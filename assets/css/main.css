@@ -1,0 +1,919 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TENIS ECUADOR - Animation & Effects System
+   Premium Silicon Valley Micro-interactions
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   BASE TRANSITIONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Global smooth transitions for interactive elements */
+*,
+*::before,
+*::after {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Disable transitions for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ENTRANCE ANIMATIONS - Staggered Reveals
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Fade Up Animation */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
+/* Stagger delays for sequential reveals */
+.animate-delay-1 { animation-delay: 0.1s; }
+.animate-delay-2 { animation-delay: 0.2s; }
+.animate-delay-3 { animation-delay: 0.3s; }
+.animate-delay-4 { animation-delay: 0.4s; }
+.animate-delay-5 { animation-delay: 0.5s; }
+.animate-delay-6 { animation-delay: 0.6s; }
+
+/* Fade In Scale */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
+/* Slide In From Left */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
+/* Slide In From Right */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AMBIENT ANIMATIONS - Background Effects
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Floating Orbs */
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(10px, -20px) scale(1.02);
+  }
+  50% {
+    transform: translate(-5px, -10px) scale(0.98);
+  }
+  75% {
+    transform: translate(-15px, -25px) scale(1.01);
+  }
+}
+
+.animate-float {
+  animation: float 20s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 25s ease-in-out infinite;
+  animation-delay: -5s;
+}
+
+.animate-float-slow {
+  animation: float 30s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+/* Pulse Glow */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
+
+/* Gradient Shift */
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease-in-out infinite;
+}
+
+/* Shimmer Effect */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-effect::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(1 0 0 / 0.1) 50%,
+    transparent 100%
+  );
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   INTERACTIVE ANIMATIONS - Hover & Focus States
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Lift on Hover */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 20px 40px -12px oklch(0 0 0 / 0.4),
+    0 0 24px -8px var(--glow-accent);
+}
+
+/* Scale on Hover */
+.hover-scale {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* Glow on Hover */
+.hover-glow {
+  transition: box-shadow 0.3s ease;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 32px -4px var(--glow-accent);
+}
+
+/* Border Glow on Hover */
+.hover-border-glow {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-border-glow:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 24px -8px var(--glow-accent);
+}
+
+/* Icon Bounce */
+.hover-bounce:hover {
+  animation: iconBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes iconBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LOADING & SKELETON ANIMATIONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Skeleton Loading */
+@keyframes skeletonPulse {
+  0%, 100% {
+    background-color: oklch(0.20 0.01 250);
+  }
+  50% {
+    background-color: oklch(0.25 0.01 250);
+  }
+}
+
+.skeleton {
+  animation: skeletonPulse 2s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* Spinner */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Dots Loading */
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.loading-dot {
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FOCUS STATES - Accessibility
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Custom focus ring */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Focus within for form groups */
+.focus-within-glow:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TEXT ANIMATIONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Gradient Text Animation */
+@keyframes textGradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.text-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--accent) 0%,
+    oklch(0.75 0.22 150) 50%,
+    var(--accent) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textGradient 4s ease-in-out infinite;
+}
+
+/* Static Gradient Text */
+.text-gradient-static {
+  background: linear-gradient(
+    135deg,
+    var(--accent) 0%,
+    oklch(0.80 0.20 160) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCROLL ANIMATIONS - View Transitions
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Intersection Observer classes */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SPECIAL EFFECTS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Tennis Ball Bounce */
+@keyframes tennisBounce {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: translateY(-16px) rotate(180deg);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.animate-tennis-bounce {
+  animation: tennisBounce 2s infinite;
+}
+
+/* Court Line Draw */
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-draw {
+  stroke-dasharray: 1000;
+  animation: drawLine 2s ease-out forwards;
+}
+
+/* Confetti Effect Prep */
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-100%) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCROLLBAR STYLING
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-subtle);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--background);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SELECTION STYLING
+   ───────────────────────────────────────────────────────────────────────────── */
+
+::selection {
+  background: var(--accent-subtle);
+  color: var(--foreground);
+}
+
+::-moz-selection {
+  background: var(--accent-subtle);
+  color: var(--foreground);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLERK COMPONENT STYLING
+   Complete override to match Tenis Ecuador design system
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ROOT CONTAINERS - Remove all default styling
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-rootBox,
+.cl-card,
+.cl-cardBox,
+.cl-main,
+.cl-component {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Hide Clerk's built-in headers (we have custom ones) */
+.cl-header,
+.cl-headerTitle,
+.cl-headerSubtitle {
+  display: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SOCIAL BUTTONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-socialButtonsBlockButton {
+  background: var(--background) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground) !important;
+  font-size: 0.875rem !important;
+  font-weight: var(--font-weight-semibold) !important;
+  padding: 0.5rem 1rem !important;
+  height: 2.5rem !important;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.cl-socialButtonsBlockButton:hover {
+  background: var(--surface-elevated) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 12px -4px var(--glow-accent) !important;
+}
+
+.cl-socialButtonsBlockButton__google {
+  color: var(--foreground) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DIVIDER (or)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-dividerRow {
+  margin: 0.75rem 0 !important;
+}
+
+.cl-dividerLine {
+  background: var(--border-subtle) !important;
+  height: 1px !important;
+}
+
+.cl-dividerText {
+  color: var(--foreground-subtle) !important;
+  font-size: 0.6875rem !important;
+  background: transparent !important;
+  padding: 0 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FORM FIELDS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-formFieldRow {
+  display: block !important;
+  position: relative !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.cl-formFieldLabel {
+  color: var(--foreground) !important;
+  font-size: 0.8125rem !important;
+  font-weight: var(--font-weight-semibold) !important;
+  margin-bottom: 0.25rem !important;
+  display: block !important;
+}
+
+.cl-formFieldLabel__optional {
+  display: none !important;
+}
+
+.cl-formFieldInput {
+  background: var(--surface) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground) !important;
+  font-size: 0.8125rem !important;
+  padding: 0.5rem 0.75rem !important;
+  transition: border-color 200ms ease, box-shadow 200ms ease !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  height: 2.25rem !important;
+  pointer-events: auto !important;
+  cursor: text !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Ensure input wrapper allows interaction */
+.cl-formFieldInputGroup,
+.cl-formFieldRow,
+[class*="formField"] {
+  pointer-events: auto !important;
+}
+
+/* Compact the form field input wrapper */
+.cl-formFieldInputGroup {
+  margin-top: 0 !important;
+}
+
+.cl-formFieldInput:hover {
+  border-color: var(--border-subtle) !important;
+  border-width: 2px !important;
+}
+
+.cl-formFieldInput:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+}
+
+.cl-formFieldInput::placeholder {
+  color: var(--foreground-subtle) !important;
+  opacity: 1 !important;
+}
+
+/* Password field and its wrapper - ensure proper layout */
+.cl-formFieldRow__password,
+[data-field-id="password"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  height: auto !important;
+  overflow: visible !important;
+  position: relative !important;
+}
+
+/* Password field label */
+.cl-formFieldLabel__password {
+  display: block !important;
+  color: var(--foreground) !important;
+  font-size: var(--font-size-4) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  margin-bottom: var(--spacing-2) !important;
+}
+
+/* Password field with toggle */
+.cl-formFieldInputShowPasswordButton {
+  color: var(--foreground-muted) !important;
+  transition: color 200ms ease !important;
+}
+
+.cl-formFieldInputShowPasswordButton:hover {
+  color: var(--foreground) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PRIMARY BUTTON (Continue)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-formButtonPrimary {
+  background: var(--foreground) !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--background) !important;
+  font-size: 0.875rem !important;
+  font-weight: var(--font-weight-semibold) !important;
+  padding: 0.625rem 1.25rem !important;
+  height: 2.625rem !important;
+  margin-top: 0.75rem !important;
+  margin-bottom: 1rem !important;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.cl-formButtonPrimary:hover,
+.cl-formButtonPrimary:focus,
+button.cl-formButtonPrimary:hover,
+[class*="cl-formButtonPrimary"]:hover {
+  background: var(--accent) !important;
+  background-color: var(--accent) !important;
+  color: oklch(0.13 0 0) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px -4px var(--glow-accent) !important;
+}
+
+.cl-formButtonPrimary:active,
+button.cl-formButtonPrimary:active,
+[class*="cl-formButtonPrimary"]:active {
+  background: oklch(0.65 0.20 150) !important;
+  background-color: oklch(0.65 0.20 150) !important;
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 8px -2px var(--glow-accent) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FOOTER SECTION - Sign up/in link
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-footerAction {
+  display: none !important; /* We have our own footer */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CLERK BRANDING FOOTER - "Secured by Clerk"
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-footerPages,
+.cl-footer__pages {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.25rem !important;
+  padding-top: 1rem !important;
+  margin-top: 0.5rem !important;
+  border-top: 1px solid var(--border-subtle) !important;
+  background: transparent !important;
+}
+
+.cl-footerPagesLink,
+.cl-footer__pagesLink {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.375rem !important;
+  color: var(--foreground-subtle) !important;
+  font-size: 0.75rem !important;
+  text-decoration: none !important;
+  transition: opacity 200ms ease !important;
+  opacity: 0.6 !important;
+}
+
+.cl-footerPagesLink:hover,
+.cl-footer__pagesLink:hover {
+  opacity: 1 !important;
+  color: var(--foreground-muted) !important;
+}
+
+.cl-footerPagesLink img,
+.cl-footer__pagesLink img {
+  height: 12px !important;
+  width: auto !important;
+  filter: grayscale(100%) brightness(0.8) !important;
+}
+
+/* Development mode badge - make it match design system */
+.cl-internal-1ow8qrx,
+[data-mode="development"],
+a[href*="dashboard.clerk"],
+a[href*="accounts.clerk"],
+[class*="cl-"] a[target="_blank"],
+.cl-footerPages span,
+.cl-footer span,
+[class*="cl-internal"] {
+  background: transparent !important;
+  color: var(--foreground-subtle) !important;
+  font-size: 0.6875rem !important;
+  padding: 0 !important;
+  border: none !important;
+  font-weight: var(--font-weight-regular) !important;
+  text-decoration: none !important;
+}
+
+a[href*="dashboard.clerk"]:hover,
+a[href*="accounts.clerk"]:hover,
+[class*="cl-"] a[target="_blank"]:hover {
+  color: var(--foreground-muted) !important;
+}
+
+/* Development mode text specifically */
+[class*="Development"],
+span:has(+ a[href*="clerk"]),
+.cl-footerPages div:last-child,
+.cl-footer div:last-child {
+  color: var(--foreground-subtle) !important;
+  font-size: 0.6875rem !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ERROR STATES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-formFieldErrorText {
+  color: oklch(0.70 0.18 25) !important;
+  font-size: var(--font-size-4) !important;
+  margin-top: var(--spacing-2) !important;
+}
+
+.cl-formFieldInput[data-invalid="true"] {
+  border-color: oklch(0.60 0.18 25) !important;
+  border-width: 2px !important;
+}
+
+.cl-formFieldInput[data-invalid="true"]:hover {
+  border-color: oklch(0.65 0.18 25) !important;
+  border-width: 2px !important;
+}
+
+.cl-formFieldInput[data-invalid="true"]:focus {
+  border-color: oklch(0.60 0.18 25) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px oklch(0.60 0.18 25 / 0.2) !important;
+}
+
+.cl-alert {
+  background: oklch(0.40 0.12 25 / 0.15) !important;
+  border: 1px solid oklch(0.55 0.15 25) !important;
+  border-radius: var(--radius-md) !important;
+  color: oklch(0.75 0.12 25) !important;
+  padding: var(--spacing-4) !important;
+  font-size: var(--font-size-4) !important;
+  margin-bottom: var(--spacing-4) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LOADING STATES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-formButtonPrimary__loading {
+  opacity: 0.7 !important;
+  cursor: wait !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   INTERNAL CLERK OVERRIDES
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Remove any lingering backgrounds */
+[class^="cl-internal"] {
+  background: transparent !important;
+}
+
+/* Fix text colors */
+[class^="cl-"] {
+  font-family: inherit !important;
+}
+
+/* Ensure proper spacing for form */
+.cl-form {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+}
+
+/* Ensure all form elements stay within container */
+.cl-form *,
+.cl-rootBox *,
+.cl-cardBox *,
+.cl-card * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Social buttons container */
+.cl-socialButtonsBlockButtonArrow,
+.cl-socialButtonsProviderIcon {
+  flex-shrink: 0 !important;
+}
+
+/* Input wrapper should also be 100% */
+.cl-formFieldInputGroup,
+.cl-formFieldHintText,
+.cl-formFieldLabelRow {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Fix form field row spacing */
+.cl-formFieldRow {
+  margin-bottom: 0.5rem !important;
+}
+
+/* Form field labels - ensure proper display */
+.cl-formFieldLabel {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  margin-bottom: 0.125rem !important;
+  font-size: 0.75rem !important;
+}
+
+.cl-formFieldLabelRow {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin-bottom: 0.125rem !important;
+}
+
+/* Optional text styling - hidden, using visual indicators instead */
+.cl-formFieldLabel__optional,
+[class*="optional"] {
+  display: none !important;
+}
+
+
+/* Force transparent backgrounds on ALL Clerk elements */
+.cl-rootBox > div,
+.cl-card > div,
+.cl-cardBox > div,
+[class*="cl-"] > div {
+  background-color: transparent !important;
+}
+
+/* Fix the poweredBy section */
+.cl-internal-b3fm6y,
+[class*="poweredBy"],
+[class*="PoweredBy"] {
+  color: var(--foreground-subtle) !important;
+  font-size: var(--font-size-4) !important;
+}
+
+/* Make sure all links in footer match theme */
+.cl-footerPages a,
+.cl-footer a {
+  color: var(--foreground-muted) !important;
+  text-decoration: none !important;
+}
+
+.cl-footerPages a:hover,
+.cl-footer a:hover {
+  color: var(--accent) !important;
+}
