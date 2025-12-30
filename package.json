@@ -8,7 +8,14 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:integration": "vitest run tests/integration",
+    "test:integration:ui": "vitest --ui",
+    "test:integration:real-api": "cross-env VITEST_RUN_REAL_API=true vitest run tests/integration/clerk-real-api.spec.ts",
+    "test:all": "npm run test:integration && npm run test:e2e"
   },
   "dependencies": {
     "@clerk/localizations": "^3.32.1",
@@ -20,7 +27,18 @@
     "vue-router": "latest"
   },
   "devDependencies": {
+    "@clerk/clerk-sdk-node": "^4.13.23",
+    "@nuxt/test-utils": "^3.21.0",
     "@nuxt/typescript-build": "^3.0.2",
-    "typescript": "^5.3.3"
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^25.0.3",
+    "@vitest/ui": "^3.2.4",
+    "cross-env": "^10.1.0",
+    "dotenv": "^17.2.3",
+    "happy-dom": "^20.0.11",
+    "msw": "^2.12.7",
+    "typescript": "^5.3.3",
+    "vite": "^7.3.0",
+    "vitest": "^3.2.4"
   }
 }

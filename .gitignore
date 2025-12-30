@@ -31,3 +31,14 @@ lerna-debug.log*
 # TypeScript
 *.tsbuildinfo
 
+# Test results
+test-results/
+playwright-report/
+playwright/.cache/
+coverage/
+.nyc_output/
+*.lcov
+
+# Vitest
+.vitest/
+
