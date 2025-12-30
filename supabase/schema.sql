@@ -72,9 +72,12 @@ CREATE TRIGGER update_players_updated_at
 
 -- Seed initial categories
 INSERT INTO categories (name, description, "order") VALUES
-  ('Principiante', 'Jugadores que están comenzando en el tenis', 1),
-  ('Intermedio', 'Jugadores con experiencia moderada', 2),
-  ('Avanzado', 'Jugadores con alto nivel de juego', 3),
-  ('Profesional', 'Jugadores de nivel profesional', 4)
+  ('1era Categoría', 'NIVEL ELITE', 1),
+  ('2da Categoría', 'NIVEL AVANZADO', 2),
+  ('3ra Categoría', 'NIVEL MEDIO ALTO', 3),
+  ('4ta Categoría', 'NIVEL MEDIO BAJO', 4),
+  ('5ta Categoría', 'NIVEL BÁSICO MEDIO', 5),
+  ('6ta Categoría', 'NIVEL PRINCIPIANTE ALTO', 6),
+  ('7ma Categoría', 'NIVEL PRINCIPIANTE', 7)
 ON CONFLICT (name) DO NOTHING;
 

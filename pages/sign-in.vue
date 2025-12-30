@@ -44,14 +44,68 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import { esES } from '@clerk/localizations'
 
 definePageMeta({
   middleware: []
 })
 
+// Custom localization that extends esES but removes "ultimo uso" references
+const customLocalization = {
+  ...esES,
+  // Override the lastAuthenticationStrategy key to remove "Último uso" text
+  lastAuthenticationStrategy: ''
+}
+
 const clerkAppearance = {
-  localization: esES
+  localization: customLocalization
+}
+
+// Hide the lastAuthenticationStrategyBadge element after Clerk loads
+if (process.client) {
+  onMounted(() => {
+    const hideBadge = () => {
+      const clerkWrapper = document.querySelector('.clerk-wrapper')
+      if (!clerkWrapper) return
+      
+      // Target the specific badge element
+      const badge = clerkWrapper.querySelector('.cl-lastAuthenticationStrategyBadge')
+      if (badge) {
+        badge.style.display = 'none'
+        badge.style.visibility = 'hidden'
+      }
+      
+      // Also target by data attribute as fallback
+      const badgeByAttr = clerkWrapper.querySelector('[data-localization-key="lastAuthenticationStrategy"]')
+      if (badgeByAttr) {
+        badgeByAttr.style.display = 'none'
+        badgeByAttr.style.visibility = 'hidden'
+      }
+    }
+    
+    // Run immediately and after delays to catch dynamically loaded content
+    hideBadge()
+    setTimeout(hideBadge, 500)
+    setTimeout(hideBadge, 1000)
+    
+    // Use MutationObserver to catch dynamically added content
+    const clerkWrapper = document.querySelector('.clerk-wrapper')
+    if (clerkWrapper) {
+      const observer = new MutationObserver(() => {
+        hideBadge()
+      })
+      observer.observe(clerkWrapper, {
+        childList: true,
+        subtree: true
+      })
+      
+      // Cleanup on unmount
+      onUnmounted(() => {
+        observer.disconnect()
+      })
+    }
+  })
 }
 </script>
 
@@ -220,8 +274,39 @@ const clerkAppearance = {
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput) {
-  padding: 0.625rem 0.75rem !important;
-  font-size: 0.875rem !important;
+  background: var(--surface) !important;
+  border: 2px solid var(--border) !important;
+  padding: 0.4375rem 0.75rem !important;
+  font-size: 0.8125rem !important;
+  height: 2.125rem !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease !important;
+}
+
+.clerk-wrapper :deep(.cl-formFieldInput:hover) {
+  border-color: var(--border-subtle) !important;
+  border-width: 2px !important;
+}
+
+.clerk-wrapper :deep(.cl-formFieldInput:focus) {
+  border-color: var(--accent) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+}
+
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]) {
+  border-color: oklch(0.60 0.18 25) !important;
+  border-width: 2px !important;
+}
+
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:hover) {
+  border-color: oklch(0.65 0.18 25) !important;
+  border-width: 2px !important;
+}
+
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:focus) {
+  border-color: oklch(0.60 0.18 25) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px oklch(0.60 0.18 25 / 0.2) !important;
 }
 
 /* Social button compact */
@@ -315,6 +400,13 @@ const clerkAppearance = {
 .clerk-wrapper :deep(.cl-footerPages span),
 .clerk-wrapper :deep(.cl-footer span) {
   color: var(--foreground-subtle) !important;
+}
+
+/* Hide the lastAuthenticationStrategyBadge element */
+.clerk-wrapper :deep(.cl-lastAuthenticationStrategyBadge),
+.clerk-wrapper :deep([data-localization-key="lastAuthenticationStrategy"]) {
+  display: none !important;
+  visibility: hidden !important;
 }
 
 /* Override any orange/red colors in Clerk components */

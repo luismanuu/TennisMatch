@@ -148,9 +148,14 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const { user, isLoaded } = useClerk()
+const auth = useAuth()
+const { isLoaded: authLoaded } = auth
+const { isLoaded: userLoaded, user } = useUser()
 const { loading, createPlayer } = usePlayer()
 const { categories, loading: categoriesLoading, fetchCategories } = useCategories()
+
+const isLoaded = computed(() => authLoaded.value && userLoaded.value)
+const userId = computed(() => user.value?.id || null)
 
 const currentStep = ref(1)
 const formData = ref({
@@ -163,11 +168,11 @@ const selectCategory = (categoryId: string) => {
 }
 
 const handleComplete = async () => {
-  if (!user.value?.id || !formData.value.category_id) return
+  if (!userId.value || !formData.value.category_id) return
 
   try {
-    await createPlayer(user.value.id, {
-      name: user.value.fullName || user.value.firstName || 'Usuario',
+    await createPlayer(userId.value, {
+      name: user.value?.fullName || user.value?.firstName || 'Usuario',
       category_id: formData.value.category_id
     })
     

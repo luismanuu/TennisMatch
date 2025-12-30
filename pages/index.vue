@@ -24,12 +24,11 @@
               >
                 Mi Perfil
               </NuxtLink>
-              <button
-                @click="handleSignOut"
-                class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
-              >
-                Cerrar Sesión
-              </button>
+              <SignOutButton>
+                <button class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors">
+                  Cerrar Sesión
+                </button>
+              </SignOutButton>
             </template>
             <template v-else>
               <NuxtLink 
@@ -312,8 +311,9 @@ definePageMeta({
 })
 
 // Use Clerk composables from @clerk/nuxt
-// useAuth provides auth state, useUser provides user data
-const { isLoaded: authLoaded, isSignedIn, userId: clerkUserId, signOut } = useAuth()
+// useAuth provides auth state
+const auth = useAuth()
+const { isLoaded: authLoaded, isSignedIn, userId: clerkUserId } = auth
 const { isLoaded: userLoaded, user } = useUser()
 
 // Combined isLoaded - both auth and user must be loaded
@@ -333,11 +333,6 @@ if (process.dev && process.client) {
       userId: clerkUserId.value || user.value?.id
     })
   })
-}
-
-const handleSignOut = async () => {
-  await signOut()
-  await navigateTo('/')
 }
 
 // Use userId from useAuth (preferred) or fallback to user.id

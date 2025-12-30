@@ -96,9 +96,6 @@
                 disabled
                 class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground-muted opacity-50 cursor-not-allowed"
               />
-              <p class="text-size-4 font-regular text-foreground-muted mt-2">
-                El email se gestiona desde tu cuenta de Clerk
-              </p>
             </div>
 
             <!-- Error Message -->
@@ -142,9 +139,14 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const { user, isLoaded } = useClerk()
+const auth = useAuth()
+const { isLoaded: authLoaded } = auth
+const { isLoaded: userLoaded, user } = useUser()
 const { player, loading, error, fetchPlayer, updatePlayer, createPlayer } = usePlayer()
 const { categories, loading: categoriesLoading, fetchCategories } = useCategories()
+
+const isLoaded = computed(() => authLoaded.value && userLoaded.value)
+const userId = computed(() => user.value?.id || null)
 
 const formData = ref({
   name: '',
@@ -159,13 +161,13 @@ const selectedCategory = computed(() => {
 })
 
 const loadData = async () => {
-  if (!isLoaded.value || !user.value?.id) return
+  if (!isLoaded.value || !userId.value) return
 
   // Load categories
   await fetchCategories()
 
   // Load player profile
-  await fetchPlayer(user.value.id)
+  await fetchPlayer(userId.value)
 
   // Populate form
   if (player.value) {
@@ -183,7 +185,7 @@ const loadData = async () => {
 }
 
 const handleSubmit = async () => {
-  if (!user.value?.id) return
+  if (!userId.value) return
 
   success.value = false
   error.value = null
@@ -191,13 +193,13 @@ const handleSubmit = async () => {
   try {
     if (player.value) {
       // Update existing profile
-      await updatePlayer(player.value.id, user.value.id, {
+      await updatePlayer(player.value.id, userId.value, {
         name: formData.value.name,
         category_id: formData.value.category_id
       })
     } else {
       // Create new profile
-      await createPlayer(user.value.id, {
+      await createPlayer(userId.value, {
         name: formData.value.name,
         category_id: formData.value.category_id
       })
@@ -219,8 +221,8 @@ onMounted(async () => {
   await loadData()
 })
 
-watch([isLoaded, () => user.value], async () => {
-  if (isLoaded.value && user.value?.id) {
+watch([isLoaded, userId], async () => {
+  if (isLoaded.value && userId.value) {
     await loadData()
   }
 }, { immediate: false })

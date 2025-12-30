@@ -1,5 +1,6 @@
 export default defineNuxtRouteMiddleware((to, from) => {
-  const { isSignedIn } = useClerk()
+  const auth = useAuth()
+  const { isSignedIn } = auth
   
   if (!isSignedIn.value) {
     return navigateTo('/sign-in')

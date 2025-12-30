@@ -18,12 +18,11 @@
             <NuxtLink to="/" class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors">
               Dashboard
             </NuxtLink>
-            <button
-              @click="handleSignOut"
-              class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
-            >
-              Cerrar Sesión
-            </button>
+            <SignOutButton>
+              <button class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors">
+                Cerrar Sesión
+              </button>
+            </SignOutButton>
           </div>
         </div>
       </div>
@@ -149,32 +148,29 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const { user, isLoaded, signOut } = useClerk()
+const auth = useAuth()
+const { isLoaded: authLoaded, isSignedIn } = auth
+const { isLoaded: userLoaded, user } = useUser()
 const { player, loading, error, fetchPlayer } = usePlayer()
 
-const handleSignOut = async () => {
-  await signOut()
-  await navigateTo('/')
-}
+const isLoaded = computed(() => authLoaded.value && userLoaded.value)
+const userId = computed(() => user.value?.id || null)
 
 const loadProfile = async () => {
-  if (user.value?.id) {
-    await fetchPlayer(user.value.id)
+  if (userId.value) {
+    await fetchPlayer(userId.value)
   }
 }
 
 onMounted(async () => {
-  if (isLoaded?.value && user?.value?.id) {
+  if (isLoaded.value && userId.value) {
     await loadProfile()
   }
 })
 
 // Computed property to safely track when profile should be loaded
 const shouldLoadProfile = computed(() => {
-  if (!isLoaded || !user) {
-    return false
-  }
-  return isLoaded.value && !!user.value?.id && !player.value
+  return !!(isLoaded.value && isSignedIn.value && userId.value && !player.value)
 })
 
 // Watch for auth state changes and load profile when ready
