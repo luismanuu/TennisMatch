@@ -6,14 +6,34 @@ export interface User {
   imageUrl?: string
 }
 
+export interface Category {
+  id: string
+  name: string
+  description?: string
+  order: number
+  created_at: string
+  updated_at: string
+}
+
 export interface Player {
   id: string
   clerk_id: string
   name: string
+  category_id?: string
+  category?: Category
   elo: number
-  category: string
   created_at: string
   updated_at: string
+}
+
+export interface CreatePlayerPayload {
+  name: string
+  category_id: string
+}
+
+export interface UpdatePlayerPayload {
+  name?: string
+  category_id?: string
 }
 
 export interface Match {

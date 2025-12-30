@@ -42,3 +42,6 @@ coverage/
 # Vitest
 .vitest/
 
+# Prisma
+/generated/prisma
+prisma/migrations/**/migration.sql.bak

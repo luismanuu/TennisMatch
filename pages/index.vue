@@ -18,6 +18,12 @@
           <!-- Nav Actions -->
           <div class="flex items-center gap-4">
             <template v-if="isLoaded && isSignedIn">
+              <NuxtLink 
+                to="/profile" 
+                class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
+              >
+                Mi Perfil
+              </NuxtLink>
               <button
                 @click="handleSignOut"
                 class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
@@ -72,10 +78,13 @@
               <div class="w-14 h-14 rounded-2xl bg-accent-subtle flex items-center justify-center">
                 <span class="text-2xl">👤</span>
               </div>
-              <div>
+              <div class="flex-1">
                 <h3 class="text-size-2 font-semibold text-foreground mb-1">Tu Perfil</h3>
                 <p class="text-size-4 font-regular text-foreground-muted">Información de tu cuenta</p>
               </div>
+              <NuxtLink to="/profile" class="btn-secondary text-size-4 !py-2 !px-4">
+                Ver Perfil
+              </NuxtLink>
             </div>
             <div class="space-y-4" v-if="user">
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">
@@ -85,6 +94,16 @@
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 font-regular text-foreground-subtle mb-1">Nombre</p>
                 <p class="text-size-3 font-regular text-foreground">{{ user.fullName || 'No configurado' }}</p>
+              </div>
+              <div v-if="player" class="p-4 rounded-xl bg-surface border border-border-subtle">
+                <p class="text-size-4 font-regular text-foreground-subtle mb-1">Categoría</p>
+                <p class="text-size-3 font-regular text-foreground">{{ player.category?.name || 'No seleccionada' }}</p>
+              </div>
+              <div v-else class="p-4 rounded-xl bg-accent-subtle/50 border border-accent/30">
+                <p class="text-size-4 font-regular text-foreground-subtle mb-2">Perfil incompleto</p>
+                <NuxtLink to="/onboarding" class="text-size-4 font-semibold text-accent hover:underline">
+                  Completa tu perfil →
+                </NuxtLink>
               </div>
             </div>
           </div>
@@ -293,11 +312,32 @@ definePageMeta({
 })
 
 const { user, isLoaded, isSignedIn, signOut } = useClerk()
+const { player, fetchPlayer } = usePlayer()
 
 const handleSignOut = async () => {
   await signOut()
   await navigateTo('/')
 }
+
+// Load player profile if user is signed in
+const loadPlayerProfile = async () => {
+  if (isLoaded.value && isSignedIn.value && user.value?.id) {
+    try {
+      await fetchPlayer(user.value.id)
+    } catch (error) {
+      // Profile might not exist yet, that's okay
+      console.log('Player profile not found:', error)
+    }
+  }
+}
+
+onMounted(async () => {
+  await loadPlayerProfile()
+})
+
+watch([isLoaded, isSignedIn, user], async () => {
+  await loadPlayerProfile()
+})
 
 // Dashboard data
 const dashboardFeatures = [
