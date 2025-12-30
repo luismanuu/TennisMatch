@@ -189,11 +189,11 @@ onMounted(async () => {
   }
 })
 
-watch([isLoaded, user], async () => {
+watch([isLoaded, () => user.value], async () => {
   if (isLoaded.value && user.value) {
     formData.value.name = user.value.fullName || user.value.firstName || ''
     await fetchCategories()
   }
-})
+}, { immediate: false })
 </script>
 

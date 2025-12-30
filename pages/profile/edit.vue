@@ -219,10 +219,10 @@ onMounted(async () => {
   await loadData()
 })
 
-watch([isLoaded, user], async () => {
+watch([isLoaded, () => user.value], async () => {
   if (isLoaded.value && user.value?.id) {
     await loadData()
   }
-})
+}, { immediate: false })
 </script>
 

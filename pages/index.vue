@@ -17,7 +17,7 @@
 
           <!-- Nav Actions -->
           <div class="flex items-center gap-4">
-            <template v-if="isLoaded && isSignedIn">
+            <template v-if="isAuthenticated">
               <NuxtLink 
                 to="/profile" 
                 class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
@@ -54,7 +54,7 @@
     <div class="h-16"></div>
 
     <!-- Authenticated User Dashboard -->
-    <div v-if="isLoaded && isSignedIn" class="section-padding">
+    <div v-if="isAuthenticated" class="section-padding">
       <div class="container-medium px-6">
         <!-- Welcome Header -->
         <div class="text-center mb-16">
@@ -89,11 +89,11 @@
             <div class="space-y-4" v-if="user">
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 font-regular text-foreground-subtle mb-1">Email</p>
-                <p class="text-size-3 font-regular text-foreground">{{ user.primaryEmailAddress?.emailAddress }}</p>
+                <p class="text-size-3 font-regular text-foreground">{{ user?.primaryEmailAddress?.emailAddress }}</p>
               </div>
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 font-regular text-foreground-subtle mb-1">Nombre</p>
-                <p class="text-size-3 font-regular text-foreground">{{ user.fullName || 'No configurado' }}</p>
+                <p class="text-size-3 font-regular text-foreground">{{ user?.fullName || 'No configurado' }}</p>
               </div>
               <div v-if="player" class="p-4 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 font-regular text-foreground-subtle mb-1">Categoría</p>
@@ -311,32 +311,75 @@ definePageMeta({
   middleware: []
 })
 
-const { user, isLoaded, isSignedIn, signOut } = useClerk()
+// Use Clerk composables from @clerk/nuxt
+// useAuth provides auth state, useUser provides user data
+const { isLoaded: authLoaded, isSignedIn, userId: clerkUserId, signOut } = useAuth()
+const { isLoaded: userLoaded, user } = useUser()
+
+// Combined isLoaded - both auth and user must be loaded
+const isLoaded = computed(() => authLoaded.value && userLoaded.value)
+
 const { player, fetchPlayer } = usePlayer()
+
+// Debug: Log auth state in development
+if (process.dev && process.client) {
+  watchEffect(() => {
+    console.log('[Auth State]', {
+      isLoaded: isLoaded.value,
+      authLoaded: authLoaded.value,
+      userLoaded: userLoaded.value,
+      isSignedIn: isSignedIn.value,
+      hasUser: !!user.value,
+      userId: clerkUserId.value || user.value?.id
+    })
+  })
+}
 
 const handleSignOut = async () => {
   await signOut()
   await navigateTo('/')
 }
 
+// Use userId from useAuth (preferred) or fallback to user.id
+const userId = computed(() => clerkUserId.value || user.value?.id || null)
+
+// Computed properties for template conditions (Vue templates auto-unwrap refs)
+// Check if refs exist and have values
+const isAuthenticated = computed(() => {
+  return !!(isLoaded.value && isSignedIn.value && user.value)
+})
+
 // Load player profile if user is signed in
 const loadPlayerProfile = async () => {
-  if (isLoaded.value && isSignedIn.value && user.value?.id) {
-    try {
-      await fetchPlayer(user.value.id)
-    } catch (error) {
-      // Profile might not exist yet, that's okay
-      console.log('Player profile not found:', error)
-    }
+  if (!isLoaded.value || !isSignedIn.value || !userId.value) {
+    return
+  }
+  
+  try {
+    await fetchPlayer(userId.value)
+  } catch (error) {
+    // Silently handle errors - profile might not exist yet
+    // This is expected for new users
   }
 }
 
-onMounted(async () => {
-  await loadPlayerProfile()
+// Computed property to safely track when profile should be loaded
+const shouldLoadProfile = computed(() => {
+  return !!(isLoaded.value && isSignedIn.value && userId.value && !player.value)
 })
 
-watch([isLoaded, isSignedIn, user], async () => {
-  await loadPlayerProfile()
+// Watch for auth state changes and load profile when ready
+watch(shouldLoadProfile, async (shouldLoad) => {
+  if (shouldLoad) {
+    await loadPlayerProfile()
+  }
+}, { immediate: false })
+
+// Also check on mount in case Clerk is already loaded
+onMounted(async () => {
+  if (isLoaded.value && userId.value) {
+    await loadPlayerProfile()
+  }
 })
 
 // Dashboard data
@@ -352,54 +395,5 @@ const stats = [
   { value: '23', label: 'Partidos' },
   { value: '15', label: 'Victorias' },
   { value: '65%', label: 'Win Rate' }
-]
-
-// Landing page data
-const features = [
-  {
-    icon: '📊',
-    title: 'Sistema ELO',
-    description: 'Rating dinámico que refleja tu verdadero nivel de juego.',
-    points: [
-      'Algoritmo similar al ajedrez',
-      'Actualización en tiempo real',
-      'Rankings locales y nacionales'
-    ]
-  },
-  {
-    icon: '🏆',
-    title: 'Torneos',
-    description: 'Participa en competencias organizadas automáticamente.',
-    points: [
-      'Brackets automáticos',
-      'Notificaciones de partidos',
-      'Premios y reconocimientos'
-    ]
-  },
-  {
-    icon: '📝',
-    title: 'Registro de Partidos',
-    description: 'Guarda el historial completo de tus encuentros.',
-    points: [
-      'Estadísticas detalladas',
-      'Historial de rivales',
-      'Análisis de rendimiento'
-    ]
-  }
-]
-
-const steps = [
-  {
-    title: 'Crea tu cuenta',
-    description: 'Regístrate en menos de 30 segundos con tu email'
-  },
-  {
-    title: 'Completa tu perfil',
-    description: 'Agrega tu nivel de juego y preferencias'
-  },
-  {
-    title: 'Comienza a competir',
-    description: 'Registra partidos y únete a torneos'
-  }
 ]
 </script>

@@ -6,18 +6,36 @@ export const usePlayer = () => {
   const error = ref<Error | null>(null)
   
   const fetchPlayer = async (clerkId: string) => {
+    if (!clerkId) {
+      player.value = null
+      return null
+    }
+    
     loading.value = true
     error.value = null
     
     try {
       const data = await $fetch<Player | null>('/api/players/me', {
         query: { clerk_id: clerkId }
+      }).catch((err: any) => {
+        // Handle 404/401 gracefully - profile doesn't exist yet
+        if (err.statusCode === 404 || err.statusCode === 401) {
+          return null
+        }
+        // Re-throw other errors
+        throw err
       })
+      
       player.value = data
       return data
     } catch (err: any) {
-      error.value = err
-      throw err
+      // Only set error for unexpected errors, not for missing profiles
+      if (err.statusCode && err.statusCode !== 404 && err.statusCode !== 401) {
+        error.value = err
+        console.error('Error fetching player:', err)
+      }
+      player.value = null
+      return null
     } finally {
       loading.value = false
     }

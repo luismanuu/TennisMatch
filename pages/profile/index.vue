@@ -164,15 +164,24 @@ const loadProfile = async () => {
 }
 
 onMounted(async () => {
-  if (isLoaded.value && user.value?.id) {
+  if (isLoaded?.value && user?.value?.id) {
     await loadProfile()
   }
 })
 
-watch([isLoaded, user], async () => {
-  if (isLoaded.value && user.value?.id && !player.value) {
+// Computed property to safely track when profile should be loaded
+const shouldLoadProfile = computed(() => {
+  if (!isLoaded || !user) {
+    return false
+  }
+  return isLoaded.value && !!user.value?.id && !player.value
+})
+
+// Watch for auth state changes and load profile when ready
+watch(shouldLoadProfile, async (shouldLoad) => {
+  if (shouldLoad) {
     await loadProfile()
   }
-})
+}, { immediate: false })
 </script>
 
