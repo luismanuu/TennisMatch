@@ -1,4 +1,4 @@
-import type { Match, CreateMatchPayload, ProposeScorePayload, UpdateMatchStatusPayload } from '~/types'
+import type { Match, CreateMatchPayload, ProposeScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
 export const useMatches = () => {
   const matches = ref<Match[]>([])
@@ -234,6 +234,85 @@ export const useMatches = () => {
     }
   }
   
+  const proposeReschedule = async (clerkId: string, matchId: string, payload: ProposeReschedulePayload) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'propose_reschedule',
+          data: payload
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  const approveReschedule = async (clerkId: string, matchId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'approve_reschedule'
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  const rejectReschedule = async (clerkId: string, matchId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'reject_reschedule'
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
   return {
     matches: readonly(matches),
     loading: readonly(loading),
@@ -246,7 +325,10 @@ export const useMatches = () => {
     approveScore,
     rejectScore,
     cancelMatch,
-    fetchScheduledMatches
+    fetchScheduledMatches,
+    proposeReschedule,
+    approveReschedule,
+    rejectReschedule
   }
 }
 

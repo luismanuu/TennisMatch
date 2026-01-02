@@ -74,6 +74,14 @@ export interface Match {
   score_proposed_at?: string
   score_approved_by?: string
   score_approved_by_player?: Player
+  reschedule_proposed_by?: string
+  reschedule_proposed_by_player?: Player
+  reschedule_proposed_at?: string
+  reschedule_proposed_scheduled_at?: string
+  reschedule_approved_by?: string
+  reschedule_approved_by_player?: Player
+  reschedule_rejected_by?: string
+  reschedule_rejected_by_player?: Player
   location?: string
   created_at: string
   updated_at: string
@@ -135,5 +143,9 @@ export interface UpdateMatchStatusPayload {
 
 export interface CreateMatchMessagePayload {
   message: string
+}
+
+export interface ProposeReschedulePayload {
+  scheduled_at: string
 }
 

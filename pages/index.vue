@@ -1,5 +1,12 @@
 <template>
-  <div class="min-h-screen">
+  <div class="min-h-screen bg-background relative overflow-hidden">
+    <!-- Ambient Background Effects -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
+      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
+      <div class="grid-pattern absolute inset-0 opacity-30"></div>
+    </div>
+
     <!-- Navigation -->
     <AppNavigation />
 
@@ -7,16 +14,16 @@
     <div class="h-16"></div>
 
     <!-- Authenticated User Dashboard -->
-    <div v-if="isAuthenticated" class="section-padding">
+    <div v-if="isAuthenticated" class="section-padding relative z-10">
       <div class="container-medium px-6">
         <!-- Welcome Header -->
-        <div class="text-center mb-16">
-          <div class="inline-flex items-center gap-2 badge badge-accent mb-6">
-            <span>🏆</span>
-            <span>Dashboard Activo</span>
+        <div class="text-center mb-16 animate-fade-up">
+          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
+            <Icon name="heroicons:trophy" class="w-4 h-4 text-accent" />
+            <span class="text-size-4 font-semibold text-accent">Dashboard Activo</span>
           </div>
           <h1 class="text-size-1 font-semibold text-foreground mb-4">
-            ¡Bienvenido de vuelta!
+            ¡Bienvenido de vuelta<span v-if="player?.name">, {{ player.name.split(' ')[0] }}</span>!
           </h1>
           <p class="text-size-3 font-regular text-foreground-muted max-w-xl mx-auto">
             Gestiona tus partidos, torneos y sigue tu progreso en la comunidad de tenis
@@ -26,50 +33,75 @@
         <!-- Dashboard Cards -->
         <div class="grid md:grid-cols-2 gap-6">
           <!-- Profile Card -->
-          <div class="glass-card-elevated p-8 hover-lift">
+          <div class="glass-card-elevated p-8 hover-lift animate-fade-up animate-delay-1">
             <div class="flex items-start gap-4 mb-6">
-              <div class="w-14 h-14 rounded-2xl bg-accent-subtle flex items-center justify-center">
-                <span class="text-2xl">👤</span>
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center flex-shrink-0">
+                <span v-if="player?.name" class="text-2xl font-bold text-accent">
+                  {{ getPlayerInitials(player.name) }}
+                </span>
+                <Icon v-else name="heroicons:user" class="w-8 h-8 text-accent" />
               </div>
-              <div class="flex-1">
+              <div class="flex-1 min-w-0">
                 <h3 class="text-size-2 font-semibold text-foreground mb-1">Tu Perfil</h3>
                 <p class="text-size-4 font-regular text-foreground-muted">Información de tu cuenta</p>
               </div>
-              <NuxtLink to="/profile" class="btn-secondary text-size-4 !py-2 !px-4">
-                Ver Perfil
+              <NuxtLink to="/profile" class="btn-secondary text-size-4 !py-2 !px-4 flex-shrink-0 group">
+                <Icon name="heroicons:arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </NuxtLink>
             </div>
-            <div class="space-y-4" v-if="user">
-              <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                <p class="text-size-4 font-regular text-foreground-subtle mb-1">Email</p>
+            <div class="space-y-3" v-if="user">
+              <div class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-center gap-3 mb-2">
+                  <Icon name="heroicons:envelope" class="w-4 h-4 text-foreground-muted" />
+                  <p class="text-size-4 font-semibold text-foreground-muted">Email</p>
+                </div>
                 <p class="text-size-3 font-regular text-foreground">{{ user?.primaryEmailAddress?.emailAddress }}</p>
               </div>
-              <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                <p class="text-size-4 font-regular text-foreground-subtle mb-1">Nombre</p>
-                <p class="text-size-3 font-regular text-foreground">{{ user?.fullName || 'No configurado' }}</p>
+              <div class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-center gap-3 mb-2">
+                  <Icon name="heroicons:user-circle" class="w-4 h-4 text-foreground-muted" />
+                  <p class="text-size-4 font-semibold text-foreground-muted">Nombre</p>
+                </div>
+                <p class="text-size-3 font-regular text-foreground">{{ user?.fullName || player?.name || 'No configurado' }}</p>
               </div>
-              <div v-if="player?.phone_number" class="p-4 rounded-xl bg-surface border border-border-subtle">
-                <p class="text-size-4 font-regular text-foreground-subtle mb-1">Teléfono</p>
+              <div v-if="player?.phone_number" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-center gap-3 mb-2">
+                  <Icon name="heroicons:phone" class="w-4 h-4 text-foreground-muted" />
+                  <p class="text-size-4 font-semibold text-foreground-muted">Teléfono</p>
+                </div>
                 <p class="text-size-3 font-regular text-foreground">{{ player.phone_number }}</p>
               </div>
-              <div v-if="player" class="p-4 rounded-xl bg-surface border border-border-subtle">
-                <p class="text-size-4 font-regular text-foreground-subtle mb-1">Categoría</p>
-                <p class="text-size-3 font-regular text-foreground">{{ player.category?.name || 'No seleccionada' }}</p>
+              <div v-if="player?.category" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-center gap-3 mb-2">
+                  <Icon name="heroicons:star" class="w-4 h-4 text-foreground-muted" />
+                  <p class="text-size-4 font-semibold text-foreground-muted">Categoría</p>
+                </div>
+                <p class="text-size-3 font-semibold text-foreground">{{ player.category.name }}</p>
+                <p v-if="player.category.description" class="text-size-4 font-regular text-foreground-muted mt-1">
+                  {{ player.category.description }}
+                </p>
               </div>
-              <div v-else class="p-4 rounded-xl bg-accent-subtle/50 border border-accent/30">
-                <p class="text-size-4 font-regular text-foreground-subtle mb-2">Perfil incompleto</p>
-                <NuxtLink to="/onboarding" class="text-size-4 font-semibold text-accent hover:underline">
-                  Completa tu perfil →
+              <div v-else class="p-4 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
+                <div class="flex items-center gap-3 mb-2">
+                  <Icon name="heroicons:exclamation-triangle" class="w-5 h-5 text-accent" />
+                  <p class="text-size-4 font-semibold text-foreground">Perfil incompleto</p>
+                </div>
+                <p class="text-size-4 font-regular text-foreground-muted mb-3">
+                  Completa tu perfil para comenzar a jugar
+                </p>
+                <NuxtLink to="/onboarding" class="btn-primary text-size-4 !py-2 !px-4 inline-flex items-center group">
+                  <span>Completar Perfil</span>
+                  <Icon name="heroicons:arrow-right" class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                 </NuxtLink>
               </div>
             </div>
           </div>
 
           <!-- Features Card -->
-          <div class="glass-card-elevated p-8 hover-lift">
+          <div class="glass-card-elevated p-8 hover-lift animate-fade-up animate-delay-2">
             <div class="flex items-start gap-4 mb-6">
-              <div class="w-14 h-14 rounded-2xl bg-accent-subtle flex items-center justify-center">
-                <span class="text-2xl">⚡</span>
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-secondary/20 to-accent-secondary/5 border-2 border-accent-secondary/30 flex items-center justify-center flex-shrink-0">
+                <Icon name="heroicons:bolt" class="w-8 h-8 text-accent-secondary" />
               </div>
               <div>
                 <h3 class="text-size-2 font-semibold text-foreground mb-1">Acciones Rápidas</h3>
@@ -79,49 +111,68 @@
             <ul class="space-y-3">
               <NuxtLink 
                 to="/matches/new"
-                class="flex items-center gap-4 p-3 rounded-xl bg-surface border border-border-subtle hover-border-glow cursor-pointer group"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
-                <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
-                  <svg class="w-5 h-5 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                  </svg>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Icon name="heroicons:plus" class="w-6 h-6 text-background" />
                 </div>
-                <span class="text-size-3 font-regular text-foreground group-hover:text-accent transition-colors">
-                  Registrar Partido
-                </span>
+                <div class="flex-1">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors block">
+                    Registrar Partido
+                  </span>
+                  <span class="text-size-4 font-regular text-foreground-muted">
+                    Programa un nuevo encuentro
+                  </span>
+                </div>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
               </NuxtLink>
               <NuxtLink 
                 to="/matches"
-                class="flex items-center gap-4 p-3 rounded-xl bg-surface border border-border-subtle hover-border-glow cursor-pointer group"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
-                <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
-                  <svg class="w-5 h-5 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Icon name="heroicons:calendar" class="w-6 h-6 text-background" />
                 </div>
-                <span class="text-size-3 font-regular text-foreground group-hover:text-accent transition-colors">
-                  Ver Historial de Partidos
-                </span>
+                <div class="flex-1">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent-secondary transition-colors block">
+                    Ver Partidos
+                  </span>
+                  <span class="text-size-4 font-regular text-foreground-muted">
+                    Historial y próximos encuentros
+                  </span>
+                </div>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
               </NuxtLink>
-              <li v-for="(feature, index) in dashboardFeatures" :key="index" 
-                  class="flex items-center gap-4 p-3 rounded-xl bg-surface border border-border-subtle hover-border-glow cursor-pointer group">
-                <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
-                  <svg class="w-5 h-5 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                  </svg>
+              <li 
+                v-for="(feature, index) in dashboardFeatures" 
+                :key="index" 
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+              >
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Icon name="heroicons:check-circle" class="w-6 h-6 text-accent" />
                 </div>
-                <span class="text-size-3 font-regular text-foreground group-hover:text-accent transition-colors">
-                  {{ feature }}
-                </span>
+                <div class="flex-1">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors block">
+                    {{ feature }}
+                  </span>
+                </div>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
               </li>
             </ul>
           </div>
         </div>
 
         <!-- Stats Preview -->
-        <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div v-for="stat in stats" :key="stat.label" 
-               class="glass-card p-6 text-center hover-lift">
+        <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-up animate-delay-3">
+          <div 
+            v-for="(stat, index) in stats" 
+            :key="stat.label" 
+            class="glass-card-elevated p-6 text-center hover-lift"
+            :style="{ animationDelay: `${(index + 3) * 0.1}s` }"
+          >
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center mx-auto mb-3">
+              <Icon :name="stat.icon" class="w-6 h-6 text-accent" />
+            </div>
             <div class="text-size-1 font-semibold text-gradient-static mb-2">{{ stat.value }}</div>
             <div class="text-size-4 font-regular text-foreground-muted">{{ stat.label }}</div>
           </div>
@@ -352,9 +403,18 @@ const dashboardFeatures = [
 ]
 
 const stats = [
-  { value: '1,247', label: 'Puntos ELO' },
-  { value: '23', label: 'Partidos' },
-  { value: '15', label: 'Victorias' },
-  { value: '65%', label: 'Win Rate' }
+  { value: player.value?.elo || '1,000', label: 'Puntos ELO', icon: 'heroicons:trophy' },
+  { value: '0', label: 'Partidos', icon: 'heroicons:calendar' },
+  { value: '0', label: 'Victorias', icon: 'heroicons:star' },
+  { value: '-', label: 'Win Rate', icon: 'heroicons:chart-bar' }
 ]
+
+const getPlayerInitials = (name: string) => {
+  if (!name) return '?'
+  const parts = name.trim().split(' ')
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
+  return name.substring(0, 2).toUpperCase()
+}
 </script>

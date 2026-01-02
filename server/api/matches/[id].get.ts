@@ -73,6 +73,18 @@ export default defineEventHandler(async (event) => {
           id,
           name
         ),
+        reschedule_proposed_by_player:players!matches_reschedule_proposed_by_fkey(
+          id,
+          name
+        ),
+        reschedule_approved_by_player:players!matches_reschedule_approved_by_fkey(
+          id,
+          name
+        ),
+        reschedule_rejected_by_player:players!matches_reschedule_rejected_by_fkey(
+          id,
+          name
+        ),
         winner:players!matches_winner_id_fkey(
           id,
           name

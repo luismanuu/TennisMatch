@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
-import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload } from '~/types'
+import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -15,8 +15,8 @@ export default defineEventHandler(async (event) => {
     
     const body = await readBody<{
       clerk_id: string
-      action: 'update_status' | 'propose_score' | 'approve_score' | 'reject_score' | 'cancel'
-      data?: UpdateMatchStatusPayload | ProposeScorePayload | ApproveScorePayload
+      action: 'update_status' | 'propose_score' | 'approve_score' | 'reject_score' | 'cancel' | 'propose_reschedule' | 'approve_reschedule' | 'reject_reschedule'
+      data?: UpdateMatchStatusPayload | ProposeScorePayload | ApproveScorePayload | ProposeReschedulePayload
     }>(event)
     
     const { clerk_id, action, data } = body
@@ -214,7 +214,138 @@ export default defineEventHandler(async (event) => {
           })
         }
         
+        if (match.status === 'active') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Cannot cancel an active match. Use reschedule instead.'
+          })
+        }
+        
         updateData.status = 'cancelled'
+        break
+      }
+      
+      case 'propose_reschedule': {
+        if (match.status !== 'active') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Reschedule can only be proposed when match status is active'
+          })
+        }
+        
+        // Cannot propose reschedule if there's already a pending proposal
+        if (match.reschedule_proposed_by && !match.reschedule_approved_by && !match.reschedule_rejected_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'There is already a pending reschedule proposal'
+          })
+        }
+        
+        const rescheduleData = data as ProposeReschedulePayload
+        if (!rescheduleData?.scheduled_at) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'scheduled_at is required for reschedule proposal'
+          })
+        }
+        
+        // Validate new date is in the future
+        const newDate = new Date(rescheduleData.scheduled_at)
+        if (newDate <= new Date()) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'New scheduled date must be in the future'
+          })
+        }
+        
+        updateData.reschedule_proposed_by = currentPlayer.id
+        updateData.reschedule_proposed_at = new Date().toISOString()
+        updateData.reschedule_proposed_scheduled_at = rescheduleData.scheduled_at
+        // Clear any previous approval/rejection
+        updateData.reschedule_approved_by = null
+        updateData.reschedule_rejected_by = null
+        break
+      }
+      
+      case 'approve_reschedule': {
+        if (match.status !== 'active') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Reschedule can only be approved when match status is active'
+          })
+        }
+        
+        if (!match.reschedule_proposed_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'No reschedule has been proposed yet'
+          })
+        }
+        
+        // Cannot approve your own reschedule proposal
+        if (match.reschedule_proposed_by === currentPlayer.id) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'You cannot approve your own reschedule proposal'
+          })
+        }
+        
+        // Check if already rejected
+        if (match.reschedule_rejected_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'This reschedule proposal has already been rejected'
+          })
+        }
+        
+        // Update scheduled_at to the proposed date
+        updateData.scheduled_at = match.reschedule_proposed_scheduled_at
+        updateData.reschedule_approved_by = currentPlayer.id
+        // Clear proposal fields
+        updateData.reschedule_proposed_by = null
+        updateData.reschedule_proposed_at = null
+        updateData.reschedule_proposed_scheduled_at = null
+        updateData.reschedule_rejected_by = null
+        break
+      }
+      
+      case 'reject_reschedule': {
+        if (match.status !== 'active') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Reschedule can only be rejected when match status is active'
+          })
+        }
+        
+        if (!match.reschedule_proposed_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'No reschedule has been proposed yet'
+          })
+        }
+        
+        // Cannot reject your own reschedule proposal
+        if (match.reschedule_proposed_by === currentPlayer.id) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'You cannot reject your own reschedule proposal'
+          })
+        }
+        
+        // Check if already approved
+        if (match.reschedule_approved_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'This reschedule proposal has already been approved'
+          })
+        }
+        
+        updateData.reschedule_rejected_by = currentPlayer.id
+        // Clear proposal fields
+        updateData.reschedule_proposed_by = null
+        updateData.reschedule_proposed_at = null
+        updateData.reschedule_proposed_scheduled_at = null
+        updateData.reschedule_approved_by = null
         break
       }
       
@@ -254,6 +385,18 @@ export default defineEventHandler(async (event) => {
           name
         ),
         score_approved_by_player:players!matches_score_approved_by_fkey(
+          id,
+          name
+        ),
+        reschedule_proposed_by_player:players!matches_reschedule_proposed_by_fkey(
+          id,
+          name
+        ),
+        reschedule_approved_by_player:players!matches_reschedule_approved_by_fkey(
+          id,
+          name
+        ),
+        reschedule_rejected_by_player:players!matches_reschedule_rejected_by_fkey(
           id,
           name
         ),

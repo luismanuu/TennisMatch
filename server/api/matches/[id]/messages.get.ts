@@ -67,8 +67,9 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Fetch messages
-    const { data: messages, error: messagesError } = await supabase
+    // Fetch messages (optionally filter by since timestamp for incremental updates)
+    const since = query.since as string | undefined
+    let queryBuilder = supabase
       .from('match_messages')
       .select(`
         *,
@@ -79,6 +80,13 @@ export default defineEventHandler(async (event) => {
         )
       `)
       .eq('match_id', matchId)
+    
+    // If since parameter is provided, only fetch messages after that timestamp
+    if (since) {
+      queryBuilder = queryBuilder.gt('created_at', since)
+    }
+    
+    const { data: messages, error: messagesError } = await queryBuilder
       .order('created_at', { ascending: true })
     
     if (messagesError) {
