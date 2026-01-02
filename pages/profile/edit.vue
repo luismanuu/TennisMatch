@@ -1,27 +1,7 @@
 <template>
   <div class="min-h-screen">
     <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
-      <div class="container-wide px-6">
-        <div class="flex justify-between items-center h-16">
-          <NuxtLink to="/" class="flex items-center gap-3 group">
-            <div class="relative w-10 h-10 rounded-xl bg-accent flex items-center justify-center hover-bounce overflow-hidden">
-              <span class="text-lg relative z-10">🎾</span>
-              <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-            </div>
-            <span class="text-size-3 font-semibold text-foreground">
-              Tenis Ecuador
-            </span>
-          </NuxtLink>
-
-          <div class="flex items-center gap-4">
-            <NuxtLink to="/profile" class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors">
-              Volver al Perfil
-            </NuxtLink>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <AppNavigation />
 
     <div class="h-16"></div>
 
@@ -55,6 +35,23 @@
               />
               <p class="text-size-4 font-regular text-foreground-muted mt-2">
                 Este nombre se sincronizará con tu cuenta de Clerk
+              </p>
+            </div>
+
+            <!-- Phone Number Field -->
+            <div>
+              <label for="phone_number" class="block text-size-4 font-semibold text-foreground mb-2">
+                Teléfono
+              </label>
+              <input
+                id="phone_number"
+                v-model="formData.phone_number"
+                type="tel"
+                class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                placeholder="+593 99 999 9999"
+              />
+              <p class="text-size-4 font-regular text-foreground-muted mt-2">
+                Opcional - Formato internacional recomendado
               </p>
             </div>
 
@@ -150,6 +147,7 @@ const userId = computed(() => user.value?.id || null)
 
 const formData = ref({
   name: '',
+  phone_number: '',
   category_id: ''
 })
 
@@ -173,12 +171,14 @@ const loadData = async () => {
   if (player.value) {
     formData.value = {
       name: player.value.name,
+      phone_number: player.value.phone_number || '',
       category_id: player.value.category_id || ''
     }
   } else if (user.value) {
     // If no player profile, use Clerk user data
     formData.value = {
       name: user.value.fullName || '',
+      phone_number: '',
       category_id: ''
     }
   }
@@ -195,12 +195,14 @@ const handleSubmit = async () => {
       // Update existing profile
       await updatePlayer(player.value.id, userId.value, {
         name: formData.value.name,
+        phone_number: formData.value.phone_number || undefined,
         category_id: formData.value.category_id
       })
     } else {
       // Create new profile
       await createPlayer(userId.value, {
         name: formData.value.name,
+        phone_number: formData.value.phone_number || undefined,
         category_id: formData.value.category_id
       })
     }

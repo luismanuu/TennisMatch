@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   try {
     const playerId = getRouterParam(event, 'id')
     const body = await readBody<UpdatePlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, category_id } = body
+    const { clerk_id, name, phone_number, category_id } = body
     
     if (!playerId || !clerk_id) {
       throw createError({
@@ -48,10 +48,25 @@ export default defineEventHandler(async (event) => {
       }
     }
     
+    // Validate phone number format if provided
+    if (phone_number !== undefined && phone_number !== null && phone_number.trim() !== '') {
+      // Basic phone number validation (allows international formats)
+      const phoneRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/
+      if (!phoneRegex.test(phone_number.trim())) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Invalid phone number format'
+        })
+      }
+    }
+    
     // Prepare update payload
     const updatePayload: any = {}
     if (name !== undefined) {
       updatePayload.name = name
+    }
+    if (phone_number !== undefined) {
+      updatePayload.phone_number = phone_number && phone_number.trim() !== '' ? phone_number.trim() : null
     }
     if (category_id !== undefined) {
       updatePayload.category_id = category_id

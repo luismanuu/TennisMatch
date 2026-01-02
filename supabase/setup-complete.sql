@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS "players" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "clerk_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "phone_number" TEXT,
     "category_id" UUID,
     "elo" INTEGER NOT NULL DEFAULT 1000,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT NOW(),

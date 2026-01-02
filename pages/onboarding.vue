@@ -47,8 +47,56 @@
           </button>
         </div>
 
-        <!-- Step 2: Category Selection -->
+        <!-- Step 2: Phone Number -->
         <div v-else-if="currentStep === 2" class="max-w-2xl mx-auto">
+          <div class="text-center mb-8">
+            <h1 class="text-size-1 font-semibold text-foreground mb-4">
+              Tu número de teléfono
+            </h1>
+            <p class="text-size-3 font-regular text-foreground-muted">
+              Opcional - Nos ayuda a contactarte para partidos y eventos
+            </p>
+          </div>
+
+          <div class="glass-card-elevated p-8">
+            <div class="mb-6">
+              <label for="phone_number" class="block text-size-4 font-semibold text-foreground mb-2">
+                Teléfono
+              </label>
+              <input
+                id="phone_number"
+                v-model="formData.phone_number"
+                type="tel"
+                class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                placeholder="+593 99 999 9999"
+              />
+              <p class="text-size-4 font-regular text-foreground-muted mt-2">
+                Puedes omitir este paso si prefieres
+              </p>
+            </div>
+
+            <div class="flex gap-4 pt-4">
+              <button
+                @click="currentStep = 3"
+                class="btn-primary text-size-3 flex-1"
+              >
+                Continuar
+                <svg class="w-5 h-5 ml-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+              <button
+                @click="currentStep = 1"
+                class="btn-secondary text-size-3 px-6"
+              >
+                Atrás
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Category Selection -->
+        <div v-else-if="currentStep === 3" class="max-w-2xl mx-auto">
           <div class="text-center mb-8">
             <h1 class="text-size-1 font-semibold text-foreground mb-4">
               Selecciona tu categoría
@@ -111,7 +159,7 @@
                 <span v-else>Completar Perfil</span>
               </button>
               <button
-                @click="currentStep = 1"
+                @click="currentStep = 2"
                 class="btn-secondary text-size-3 px-6"
               >
                 Atrás
@@ -120,8 +168,8 @@
           </div>
         </div>
 
-        <!-- Step 3: Complete -->
-        <div v-else-if="currentStep === 3" class="max-w-2xl mx-auto text-center">
+        <!-- Step 4: Complete -->
+        <div v-else-if="currentStep === 4" class="max-w-2xl mx-auto text-center">
           <div class="w-24 h-24 rounded-2xl bg-green-500/20 flex items-center justify-center mx-auto mb-8">
             <span class="text-5xl">✅</span>
           </div>
@@ -160,6 +208,7 @@ const userId = computed(() => user.value?.id || null)
 const currentStep = ref(1)
 const formData = ref({
   name: '',
+  phone_number: '',
   category_id: ''
 })
 
@@ -173,10 +222,11 @@ const handleComplete = async () => {
   try {
     await createPlayer(userId.value, {
       name: user.value?.fullName || user.value?.firstName || 'Usuario',
+      phone_number: formData.value.phone_number || undefined,
       category_id: formData.value.category_id
     })
     
-    currentStep.value = 3
+    currentStep.value = 4
   } catch (error) {
     console.error('Error creating profile:', error)
     // Error handling is done by the composable

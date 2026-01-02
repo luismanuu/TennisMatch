@@ -1,32 +1,7 @@
 <template>
   <div class="min-h-screen">
     <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
-      <div class="container-wide px-6">
-        <div class="flex justify-between items-center h-16">
-          <NuxtLink to="/" class="flex items-center gap-3 group">
-            <div class="relative w-10 h-10 rounded-xl bg-accent flex items-center justify-center hover-bounce overflow-hidden">
-              <span class="text-lg relative z-10">🎾</span>
-              <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-            </div>
-            <span class="text-size-3 font-semibold text-foreground">
-              Tenis Ecuador
-            </span>
-          </NuxtLink>
-
-          <div class="flex items-center gap-4">
-            <NuxtLink to="/" class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors">
-              Dashboard
-            </NuxtLink>
-            <SignOutButton>
-              <button class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors">
-                Cerrar Sesión
-              </button>
-            </SignOutButton>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <AppNavigation />
 
     <div class="h-16"></div>
 
@@ -88,7 +63,17 @@
               </p>
             </div>
 
-            <!-- ELO Rating -->
+            <!-- Phone Number -->
+            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
+              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Teléfono</p>
+              <p class="text-size-3 font-semibold text-foreground">
+                {{ player.phone_number || 'No proporcionado' }}
+              </p>
+            </div>
+          </div>
+
+          <!-- ELO Rating -->
+          <div class="mt-6">
             <div class="p-6 rounded-xl bg-surface border border-border-subtle">
               <p class="text-size-4 font-regular text-foreground-subtle mb-2">Puntuación ELO</p>
               <p class="text-size-1 font-semibold text-gradient-static">{{ player.elo }}</p>

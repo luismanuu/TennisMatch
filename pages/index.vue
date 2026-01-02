@@ -1,53 +1,7 @@
 <template>
   <div class="min-h-screen">
     <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
-      <div class="container-wide px-6">
-        <div class="flex justify-between items-center h-16">
-          <!-- Logo -->
-          <NuxtLink to="/" class="flex items-center gap-3 group">
-            <div class="relative w-10 h-10 rounded-xl bg-accent flex items-center justify-center hover-bounce overflow-hidden">
-              <span class="text-lg relative z-10">🎾</span>
-              <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-            </div>
-            <span class="text-size-3 font-semibold text-foreground">
-              Tenis Ecuador
-            </span>
-          </NuxtLink>
-
-          <!-- Nav Actions -->
-          <div class="flex items-center gap-4">
-            <template v-if="isAuthenticated">
-              <NuxtLink 
-                to="/profile" 
-                class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
-              >
-                Mi Perfil
-              </NuxtLink>
-              <SignOutButton>
-                <button class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors">
-                  Cerrar Sesión
-                </button>
-              </SignOutButton>
-            </template>
-            <template v-else>
-              <NuxtLink 
-                to="/sign-in" 
-                class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors hidden sm:block"
-              >
-                Iniciar Sesión
-              </NuxtLink>
-              <NuxtLink 
-                to="/sign-up" 
-                class="btn-primary text-size-4 !py-2 !px-4"
-              >
-                Comenzar Gratis
-              </NuxtLink>
-            </template>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <AppNavigation />
 
     <!-- Spacer for fixed nav -->
     <div class="h-16"></div>
@@ -94,6 +48,10 @@
                 <p class="text-size-4 font-regular text-foreground-subtle mb-1">Nombre</p>
                 <p class="text-size-3 font-regular text-foreground">{{ user?.fullName || 'No configurado' }}</p>
               </div>
+              <div v-if="player?.phone_number" class="p-4 rounded-xl bg-surface border border-border-subtle">
+                <p class="text-size-4 font-regular text-foreground-subtle mb-1">Teléfono</p>
+                <p class="text-size-3 font-regular text-foreground">{{ player.phone_number }}</p>
+              </div>
               <div v-if="player" class="p-4 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 font-regular text-foreground-subtle mb-1">Categoría</p>
                 <p class="text-size-3 font-regular text-foreground">{{ player.category?.name || 'No seleccionada' }}</p>
@@ -119,6 +77,32 @@
               </div>
             </div>
             <ul class="space-y-3">
+              <NuxtLink 
+                to="/matches/new"
+                class="flex items-center gap-4 p-3 rounded-xl bg-surface border border-border-subtle hover-border-glow cursor-pointer group"
+              >
+                <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                <span class="text-size-3 font-regular text-foreground group-hover:text-accent transition-colors">
+                  Registrar Partido
+                </span>
+              </NuxtLink>
+              <NuxtLink 
+                to="/matches"
+                class="flex items-center gap-4 p-3 rounded-xl bg-surface border border-border-subtle hover-border-glow cursor-pointer group"
+              >
+                <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <span class="text-size-3 font-regular text-foreground group-hover:text-accent transition-colors">
+                  Ver Historial de Partidos
+                </span>
+              </NuxtLink>
               <li v-for="(feature, index) in dashboardFeatures" :key="index" 
                   class="flex items-center gap-4 p-3 rounded-xl bg-surface border border-border-subtle hover-border-glow cursor-pointer group">
                 <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
@@ -310,14 +294,8 @@ definePageMeta({
   middleware: []
 })
 
-// Use Clerk composables from @clerk/nuxt
-// useAuth provides auth state
-const auth = useAuth()
-const { isLoaded: authLoaded, isSignedIn, userId: clerkUserId } = auth
-const { isLoaded: userLoaded, user } = useUser()
-
-// Combined isLoaded - both auth and user must be loaded
-const isLoaded = computed(() => authLoaded.value && userLoaded.value)
+// Use shared auth state composable for consistent behavior
+const { isLoaded, isAuthenticated, userId, user, isSignedIn } = useAuthState()
 
 const { player, fetchPlayer } = usePlayer()
 
@@ -326,23 +304,12 @@ if (process.dev && process.client) {
   watchEffect(() => {
     console.log('[Auth State]', {
       isLoaded: isLoaded.value,
-      authLoaded: authLoaded.value,
-      userLoaded: userLoaded.value,
-      isSignedIn: isSignedIn.value,
+      isAuthenticated: isAuthenticated.value,
       hasUser: !!user.value,
-      userId: clerkUserId.value || user.value?.id
+      userId: userId.value
     })
   })
 }
-
-// Use userId from useAuth (preferred) or fallback to user.id
-const userId = computed(() => clerkUserId.value || user.value?.id || null)
-
-// Computed properties for template conditions (Vue templates auto-unwrap refs)
-// Check if refs exist and have values
-const isAuthenticated = computed(() => {
-  return !!(isLoaded.value && isSignedIn.value && user.value)
-})
 
 // Load player profile if user is signed in
 const loadPlayerProfile = async () => {
@@ -379,7 +346,6 @@ onMounted(async () => {
 
 // Dashboard data
 const dashboardFeatures = [
-  'Registrar partidos de torneos',
   'Seguir tu calificación ELO',
   'Ver y crear torneos',
   'Gestionar tu perfil de jugador'

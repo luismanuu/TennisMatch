@@ -43,6 +43,37 @@ export async function updateClerkUserName(clerkId: string, name: string) {
   }
 }
 
+export async function createInvitation(email: string, name: string, invitationToken: string) {
+  try {
+    const client = getClerkClient()
+    const config = useRuntimeConfig()
+    
+    // Get the base URL for invitation links
+    const baseUrl = config.public?.appUrl || process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const invitationUrl = `${baseUrl}/invitation/${invitationToken}`
+    
+    // Create invitation via Clerk
+    const invitation = await client.invitations.createInvitation({
+      emailAddress: email,
+      publicMetadata: {
+        name,
+        invitationToken
+      },
+      // Optional: customize the redirect URL after sign-up
+      redirectUrl: invitationUrl
+    })
+    
+    return {
+      id: invitation.id,
+      emailAddress: invitation.emailAddress,
+      status: invitation.status
+    }
+  } catch (error) {
+    console.error('Error creating Clerk invitation:', error)
+    throw error
+  }
+}
+
 // Note: Clerk ID is passed from the client in the request body/query
 // Server-side Clerk verification would require JWT token parsing
 // For now, we rely on the client to pass clerk_id and verify it server-side

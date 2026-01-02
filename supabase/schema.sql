@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clerk_id TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
+  phone_number TEXT,
   category_id UUID REFERENCES categories(id),
   elo INTEGER NOT NULL DEFAULT 1000,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

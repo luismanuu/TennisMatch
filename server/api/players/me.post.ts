@@ -5,7 +5,7 @@ import type { CreatePlayerPayload } from '~/types'
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody<CreatePlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, category_id } = body
+    const { clerk_id, name, phone_number, category_id } = body
     
     if (!clerk_id || !name || !category_id) {
       throw createError({
@@ -15,7 +15,17 @@ export default defineEventHandler(async (event) => {
     }
     
     // Verify Clerk user exists
-    const clerkUser = await getClerkUser(clerk_id)
+    let clerkUser
+    try {
+      clerkUser = await getClerkUser(clerk_id)
+    } catch (clerkError: any) {
+      console.error('Clerk user verification error:', clerkError)
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Clerk user not found',
+        data: clerkError
+      })
+    }
     
     // Verify category exists
     const supabase = getSupabaseAdmin()
@@ -47,11 +57,12 @@ export default defineEventHandler(async (event) => {
     }
     
     // Create player profile
-    const { data: player, error: createError } = await supabase
+    const { data: player, error: insertError } = await supabase
       .from('players')
       .insert({
         clerk_id,
         name,
+        phone_number: phone_number || null,
         category_id,
         elo: 1000
       })
@@ -61,19 +72,29 @@ export default defineEventHandler(async (event) => {
       `)
       .single()
     
-    if (createError) {
+    if (insertError) {
+      console.error('Supabase insert error:', insertError)
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create player profile',
-        data: createError
+        data: insertError
       })
     }
     
     return player
   } catch (error: any) {
+    console.error('Error in /api/players/me POST:', error)
+    
+    // If it's already a createError, re-throw it
+    if (error.statusCode) {
+      throw error
+    }
+    
+    // Otherwise, wrap it
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || error.message || 'Internal server error',
+      data: error.data || error
     })
   }
 })
