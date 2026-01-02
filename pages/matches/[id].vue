@@ -46,8 +46,15 @@
                 <p class="text-size-4 font-semibold text-foreground-muted mb-2">Jugadores</p>
                 <div class="flex items-center gap-4">
                   <div class="flex-1 p-4 rounded-xl bg-surface border border-border-subtle">
-                    <p class="text-size-3 font-semibold text-foreground">
-                      {{ match.player1?.name || 'Jugador 1' }}
+                    <NuxtLink
+                      v-if="match.player1"
+                      :to="`/players/${match.player1.id}`"
+                      class="text-size-3 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block"
+                    >
+                      {{ match.player1.name }}
+                    </NuxtLink>
+                    <p v-else class="text-size-3 font-semibold text-foreground">
+                      Jugador 1
                     </p>
                     <p v-if="match.player1?.category" class="text-size-4 text-foreground-muted mt-1">
                       {{ match.player1.category.name }}
@@ -55,13 +62,27 @@
                   </div>
                   <span class="text-size-2 font-bold text-foreground-muted">VS</span>
                   <div class="flex-1 p-4 rounded-xl bg-surface border border-border-subtle">
-                    <p class="text-size-3 font-semibold text-foreground">
-                      {{ match.player2?.name || match.pending_player2?.name || 'Oponente' }}
+                    <NuxtLink
+                      v-if="match.player2"
+                      :to="`/players/${match.player2.id}`"
+                      class="text-size-3 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block"
+                    >
+                      {{ match.player2.name }}
+                    </NuxtLink>
+                    <NuxtLink
+                      v-else-if="match.pending_player2"
+                      :to="`/players/${match.pending_player2.id}`"
+                      class="text-size-3 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block"
+                    >
+                      {{ match.pending_player2.name }}
+                    </NuxtLink>
+                    <p v-else class="text-size-3 font-semibold text-foreground">
+                      Oponente
                     </p>
                     <p v-if="match.player2?.category || match.pending_player2?.category" class="text-size-4 text-foreground-muted mt-1">
                       {{ match.player2?.category?.name || match.pending_player2?.category?.name }}
                     </p>
-                    <p v-if="match.pending_player2" class="text-size-4 text-red-400 mt-1">
+                    <p v-if="match.pending_player2" class="text-size-4 text-yellow-400 mt-1">
                       (Pendiente de registro)
                     </p>
                   </div>
@@ -87,7 +108,13 @@
                 <p class="text-size-4 font-semibold text-foreground-muted mb-2">Resultado</p>
                 <p class="text-size-3 text-foreground">{{ match.score }}</p>
                 <p v-if="match.winner" class="text-size-4 text-foreground-muted mt-1">
-                  Ganador: {{ match.winner.name }}
+                  Ganador: 
+                  <NuxtLink
+                    :to="`/players/${match.winner.id}`"
+                    class="text-accent hover:underline hover:opacity-80 transition-all cursor-pointer"
+                  >
+                    {{ match.winner.name }}
+                  </NuxtLink>
                 </p>
               </div>
 
@@ -101,7 +128,13 @@
                     {{ match.score_proposed_by_player?.name }} propuso: {{ match.score }}
                   </p>
                   <p v-if="match.winner" class="text-size-4 text-foreground-muted mt-1">
-                    Ganador: {{ match.winner.name }}
+                    Ganador: 
+                    <NuxtLink
+                      :to="`/players/${match.winner.id}`"
+                      class="text-accent hover:underline hover:opacity-80 transition-all cursor-pointer"
+                    >
+                      {{ match.winner.name }}
+                    </NuxtLink>
                   </p>
                 </div>
               </div>
@@ -233,8 +266,15 @@
                     : 'bg-surface max-w-[80%]'
                 ]"
               >
-                <p class="text-size-4 font-semibold text-foreground mb-1">
-                  {{ message.player?.name || 'Jugador' }}
+                <NuxtLink
+                  v-if="message.player"
+                  :to="`/players/${message.player.id}`"
+                  class="text-size-4 font-semibold text-foreground mb-1 hover:text-accent hover:underline transition-all cursor-pointer block"
+                >
+                  {{ message.player.name }}
+                </NuxtLink>
+                <p v-else class="text-size-4 font-semibold text-foreground mb-1">
+                  Jugador
                 </p>
                 <p class="text-size-3 text-foreground">{{ message.message }}</p>
                 <p class="text-size-4 text-foreground-muted mt-1">

@@ -87,12 +87,26 @@ export default defineEventHandler(async (event) => {
     // Create Clerk invitation
     let clerkInvitationId: string | undefined
     try {
+      console.log('Creating Clerk invitation for:', { email, name, invitationToken })
       const invitation = await createInvitation(email, name, invitationToken)
       clerkInvitationId = invitation.id
+      console.log('Clerk invitation created successfully:', { id: invitation.id, email: invitation.emailAddress, status: invitation.status })
     } catch (invitationError: any) {
-      console.error('Error creating Clerk invitation:', invitationError)
-      // Continue without invitation ID - the pending player will still be created
-      // The invitation can be retried later
+      console.error('Error creating Clerk invitation:', {
+        error: invitationError,
+        message: invitationError?.message,
+        statusCode: invitationError?.statusCode,
+        statusMessage: invitationError?.statusMessage,
+        email,
+        name
+      })
+      // Throw error to prevent creating pending player without invitation
+      // This ensures the user knows the invitation failed
+      throw createError({
+        statusCode: 500,
+        statusMessage: `Failed to send invitation email: ${invitationError?.message || invitationError?.statusMessage || 'Unknown error'}. Please check your Clerk configuration and try again.`,
+        data: invitationError
+      })
     }
     
     // Create pending player record

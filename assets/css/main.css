@@ -610,6 +610,85 @@ textarea:focus-visible,
   opacity: 1 !important;
 }
 
+/* Verification code input fields (OTP) - Use same style as regular text fields */
+input[type="text"][inputmode="numeric"],
+input[type="tel"][inputmode="numeric"],
+input[type="text"][autocomplete="one-time-code"],
+.cl-otpCodeInput,
+.cl-codeInput,
+[class*="otp"] input,
+[class*="code"] input,
+[class*="verification"] input,
+[class*="codeInput"],
+[class*="otpField"] input,
+[class*="codeField"] input,
+div[class*="otp"] input,
+div[class*="code"] input {
+  background: var(--surface) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.4375rem 0.75rem !important;
+  font-size: 0.8125rem !important;
+  height: 2.125rem !important;
+  width: 2.5rem !important;
+  min-width: 2.5rem !important;
+  max-width: 2.5rem !important;
+  text-align: center !important;
+  color: var(--foreground) !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease !important;
+  box-sizing: border-box !important;
+  display: inline-block !important;
+  margin: 0 0.25rem !important;
+  font-weight: normal !important;
+}
+
+input[type="text"][inputmode="numeric"]:hover,
+input[type="tel"][inputmode="numeric"]:hover,
+input[type="text"][autocomplete="one-time-code"]:hover,
+.cl-otpCodeInput:hover,
+.cl-codeInput:hover,
+[class*="otp"] input:hover,
+[class*="code"] input:hover,
+[class*="verification"] input:hover,
+[class*="codeInput"]:hover,
+[class*="otpField"] input:hover,
+[class*="codeField"] input:hover,
+div[class*="otp"] input:hover,
+div[class*="code"] input:hover {
+  border-color: var(--border-subtle) !important;
+  border-width: 2px !important;
+}
+
+input[type="text"][inputmode="numeric"]:focus,
+input[type="tel"][inputmode="numeric"]:focus,
+input[type="text"][autocomplete="one-time-code"]:focus,
+.cl-otpCodeInput:focus,
+.cl-codeInput:focus,
+[class*="otp"] input:focus,
+[class*="code"] input:focus,
+[class*="verification"] input:focus,
+[class*="codeInput"]:focus,
+[class*="otpField"] input:focus,
+[class*="codeField"] input:focus,
+div[class*="otp"] input:focus,
+div[class*="code"] input:focus {
+  border-color: var(--accent) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+  outline: none !important;
+}
+
+/* OTP container spacing */
+[class*="otp"],
+[class*="code"],
+[class*="verification"] {
+  display: flex !important;
+  gap: 0.5rem !important;
+  justify-content: center !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+}
+
 /* Password field and its wrapper - ensure proper layout */
 .cl-formFieldRow__password,
 [data-field-id="password"] {

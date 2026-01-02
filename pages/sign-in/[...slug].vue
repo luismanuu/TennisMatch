@@ -23,21 +23,40 @@
           <p class="auth-subtitle">Ingresa a tu cuenta para continuar</p>
         </div>
 
-        <!-- Invitation Message -->
-        <div v-if="invitationMessage" class="invitation-notice">
-          <div class="notice-icon">🎾</div>
-          <p class="notice-text">{{ invitationMessage }}</p>
-        </div>
-
         <!-- Clerk Sign In Component -->
-        <div class="clerk-wrapper">
-          <SignIn
-            :routing="'path'"
-            :path="'/sign-in'"
-            :sign-up-url="'/sign-up'"
-            :appearance="clerkAppearance"
-            :initial-values="invitationEmail ? { emailAddress: invitationEmail } : undefined"
-          />
+        <div class="clerk-wrapper" v-if="!(isFactorTwoRoute && sessionStorage.getItem('clerk-2fa-code-sent') && !sessionStorage.getItem('clerk-2fa-initiated'))">
+          <ClientOnly>
+            <SignIn
+              v-if="shouldRenderSignIn"
+              :key="signInKey"
+              :routing="'path'"
+              :path="'/sign-in'"
+              :sign-up-url="'/sign-up'"
+              :appearance="clerkAppearance"
+            />
+            <template #fallback>
+              <div class="flex items-center justify-center p-8">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                <p class="text-size-4 font-regular text-foreground-muted ml-4">Cargando...</p>
+              </div>
+            </template>
+          </ClientOnly>
+        </div>
+        <!-- Custom message for reload scenarios -->
+        <div v-else-if="isFactorTwoRoute && sessionStorage.getItem('clerk-2fa-code-sent') && !sessionStorage.getItem('clerk-2fa-initiated')" class="code-entry-message">
+          <div class="message-content">
+            <p class="message-title">Ingresa tu código de verificación</p>
+            <p class="message-text">
+              Ya se envió un código de verificación a tu correo electrónico.
+              Por favor, revisa tu bandeja de entrada e ingresa el código a continuación.
+            </p>
+            <button
+              @click="allowCodeEntry"
+              class="continue-button"
+            >
+              Continuar con el código existente
+            </button>
+          </div>
         </div>
       </div>
 
@@ -51,57 +70,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
 import { esES } from '@clerk/localizations'
+import { useRoute } from 'vue-router'
 
 definePageMeta({
-  middleware: []
+  middleware: ['2fa']
 })
 
 const route = useRoute()
-const router = useRouter()
-const { isAuthenticated, userId } = useAuthState()
-
-// Check if coming from invitation completion
-const invitationEmail = computed(() => route.query.email as string | undefined)
-const invitationMessage = computed(() => route.query.message as string | undefined)
-const invitationToken = computed(() => route.query.invitation_token as string | undefined)
-
-// Handle invitation completion for OAuth users
-const handleInvitationForOAuth = async () => {
-  if (!invitationToken.value || !isAuthenticated.value || !userId.value) return
-
-  try {
-    console.log('Completing invitation for OAuth user:', { invitationToken: invitationToken.value, userId: userId.value })
-
-    // Call API to complete invitation for OAuth user
-    const response = await $fetch('/api/invitations/complete-oauth', {
-      method: 'POST',
-      body: {
-        invitation_token: invitationToken.value,
-        clerk_user_id: userId.value
-      }
-    })
-
-    if (response.success) {
-      console.log('Invitation completed successfully for OAuth user')
-      // Redirect to home after successful completion
-      await router.push('/')
-    }
-  } catch (error: any) {
-    console.error('Error completing invitation for OAuth user:', error)
-    // Continue to home anyway - the user is authenticated
-    await router.push('/')
-  }
-}
-
-// Watch for authentication state changes when coming from invitation
-watch([isAuthenticated, invitationToken], ([authenticated, token]) => {
-  if (authenticated && token) {
-    // User just signed in via OAuth after invitation
-    handleInvitationForOAuth()
-  }
-}, { immediate: true })
 
 // Custom localization that extends esES but removes "ultimo uso" references
 const customLocalization = {
@@ -114,9 +91,210 @@ const clerkAppearance = {
   localization: customLocalization
 }
 
-// Hide the lastAuthenticationStrategyBadge element after Clerk loads
+// Track if we're on the factor-two route
+const isFactorTwoRoute = computed(() => {
+  if (!process.client) return false
+  const currentPath = window.location?.pathname || ''
+  const currentHash = window.location?.hash || ''
+  const routePath = route.path || ''
+  return routePath === '/sign-in/factor-two' ||
+         routePath.includes('factor-two') ||
+         currentPath.includes('factor-two') ||
+         currentHash.includes('factor-two')
+})
+
+// Track when 2FA code was sent to prevent re-sending on reload
+const twoFactorCodeSentKey = 'clerk-2fa-code-sent'
+const twoFactorInitiatedKey = 'clerk-2fa-initiated'
+const continueWithExistingCodeKey = 'clerk-2fa-continue-existing'
+
+// Initialize as false - will be set synchronously before render
+const shouldRenderSignIn = ref(false)
+
+// SYNCHRONOUS CHECK: If we're on factor-two with recent code but no initiated flag, never render
+if (process.client && typeof window !== 'undefined') {
+  const currentPath = window.location.pathname
+  const currentHash = window.location.hash
+  const isOnFactorTwo = currentPath.includes('factor-two') || currentHash.includes('factor-two')
+
+  if (isOnFactorTwo) {
+    const codeSentTimestamp = sessionStorage.getItem(twoFactorCodeSentKey)
+    const twoFactorInitiated = sessionStorage.getItem(twoFactorInitiatedKey)
+    const codeSentRecently = codeSentTimestamp && (Date.now() - parseInt(codeSentTimestamp)) < 10 * 60 * 1000
+
+    if (codeSentRecently && !twoFactorInitiated) {
+      shouldRenderSignIn.value = false
+      console.log('🚫 INITIAL: Blocking SignIn render on factor-two reload')
+    }
+  }
+}
+
+// Determine if we should render SignIn component
+// Only render when user is actually signing in, not on page reload
+const checkShouldRender = () => {
+  if (!process.client) {
+    shouldRenderSignIn.value = true
+    return
+  }
+  
+  // Check route directly from window.location for more reliable detection
+  const currentPath = window.location.pathname
+  const currentHash = window.location.hash
+  const isOnFactorTwo = currentPath.includes('factor-two') || currentHash.includes('factor-two')
+  
+  if (!isOnFactorTwo) {
+    // Not on factor-two route, always render
+    shouldRenderSignIn.value = true
+    return
+  }
+  
+  // We're on factor-two route - check if we should render
+  const codeSentTimestamp = sessionStorage.getItem(twoFactorCodeSentKey)
+  const twoFactorInitiated = sessionStorage.getItem(twoFactorInitiatedKey)
+  const continueWithExisting = sessionStorage.getItem(continueWithExistingCodeKey)
+  const now = Date.now()
+  const codeSentRecently = codeSentTimestamp && (now - parseInt(codeSentTimestamp)) < 10 * 60 * 1000
+  
+  if (twoFactorInitiated) {
+    // User just navigated here from sign-in (completed first factor)
+    // Allow SignIn to render and send code
+    shouldRenderSignIn.value = true
+    console.log('✅ Allowing SignIn to render - user completed sign-in')
+    // Remove initiated flag after a delay to mark that code sending is complete
+    setTimeout(() => {
+      sessionStorage.removeItem(twoFactorInitiatedKey)
+      // Mark that code was sent
+      sessionStorage.setItem(twoFactorCodeSentKey, now.toString())
+    }, 3000)
+  } else if (codeSentRecently && !continueWithExisting) {
+    // Code was sent recently and this is a reload (not continuing with existing)
+    // DON'T render SignIn to prevent automatic code sending
+    shouldRenderSignIn.value = false
+    console.log('🚫 Preventing SignIn render - code already sent, this is a reload')
+  } else if (continueWithExisting) {
+    // User clicked continue - render but with fetch interception active
+    shouldRenderSignIn.value = true
+    console.log('✅ Allowing SignIn to render - user clicked continue')
+    // Clear the continue flag after a short delay
+    setTimeout(() => {
+      sessionStorage.removeItem(continueWithExistingCodeKey)
+    }, 1000)
+  } else {
+    // Code expired or no code sent yet, allow resend
+    // But only if we have a code sent timestamp (meaning user was here before)
+    // If no timestamp, this might be direct access - don't allow
+    if (codeSentTimestamp) {
+      // Code expired, allow resend
+      sessionStorage.setItem(twoFactorInitiatedKey, 'true')
+      shouldRenderSignIn.value = true
+      console.log('✅ Allowing SignIn to render - code expired, allowing resend')
+      setTimeout(() => {
+        sessionStorage.removeItem(twoFactorInitiatedKey)
+        sessionStorage.setItem(twoFactorCodeSentKey, Date.now().toString())
+      }, 3000)
+    } else {
+      // No code sent timestamp - this is likely direct access to factor-two
+      // Don't render SignIn - redirect or show message
+      shouldRenderSignIn.value = false
+      console.log('🚫 Preventing SignIn render - no code sent timestamp, likely direct access')
+    }
+  }
+}
+
+// Run check synchronously before component renders
+if (process.client) {
+  // IMMEDIATE CHECK: Prevent rendering on reload scenarios
+  const currentPath = window.location.pathname
+  const currentHash = window.location.hash
+  const isOnFactorTwo = currentPath.includes('factor-two') || currentHash.includes('factor-two')
+
+  if (isOnFactorTwo) {
+    const codeSentTimestamp = sessionStorage.getItem(twoFactorCodeSentKey)
+    const twoFactorInitiated = sessionStorage.getItem(twoFactorInitiatedKey)
+    const codeSentRecently = codeSentTimestamp && (Date.now() - parseInt(codeSentTimestamp)) < 10 * 60 * 1000
+
+    if (codeSentRecently && !twoFactorInitiated) {
+      // Definitely a reload - don't render Clerk component
+      shouldRenderSignIn.value = false
+    }
+  }
+
+  // Also run the full check
+  checkShouldRender()
+}
+
+// Function to allow code entry (when user clicks button)
+const allowCodeEntry = () => {
+  // Mark that user wants to continue with existing code
+  // This will render SignIn but fetch interception will block code sending
+  sessionStorage.setItem(continueWithExistingCodeKey, 'true')
+  shouldRenderSignIn.value = true
+  // The stable key from signInKey computed will prevent Clerk from re-initializing
+  // Fetch interception will block any code sending requests
+}
+
+// Compute the sign-in key
+const signInKey = computed(() => {
+  if (!process.client) return 'sign-in-default'
+  
+  if (!isFactorTwoRoute.value) {
+    return 'sign-in-default'
+  }
+  
+  const codeSentTimestamp = sessionStorage.getItem(twoFactorCodeSentKey)
+  const twoFactorInitiated = sessionStorage.getItem(twoFactorInitiatedKey)
+  const now = Date.now()
+  const codeSentRecently = codeSentTimestamp && (now - parseInt(codeSentTimestamp)) < 10 * 60 * 1000
+  
+  if (twoFactorInitiated) {
+    return `sign-in-2fa-${now}`
+  } else if (codeSentRecently) {
+    // Use stable key to prevent re-initialization
+    return `sign-in-2fa-existing-${codeSentTimestamp}`
+  } else {
+    return `sign-in-2fa-${now}`
+  }
+})
+
+// Initialize on mount
 if (process.client) {
   onMounted(() => {
+    // IMMEDIATE CHECK: Prevent Clerk from mounting if this is a reload on factor-two
+    const currentPath = window.location.pathname
+    const currentHash = window.location.hash
+    const isOnFactorTwo = currentPath.includes('factor-two') || currentHash.includes('factor-two')
+
+    if (isOnFactorTwo) {
+      const codeSentTimestamp = sessionStorage.getItem(twoFactorCodeSentKey)
+      const twoFactorInitiated = sessionStorage.getItem(twoFactorInitiatedKey)
+      const codeSentRecently = codeSentTimestamp && (Date.now() - parseInt(codeSentTimestamp)) < 10 * 60 * 1000
+
+      // If code was sent recently and no initiated flag, this is DEFINITELY a reload - prevent rendering
+      if (codeSentRecently && !twoFactorInitiated) {
+        console.log('🚫 IMMEDIATE: Preventing Clerk SignIn render on reload - code already sent', {
+          codeSentTimestamp,
+          twoFactorInitiated,
+          isOnFactorTwo
+        })
+        shouldRenderSignIn.value = false
+
+        // Force update the key to prevent any Clerk component from mounting
+        signInKey.value = `reload-blocked-${Date.now()}`
+        return // Don't run any other checks
+      }
+    }
+    
+    // Check if we should render SignIn on mount (in case it wasn't set synchronously)
+    checkShouldRender()
+    
+    // Watch for route changes
+    watch(() => route.path, () => {
+      checkShouldRender()
+    })
+    
+    // NOTE: Fetch interception is handled by the plugin (track-2fa-navigation.client.ts)
+    // We don't need to intercept here to avoid conflicts
+    
     const hideBadge = () => {
       const clerkWrapper = document.querySelector('.clerk-wrapper')
       if (!clerkWrapper) return
@@ -155,6 +333,7 @@ if (process.client) {
       // Cleanup on unmount
       onUnmounted(() => {
         observer.disconnect()
+        // Fetch interception is handled by plugin, no cleanup needed here
       })
     }
   })
@@ -345,17 +524,17 @@ if (process.client) {
   box-shadow: 0 0 0 3px var(--accent-subtle) !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)[data-invalid="true"]) {
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]) {
   border-color: oklch(0.60 0.18 25) !important;
   border-width: 2px !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)[data-invalid="true"]:hover) {
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:hover) {
   border-color: oklch(0.65 0.18 25) !important;
   border-width: 2px !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)[data-invalid="true"]:focus) {
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:focus) {
   border-color: oklch(0.60 0.18 25) !important;
   border-width: 2px !important;
   box-shadow: 0 0 0 3px oklch(0.60 0.18 25 / 0.2) !important;
@@ -470,30 +649,6 @@ if (process.client) {
   color: var(--foreground-muted) !important;
 }
 
-/* Invitation Notice */
-.invitation-notice {
-  background: var(--accent-subtle);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-4);
-  margin-bottom: var(--spacing-4);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-}
-
-.notice-icon {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-.notice-text {
-  font-size: 0.875rem;
-  color: var(--foreground);
-  margin: 0;
-  line-height: 1.4;
-}
-
 /* OTP Container - Must allow pointer events for the hidden input overlay */
 .clerk-wrapper :deep([data-input-otp-container="true"]) {
   position: relative !important;
@@ -501,7 +656,7 @@ if (process.client) {
   cursor: text !important;
 }
 
-/* The hidden input overlay that actually receives input */
+/* Position the hidden input overlay to cover the entire OTP container area */
 .clerk-wrapper :deep(input[data-input-otp="true"]) {
   position: absolute !important;
   top: 0 !important;
@@ -511,62 +666,96 @@ if (process.client) {
   opacity: 1 !important;
   pointer-events: all !important;
   cursor: text !important;
-  z-index: 10 !important;
+  /* Override Clerk's inline styles */
   background: transparent !important;
   border: none !important;
   color: transparent !important;
   caret-color: var(--accent) !important;
+  z-index: 10 !important;
   font-size: 20px !important;
   letter-spacing: 0.75rem !important;
   text-align: center !important;
   text-indent: 0 !important;
 }
 
-/* OTP Code Field Input Container */
+/* Apple-style OTP Code Input - Clean and minimal design */
 .clerk-wrapper :deep(.cl-otpCodeFieldInputContainer) {
   pointer-events: auto !important;
   width: 100% !important;
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
+  margin: 1rem 0 !important;
 }
 
-/* OTP Code Field Inputs (visual segments) */
+/* OTP Code Field Inputs container - Apple spacing */
 .clerk-wrapper :deep(.cl-otpCodeFieldInputs) {
   pointer-events: none !important;
-  position: relative !important;
   display: flex !important;
   flex-direction: row !important;
-  gap: 0.5rem !important;
+  gap: 0.75rem !important;
   justify-content: center !important;
   align-items: center !important;
   flex-wrap: nowrap !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: relative !important;
 }
 
-/* Individual OTP input segments (visual only) - Exclude from all form field styles */
+/* Apple-style individual OTP boxes */
 .clerk-wrapper :deep(.cl-otpCodeFieldInput),
 .clerk-wrapper :deep(.cl-input.cl-otpCodeFieldInput) {
-  background: var(--surface) !important;
-  border: 2px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
+  /* Clean Apple-like appearance */
+  background: var(--background) !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
   color: var(--foreground) !important;
   pointer-events: none !important;
-  /* Proper sizing for OTP inputs */
-  min-width: 2.5rem !important;
-  width: 2.5rem !important;
-  max-width: 2.5rem !important;
-  height: 2.5rem !important;
-  min-height: 2.5rem !important;
-  max-height: 2.5rem !important;
+
+  /* Perfect square dimensions like Apple */
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  max-width: 44px !important;
+  max-height: 44px !important;
+
+  /* Centered content */
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  transition: border-color 150ms ease !important;
-  /* Override form field padding but keep proper spacing */
+
+  /* Smooth transitions */
+  transition: all 200ms ease !important;
+
+  /* Reset Clerk styles */
   padding: 0 !important;
   margin: 0 !important;
-  flex-shrink: 0 !important;
-  flex-grow: 0 !important;
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: 20px !important;
+  line-height: 1 !important;
+  text-align: center !important;
+
+  /* Subtle shadow like Apple */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Style the inner content */
+.clerk-wrapper :deep(.cl-otpCodeFieldInput > div) {
+  font-size: 20px !important;
+  font-weight: 400 !important;
+  color: var(--foreground) !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Verification code input fields (OTP) - Fallback for other OTP implementations */
@@ -600,17 +789,18 @@ if (process.client) {
   -ms-user-select: auto !important;
 }
 
-/* OTP container hover state - only apply if not already focused */
-.clerk-wrapper :deep([data-input-otp-container="true"]:hover:not(:focus-within) .cl-otpCodeFieldInput) {
-  border-color: var(--border-subtle) !important;
-  /* Prevent any other hover styles from applying */
-  box-shadow: none !important;
-}
-
-/* OTP container focus state */
+/* Apple-style focus state */
 .clerk-wrapper :deep([data-input-otp-container="true"]:focus-within .cl-otpCodeFieldInput) {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
+  transform: scale(1.02) !important;
+}
+
+/* Subtle hover state */
+.clerk-wrapper :deep([data-input-otp-container="true"]:hover:not(:focus-within) .cl-otpCodeFieldInput) {
+  border-color: #9ca3af !important;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
 }
 
 /* Fallback OTP inputs hover/focus */
@@ -675,4 +865,55 @@ if (process.client) {
     display: none;
   }
 }
+
+/* Code Entry Message */
+.code-entry-message {
+  padding: var(--spacing-6);
+  text-align: center;
+}
+
+.message-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  align-items: center;
+}
+
+.message-title {
+  font-size: 1.125rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--foreground);
+  margin-bottom: var(--spacing-1);
+}
+
+.message-text {
+  font-size: var(--font-size-4);
+  color: var(--foreground-muted);
+  line-height: 1.5;
+  max-width: 320px;
+}
+
+.continue-button {
+  background: oklch(0.70 0.22 150);
+  color: oklch(0.13 0 0);
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all 150ms ease;
+  margin-top: var(--spacing-2);
+}
+
+.continue-button:hover {
+  background: oklch(0.65 0.20 150);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px oklch(0.70 0.22 150 / 0.4);
+}
+
+.continue-button:active {
+  transform: translateY(0);
+}
 </style>
+

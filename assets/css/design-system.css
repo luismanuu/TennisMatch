@@ -170,6 +170,28 @@
   border-color: var(--border-subtle);
 }
 
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-3) var(--spacing-6);
+  background-color: oklch(0.50 0.20 25);
+  color: oklch(0.95 0 0);
+  border: 1px solid oklch(0.50 0.20 25);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-danger:hover {
+  background-color: oklch(0.45 0.22 25);
+  border-color: oklch(0.45 0.22 25);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -2px oklch(0.50 0.20 25 / 0.4);
+}
+
 /* Cards */
 .glass-card {
   background: var(--glass-bg);

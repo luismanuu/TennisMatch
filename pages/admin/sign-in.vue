@@ -1,107 +1,75 @@
 <template>
-  <div class="auth-page">
-    <!-- Decorative elements -->
-    <div class="auth-decoration">
-      <div class="decoration-ring decoration-ring-1"></div>
-      <div class="decoration-ring decoration-ring-2"></div>
-      <div class="decoration-glow"></div>
-    </div>
-
-    <div class="auth-container">
-      <!-- Logo & Branding -->
-      <div class="auth-brand animate-fade-up">
-        <div class="brand-icon">
-          <span>🎾</span>
-        </div>
-        <span class="brand-name">Tenis Ecuador</span>
+  <ClientOnly>
+    <div class="auth-page">
+      <!-- Decorative elements -->
+      <div class="auth-decoration">
+        <div class="decoration-ring decoration-ring-1"></div>
+        <div class="decoration-ring decoration-ring-2"></div>
+        <div class="decoration-glow"></div>
       </div>
 
-      <!-- Main Card -->
-      <div class="auth-card animate-fade-up animate-delay-1">
-        <div class="auth-header">
-          <h1 class="auth-title">Bienvenido de vuelta</h1>
-          <p class="auth-subtitle">Ingresa a tu cuenta para continuar</p>
+      <div class="auth-container">
+        <!-- Logo & Branding -->
+        <div class="auth-brand animate-fade-up">
+          <div class="brand-icon">
+            <span>🔐</span>
+          </div>
+          <span class="brand-name">Admin Portal</span>
         </div>
 
-        <!-- Invitation Message -->
-        <div v-if="invitationMessage" class="invitation-notice">
-          <div class="notice-icon">🎾</div>
-          <p class="notice-text">{{ invitationMessage }}</p>
+        <!-- Main Card -->
+        <div class="auth-card animate-fade-up animate-delay-1">
+          <div class="auth-header">
+            <h1 class="auth-title">Admin Sign In</h1>
+            <p class="auth-subtitle">Sign in to access the admin dashboard</p>
+          </div>
+
+          <!-- Clerk Sign In Component -->
+          <div class="clerk-wrapper">
+            <SignIn 
+              :routing="'path'"
+              :path="'/admin/sign-in'"
+              :sign-up-url="'/sign-up'"
+              :appearance="clerkAppearance"
+              :fallback-redirect-url="'/admin'"
+            />
+          </div>
         </div>
 
-        <!-- Clerk Sign In Component -->
-        <div class="clerk-wrapper">
-          <SignIn
-            :routing="'path'"
-            :path="'/sign-in'"
-            :sign-up-url="'/sign-up'"
-            :appearance="clerkAppearance"
-            :initial-values="invitationEmail ? { emailAddress: invitationEmail } : undefined"
-          />
+        <!-- Footer -->
+        <p class="auth-footer animate-fade-up animate-delay-2">
+          <NuxtLink to="/sign-in" class="auth-link">Regular Sign In</NuxtLink>
+          <span class="mx-2">•</span>
+          <NuxtLink to="/" class="auth-link">Back to Home</NuxtLink>
+        </p>
+      </div>
+    </div>
+    <template #fallback>
+      <div class="auth-page" style="display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+        <div class="auth-container">
+          <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+            <p class="text-size-4 font-regular text-foreground-muted mt-4">Loading...</p>
+          </div>
         </div>
       </div>
-
-      <!-- Footer -->
-      <p class="auth-footer animate-fade-up animate-delay-2">
-        ¿No tienes cuenta? 
-        <NuxtLink to="/sign-up" class="auth-link">Regístrate gratis</NuxtLink>
-      </p>
-    </div>
-  </div>
+    </template>
+  </ClientOnly>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { esES } from '@clerk/localizations'
+import { useRouter } from 'vue-router'
 
 definePageMeta({
   middleware: []
 })
 
-const route = useRoute()
 const router = useRouter()
-const { isAuthenticated, userId } = useAuthState()
-
-// Check if coming from invitation completion
-const invitationEmail = computed(() => route.query.email as string | undefined)
-const invitationMessage = computed(() => route.query.message as string | undefined)
-const invitationToken = computed(() => route.query.invitation_token as string | undefined)
-
-// Handle invitation completion for OAuth users
-const handleInvitationForOAuth = async () => {
-  if (!invitationToken.value || !isAuthenticated.value || !userId.value) return
-
-  try {
-    console.log('Completing invitation for OAuth user:', { invitationToken: invitationToken.value, userId: userId.value })
-
-    // Call API to complete invitation for OAuth user
-    const response = await $fetch('/api/invitations/complete-oauth', {
-      method: 'POST',
-      body: {
-        invitation_token: invitationToken.value,
-        clerk_user_id: userId.value
-      }
-    })
-
-    if (response.success) {
-      console.log('Invitation completed successfully for OAuth user')
-      // Redirect to home after successful completion
-      await router.push('/')
-    }
-  } catch (error: any) {
-    console.error('Error completing invitation for OAuth user:', error)
-    // Continue to home anyway - the user is authenticated
-    await router.push('/')
-  }
-}
-
-// Watch for authentication state changes when coming from invitation
-watch([isAuthenticated, invitationToken], ([authenticated, token]) => {
-  if (authenticated && token) {
-    // User just signed in via OAuth after invitation
-    handleInvitationForOAuth()
-  }
-}, { immediate: true })
+const auth = useAuth()
+const { isSignedIn } = auth
+const { user } = useUser()
 
 // Custom localization that extends esES but removes "ultimo uso" references
 const customLocalization = {
@@ -114,6 +82,50 @@ const clerkAppearance = {
   localization: customLocalization
 }
 
+// Track if we've already redirected to prevent multiple redirects
+let hasRedirected = false
+
+// Watch for successful sign-in and redirect to admin dashboard
+watch([isSignedIn, () => user.value], ([signedIn, currentUser]) => {
+  if (signedIn && currentUser && !hasRedirected) {
+    // Check if user is admin
+    const role = currentUser.publicMetadata?.role as string | undefined
+    if (role === 'admin') {
+      hasRedirected = true
+      // Use replace to avoid adding to history
+      router.replace('/admin')
+    } else {
+      hasRedirected = true
+      // If not admin, redirect to home
+      router.replace('/')
+    }
+  }
+}, { immediate: true })
+
+// Also watch for route changes in case Clerk redirects elsewhere
+watch(() => router.currentRoute.value.path, (newPath) => {
+  // If we're signed in as admin but not on admin page, redirect
+  if (isSignedIn.value && user.value && !hasRedirected) {
+    const role = user.value.publicMetadata?.role as string | undefined
+    if (role === 'admin' && newPath !== '/admin' && newPath !== '/admin/sign-in' && newPath !== '/admin/debug') {
+      hasRedirected = true
+      router.replace('/admin')
+    }
+  }
+}, { immediate: true })
+
+// Check on mount if user is already signed in
+onMounted(() => {
+  // If already signed in and admin, redirect immediately
+  if (isSignedIn.value && user.value && !hasRedirected) {
+    const role = user.value.publicMetadata?.role as string | undefined
+    if (role === 'admin') {
+      hasRedirected = true
+      router.replace('/admin')
+    }
+  }
+})
+
 // Hide the lastAuthenticationStrategyBadge element after Clerk loads
 if (process.client) {
   onMounted(() => {
@@ -122,14 +134,14 @@ if (process.client) {
       if (!clerkWrapper) return
       
       // Target the specific badge element
-      const badge = clerkWrapper.querySelector('.cl-lastAuthenticationStrategyBadge')
+      const badge = clerkWrapper.querySelector('.cl-lastAuthenticationStrategyBadge') as HTMLElement
       if (badge) {
         badge.style.display = 'none'
         badge.style.visibility = 'hidden'
       }
       
       // Also target by data attribute as fallback
-      const badgeByAttr = clerkWrapper.querySelector('[data-localization-key="lastAuthenticationStrategy"]')
+      const badgeByAttr = clerkWrapper.querySelector('[data-localization-key="lastAuthenticationStrategy"]') as HTMLElement
       if (badgeByAttr) {
         badgeByAttr.style.display = 'none'
         badgeByAttr.style.visibility = 'hidden'
@@ -164,6 +176,7 @@ if (process.client) {
 <style scoped>
 .auth-page {
   min-height: 100vh;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -171,6 +184,9 @@ if (process.client) {
   position: relative;
   overflow-x: hidden;
   overflow-y: auto;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 /* Decorative Elements */
@@ -238,12 +254,12 @@ if (process.client) {
   width: 36px;
   height: 36px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--accent) 0%, oklch(0.60 0.20 150) 100%);
+  background: linear-gradient(135deg, oklch(0.60 0.18 25) 0%, oklch(0.55 0.20 30) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.125rem;
-  box-shadow: 0 4px 12px -4px var(--glow-accent);
+  box-shadow: 0 4px 12px -4px oklch(0.60 0.18 25 / 0.4);
 }
 
 .brand-name {
@@ -325,7 +341,7 @@ if (process.client) {
   font-size: 0.8125rem !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)) {
+.clerk-wrapper :deep(.cl-formFieldInput) {
   background: var(--surface) !important;
   border: 2px solid var(--border) !important;
   padding: 0.4375rem 0.75rem !important;
@@ -334,28 +350,28 @@ if (process.client) {
   transition: border-color 150ms ease, box-shadow 150ms ease !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput):hover) {
+.clerk-wrapper :deep(.cl-formFieldInput:hover) {
   border-color: var(--border-subtle) !important;
   border-width: 2px !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput):focus) {
+.clerk-wrapper :deep(.cl-formFieldInput:focus) {
   border-color: var(--accent) !important;
   border-width: 2px !important;
   box-shadow: 0 0 0 3px var(--accent-subtle) !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)[data-invalid="true"]) {
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]) {
   border-color: oklch(0.60 0.18 25) !important;
   border-width: 2px !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)[data-invalid="true"]:hover) {
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:hover) {
   border-color: oklch(0.65 0.18 25) !important;
   border-width: 2px !important;
 }
 
-.clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)[data-invalid="true"]:focus) {
+.clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:focus) {
   border-color: oklch(0.60 0.18 25) !important;
   border-width: 2px !important;
   box-shadow: 0 0 0 3px oklch(0.60 0.18 25 / 0.2) !important;
@@ -470,177 +486,17 @@ if (process.client) {
   color: var(--foreground-muted) !important;
 }
 
-/* Invitation Notice */
-.invitation-notice {
-  background: var(--accent-subtle);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-4);
-  margin-bottom: var(--spacing-4);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-}
-
-.notice-icon {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
-.notice-text {
-  font-size: 0.875rem;
-  color: var(--foreground);
-  margin: 0;
-  line-height: 1.4;
-}
-
-/* OTP Container - Must allow pointer events for the hidden input overlay */
-.clerk-wrapper :deep([data-input-otp-container="true"]) {
-  position: relative !important;
-  pointer-events: auto !important;
-  cursor: text !important;
-}
-
-/* The hidden input overlay that actually receives input */
-.clerk-wrapper :deep(input[data-input-otp="true"]) {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  opacity: 1 !important;
-  pointer-events: all !important;
-  cursor: text !important;
-  z-index: 10 !important;
-  background: transparent !important;
-  border: none !important;
-  color: transparent !important;
-  caret-color: var(--accent) !important;
-  font-size: 20px !important;
-  letter-spacing: 0.75rem !important;
-  text-align: center !important;
-  text-indent: 0 !important;
-}
-
-/* OTP Code Field Input Container */
-.clerk-wrapper :deep(.cl-otpCodeFieldInputContainer) {
-  pointer-events: auto !important;
-  width: 100% !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-}
-
-/* OTP Code Field Inputs (visual segments) */
-.clerk-wrapper :deep(.cl-otpCodeFieldInputs) {
-  pointer-events: none !important;
-  position: relative !important;
-  display: flex !important;
-  flex-direction: row !important;
-  gap: 0.5rem !important;
-  justify-content: center !important;
-  align-items: center !important;
-  flex-wrap: nowrap !important;
-}
-
-/* Individual OTP input segments (visual only) - Exclude from all form field styles */
-.clerk-wrapper :deep(.cl-otpCodeFieldInput),
-.clerk-wrapper :deep(.cl-input.cl-otpCodeFieldInput) {
-  background: var(--surface) !important;
-  border: 2px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
-  color: var(--foreground) !important;
-  pointer-events: none !important;
-  /* Proper sizing for OTP inputs */
-  min-width: 2.5rem !important;
-  width: 2.5rem !important;
-  max-width: 2.5rem !important;
-  height: 2.5rem !important;
-  min-height: 2.5rem !important;
-  max-height: 2.5rem !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  transition: border-color 150ms ease !important;
-  /* Override form field padding but keep proper spacing */
-  padding: 0 !important;
-  margin: 0 !important;
-  flex-shrink: 0 !important;
-  flex-grow: 0 !important;
-}
-
-/* Verification code input fields (OTP) - Fallback for other OTP implementations */
-.clerk-wrapper :deep(input[type="text"][inputmode="numeric"]:not([data-input-otp])),
-.clerk-wrapper :deep(input[type="tel"]:not([data-input-otp])),
-.clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp])),
-.clerk-wrapper :deep(.cl-otpCodeInput:not([data-input-otp])),
-.clerk-wrapper :deep(.cl-codeInput:not([data-input-otp])) {
-  background: var(--surface) !important;
-  border: 2px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
-  padding: 0.4375rem 0.75rem !important;
-  font-size: 0.8125rem !important;
-  height: 2.125rem !important;
-  width: 2.5rem !important;
-  min-width: 2.5rem !important;
-  max-width: 2.5rem !important;
-  text-align: center !important;
-  color: var(--foreground) !important;
-  transition: border-color 150ms ease, box-shadow 150ms ease !important;
-  box-sizing: border-box !important;
-  display: inline-block !important;
-  margin: 0 0.25rem !important;
-  font-weight: normal !important;
-  pointer-events: auto !important;
-  cursor: text !important;
-  opacity: 1 !important;
-  user-select: auto !important;
-  -webkit-user-select: auto !important;
-  -moz-user-select: auto !important;
-  -ms-user-select: auto !important;
-}
-
-/* OTP container hover state - only apply if not already focused */
-.clerk-wrapper :deep([data-input-otp-container="true"]:hover:not(:focus-within) .cl-otpCodeFieldInput) {
-  border-color: var(--border-subtle) !important;
-  /* Prevent any other hover styles from applying */
-  box-shadow: none !important;
-}
-
-/* OTP container focus state */
-.clerk-wrapper :deep([data-input-otp-container="true"]:focus-within .cl-otpCodeFieldInput) {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
-}
-
-/* Fallback OTP inputs hover/focus */
-.clerk-wrapper :deep(input[type="text"][inputmode="numeric"]:not([data-input-otp]):hover),
-.clerk-wrapper :deep(input[type="tel"]:not([data-input-otp]):hover),
-.clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp]):hover) {
-  border-color: var(--border-subtle) !important;
-  border-width: 2px !important;
-}
-
-.clerk-wrapper :deep(input[type="text"][inputmode="numeric"]:not([data-input-otp]):focus),
-.clerk-wrapper :deep(input[type="tel"]:not([data-input-otp]):focus),
-.clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp]):focus) {
-  border-color: var(--accent) !important;
-  border-width: 2px !important;
-  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
-  outline: none !important;
-}
-
-/* OTP Code Field container */
-.clerk-wrapper :deep(.cl-otpCodeField) {
-  pointer-events: auto !important;
-}
-
 /* Footer */
 .auth-footer {
   text-align: center;
   margin-top: var(--spacing-4);
   font-size: 0.8125rem;
   color: var(--foreground-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
 }
 
 .auth-link {
@@ -676,3 +532,4 @@ if (process.client) {
   }
 }
 </style>
+

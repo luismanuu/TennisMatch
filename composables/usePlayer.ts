@@ -4,6 +4,9 @@ export const usePlayer = () => {
   const player = ref<Player | null>(null)
   const loading = ref(false)
   const error = ref<Error | null>(null)
+  const publicPlayer = ref<Player | null>(null)
+  const publicLoading = ref(false)
+  const publicError = ref<Error | null>(null)
   
   const fetchPlayer = async (clerkId: string) => {
     if (!clerkId) {
@@ -85,13 +88,53 @@ export const usePlayer = () => {
     }
   }
   
+  const fetchPublicPlayer = async (playerId: string) => {
+    if (!playerId) {
+      publicPlayer.value = null
+      return null
+    }
+    
+    publicLoading.value = true
+    publicError.value = null
+    
+    try {
+      const data = await $fetch<Player | null>(`/api/players/${playerId}`, {
+        method: 'GET'
+      }).catch((err: any) => {
+        // Handle 404 gracefully - player doesn't exist
+        if (err.statusCode === 404) {
+          return null
+        }
+        // Re-throw other errors
+        throw err
+      })
+      
+      publicPlayer.value = data
+      return data
+    } catch (err: any) {
+      // Only set error for unexpected errors, not for missing players
+      if (err.statusCode && err.statusCode !== 404) {
+        publicError.value = err
+        console.error('Error fetching public player:', err)
+      }
+      publicPlayer.value = null
+      return null
+    } finally {
+      publicLoading.value = false
+    }
+  }
+  
   return {
     player: readonly(player),
     loading: readonly(loading),
     error: readonly(error),
+    publicPlayer: readonly(publicPlayer),
+    publicLoading: readonly(publicLoading),
+    publicError: readonly(publicError),
     fetchPlayer,
     createPlayer,
-    updatePlayer
+    updatePlayer,
+    fetchPublicPlayer
   }
 }
 

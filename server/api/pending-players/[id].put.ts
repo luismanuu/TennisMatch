@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { getClerkUser, revokePendingInvitationsByEmail } from '~/server/utils/clerk'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -58,21 +58,43 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (existingPlayer) {
+      // Revoke any remaining pending invitations in Clerk for this email
+      try {
+        await revokePendingInvitationsByEmail(pendingPlayer.email)
+      } catch (revokeError) {
+        console.warn('Warning: Could not revoke pending invitations in Clerk:', revokeError)
+        // Don't fail - this is cleanup
+      }
+      
       // Player already exists - just update the pending player status
       // and update matches to reference the existing player
-      await supabase
+      const { error: updatePendingError } = await supabase
         .from('pending_players')
         .update({ status: 'accepted' })
         .eq('id', pendingPlayerId)
       
+      if (updatePendingError) {
+        console.error('Error updating pending player status:', updatePendingError)
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Failed to update pending player status',
+          data: updatePendingError
+        })
+      }
+      
       // Update matches with this pending player to reference the existing player
-      await supabase
+      const { error: updateMatchesError } = await supabase
         .from('matches')
         .update({ 
           player2_id: existingPlayer.id,
           pending_player2_id: null
         })
         .eq('pending_player2_id', pendingPlayerId)
+      
+      if (updateMatchesError) {
+        console.warn('Error updating matches (non-critical):', updateMatchesError)
+        // Don't fail if matches update fails - it's not critical
+      }
       
       return {
         success: true,
@@ -104,14 +126,29 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    // Revoke any remaining pending invitations in Clerk for this email
+    // This cleans up any duplicate invitations that might exist
+    try {
+      await revokePendingInvitationsByEmail(pendingPlayer.email)
+    } catch (revokeError) {
+      console.warn('Warning: Could not revoke pending invitations in Clerk:', revokeError)
+      // Don't fail - this is cleanup
+    }
+    
     // Update pending player status
-    await supabase
+    const { error: updatePendingError } = await supabase
       .from('pending_players')
       .update({ status: 'accepted' })
       .eq('id', pendingPlayerId)
     
+    if (updatePendingError) {
+      console.error('Error updating pending player status:', updatePendingError)
+      // Don't fail here - player was created successfully
+      // Just log the error
+    }
+    
     // Update all matches with this pending player to reference the new player
-    await supabase
+    const { error: updateMatchesError } = await supabase
       .from('matches')
       .update({ 
         player2_id: newPlayer.id,
@@ -119,15 +156,29 @@ export default defineEventHandler(async (event) => {
       })
       .eq('pending_player2_id', pendingPlayerId)
     
+    if (updateMatchesError) {
+      console.warn('Error updating matches (non-critical):', updateMatchesError)
+      // Don't fail if matches update fails - it's not critical
+    }
+    
     return {
       success: true,
       player: newPlayer,
       message: 'Invitation accepted - player created'
     }
   } catch (error: any) {
+    console.error('Error in accept invitation endpoint:', {
+      message: error.message,
+      statusCode: error.statusCode,
+      statusMessage: error.statusMessage,
+      data: error.data,
+      stack: error.stack
+    })
+    
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
+      data: error.data || error
     })
   }
 })
