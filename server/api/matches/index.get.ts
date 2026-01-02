@@ -57,7 +57,8 @@ export default defineEventHandler(async (event) => {
         ),
         winner:players!winner_id(
           id,
-          name
+          name,
+          status
         )
       `)
       .or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
@@ -79,10 +80,10 @@ export default defineEventHandler(async (event) => {
           .from('matches')
           .select(`
             *,
-            player1:players(id, name, category:categories(id, name, description, order)),
-            player2:players(id, name, category:categories(id, name, description, order)),
+            player1:players(id, name, status, category:categories(id, name, description, order)),
+            player2:players(id, name, status, category:categories(id, name, description, order)),
             pending_player2:pending_players(id, name, email, category:categories(id, name, description, order), status, invited_by_player_id),
-            winner:players(id, name)
+            winner:players(id, name, status)
           `)
           .or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
         
@@ -262,7 +263,8 @@ export default defineEventHandler(async (event) => {
         ),
         winner:players!winner_id(
           id,
-          name
+          name,
+          status
         )
       `)
       .not('pending_player2_id', 'is', null)

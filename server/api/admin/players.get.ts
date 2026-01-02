@@ -17,7 +17,10 @@ export default defineEventHandler(async (event) => {
 
     const supabase = getSupabaseAdmin()
 
-    const { data: players, error: fetchError } = await supabase
+    // Check if we should include deleted players
+    const includeDeleted = query.include_deleted === 'true'
+
+    let queryBuilder = supabase
       .from('players')
       .select(`
         id,
@@ -27,9 +30,18 @@ export default defineEventHandler(async (event) => {
         category_id,
         category:categories(id, name, description, order),
         elo,
+        status,
+        deleted_at,
         created_at,
         updated_at
       `)
+
+    // Filter out deleted players by default, unless include_deleted is true
+    if (!includeDeleted) {
+      queryBuilder = queryBuilder.eq('status', 'active')
+    }
+
+    const { data: players, error: fetchError } = await queryBuilder
       .order('created_at', { ascending: false })
 
     if (fetchError) {

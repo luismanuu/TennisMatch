@@ -23,6 +23,9 @@
     <div class="relative z-10">
       <NuxtPage />
     </div>
+
+    <!-- Toast Container -->
+    <ToastContainer />
   </div>
 </template>
 

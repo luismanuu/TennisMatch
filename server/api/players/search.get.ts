@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     
     const supabase = getSupabaseAdmin()
     
-    // Build query
+    // Build query - only search active players
     let queryBuilder = supabase
       .from('players')
       .select(`
@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
         category:categories(id, name, description, order)
       `)
       .ilike('name', `%${searchTerm.trim()}%`)
+      .eq('status', 'active')
     
     // Exclude current player if provided
     if (excludePlayerId) {

@@ -82,13 +82,20 @@
                           {{ getPlayerInitials(match.player1?.name || 'Jugador 1') }}
                         </span>
                       </div>
-                      <NuxtLink
-                        v-if="match.player1"
-                        :to="`/players/${match.player1.id}`"
-                        class="text-size-2 font-semibold text-foreground hover:text-accent transition-all mb-2 group-hover:underline"
-                      >
-                        {{ match.player1.name }}
-                      </NuxtLink>
+                      <div v-if="match.player1" class="flex flex-col items-center mb-2">
+                        <NuxtLink
+                          :to="`/players/${match.player1.id}`"
+                          class="text-size-2 font-semibold text-foreground hover:text-accent transition-all group-hover:underline"
+                        >
+                          {{ match.player1.name }}
+                        </NuxtLink>
+                        <span 
+                          v-if="match.player1.status === 'deleted'"
+                          class="mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
+                        >
+                          Eliminado
+                        </span>
+                      </div>
                       <p v-else class="text-size-2 font-semibold text-foreground mb-2">
                         Jugador 1
                       </p>
@@ -118,13 +125,20 @@
                           {{ getPlayerInitials(match.player2?.name || match.pending_player2?.name || 'Oponente') }}
                         </span>
                       </div>
-                      <NuxtLink
-                        v-if="match.player2"
-                        :to="`/players/${match.player2.id}`"
-                        class="text-size-2 font-semibold text-foreground hover:text-accent-secondary transition-all mb-2 group-hover:underline"
-                      >
-                        {{ match.player2.name }}
-                      </NuxtLink>
+                      <div v-if="match.player2" class="flex flex-col items-center mb-2">
+                        <NuxtLink
+                          :to="`/players/${match.player2.id}`"
+                          class="text-size-2 font-semibold text-foreground hover:text-accent-secondary transition-all group-hover:underline"
+                        >
+                          {{ match.player2.name }}
+                        </NuxtLink>
+                        <span 
+                          v-if="match.player2.status === 'deleted'"
+                          class="mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
+                        >
+                          Eliminado
+                        </span>
+                      </div>
                       <NuxtLink
                         v-else-if="match.pending_player2"
                         :to="`/players/${match.pending_player2.id}`"
@@ -182,8 +196,8 @@
               </div>
             </div>
 
-            <!-- Score Section -->
-            <div v-if="match.score" class="mb-8 p-6 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30">
+            <!-- Score Section - Only show if score is approved (completed match or score_approved_by exists) -->
+            <div v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="mb-8 p-6 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30">
               <div class="flex items-center gap-3 mb-4">
                 <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
                 <p class="text-size-3 font-semibold text-foreground">Resultado</p>
@@ -191,17 +205,25 @@
               <p class="text-size-2 font-bold text-foreground mb-3">{{ match.score }}</p>
               <div v-if="match.winner" class="flex items-center gap-2">
                 <span class="text-size-4 text-foreground-muted">Ganador:</span>
-                <NuxtLink
-                  :to="`/players/${match.winner.id}`"
-                  class="text-size-4 font-semibold text-accent hover:underline transition-all"
-                >
-                  {{ match.winner.name }}
-                </NuxtLink>
+                <div class="flex items-center gap-2">
+                  <NuxtLink
+                    :to="`/players/${match.winner.id}`"
+                    class="text-size-4 font-semibold text-accent hover:underline transition-all"
+                  >
+                    {{ match.winner.name }}
+                  </NuxtLink>
+                  <span 
+                    v-if="match.winner.status === 'deleted'"
+                    class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
+                  >
+                    Eliminado
+                  </span>
+                </div>
               </div>
             </div>
 
-            <!-- Score Proposal Status -->
-            <div v-if="match.status === 'active' && match.score_proposed_by" class="mb-8 p-6 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
+            <!-- Score Proposal Status - Only show if score is proposed but not approved yet -->
+            <div v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="mb-8 p-6 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
               <div class="flex items-center gap-3 mb-4">
                 <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
                 <p class="text-size-3 font-semibold text-foreground">

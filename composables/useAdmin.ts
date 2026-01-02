@@ -118,17 +118,24 @@ export const useAdmin = () => {
     }
   }
 
+  // Store the last includeDeleted value
+  const lastIncludeDeleted = ref(false)
+
   // Fetch all players (admin only)
-  const fetchPlayers = async () => {
+  const fetchPlayers = async (includeDeleted: boolean = false) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
     }
     
+    lastIncludeDeleted.value = includeDeleted
     loading.value = true
     error.value = null
     
     try {
-      const data = await $fetch<Player[]>(`/api/admin/players?clerk_id=${userId.value}`)
+      const url = includeDeleted 
+        ? `/api/admin/players?clerk_id=${userId.value}&include_deleted=true`
+        : `/api/admin/players?clerk_id=${userId.value}`
+      const data = await $fetch<Player[]>(url)
       players.value = data
       return data
     } catch (err: any) {
@@ -216,7 +223,7 @@ export const useAdmin = () => {
     }
   }
 
-  // Delete a player (admin only)
+  // Delete a player (admin only) - soft delete
   const deletePlayer = async (playerId: string) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
@@ -226,7 +233,7 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; deletedPlayer: { id: string; name: string } }>(
+      const data = await $fetch<{ success: boolean; message: string; deletedPlayer: { id: string; name: string; status: string } }>(
         `/api/admin/players/${playerId}`,
         {
           method: 'DELETE',
@@ -247,6 +254,266 @@ export const useAdmin = () => {
       loading.value = false
     }
   }
+
+  // Restore a deleted player (admin only)
+  const restorePlayer = async (playerId: string) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; restoredPlayer: { id: string; name: string; status: string } }>(
+        `/api/admin/players/${playerId}/restore`,
+        {
+          method: 'POST',
+          body: {
+            clerk_id: userId.value
+          }
+        }
+      )
+      
+      // Refresh players list after restoration
+      await fetchPlayers()
+      
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  // Category management functions
+  const categories = ref<any[]>([])
+
+  const fetchCategories = async () => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<any[]>(`/api/admin/categories?clerk_id=${userId.value}`)
+      categories.value = data
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const createCategory = async (payload: { name: string; description?: string; order?: number }) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; category: any }>(
+        '/api/admin/categories',
+        {
+          method: 'POST',
+          body: {
+            clerk_id: userId.value,
+            ...payload
+          }
+        }
+      )
+      
+      await fetchCategories()
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const updateCategory = async (categoryId: string, payload: { name?: string; description?: string; order?: number }) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; category: any }>(
+        `/api/admin/categories/${categoryId}`,
+        {
+          method: 'PUT',
+          body: {
+            clerk_id: userId.value,
+            ...payload
+          }
+        }
+      )
+      
+      await fetchCategories()
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const deleteCategory = async (categoryId: string) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; deletedCategory: { id: string; name: string } }>(
+        `/api/admin/categories/${categoryId}`,
+        {
+          method: 'DELETE',
+          body: {
+            clerk_id: userId.value
+          }
+        }
+      )
+      
+      await fetchCategories()
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const reorderCategories = async (categoryOrders: Array<{ id: string; order: number }>) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; updated: number }>(
+        '/api/admin/categories/reorder',
+        {
+          method: 'POST',
+          body: {
+            clerk_id: userId.value,
+            category_orders: categoryOrders
+          }
+        }
+      )
+      
+      await fetchCategories()
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Update a player (admin only)
+  const updatePlayer = async (playerId: string, payload: { name?: string; phone_number?: string; category_id?: string; elo?: number }) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; player: Player }>(
+        `/api/admin/players/${playerId}`,
+        {
+          method: 'PUT',
+          body: {
+            clerk_id: userId.value,
+            ...payload
+          }
+        }
+      )
+      
+      // Refresh players list after update
+      await fetchPlayers(lastIncludeDeleted.value)
+      
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Fetch all matches (admin only)
+  const allMatches = ref<any[]>([])
+
+  const fetchAllMatches = async (filters?: { status?: string; player_id?: string; start_date?: string; end_date?: string }) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const queryParams = new URLSearchParams()
+      queryParams.append('clerk_id', userId.value)
+      if (filters?.status) queryParams.append('status', filters.status)
+      if (filters?.player_id) queryParams.append('player_id', filters.player_id)
+      if (filters?.start_date) queryParams.append('start_date', filters.start_date)
+      if (filters?.end_date) queryParams.append('end_date', filters.end_date)
+
+      const data = await $fetch<any[]>(`/api/admin/matches?${queryParams.toString()}`)
+      allMatches.value = data
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Fetch statistics (admin only)
+  const stats = ref<any>(null)
+
+  const fetchStats = async () => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<any>(`/api/admin/stats?clerk_id=${userId.value}`)
+      stats.value = data
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
   
   return {
     isAdmin: readonly(isAdmin),
@@ -254,13 +521,25 @@ export const useAdmin = () => {
     error: readonly(error),
     pendingPlayers: readonly(pendingPlayers),
     players: readonly(players),
+    categories: readonly(categories),
     fetchPendingPlayers,
     resendInvitation,
     invitePlayer,
     fetchPlayers,
     deletePlayer,
+    restorePlayer,
     deletePendingPlayer,
-    syncInvitations
+    syncInvitations,
+    fetchCategories,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    reorderCategories,
+    updatePlayer,
+    allMatches: readonly(allMatches),
+    fetchAllMatches,
+    stats: readonly(stats),
+    fetchStats
   }
 }
 

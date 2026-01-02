@@ -49,12 +49,14 @@ export default defineEventHandler(async (event) => {
           id,
           name,
           clerk_id,
+          status,
           category:categories(id, name, description, order)
         ),
         player2:players!matches_player2_id_fkey(
           id,
           name,
           clerk_id,
+          status,
           category:categories(id, name, description, order)
         ),
         pending_player2:pending_players(

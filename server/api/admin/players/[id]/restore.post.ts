@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 
     const supabase = getSupabaseAdmin()
 
-    // Check if player exists and is not already deleted
+    // Check if player exists
     const { data: player, error: fetchError } = await supabase
       .from('players')
       .select('id, clerk_id, name, status')
@@ -32,40 +32,38 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Check if already deleted
-    if (player.status === 'deleted') {
+    // Check if player is actually deleted
+    if (player.status !== 'deleted') {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Player is already deleted'
+        statusMessage: 'Player is not deleted and cannot be restored'
       })
     }
 
-    // SOFT DELETE: Set status to 'deleted' and set deleted_at timestamp
-    // DO NOT delete matches - preserve all match history
-    // DO NOT delete from Clerk - preserve ability to restore
+    // RESTORE: Set status back to 'active' and clear deleted_at
     const { error: updateError } = await supabase
       .from('players')
       .update({
-        status: 'deleted',
-        deleted_at: new Date().toISOString()
+        status: 'active',
+        deleted_at: null
       })
       .eq('id', playerId)
 
     if (updateError) {
       throw createError({
         statusCode: 500,
-        statusMessage: 'Failed to delete player',
+        statusMessage: 'Failed to restore player',
         data: updateError
       })
     }
 
     return {
       success: true,
-      message: `Player "${player.name}" has been marked as deleted. All match history has been preserved.`,
-      deletedPlayer: {
+      message: `Player "${player.name}" has been restored successfully`,
+      restoredPlayer: {
         id: player.id,
         name: player.name,
-        status: 'deleted'
+        status: 'active'
       }
     }
   } catch (error: any) {

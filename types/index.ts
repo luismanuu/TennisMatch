@@ -23,6 +23,8 @@ export interface Player {
   category_id?: string
   category?: Category
   elo: number
+  status?: 'active' | 'deleted'
+  deleted_at?: string
   created_at: string
   updated_at: string
 }

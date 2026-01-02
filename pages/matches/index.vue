@@ -151,14 +151,21 @@
                       </span>
                     </div>
                     <div>
-                      <NuxtLink
-                        v-if="match.player1"
-                        :to="`/players/${match.player1.id}`"
-                        @click.stop
-                        class="text-size-2 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block mb-1"
-                      >
-                        {{ match.player1.name }}
-                      </NuxtLink>
+                      <div v-if="match.player1" class="mb-1">
+                        <NuxtLink
+                          :to="`/players/${match.player1.id}`"
+                          @click.stop
+                          class="text-size-2 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block"
+                        >
+                          {{ match.player1.name }}
+                        </NuxtLink>
+                        <span 
+                          v-if="match.player1.status === 'deleted'"
+                          class="mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
+                        >
+                          Eliminado
+                        </span>
+                      </div>
                       <p v-else class="text-size-2 font-semibold text-foreground mb-1">
                         Jugador 1
                       </p>
@@ -185,14 +192,21 @@
                       </span>
                     </div>
                     <div>
-                      <NuxtLink
-                        v-if="match.player2"
-                        :to="`/players/${match.player2.id}`"
-                        @click.stop
-                        class="text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block mb-1"
-                      >
-                        {{ match.player2.name }}
-                      </NuxtLink>
+                      <div v-if="match.player2" class="mb-1">
+                        <NuxtLink
+                          :to="`/players/${match.player2.id}`"
+                          @click.stop
+                          class="text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block"
+                        >
+                          {{ match.player2.name }}
+                        </NuxtLink>
+                        <span 
+                          v-if="match.player2.status === 'deleted'"
+                          class="mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
+                        >
+                          Eliminado
+                        </span>
+                      </div>
                       <NuxtLink
                         v-else-if="match.pending_player2"
                         :to="`/players/${match.pending_player2.id}`"
@@ -237,7 +251,8 @@
 
               <!-- Match Details -->
               <div class="flex flex-col md:items-end gap-4 md:min-w-[200px]">
-                <div v-if="match.score" class="text-center md:text-right">
+                <!-- Show result only if score has been approved (completed match or score_approved_by exists) -->
+                <div v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="text-center md:text-right">
                   <div class="p-4 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30">
                     <div class="flex items-center gap-2 mb-2 justify-center md:justify-end">
                       <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" />
@@ -256,7 +271,8 @@
                     </div>
                   </div>
                 </div>
-                <div v-else-if="match.status === 'active' && match.score_proposed_by" class="text-center md:text-right">
+                <!-- Show proposed score if active match has proposed score but not approved yet -->
+                <div v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="text-center md:text-right">
                   <div class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
                     <div class="flex items-center gap-2 mb-2 justify-center md:justify-end">
                       <Icon name="heroicons:clock" class="w-5 h-5 text-yellow-400" />

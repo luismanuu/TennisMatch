@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
     
     const supabase = getSupabaseAdmin()
     
-    // Try to fetch existing player profile
+    // Try to fetch existing player profile (only active players)
     const { data: player, error: fetchError } = await supabase
       .from('players')
       .select(`
@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
         category:categories(*)
       `)
       .eq('clerk_id', clerkId)
+      .eq('status', 'active')
       .single()
     
     if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
