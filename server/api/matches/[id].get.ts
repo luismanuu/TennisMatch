@@ -4,6 +4,8 @@ import { getClerkUser } from '~/server/utils/clerk'
 export default defineEventHandler(async (event) => {
   try {
     const matchId = getRouterParam(event, 'id')
+    const query = getQuery(event)
+    const clerk_id = query.clerk_id as string
     
     if (!matchId) {
       throw createError({
@@ -12,9 +14,33 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    if (!clerk_id) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Unauthorized - Clerk ID required'
+      })
+    }
+    
+    // Verify Clerk user exists
+    await getClerkUser(clerk_id)
+    
     const supabase = getSupabaseAdmin()
     
-    // Fetch match with all relations and messages
+    // Get current player
+    const { data: currentPlayer, error: playerError } = await supabase
+      .from('players')
+      .select('id')
+      .eq('clerk_id', clerk_id)
+      .single()
+    
+    if (playerError || !currentPlayer) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Player not found'
+      })
+    }
+    
+    // Fetch match with all relations
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select(`
@@ -36,7 +62,8 @@ export default defineEventHandler(async (event) => {
           name,
           email,
           category:categories(id, name, description, order),
-          status
+          status,
+          invited_by_player_id
         ),
         score_proposed_by_player:players!matches_score_proposed_by_fkey(
           id,
@@ -58,6 +85,19 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 404,
         statusMessage: 'Match not found'
+      })
+    }
+    
+    // Verify user is part of the match
+    const isPlayer1 = match.player1_id === currentPlayer.id
+    const isPlayer2 = match.player2_id === currentPlayer.id
+    const isPendingPlayerInviter = match.pending_player2_id && 
+      (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
+    
+    if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Unauthorized: You are not part of this match'
       })
     }
     

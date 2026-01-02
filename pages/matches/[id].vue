@@ -12,10 +12,22 @@
         </div>
 
         <div v-else-if="error" class="text-center py-12">
-          <p class="text-size-3 text-red-400">{{ error.message || 'Error al cargar el partido' }}</p>
-          <NuxtLink to="/matches" class="btn-secondary text-size-3 mt-4 inline-block">
-            Volver a Partidos
-          </NuxtLink>
+          <div class="glass-card-elevated p-8 max-w-md mx-auto">
+            <div class="w-16 h-16 rounded-xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+              <span class="text-3xl">🔒</span>
+            </div>
+            <h2 class="text-size-2 font-semibold text-foreground mb-2">
+              Acceso Denegado
+            </h2>
+            <p class="text-size-4 text-foreground-muted mb-6">
+              {{ error.statusCode === 403 
+                ? 'No tienes permiso para ver este partido. Solo puedes ver los partidos en los que participas.' 
+                : error.message || 'Error al cargar el partido' }}
+            </p>
+            <NuxtLink to="/matches" class="btn-secondary text-size-3 inline-block">
+              Volver a Partidos
+            </NuxtLink>
+          </div>
         </div>
 
         <div v-else-if="match" class="max-w-4xl mx-auto space-y-6">
@@ -255,7 +267,13 @@
             <h2 class="text-size-2 font-semibold text-foreground mb-4">Chat</h2>
             
             <!-- Messages -->
-            <div class="space-y-3 mb-4 max-h-96 overflow-y-auto">
+            <div ref="messagesContainer" class="space-y-3 mb-4 max-h-96 overflow-y-auto">
+              <div v-if="chatLoading && chatMessages.length === 0" class="text-center py-4">
+                <p class="text-size-4 text-foreground-muted">Cargando mensajes...</p>
+              </div>
+              <div v-else-if="!chatLoading && chatMessages.length === 0" class="text-center py-4">
+                <p class="text-size-4 text-foreground-muted">No hay mensajes aún. ¡Sé el primero en escribir!</p>
+              </div>
               <div
                 v-for="message in chatMessages"
                 :key="message.id"
@@ -280,9 +298,6 @@
                 <p class="text-size-4 text-foreground-muted mt-1">
                   {{ formatTime(message.created_at) }}
                 </p>
-              </div>
-              <div v-if="chatLoading" class="text-center py-4">
-                <p class="text-size-4 text-foreground-muted">Cargando mensajes...</p>
               </div>
             </div>
 
@@ -329,6 +344,7 @@ const match = ref<Match | null>(null)
 const actionLoading = ref(false)
 const showScoreForm = ref(false)
 const messageInput = ref('')
+const messagesContainer = ref<HTMLElement | null>(null)
 const scoreForm = ref({
   score: '',
   winner_id: ''
@@ -337,8 +353,22 @@ const scoreForm = ref({
 const currentPlayerId = computed(() => player.value?.id)
 const isPlayerInMatch = computed(() => {
   if (!match.value || !currentPlayerId.value) return false
-  return match.value.player1_id === currentPlayerId.value || 
-         match.value.player2_id === currentPlayerId.value
+  const isPlayer1 = match.value.player1_id === currentPlayerId.value
+  const isPlayer2 = match.value.player2_id === currentPlayerId.value
+  
+  // Debug logging
+  if (match.value && currentPlayerId.value) {
+    console.log('isPlayerInMatch check:', {
+      currentPlayerId: currentPlayerId.value,
+      player1_id: match.value.player1_id,
+      player2_id: match.value.player2_id,
+      isPlayer1,
+      isPlayer2,
+      result: isPlayer1 || isPlayer2
+    })
+  }
+  
+  return isPlayer1 || isPlayer2
 })
 
 const statusLabel = computed(() => {
@@ -382,16 +412,70 @@ const formatTime = (dateString: string) => {
   })
 }
 
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
+  })
+}
+
 const loadMatch = async () => {
   if (!userId.value) return
   
+  // Ensure player is loaded before checking match
+  if (!player.value) {
+    console.log('Player not loaded yet, fetching...')
+    await fetchPlayer(userId.value)
+  }
+  
+  if (!player.value) {
+    console.warn('Player profile not found for user:', userId.value)
+    return
+  }
+  
   try {
-    const data = await getMatch(matchId)
+    const data = await getMatch(matchId, userId.value)
     match.value = data
     
-    // Load messages
-    if (userId.value) {
-      await fetchMessages(matchId, userId.value)
+    // Check if current player is part of the match
+    const isPartOfMatch = data.player1_id === player.value.id || 
+                         data.player2_id === player.value.id
+    
+    console.log('LoadMatch Debug:', {
+      playerId: player.value.id,
+      playerName: player.value.name,
+      player1_id: data.player1_id,
+      player2_id: data.player2_id,
+      player1_name: data.player1?.name,
+      player2_name: data.player2?.name,
+      isPartOfMatch,
+      userId: userId.value
+    })
+    
+    // Load messages if user is part of the match
+    if (isPartOfMatch && userId.value) {
+      try {
+        const messages = await fetchMessages(matchId, userId.value)
+        console.log('Messages loaded:', messages.length)
+        scrollToBottom()
+      } catch (err: any) {
+        console.error('Error loading messages:', {
+          statusCode: err?.statusCode,
+          message: err?.message,
+          statusMessage: err?.statusMessage
+        })
+        // If 403, user is not part of match - don't load messages
+        if (err?.statusCode !== 403) {
+          console.error('Error loading messages:', err)
+        }
+      }
+    } else {
+      console.warn('User is not part of match, skipping message load', {
+        playerId: player.value.id,
+        player1_id: data.player1_id,
+        player2_id: data.player2_id
+      })
     }
   } catch (err) {
     console.error('Error loading match:', err)
@@ -475,6 +559,18 @@ const handleCancelMatch = async () => {
   }
 }
 
+const reloadMessages = async () => {
+  if (!userId.value || !isPlayerInMatch.value) return
+  
+  try {
+    await fetchMessages(matchId, userId.value)
+    scrollToBottom()
+    previousMessagesCount.value = chatMessages.value.length
+  } catch (err: any) {
+    console.error('Error reloading messages:', err)
+  }
+}
+
 const handleSendMessage = async () => {
   if (!userId.value || !messageInput.value.trim()) return
   
@@ -483,8 +579,60 @@ const handleSendMessage = async () => {
       message: messageInput.value.trim()
     })
     messageInput.value = ''
+    scrollToBottom()
+    // Update previous count after sending
+    previousMessagesCount.value = chatMessages.value.length
   } catch (err) {
     console.error('Error sending message:', err)
+  }
+}
+
+// Polling interval for messages (every 3 seconds)
+let messagesPollInterval: NodeJS.Timeout | null = null
+const previousMessagesCount = ref(0)
+
+const startMessagesPolling = () => {
+  if (messagesPollInterval) {
+    clearInterval(messagesPollInterval)
+  }
+  
+  messagesPollInterval = setInterval(async () => {
+    // Only poll if user is part of the match
+    if (userId.value && matchId && isPlayerInMatch.value && match.value) {
+      try {
+        const messages = await fetchMessages(matchId, userId.value)
+        console.log('Polling messages:', messages.length, 'Previous:', previousMessagesCount.value)
+        // Scroll to bottom if new messages arrived
+        if (chatMessages.value.length > previousMessagesCount.value) {
+          console.log('New messages detected, scrolling to bottom')
+          scrollToBottom()
+          previousMessagesCount.value = chatMessages.value.length
+        }
+      } catch (err: any) {
+        // Only log if it's not a 403 error (user might have lost access)
+        if (err?.statusCode !== 403) {
+          console.error('Error polling messages:', err)
+        } else {
+          console.warn('User no longer authorized, stopping polling')
+          // Stop polling if user is no longer authorized
+          stopMessagesPolling()
+        }
+      }
+    } else {
+      console.log('Polling skipped:', {
+        hasUserId: !!userId.value,
+        hasMatchId: !!matchId,
+        isPlayerInMatch: isPlayerInMatch.value,
+        hasMatch: !!match.value
+      })
+    }
+  }, 3000) // Poll every 3 seconds
+}
+
+const stopMessagesPolling = () => {
+  if (messagesPollInterval) {
+    clearInterval(messagesPollInterval)
+    messagesPollInterval = null
   }
 }
 
@@ -492,6 +640,11 @@ onMounted(async () => {
   if (isLoaded.value && userId.value) {
     await fetchPlayer(userId.value)
     await loadMatch()
+    // Only start polling if user is part of the match
+    if (isPlayerInMatch.value) {
+      previousMessagesCount.value = chatMessages.value.length
+      startMessagesPolling()
+    }
   }
 })
 
@@ -499,7 +652,47 @@ watch([isLoaded, userId], async () => {
   if (isLoaded.value && userId.value) {
     await fetchPlayer(userId.value)
     await loadMatch()
+    // Only start polling if user is part of the match
+    if (isPlayerInMatch.value) {
+      previousMessagesCount.value = chatMessages.value.length
+      startMessagesPolling()
+    } else {
+      stopMessagesPolling()
+    }
   }
+})
+
+// Watch for changes in match or player to restart polling if needed
+watch([match, currentPlayerId, isPlayerInMatch], async () => {
+  if (isPlayerInMatch.value && match.value && currentPlayerId.value && userId.value) {
+    // Reload messages when match or player changes
+    try {
+      await fetchMessages(matchId, userId.value)
+      previousMessagesCount.value = chatMessages.value.length
+      scrollToBottom()
+    } catch (err: any) {
+      if (err?.statusCode !== 403) {
+        console.error('Error reloading messages on watch:', err)
+      }
+    }
+    
+    if (!messagesPollInterval) {
+      startMessagesPolling()
+    }
+  } else {
+    stopMessagesPolling()
+  }
+})
+
+// Watch for new messages and scroll to bottom
+watch(chatMessages, (newMessages, oldMessages) => {
+  if (newMessages.length > (oldMessages?.length || 0)) {
+    scrollToBottom()
+  }
+}, { deep: true })
+
+onUnmounted(() => {
+  stopMessagesPolling()
 })
 </script>
 

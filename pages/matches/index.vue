@@ -251,7 +251,7 @@ definePageMeta({
 })
 
 // Use shared auth state composable for consistent behavior
-const { isAuthenticated } = useAuthState()
+const { isAuthenticated, isLoaded, userId } = useAuthState()
 
 const { matches, loading, error, fetchMatches } = useMatches()
 
@@ -263,7 +263,9 @@ const filteredMatches = computed(() => {
 })
 
 const loadMatches = async () => {
-  await fetchMatches()
+  if (isLoaded.value && userId.value) {
+    await fetchMatches(userId.value)
+  }
 }
 
 const formatDate = (dateString: string) => {
@@ -298,7 +300,15 @@ const getStatusBadgeClass = (status: string) => {
 }
 
 onMounted(async () => {
-  await loadMatches()
+  if (isLoaded.value && userId.value) {
+    await loadMatches()
+  }
+})
+
+watch([isLoaded, userId], async () => {
+  if (isLoaded.value && userId.value) {
+    await loadMatches()
+  }
 })
 </script>
 

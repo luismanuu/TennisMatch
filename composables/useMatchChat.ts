@@ -35,8 +35,8 @@ export const useMatchChat = () => {
           ...payload
         }
       })
-      // Add the new message to the list
-      messages.value = [...messages.value, data]
+      // Reload all messages to ensure both players see the latest messages
+      await fetchMessages(matchId, clerkId)
       return data
     } catch (err: any) {
       error.value = err

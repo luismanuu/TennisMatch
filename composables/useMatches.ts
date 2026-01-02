@@ -5,12 +5,23 @@ export const useMatches = () => {
   const loading = ref(false)
   const error = ref<Error | null>(null)
   
-  const fetchMatches = async () => {
+  const fetchMatches = async (clerkId?: string) => {
     loading.value = true
     error.value = null
     
     try {
-      const data = await $fetch<Match[]>('/api/matches')
+      // Get clerkId from auth state if not provided
+      if (!clerkId) {
+        const { userId } = useAuthState()
+        if (!userId.value) {
+          throw new Error('User not authenticated')
+        }
+        clerkId = userId.value
+      }
+      
+      const data = await $fetch<Match[]>('/api/matches', {
+        query: { clerk_id: clerkId }
+      })
       matches.value = data
       return data
     } catch (err: any) {
@@ -44,12 +55,23 @@ export const useMatches = () => {
     }
   }
   
-  const getMatch = async (id: string) => {
+  const getMatch = async (id: string, clerkId?: string) => {
     loading.value = true
     error.value = null
     
     try {
-      const data = await $fetch<Match>(`/api/matches/${id}`)
+      // Get clerkId from auth state if not provided
+      if (!clerkId) {
+        const { userId } = useAuthState()
+        if (!userId.value) {
+          throw new Error('User not authenticated')
+        }
+        clerkId = userId.value
+      }
+      
+      const data = await $fetch<Match>(`/api/matches/${id}`, {
+        query: { clerk_id: clerkId }
+      })
       // Update match in cache if it exists
       const index = matches.value.findIndex(m => m.id === id)
       if (index !== -1) {

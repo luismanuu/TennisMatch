@@ -29,10 +29,21 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
+      console.error('Error fetching player from Supabase:', {
+        message: fetchError.message,
+        details: fetchError.details,
+        hint: fetchError.hint,
+        code: fetchError.code
+      })
       throw createError({
         statusCode: 500,
-        statusMessage: 'Failed to fetch player profile',
-        data: fetchError
+        statusMessage: `Failed to fetch player profile: ${fetchError.message || 'Unknown error'}`,
+        data: {
+          error: fetchError.message,
+          details: fetchError.details,
+          hint: fetchError.hint,
+          code: fetchError.code
+        }
       })
     }
     
@@ -46,16 +57,22 @@ export default defineEventHandler(async (event) => {
     try {
       const clerkUser = await getClerkUser(clerkId)
       return null // Profile doesn't exist yet
-    } catch (clerkError) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Clerk user not found'
+    } catch (clerkError: any) {
+      console.error('Error fetching Clerk user:', {
+        message: clerkError?.message,
+        status: clerkError?.status,
+        statusCode: clerkError?.statusCode
       })
+      // Don't throw error if Clerk user doesn't exist - just return null
+      // The client can handle creating a new profile
+      return null
     }
   } catch (error: any) {
+    console.error('Unexpected error in players/me endpoint:', error)
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || error.message || 'Internal server error',
+      data: error.data || error
     })
   }
 })
