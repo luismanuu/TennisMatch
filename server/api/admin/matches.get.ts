@@ -81,11 +81,83 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    return matches || []
+    // Collect all player IDs from optional relationships for batch lookup
+    // Only if matches exist and have these fields
+    const allPlayerIds = new Set<string>()
+    if (matches && Array.isArray(matches)) {
+      matches.forEach((match: any) => {
+        if (match && typeof match === 'object') {
+          if (match.score_proposed_by && typeof match.score_proposed_by === 'string') {
+            allPlayerIds.add(match.score_proposed_by)
+          }
+          if (match.score_approved_by && typeof match.score_approved_by === 'string') {
+            allPlayerIds.add(match.score_approved_by)
+          }
+          if (match.reschedule_proposed_by && typeof match.reschedule_proposed_by === 'string') {
+            allPlayerIds.add(match.reschedule_proposed_by)
+          }
+          if (match.reschedule_approved_by && typeof match.reschedule_approved_by === 'string') {
+            allPlayerIds.add(match.reschedule_approved_by)
+          }
+          if (match.reschedule_rejected_by && typeof match.reschedule_rejected_by === 'string') {
+            allPlayerIds.add(match.reschedule_rejected_by)
+          }
+        }
+      })
+    }
+
+    // Batch fetch all optional player relationships in a single query
+    let playerMap = new Map<string, { id: string; name: string }>()
+    if (allPlayerIds.size > 0) {
+      const playerIdsArray = Array.from(allPlayerIds)
+      if (playerIdsArray.length > 0) {
+        const { data: players, error: playersError } = await supabase
+          .from('players')
+          .select('id, name')
+          .in('id', playerIdsArray)
+        
+        if (!playersError && players && Array.isArray(players)) {
+          playerMap = new Map(players.map((p: any) => [p.id, p]))
+        }
+      }
+    }
+
+    // Enrich matches with optional player relationships using the batched data
+    const enrichedMatches = Array.isArray(matches) 
+      ? matches.map((match: any) => {
+          if (!match || typeof match !== 'object') {
+            return match
+          }
+          
+          const enriched: any = { ...match }
+          
+          // Only add these fields if they exist in the original match
+          if (match.score_proposed_by) {
+            enriched.score_proposed_by_player = playerMap.get(match.score_proposed_by) || null
+          }
+          if (match.score_approved_by) {
+            enriched.score_approved_by_player = playerMap.get(match.score_approved_by) || null
+          }
+          if (match.reschedule_proposed_by) {
+            enriched.reschedule_proposed_by_player = playerMap.get(match.reschedule_proposed_by) || null
+          }
+          if (match.reschedule_approved_by) {
+            enriched.reschedule_approved_by_player = playerMap.get(match.reschedule_approved_by) || null
+          }
+          if (match.reschedule_rejected_by) {
+            enriched.reschedule_rejected_by_player = playerMap.get(match.reschedule_rejected_by) || null
+          }
+          
+          return enriched
+        })
+      : []
+
+    return enrichedMatches
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || error.message || 'Internal server error',
+      data: error.data || error
     })
   }
 })
