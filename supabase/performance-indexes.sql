@@ -52,3 +52,4 @@ WHERE reschedule_rejected_by IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_pending_players_invited_by_composite 
 ON pending_players(invited_by_player_id, status);
 
+

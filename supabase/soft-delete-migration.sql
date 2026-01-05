@@ -17,3 +17,4 @@ CREATE INDEX IF NOT EXISTS idx_players_deleted_at ON players(deleted_at);
 -- Update existing players to be active (in case of NULL values)
 UPDATE players SET status = 'active' WHERE status IS NULL;
 
+
