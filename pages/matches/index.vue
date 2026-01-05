@@ -234,6 +234,7 @@
                 
                 <!-- Status Badge and Date -->
                 <div class="flex items-center gap-4 flex-wrap">
+                  <MatchTournamentBadge :match="match" />
                   <div class="flex items-center gap-2 px-3 py-1 rounded-full border backdrop-blur-sm" :class="getStatusBadgeClass(match.status)">
                     <Icon :name="getStatusIcon(match.status)" class="w-4 h-4" />
                     <span class="text-size-4 font-semibold">{{ getStatusLabel(match.status) }}</span>

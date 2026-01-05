@@ -92,6 +92,55 @@ export default defineEventHandler(async (event) => {
       ? ((matchesStats.completed / matchesStats.total) * 100).toFixed(1)
       : '0'
 
+    // Get tournament statistics
+    const { data: tournamentsByStatus } = await supabase
+      .from('tournaments')
+      .select('status, id')
+
+    const tournamentStats = {
+      upcoming: 0,
+      active: 0,
+      completed: 0,
+      cancelled: 0,
+      total: 0
+    }
+
+    if (tournamentsByStatus) {
+      tournamentsByStatus.forEach((tournament: any) => {
+        tournamentStats.total++
+        if (tournament.status in tournamentStats) {
+          tournamentStats[tournament.status as keyof typeof tournamentStats]++
+        }
+      })
+    }
+
+    // Get total tournament registrations
+    const { count: totalRegistrations } = await supabase
+      .from('tournament_registrations')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'confirmed')
+      .is('withdrawn_at', null)
+
+    // Get unique organizers count
+    const { data: organizersData } = await supabase
+      .from('tournaments')
+      .select('organizer_id')
+      .not('organizer_id', 'is', null)
+
+    const uniqueOrganizers = new Set()
+    if (organizersData) {
+      organizersData.forEach((t: any) => {
+        if (t.organizer_id) {
+          uniqueOrganizers.add(t.organizer_id)
+        }
+      })
+    }
+
+    // Calculate average registrations per tournament
+    const avgRegistrations = tournamentStats.total > 0
+      ? Math.round((totalRegistrations || 0) / tournamentStats.total)
+      : 0
+
     return {
       players: {
         active: activePlayersCount || 0,
@@ -105,7 +154,13 @@ export default defineEventHandler(async (event) => {
         newPlayers: recentPlayers || 0,
         completedMatches: recentMatches || 0
       },
-      completionRate: parseFloat(completionRate)
+      completionRate: parseFloat(completionRate),
+      tournaments: {
+        ...tournamentStats,
+        totalRegistrations: totalRegistrations || 0,
+        organizers: uniqueOrganizers.size,
+        avgRegistrations
+      }
     }
   } catch (error: any) {
     throw createError({

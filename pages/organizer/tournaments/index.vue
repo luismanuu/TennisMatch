@@ -1,0 +1,330 @@
+<template>
+  <div class="min-h-screen bg-background relative overflow-hidden">
+    <!-- Ambient Background Effects -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
+      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
+      <div class="grid-pattern absolute inset-0 opacity-30"></div>
+    </div>
+
+    <!-- Navigation -->
+    <AppNavigation />
+    
+    <!-- Spacer for fixed nav -->
+    <div class="h-16"></div>
+
+    <div class="section-padding relative z-10">
+      <div class="container-medium px-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8 animate-fade-up">
+          <div>
+            <h1 class="text-size-1 font-semibold text-foreground mb-2">Mis Torneos</h1>
+            <p class="text-size-3 font-regular text-foreground-muted">
+              Gestiona los torneos que has creado
+            </p>
+          </div>
+          <button
+            @click="showCreateForm = !showCreateForm"
+            class="glass-card-elevated px-6 py-3 rounded-xl flex items-center gap-2 text-size-4 font-semibold text-foreground hover-lift transition-all"
+          >
+            <Icon name="heroicons:plus" class="w-5 h-5" />
+            <span>Nuevo Torneo</span>
+          </button>
+        </div>
+
+        <!-- Create Tournament Form -->
+        <div v-if="showCreateForm" class="glass-card-elevated p-8 mb-8 animate-fade-in-scale">
+          <h2 class="text-size-2 font-semibold text-foreground mb-6">Crear Nuevo Torneo</h2>
+          <form @submit.prevent="handleCreateTournament" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Nombre del Torneo</label>
+                <input
+                  v-model="tournamentForm.name"
+                  type="text"
+                  required
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  placeholder="Ej: Torneo Primavera 2024"
+                />
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  Categoría <span class="text-foreground-muted text-size-5">(Opcional)</span>
+                </label>
+                <select
+                  v-model="tournamentForm.category_id"
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                >
+                  <option value="">Abierto a todos (sin categoría)</option>
+                  <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                    {{ cat.name }}
+                  </option>
+                </select>
+                <p class="text-size-5 text-foreground-muted mt-2">
+                  Si no seleccionas una categoría, el torneo estará abierto a jugadores de todas las categorías
+                </p>
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha de Inicio</label>
+                <input
+                  v-model="tournamentForm.start_date"
+                  type="datetime-local"
+                  required
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha de Fin (Opcional)</label>
+                <input
+                  v-model="tournamentForm.end_date"
+                  type="datetime-local"
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Tipo de Torneo</label>
+                <select
+                  v-model="tournamentForm.tournament_type"
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                >
+                  <option value="groups_playoffs">Grupos + Playoffs (Default)</option>
+                  <option value="single_elimination">Eliminación Simple</option>
+                  <option value="double_elimination">Eliminación Doble</option>
+                  <option value="round_robin">Round Robin</option>
+                </select>
+                <p class="text-size-5 text-foreground-muted mt-2">
+                  <strong>Grupos + Playoffs:</strong> Fase de grupos seguida de brackets de playoffs (principal y consolación)
+                </p>
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Tamaño de Grupo</label>
+                <input
+                  v-model.number="tournamentForm.group_size"
+                  type="number"
+                  min="2"
+                  required
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Jugadores que Avanzan por Grupo</label>
+                <input
+                  v-model.number="tournamentForm.players_per_group_advance"
+                  type="number"
+                  min="1"
+                  required
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Mínimo de Jugadores</label>
+                <input
+                  v-model.number="tournamentForm.min_players"
+                  type="number"
+                  min="4"
+                  required
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Máximo de Jugadores (Opcional)</label>
+                <input
+                  v-model.number="tournamentForm.max_players"
+                  type="number"
+                  min="4"
+                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+            <div>
+              <label class="block text-size-4 font-semibold text-foreground mb-2">Descripción (Opcional)</label>
+              <textarea
+                v-model="tournamentForm.description"
+                rows="3"
+                class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                placeholder="Descripción del torneo..."
+              />
+            </div>
+            <div class="flex items-center gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  v-model="tournamentForm.registration_open"
+                  type="checkbox"
+                  class="w-5 h-5 rounded border-2 border-border-subtle text-accent focus:ring-accent"
+                />
+                <span class="text-size-4 font-regular text-foreground">Registro abierto</span>
+              </label>
+            </div>
+            <div class="flex gap-4">
+              <button
+                type="submit"
+                :disabled="creating"
+                class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span v-if="!creating">Crear Torneo</span>
+                <span v-else class="flex items-center gap-2">
+                  <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
+                  Creando...
+                </span>
+              </button>
+              <button
+                type="button"
+                @click="showCreateForm = false; resetForm()"
+                class="px-6 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 font-semibold hover-lift transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
+          <Icon name="heroicons:arrow-path" class="w-12 h-12 text-accent mx-auto mb-4 animate-spin" />
+          <p class="text-size-3 font-regular text-foreground-muted">Cargando torneos...</p>
+        </div>
+
+        <!-- Tournaments List -->
+        <div v-else-if="tournaments.length > 0" class="space-y-4 animate-fade-up animate-delay-2">
+          <div
+            v-for="tournament in tournaments"
+            :key="tournament.id"
+            class="glass-card-elevated p-6 hover-lift transition-all cursor-pointer"
+            @click="navigateTo(`/organizer/tournaments/${tournament.id}`)"
+          >
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="flex items-center gap-3 mb-2">
+                  <h3 class="text-size-2 font-semibold text-foreground">{{ tournament.name }}</h3>
+                  <span
+                    :class="[
+                      'px-3 py-1 rounded-full text-size-4 font-semibold',
+                      tournament.status === 'upcoming' ? 'bg-blue-500/20 text-blue-400' :
+                      tournament.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                      'bg-gray-500/20 text-gray-400'
+                    ]"
+                  >
+                    {{ tournament.status === 'upcoming' ? 'Próximo' : tournament.status === 'active' ? 'Activo' : 'Completado' }}
+                  </span>
+                </div>
+                <p class="text-size-4 font-regular text-foreground-muted mb-3">
+                  {{ tournament.category?.name || 'Abierto a todos' }} • {{ formatDate(tournament.start_date) }}
+                </p>
+                <div class="flex items-center gap-4 text-size-4 text-foreground-muted">
+                  <span class="flex items-center gap-1">
+                    <Icon name="heroicons:users" class="w-4 h-4" />
+                    {{ tournament.registrations?.length || 0 }} registrados
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <Icon name="heroicons:user-group" class="w-4 h-4" />
+                    Grupos: {{ tournament.groups?.length || 0 }}
+                  </span>
+                </div>
+              </div>
+              <Icon name="heroicons:chevron-right" class="w-6 h-6 text-foreground-muted flex-shrink-0" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div v-else class="glass-card-elevated p-12 text-center animate-fade-in-scale">
+          <Icon name="heroicons:trophy-cup" class="w-24 h-24 text-foreground-muted mx-auto mb-6 opacity-50" />
+          <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay torneos</h3>
+          <p class="text-size-4 font-regular text-foreground-muted mb-6">
+            Crea tu primer torneo para comenzar
+          </p>
+          <button
+            @click="showCreateForm = true"
+            class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+          >
+            Crear Torneo
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import type { CreateTournamentPayload } from '~/types'
+
+definePageMeta({
+  middleware: ['organizer']
+})
+
+const { tournaments, loading, fetchOrganizerTournaments, createTournament } = useOrganizer()
+const { categories, fetchCategories } = useCategories()
+
+const showCreateForm = ref(false)
+const creating = ref(false)
+
+const tournamentForm = ref<CreateTournamentPayload & { registration_open: boolean }>({
+  name: '',
+  category_id: '',
+  start_date: '',
+  end_date: '',
+  tournament_type: 'groups_playoffs',
+  group_size: 4,
+  players_per_group_advance: 2,
+  min_players: 4,
+  max_players: undefined,
+  description: '',
+  registration_open: true
+})
+
+const resetForm = () => {
+  tournamentForm.value = {
+    name: '',
+    category_id: '',
+    start_date: '',
+    end_date: '',
+    group_size: 4,
+    players_per_group_advance: 2,
+    min_players: 4,
+    max_players: undefined,
+    description: '',
+    registration_open: true
+  }
+}
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const handleCreateTournament = async () => {
+  try {
+    creating.value = true
+    await createTournament(tournamentForm.value)
+    showCreateForm.value = false
+    resetForm()
+    await loadTournaments()
+    const toast = useToastNotifications()
+    toast.success('Torneo creado exitosamente')
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al crear torneo')
+  } finally {
+    creating.value = false
+  }
+}
+
+const loadTournaments = async () => {
+  try {
+    await fetchOrganizerTournaments()
+  } catch (err) {
+    console.error('Error loading tournaments:', err)
+  }
+}
+
+onMounted(async () => {
+  await fetchCategories()
+  await loadTournaments()
+})
+</script>
+

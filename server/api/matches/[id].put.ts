@@ -258,6 +258,25 @@ export default defineEventHandler(async (event) => {
           })
         }
         
+        // Check if this is a tournament match and validate round deadline
+        if (match.tournament_id) {
+          const { data: tournamentMatch } = await supabase
+            .from('tournament_matches')
+            .select('round_deadline')
+            .eq('match_id', matchId)
+            .single()
+          
+          if (tournamentMatch?.round_deadline) {
+            const deadline = new Date(tournamentMatch.round_deadline)
+            if (newDate > deadline) {
+              throw createError({
+                statusCode: 400,
+                statusMessage: 'Cannot reschedule tournament match after round deadline. Please contact tournament administrator.'
+              })
+            }
+          }
+        }
+        
         updateData.reschedule_proposed_by = currentPlayer.id
         updateData.reschedule_proposed_at = new Date().toISOString()
         updateData.reschedule_proposed_scheduled_at = rescheduleData.scheduled_at

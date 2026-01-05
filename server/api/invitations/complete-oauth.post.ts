@@ -68,6 +68,23 @@ export default defineEventHandler(async (event) => {
       ? `${clerkUser.firstName} ${clerkUser.lastName}`.trim()
       : clerkUser.firstName || clerkUser.lastName || 'Usuario'
 
+    // Get role from invitation metadata and update user if needed
+    const invitationMetadata = (clerkInvitation.publicMetadata as any) || {}
+    const role = invitationMetadata.role || 'player'
+    
+    // Update user role if it's different
+    if (role !== (clerkUser.publicMetadata?.role as string || 'player')) {
+      try {
+        await clerkClient.users.updateUser(clerk_user_id, {
+          publicMetadata: {
+            role: role
+          }
+        })
+      } catch (updateError) {
+        console.warn('Could not update user role:', updateError)
+      }
+    }
+
     // Create player profile
     const { data: newPlayer, error: createError } = await supabase
       .from('players')

@@ -15,44 +15,70 @@
           </NuxtLink>
 
           <!-- Nav Actions -->
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 overflow-x-auto -mx-6 px-6 nav-scroll">
             <!-- Show authenticated navigation if signed in (stable once authenticated) -->
             <template v-if="isAuthenticated">
               <NuxtLink 
                 to="/"
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group',
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isDashboard 
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30' 
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:squares-2x2" :class="['w-4 h-4 transition-transform', isDashboard ? 'text-accent' : 'group-hover:scale-110']" />
-                <span>Dashboard</span>
+                <span class="hidden sm:inline">Dashboard</span>
               </NuxtLink>
               <NuxtLink 
                 to="/matches" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group',
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isMatchesPage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:calendar" :class="['w-4 h-4 transition-transform', isMatchesPage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span>Partidos</span>
+                <span class="hidden sm:inline">Partidos</span>
+              </NuxtLink>
+              <NuxtLink 
+                to="/tournaments" 
+                :class="[
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  isTournamentsPage
+                    ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
+                    : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isTournamentsPage ? 'text-accent' : 'group-hover:scale-110']" />
+                <span class="hidden sm:inline">Torneos</span>
+              </NuxtLink>
+              <!-- Organizer Tournaments Link (only for organizers) -->
+              <NuxtLink 
+                v-if="isOrganizer"
+                to="/organizer/tournaments" 
+                :class="[
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  isOrganizerTournamentsPage
+                    ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
+                    : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isOrganizerTournamentsPage ? 'text-accent' : 'group-hover:scale-110']" />
+                <span class="hidden sm:inline">Mis Torneos</span>
               </NuxtLink>
               <NuxtLink 
                 to="/profile" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group',
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isProfilePage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:user-circle" :class="['w-4 h-4 transition-transform', isProfilePage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span>Mi Perfil</span>
+                <span class="hidden sm:inline">Mi Perfil</span>
               </NuxtLink>
               <SignOutButton>
                 <button class="flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group">
@@ -111,12 +137,38 @@
 
 <script setup lang="ts">
 // Use shared auth state composable for consistent behavior
-const { isAuthenticated, authLoaded } = useAuthState()
+const { isAuthenticated, authLoaded, user } = useAuthState()
+const { isOrganizer } = useOrganizer()
 const route = useRoute()
 
 // Helpers to check current page
 const isDashboard = computed(() => route.path === '/')
 const isMatchesPage = computed(() => route.path.startsWith('/matches'))
+const isTournamentsPage = computed(() => route.path.startsWith('/tournaments') && !route.path.startsWith('/organizer/tournaments'))
 const isProfilePage = computed(() => route.path.startsWith('/profile'))
+const isOrganizerTournamentsPage = computed(() => route.path.startsWith('/organizer/tournaments'))
+
+// Debug: Log organizer status in development
+if (process.dev) {
+  watch([isOrganizer, user], ([organizer, userData]) => {
+    console.log('[Navigation] Organizer status:', {
+      isOrganizer: organizer,
+      hasUser: !!userData,
+      role: userData?.publicMetadata?.role,
+      publicMetadata: userData?.publicMetadata
+    })
+  }, { immediate: true })
+}
 </script>
+
+<style scoped>
+.nav-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+</style>
 

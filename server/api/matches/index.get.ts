@@ -58,6 +58,22 @@ export default defineEventHandler(async (event) => {
           id,
           name,
           status
+        ),
+        tournament:tournaments(
+          id,
+          name,
+          category_id
+        ),
+        tournament_match:tournament_matches(
+          id,
+          bracket_type,
+          round_number,
+          group_id,
+          round_deadline,
+          group:tournament_groups(
+            id,
+            group_name
+          )
         )
       `)
       .or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
@@ -110,6 +126,22 @@ export default defineEventHandler(async (event) => {
           id,
           name,
           status
+        ),
+        tournament:tournaments(
+          id,
+          name,
+          category_id
+        ),
+        tournament_match:tournament_matches(
+          id,
+          bracket_type,
+          round_number,
+          group_id,
+          round_deadline,
+          group:tournament_groups(
+            id,
+            group_name
+          )
         )
       `)
       .not('pending_player2_id', 'is', null)
@@ -171,6 +203,13 @@ export default defineEventHandler(async (event) => {
       enriched.reschedule_rejected_by_player = match.reschedule_rejected_by 
         ? playerMap.get(match.reschedule_rejected_by) || null 
         : null
+      
+      // Flatten tournament_match if it exists
+      if (match.tournament_match && Array.isArray(match.tournament_match) && match.tournament_match.length > 0) {
+        enriched.tournament_match = match.tournament_match[0]
+      } else if (match.tournament_match && !Array.isArray(match.tournament_match)) {
+        enriched.tournament_match = match.tournament_match
+      }
       
       return enriched
     })

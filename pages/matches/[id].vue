@@ -56,9 +56,12 @@
               <Icon name="heroicons:arrow-left" class="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <span>Volver a Partidos</span>
             </NuxtLink>
-            <div class="flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm" :class="statusBadgeClass">
-              <Icon :name="statusIcon" class="w-4 h-4" />
-              <span class="text-size-4 font-semibold">{{ statusLabel }}</span>
+            <div class="flex items-center gap-3">
+              <MatchTournamentBadge :match="match" />
+              <div class="flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm" :class="statusBadgeClass">
+                <Icon :name="statusIcon" class="w-4 h-4" />
+                <span class="text-size-4 font-semibold">{{ statusLabel }}</span>
+              </div>
             </div>
           </div>
 

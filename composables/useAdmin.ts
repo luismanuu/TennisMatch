@@ -515,6 +515,92 @@ export const useAdmin = () => {
     }
   }
   
+  // Organizer management functions
+  const organizers = ref<any[]>([])
+  const pendingOrganizerInvitations = ref<any[]>([])
+
+  const fetchOrganizers = async () => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ organizers: any[]; pendingInvitations: any[] }>(
+        `/api/admin/organizers?clerk_id=${userId.value}`
+      )
+      organizers.value = data.organizers || []
+      pendingOrganizerInvitations.value = data.pendingInvitations || []
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const inviteOrganizer = async (payload: { name: string; email: string }) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; invitation: any }>(
+        '/api/admin/organizers',
+        {
+          method: 'POST',
+          body: {
+            clerk_id: userId.value,
+            ...payload
+          }
+        }
+      )
+      
+      await fetchOrganizers()
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const deleteOrganizer = async (organizerId: string) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string }>(
+        `/api/admin/organizers/${organizerId}`,
+        {
+          method: 'DELETE',
+          query: {
+            clerk_id: userId.value
+          }
+        }
+      )
+      
+      await fetchOrganizers()
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     isAdmin: readonly(isAdmin),
     loading: readonly(loading),
@@ -539,7 +625,12 @@ export const useAdmin = () => {
     allMatches: readonly(allMatches),
     fetchAllMatches,
     stats: readonly(stats),
-    fetchStats
+    fetchStats,
+    organizers: readonly(organizers),
+    pendingOrganizerInvitations: readonly(pendingOrganizerInvitations),
+    fetchOrganizers,
+    inviteOrganizer,
+    deleteOrganizer
   }
 }
 

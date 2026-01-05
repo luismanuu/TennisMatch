@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { validateAndSetMatchScheduling } from '~/server/utils/tournament-scheduling'
 import type { CreateMatchPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -24,6 +25,9 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Cannot schedule a match in the past'
       })
     }
+    
+    // Check if this is a tournament match and validate round deadline
+    // Note: tournament_id will be set when bracket is generated, so we check after match creation
     
     // Validate that either player2_id or pending_player2_id is provided, but not both
     if (!player2_id && !pending_player2_id) {
@@ -157,6 +161,11 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Failed to create match',
         data: createError
       })
+    }
+    
+    // If this is a tournament match, validate round deadline
+    if (match.tournament_id) {
+      await validateAndSetMatchScheduling(match.id, scheduled_at, supabase)
     }
     
     return match

@@ -35,10 +35,12 @@
                 <span class="text-4xl">🎾</span>
               </div>
               <h1 class="text-size-1 font-semibold text-foreground mb-4">
-                ¡Has sido invitado!
+                {{ isOrganizer ? '¡Has sido invitado como Organizador!' : '¡Has sido invitado!' }}
               </h1>
               <p class="text-size-3 font-regular text-foreground-muted">
-                Completa tu registro para unirte a Tenis Ecuador
+                {{ isOrganizer 
+                  ? 'Completa tu registro para comenzar a organizar torneos en Tenis Ecuador' 
+                  : 'Completa tu registro para unirte a Tenis Ecuador' }}
               </p>
             </div>
 
@@ -48,13 +50,22 @@
                 <p class="text-size-3 font-semibold text-foreground">{{ invitation.name }}</p>
                 <p class="text-size-4 font-regular text-foreground-muted">{{ invitation.email }}</p>
               </div>
-              <div v-if="invitation.category" class="p-6 rounded-xl bg-surface border border-border-subtle">
+              <div v-if="invitation.category && !isOrganizer" class="p-6 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 font-regular text-foreground-subtle mb-2">Categoría asignada</p>
                 <p class="text-size-3 font-semibold text-foreground">
                   {{ invitation.category.name }}
                 </p>
                 <p v-if="invitation.category.description" class="text-size-4 font-regular text-foreground-muted mt-2">
                   {{ invitation.category.description }}
+                </p>
+              </div>
+              <div v-if="isOrganizer" class="p-6 rounded-xl bg-accent-subtle border border-accent/30">
+                <p class="text-size-4 font-regular text-foreground-subtle mb-2">Rol</p>
+                <p class="text-size-3 font-semibold text-foreground">
+                  Organizador de Torneos
+                </p>
+                <p class="text-size-4 font-regular text-foreground-muted mt-2">
+                  Podrás crear y gestionar tus propios torneos en el sistema
                 </p>
               </div>
             </div>
@@ -80,8 +91,8 @@
                 </p>
               </div>
 
-              <!-- Category Selection (if not pre-assigned) -->
-              <div v-if="!invitation.category_id && categories.length > 0">
+              <!-- Category Selection (if not pre-assigned and not organizer) -->
+              <div v-if="!invitation.category_id && categories.length > 0 && !isOrganizer">
                 <label class="block text-size-4 font-semibold text-foreground mb-2">
                   Selecciona tu categoría
                 </label>
@@ -128,11 +139,11 @@
               <!-- Submit Button -->
               <button
                 type="submit"
-                :disabled="registering || !formData.password || (!invitation.category_id && !formData.category_id)"
+                :disabled="registering || !formData.password || (!isOrganizer && !invitation.category_id && !formData.category_id)"
                 class="btn-primary text-size-3 w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span v-if="registering">Creando cuenta...</span>
-                <span v-else>Completar Registro</span>
+                <span v-if="registering">{{ isOrganizer ? 'Creando cuenta de organizador...' : 'Creando cuenta...' }}</span>
+                <span v-else>{{ isOrganizer ? 'Completar Registro como Organizador' : 'Completar Registro' }}</span>
               </button>
             </form>
           </div>
@@ -146,10 +157,12 @@
                 <span class="text-4xl">🎾</span>
               </div>
               <h1 class="text-size-1 font-semibold text-foreground mb-4">
-                Aceptar Invitación
+                {{ isOrganizer ? 'Aceptar Invitación como Organizador' : 'Aceptar Invitación' }}
               </h1>
               <p class="text-size-3 font-regular text-foreground-muted">
-                {{ invitation.invited_by_player?.name }} te ha invitado a unirte
+                {{ isOrganizer 
+                  ? 'Has sido invitado a ser organizador de torneos' 
+                  : `${invitation.invited_by_player?.name || 'Un administrador'} te ha invitado a unirte` }}
               </p>
             </div>
 
@@ -158,10 +171,16 @@
                 <p class="text-size-4 font-regular text-foreground-subtle mb-2">Nombre</p>
                 <p class="text-size-3 font-semibold text-foreground">{{ invitation.name }}</p>
               </div>
-              <div class="p-6 rounded-xl bg-surface border border-border-subtle">
+              <div v-if="invitation.category && !isOrganizer" class="p-6 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 font-regular text-foreground-subtle mb-2">Categoría</p>
                 <p class="text-size-3 font-semibold text-foreground">
                   {{ invitation.category?.name }}
+                </p>
+              </div>
+              <div v-if="isOrganizer" class="p-6 rounded-xl bg-accent-subtle border border-accent/30">
+                <p class="text-size-4 font-regular text-foreground-subtle mb-2">Rol</p>
+                <p class="text-size-3 font-semibold text-foreground">
+                  Organizador de Torneos
                 </p>
               </div>
             </div>
@@ -217,6 +236,11 @@ const acceptSuccess = ref(false)
 const registering = ref(false)
 const registrationError = ref<string | null>(null)
 
+// Check if this is an organizer invitation
+const isOrganizer = computed(() => {
+  return invitation.value?.role === 'tournament_organizer'
+})
+
 // Check for Clerk ticket in URL (from Clerk invitation email)
 const clerkTicket = computed(() => route.query.__clerk_ticket as string | undefined)
 const clerkStatus = computed(() => route.query.__clerk_status as string | undefined)
@@ -257,21 +281,22 @@ const handleCompleteRegistration = async () => {
   
   try {
     // Determine category_id (use pre-assigned or selected)
-    const categoryId = invitation.value.category_id || formData.value.category_id
+    // Organizers don't need a category
+    const categoryId = isOrganizer.value ? null : (invitation.value.category_id || formData.value.category_id)
     
-    if (!categoryId) {
+    if (!isOrganizer.value && !categoryId) {
       throw new Error('Por favor selecciona una categoría')
     }
     
     // Create user via API endpoint
-    // This endpoint will create the user in Clerk and the player in our system
+    // This endpoint will create the user in Clerk and the player/organizer in our system
     const response = await $fetch('/api/invitations/create-user', {
       method: 'POST',
       body: {
         email: invitation.value.email,
         password: formData.value.password,
         name: invitation.value.name,
-        category_id: categoryId,
+        category_id: categoryId || undefined, // Only send if not null
         invitation_token: token
       }
     })

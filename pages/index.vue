@@ -109,6 +109,25 @@
               </div>
             </div>
             <ul class="space-y-3">
+              <!-- Create Tournament (only for organizers) -->
+              <NuxtLink 
+                v-if="isOrganizer"
+                to="/organizer/tournaments"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+              >
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
+                </div>
+                <div class="flex-1">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent-secondary transition-colors block">
+                    Crear Torneo
+                  </span>
+                  <span class="text-size-4 font-regular text-foreground-muted">
+                    Organiza un nuevo torneo
+                  </span>
+                </div>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
+              </NuxtLink>
               <NuxtLink 
                 to="/matches/new"
                 class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
@@ -125,6 +144,23 @@
                   </span>
                 </div>
                 <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
+              </NuxtLink>
+              <NuxtLink 
+                to="/tournaments"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+              >
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
+                </div>
+                <div class="flex-1">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent-secondary transition-colors block">
+                    Ver Torneos
+                  </span>
+                  <span class="text-size-4 font-regular text-foreground-muted">
+                    Explora y regístrate en torneos
+                  </span>
+                </div>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
               </NuxtLink>
               <NuxtLink 
                 to="/matches"
@@ -349,6 +385,7 @@ definePageMeta({
 const { isLoaded, isAuthenticated, userId, user, isSignedIn } = useAuthState()
 
 const { player, fetchPlayer } = usePlayer()
+const { isOrganizer } = useOrganizer()
 
 // Debug: Log auth state in development
 if (process.dev && process.client) {

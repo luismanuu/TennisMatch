@@ -29,69 +29,118 @@
           </p>
         </div>
 
-        <!-- Tabs -->
+        <!-- Navigation Tabs - Organized in Groups -->
         <div v-if="!loading" class="mb-8 animate-fade-up animate-delay-1">
-          <div class="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6">
+          <!-- Primary Tab: Overview -->
+          <div class="mb-4">
             <button
               @click="activeTab = 'overview'"
               :class="[
-                'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all whitespace-nowrap flex-1 min-w-0',
+                'flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
                 activeTab === 'overview'
                   ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
                   : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
               ]"
             >
-              <Icon name="heroicons:chart-bar-square" class="w-4 h-4 flex-shrink-0" />
-              <span class="truncate">Overview</span>
+              <Icon name="heroicons:chart-bar-square" class="w-5 h-5 flex-shrink-0" />
+              <span>Overview</span>
             </button>
-            <button
-              @click="activeTab = 'pending'"
-              :class="[
-                'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all whitespace-nowrap flex-1 min-w-0',
-                activeTab === 'pending'
-                  ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                  : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
-              ]"
-            >
-              <Icon name="heroicons:clock" class="w-4 h-4 flex-shrink-0" />
-              <span class="truncate">Pendientes</span>
-            </button>
-            <button
-              @click="activeTab = 'players'"
-              :class="[
-                'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all whitespace-nowrap flex-1 min-w-0',
-                activeTab === 'players'
-                  ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                  : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
-              ]"
-            >
-              <Icon name="heroicons:users" class="w-4 h-4 flex-shrink-0" />
-              <span class="truncate">Jugadores</span>
-            </button>
-            <button
-              @click="activeTab = 'categories'"
-              :class="[
-                'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all whitespace-nowrap flex-1 min-w-0',
-                activeTab === 'categories'
-                  ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                  : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
-              ]"
-            >
-              <Icon name="heroicons:tag" class="w-4 h-4 flex-shrink-0" />
-              <span class="truncate">Categorías</span>
-            </button>
-            <button
-              @click="activeTab = 'matches'"
-              :class="[
-                'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all whitespace-nowrap flex-1 min-w-0',
-                activeTab === 'matches'
-                  ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                  : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
-              ]"
-            >
-              <Icon name="heroicons:trophy" class="w-4 h-4 flex-shrink-0" />
-              <span class="truncate">Partidos</span>
-            </button>
+          </div>
+
+          <!-- Grouped Tabs -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- User Management Group -->
+            <div class="space-y-2">
+              <div class="px-2 py-1">
+                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Usuarios</p>
+              </div>
+              <button
+                @click="activeTab = 'pending'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'pending'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:clock" class="w-4 h-4 flex-shrink-0" />
+                <span>Pendientes</span>
+              </button>
+              <button
+                @click="activeTab = 'players'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'players'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:users" class="w-4 h-4 flex-shrink-0" />
+                <span>Jugadores</span>
+              </button>
+            </div>
+
+            <!-- Content Management Group -->
+            <div class="space-y-2">
+              <div class="px-2 py-1">
+                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Contenido</p>
+              </div>
+              <button
+                @click="activeTab = 'categories'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'categories'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:tag" class="w-4 h-4 flex-shrink-0" />
+                <span>Categorías</span>
+              </button>
+              <button
+                @click="activeTab = 'matches'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'matches'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:trophy" class="w-4 h-4 flex-shrink-0" />
+                <span>Partidos</span>
+              </button>
+            </div>
+
+            <!-- Tournament Management Group -->
+            <div class="space-y-2">
+              <div class="px-2 py-1">
+                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Torneos</p>
+              </div>
+              <button
+                @click="activeTab = 'tournaments'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'tournaments'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:trophy-cup" class="w-4 h-4 flex-shrink-0" />
+                <span>Torneos</span>
+              </button>
+              <button
+                @click="activeTab = 'organizers'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'organizers'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:user-group" class="w-4 h-4 flex-shrink-0" />
+                <span>Organizadores</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -224,8 +273,62 @@
               </div>
             </div>
 
-            <!-- Recent Activity -->
+            <!-- Tournament Statistics -->
             <div class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-4">
+              <div class="flex items-center gap-3 mb-6">
+                <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
+                <h2 class="text-size-2 font-semibold text-foreground">Estadísticas de Torneos</h2>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30 hover:bg-blue-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:calendar-days" class="w-5 h-5 text-blue-400" />
+                    <p class="text-size-4 text-foreground-muted">Próximos</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-blue-400">{{ stats.tournaments?.upcoming || 0 }}</p>
+                </div>
+                <div class="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30 hover:bg-green-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:play-circle" class="w-5 h-5 text-green-400" />
+                    <p class="text-size-4 text-foreground-muted">Activos</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-green-400">{{ stats.tournaments?.active || 0 }}</p>
+                </div>
+                <div class="p-4 rounded-xl bg-gray-500/10 border-2 border-gray-500/30 hover:bg-gray-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:check-circle" class="w-5 h-5 text-gray-400" />
+                    <p class="text-size-4 text-foreground-muted">Completados</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-gray-400">{{ stats.tournaments?.completed || 0 }}</p>
+                </div>
+                <div class="p-4 rounded-xl bg-purple-500/10 border-2 border-purple-500/30 hover:bg-purple-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:users" class="w-5 h-5 text-purple-400" />
+                    <p class="text-size-4 text-foreground-muted">Total Registrados</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-purple-400">{{ stats.tournaments?.totalRegistrations || 0 }}</p>
+                </div>
+              </div>
+              <div class="mt-6 pt-6 border-t border-border-subtle">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div class="p-4 rounded-xl bg-surface border-2 border-border-subtle">
+                    <p class="text-size-4 text-foreground-muted mb-1">Total Torneos</p>
+                    <p class="text-size-2 font-bold text-foreground">{{ stats.tournaments?.total || 0 }}</p>
+                  </div>
+                  <div class="p-4 rounded-xl bg-surface border-2 border-border-subtle">
+                    <p class="text-size-4 text-foreground-muted mb-1">Organizadores</p>
+                    <p class="text-size-2 font-bold text-foreground">{{ stats.tournaments?.organizers || 0 }}</p>
+                  </div>
+                  <div class="p-4 rounded-xl bg-surface border-2 border-border-subtle">
+                    <p class="text-size-4 text-foreground-muted mb-1">Promedio por Torneo</p>
+                    <p class="text-size-2 font-bold text-foreground">{{ stats.tournaments?.avgRegistrations || 0 }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-5">
               <div class="flex items-center gap-3 mb-6">
                 <Icon name="heroicons:clock" class="w-6 h-6 text-accent" />
                 <h2 class="text-size-2 font-semibold text-foreground">Actividad Reciente (Últimos 7 Días)</h2>
@@ -1007,6 +1110,32 @@
             </p>
           </div>
         </div>
+
+        <!-- Tournaments Tab -->
+        <div v-show="activeTab === 'tournaments' && !loading">
+          <NuxtLink to="/admin/tournaments" class="block">
+            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+              <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
+              <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Torneos</h3>
+              <p class="text-size-4 font-regular text-foreground-muted">
+                Ver y administrar todos los torneos del sistema
+              </p>
+            </div>
+          </NuxtLink>
+        </div>
+
+        <!-- Organizers Tab -->
+        <div v-show="activeTab === 'organizers' && !loading">
+          <NuxtLink to="/admin/organizers" class="block">
+            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+              <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
+              <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Organizadores</h3>
+              <p class="text-size-4 font-regular text-foreground-muted">
+                Crear y administrar organizadores de torneos
+              </p>
+            </div>
+          </NuxtLink>
+        </div>
       </div>
     </div>
   </div>
@@ -1048,7 +1177,7 @@ const {
 
 
 // Tab management
-const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches'>('overview')
+const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'tournaments' | 'organizers'>('overview')
 
 const successMessage = ref<string | null>(null)
 const resendingIds = ref<Set<string>>(new Set())
@@ -1513,6 +1642,12 @@ watch(activeTab, (newTab) => {
     loadCategories()
   } else if (newTab === 'matches') {
     loadMatches()
+  } else if (newTab === 'tournaments') {
+    // Navigate to tournaments page
+    navigateTo('/admin/tournaments')
+  } else if (newTab === 'organizers') {
+    // Navigate to organizers page
+    navigateTo('/admin/organizers')
   }
 })
 

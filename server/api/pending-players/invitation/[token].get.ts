@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
         }
         
         const metadata = (clerkInvitation.publicMetadata as any) || {}
+        const role = metadata.role || 'player'
         
         // Return in the same format as database pending player
         return {
@@ -51,7 +52,8 @@ export default defineEventHandler(async (event) => {
           invitation_token: token,
           status: clerkInvitation.revoked ? 'revoked' : (clerkInvitation.status || 'pending'),
           created_at: clerkInvitation.createdAt ? new Date(clerkInvitation.createdAt).toISOString() : new Date().toISOString(),
-          updated_at: clerkInvitation.updatedAt ? new Date(clerkInvitation.updatedAt).toISOString() : new Date().toISOString()
+          updated_at: clerkInvitation.updatedAt ? new Date(clerkInvitation.updatedAt).toISOString() : new Date().toISOString(),
+          role: role // Include role to identify organizer invitations
         }
       }
     } catch (clerkError: any) {

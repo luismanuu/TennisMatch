@@ -7,13 +7,13 @@ export default defineEventHandler(async (event) => {
       email: string
       password: string
       name: string
-      category_id: string
+      category_id?: string
       invitation_token: string
     }>(event)
     
     const { email, password, name, category_id, invitation_token } = body
     
-    if (!email || !password || !name || !category_id || !invitation_token) {
+    if (!email || !password || !name || !invitation_token) {
       throw createError({
         statusCode: 400,
         statusMessage: 'Missing required fields'
@@ -70,13 +70,40 @@ export default defineEventHandler(async (event) => {
         })
       }
       
+      // Get role from invitation metadata and update user if needed
+      const invitationMetadata = (clerkInvitation.publicMetadata as any) || {}
+      const role = invitationMetadata.role || 'player'
+      
+      // For organizers, category_id is not required
+      if (role === 'tournament_organizer' && !category_id) {
+        // Organizers don't need a category
+      } else if (!category_id) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'category_id is required for players'
+        })
+      }
+      
+      // Update user role if it's different
+      if (role !== (existingUser.publicMetadata?.role as string || 'player')) {
+        try {
+          await clerkClient.users.updateUser(existingUser.id, {
+            publicMetadata: {
+              role: role
+            }
+          })
+        } catch (updateError) {
+          console.warn('Could not update user role:', updateError)
+        }
+      }
+
       // User exists but no player - create player
       const { data: newPlayer, error: createError } = await supabase
         .from('players')
         .insert({
           clerk_id: existingUser.id,
           name: name,
-          category_id: category_id,
+          category_id: category_id || null, // Organizers can have null category_id
           elo: 1000
         })
         .select(`
@@ -108,21 +135,38 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Create user in Clerk
+    // Get role from invitation metadata
+    const invitationMetadata = (clerkInvitation.publicMetadata as any) || {}
+    const role = invitationMetadata.role || 'player'
+    
+    // For organizers, category_id is not required
+    if (role === 'tournament_organizer' && !category_id) {
+      // Organizers don't need a category
+    } else if (!category_id) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'category_id is required for players'
+      })
+    }
+
+    // Create user in Clerk with role preserved
     const clerkUser = await clerkClient.users.createUser({
       emailAddress: [email],
       password: password,
       firstName: name.split(' ')[0] || name,
-      lastName: name.split(' ').slice(1).join(' ') || ''
+      lastName: name.split(' ').slice(1).join(' ') || '',
+      publicMetadata: {
+        role: role
+      }
     })
     
-    // Create player in our system
+    // Create player in our system (organizers are also stored as players)
     const { data: newPlayer, error: createError } = await supabase
       .from('players')
       .insert({
         clerk_id: clerkUser.id,
         name: name,
-        category_id: category_id,
+        category_id: category_id || null, // Organizers can have null category_id
         elo: 1000
       })
       .select(`

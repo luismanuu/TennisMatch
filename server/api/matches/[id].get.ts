@@ -90,6 +90,22 @@ export default defineEventHandler(async (event) => {
         winner:players!matches_winner_id_fkey(
           id,
           name
+        ),
+        tournament:tournaments(
+          id,
+          name,
+          category_id
+        ),
+        tournament_match:tournament_matches(
+          id,
+          bracket_type,
+          round_number,
+          group_id,
+          round_deadline,
+          group:tournament_groups(
+            id,
+            group_name
+          )
         )
       `)
       .eq('id', matchId)
@@ -137,8 +153,16 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    // Flatten tournament_match if it exists
+    const enrichedMatch: any = { ...match }
+    if (match.tournament_match && Array.isArray(match.tournament_match) && match.tournament_match.length > 0) {
+      enrichedMatch.tournament_match = match.tournament_match[0]
+    } else if (match.tournament_match && !Array.isArray(match.tournament_match)) {
+      enrichedMatch.tournament_match = match.tournament_match
+    }
+    
     return {
-      ...match,
+      ...enrichedMatch,
       messages: messages || []
     }
   } catch (error: any) {
