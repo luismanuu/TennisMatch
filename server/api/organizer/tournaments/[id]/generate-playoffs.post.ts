@@ -241,14 +241,35 @@ async function createPlayoffMatches(
   const tournamentMatchRecords: any[] = []
 
   for (const bracketMatch of bracket) {
-    // Skip bye matches (they don't need actual match records)
-    if (bracketMatch.is_bye) {
-      continue
-    }
-
     // Only create matches for the first round (round 1) where we have actual player IDs
     // Subsequent rounds will be created when previous round matches complete
     if (bracketMatch.round !== 1) {
+      continue
+    }
+
+    // Handle bye matches - create tournament_match record with player_id but no actual match
+    if (bracketMatch.is_bye) {
+      const byePlayerId = bracketMatch.player1_id || bracketMatch.player2_id
+      if (!byePlayerId) {
+        continue
+      }
+      
+      // Validate that player ID is an actual UUID, not a placeholder
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!uuidRegex.test(byePlayerId)) {
+        continue
+      }
+
+      // Create tournament match record for bye (no actual match record, but store player_id)
+      tournamentMatchRecords.push({
+        tournament_id: tournamentId,
+        match_id: null, // No actual match for byes
+        bracket_type: bracketType,
+        round_number: bracketMatch.round,
+        bracket_position: bracketMatch.matchNumber,
+        is_bye: true,
+        player_id: byePlayerId // Store the player who gets the bye
+      })
       continue
     }
 

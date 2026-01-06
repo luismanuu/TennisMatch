@@ -1,12 +1,15 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
-import { recalculateGroupStandings } from '~/server/utils/tournament-brackets'
+import { updateBracketFromCompletedMatches } from '~/server/utils/tournament-brackets'
+import { getClerkClient } from '~/server/utils/clerk'
 
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
     const clerkId = query.clerk_id as string
     const tournamentId = getRouterParam(event, 'id')
+    const body = await readBody(event)
+    const bracketType = (body.bracketType || 'all') as 'main' | 'backdraw' | 'all'
 
     if (!clerkId) {
       throw createError({
@@ -25,6 +28,7 @@ export default defineEventHandler(async (event) => {
     await requireOrganizer(clerkId)
 
     const supabase = getSupabaseAdmin()
+    const clerkClient = getClerkClient()
 
     // Get organizer's player ID
     const { data: organizer, error: organizerError } = await supabase
@@ -43,36 +47,10 @@ export default defineEventHandler(async (event) => {
     // Verify organizer owns this tournament
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
 
-    // Get all groups for this tournament
-    const { data: groups, error: groupsError } = await supabase
-      .from('tournament_groups')
-      .select('id')
-      .eq('tournament_id', tournamentId)
+    // Update bracket from all completed matches
+    await updateBracketFromCompletedMatches(tournamentId, bracketType, supabase)
 
-    if (groupsError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch tournament groups',
-        data: groupsError
-      })
-    }
-
-    // Recalculate standings for each group
-    const results = []
-    for (const group of groups || []) {
-      try {
-        await recalculateGroupStandings(tournamentId, group.id, supabase)
-        results.push({ groupId: group.id, success: true })
-      } catch (error: any) {
-        results.push({ groupId: group.id, success: false, error: error.message })
-      }
-    }
-
-    return {
-      success: true,
-      message: 'Standings recalculated successfully',
-      results
-    }
+    return { success: true, message: 'Bracket updated successfully' }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,

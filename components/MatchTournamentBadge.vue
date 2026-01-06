@@ -4,7 +4,7 @@
       v-if="match.tournament"
       class="px-3 py-1 rounded-full text-size-4 font-semibold bg-accent-subtle/30 text-accent border border-accent/30"
     >
-      <Icon name="heroicons:trophy-cup" class="w-3 h-3 inline mr-1" />
+      <Icon name="heroicons:trophy" class="w-3 h-3 inline mr-1" />
       {{ getBadgeText() }}
     </span>
     <span

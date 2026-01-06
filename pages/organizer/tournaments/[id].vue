@@ -368,21 +368,38 @@
 
           <!-- Bracket Visualization -->
           <div v-if="tournament.groups && tournament.groups.length > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-2">
-            <button
-              @click="showBrackets = !showBrackets"
-              class="flex items-center gap-2 text-size-2 font-semibold text-foreground hover:text-accent transition-colors mb-4"
-            >
-              <Icon 
-                :name="showBrackets ? 'heroicons:chevron-down' : 'heroicons:chevron-right'" 
-                class="w-5 h-5 transition-transform"
-              />
-              <span>Brackets</span>
-            </button>
+            <div class="flex items-center justify-between mb-4">
+              <button
+                @click="showBrackets = !showBrackets"
+                class="flex items-center gap-2 text-size-2 font-semibold text-foreground hover:text-accent transition-colors"
+              >
+                <Icon 
+                  :name="showBrackets ? 'heroicons:chevron-down' : 'heroicons:chevron-right'" 
+                  class="w-5 h-5 transition-transform"
+                />
+                <span>Brackets</span>
+              </button>
+              <button
+                v-if="showBrackets && tournament.current_phase === 'playoffs'"
+                @click="refreshBracket"
+                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                :disabled="refreshingBracket"
+              >
+                <Icon 
+                  name="heroicons:arrow-path" 
+                  class="w-5 h-5 transition-transform"
+                  :class="{ 'animate-spin': refreshingBracket }"
+                />
+                <span>{{ refreshingBracket ? 'Refrescando...' : 'Refrescar Bracket' }}</span>
+              </button>
+            </div>
             <div v-show="showBrackets">
               <TournamentBracket 
+                ref="bracketRef"
                 :tournament-id="tournament.id" 
                 :is-organizer="true"
                 :tournament-organizer-id="tournament.organizer_id"
+                :key="bracketRefreshKey"
               />
             </div>
           </div>
@@ -534,7 +551,7 @@ const route = useRoute()
 const tournamentId = route.params.id as string
 
 const { userId, isLoaded } = useAuthState()
-const { getTournament: getOrgTournament, generateBrackets, generatePlayoffs, registerPlayer, setGroupDeadline, getPhaseStatus, advancePhase, currentTournament, loading, error } = useOrganizer()
+const { getTournament: getOrgTournament, generateBrackets, generatePlayoffs, registerPlayer, setGroupDeadline, getPhaseStatus, advancePhase, updateBracket, currentTournament, loading, error } = useOrganizer()
 
 const tournament = computed(() => currentTournament.value)
 
@@ -630,6 +647,12 @@ const loadTournament = async () => {
     // Load bracket data if in playoffs phase to get round numbers
     if (tournament.value?.current_phase === 'playoffs') {
       await loadBracketData()
+      // Refresh bracket visualization
+      bracketRefreshKey.value++
+      await nextTick()
+      if (bracketRef.value) {
+        bracketRef.value.refresh()
+      }
     }
     // Load group deadline into the input field
     if (currentGroupDeadline.value) {
@@ -793,6 +816,40 @@ const handleAdvancePhase = async () => {
     advancingPhase.value = false
   }
 }
+
+const refreshBracket = async () => {
+  try {
+    refreshingBracket.value = true
+    
+    // First, update bracket from all completed matches to create/update next round matches
+    if (tournament.value?.id) {
+      console.log('[refreshBracket] Updating bracket from completed matches...')
+      await updateBracket(tournament.value.id, 'all')
+      console.log('[refreshBracket] Bracket update completed')
+    }
+    
+    // Reload tournament data to get updated bracket
+    await loadTournament()
+    
+    // Increment refresh key to force re-render
+    bracketRefreshKey.value++
+    // Wait for next tick to ensure component is updated
+    await nextTick()
+    // Call refresh method on the bracket component
+    if (bracketRef.value) {
+      await bracketRef.value.refresh()
+    }
+    const toast = useToastNotifications()
+    toast.success('Bracket refrescado')
+  } catch (err: any) {
+    console.error('Error refreshing bracket:', err)
+    const toast = useToastNotifications()
+    toast.error('Error al refrescar el bracket')
+  } finally {
+    refreshingBracket.value = false
+  }
+}
+
 const generating = ref(false)
 const startingTournament = ref(false)
 const showRegisterForm = ref(false)
@@ -804,6 +861,9 @@ const groupDeadline = ref('')
 const phaseStatus = ref<any>(null)
 const advancingPhase = ref(false)
 const generatingPlayoffs = ref(false)
+const bracketRef = ref<any>(null)
+const bracketRefreshKey = ref(0)
+const refreshingBracket = ref(false)
 
 // Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm)
 const minDateTime = computed(() => {
@@ -869,8 +929,6 @@ const calculateRoundsForBracket = (bracketType: 'main' | 'backdraw') => {
   // Get matches for this specific bracket type only
   const matches = bracketData.value[bracketType] || []
   
-  console.log(`[Deadline Rounds ${bracketType}] Matches:`, matches.length)
-  
   if (matches.length === 0) return []
   
   // Convert to bracketry format to get roundIndex (same as TournamentBracket)
@@ -881,16 +939,12 @@ const calculateRoundsForBracket = (bracketType: 'main' | 'backdraw') => {
   
   const maxRoundIndex = Math.max(...uniqueRoundIndexes, 0)
   
-  console.log(`[Deadline Rounds ${bracketType}] Unique round indexes (0-based):`, uniqueRoundIndexes)
-  console.log(`[Deadline Rounds ${bracketType}] Max round index:`, maxRoundIndex)
-  
   // Calculate total rounds needed (EXACT same logic as TournamentBracket)
   let roundsToCreate = uniqueRoundIndexes.length
   
   // If we only have round 0 (first round), calculate how many rounds we need
   // based on the actual number of unique players in the first round
   if (roundsToCreate === 1 && uniqueRoundIndexes[0] === 0) {
-    console.log(`[Deadline Rounds ${bracketType}] Only one round found (roundIndex 0), calculating from players...`)
     // Get all unique players from round 1 matches
     const round1Matches = matches.filter((tm: any) => (tm.round_number || 1) === 1)
     const uniquePlayers = new Set<string>()
@@ -906,26 +960,21 @@ const calculateRoundsForBracket = (bracketType: 'main' | 'backdraw') => {
     })
     
     const totalPlayers = uniquePlayers.size
-    console.log(`[Deadline Rounds ${bracketType}] Round 1 matches:`, round1Matches.length)
-    console.log(`[Deadline Rounds ${bracketType}] Unique players in round 1:`, totalPlayers)
     
     if (totalPlayers > 0) {
       // Calculate total rounds needed for single elimination bracket
       // Formula: ceil(log2(totalPlayers))
       roundsToCreate = Math.ceil(Math.log2(totalPlayers))
-      console.log(`[Deadline Rounds ${bracketType}] Calculando rondas: ${totalPlayers} jugadores únicos = ${roundsToCreate} rondas totales`)
     } else {
       // Fallback: use number of matches * 2
       const round1MatchCount = round1Matches.length
       if (round1MatchCount > 0) {
         roundsToCreate = Math.ceil(Math.log2(round1MatchCount * 2))
-        console.log(`[Deadline Rounds ${bracketType}] Fallback cálculo: ${round1MatchCount} partidos = ${roundsToCreate} rondas`)
       }
     }
   } else {
     // Use actual max round index + 1 (since roundIndex is 0-based)
     roundsToCreate = maxRoundIndex + 1
-    console.log(`[Deadline Rounds ${bracketType}] Usando rondas reales: maxRoundIndex=${maxRoundIndex}, totalRounds=${roundsToCreate}`)
   }
   
   // Generate rounds (EXACT same logic as TournamentBracket)
@@ -958,9 +1007,6 @@ const calculateRoundsForBracket = (bracketType: 'main' | 'backdraw') => {
       round_name: roundName
     })
   }
-  
-  console.log(`[Deadline Rounds ${bracketType}] Rounds created: ${allRounds.length}`, allRounds.map(r => `${r.round_number}: ${r.round_name}`))
-  console.log(`[Deadline Rounds ${bracketType}] Rounds to create: ${roundsToCreate}`)
   
   return allRounds
 }

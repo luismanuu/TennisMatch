@@ -66,11 +66,33 @@ export default defineEventHandler(async (event) => {
     }
 
     // Organize matches by bracket type and round
+    const mainMatches = (matches || []).filter(m => m.bracket_type === 'main')
+    const backdrawMatches = (matches || []).filter(m => m.bracket_type === 'backdraw')
+    const groupMatches = (matches || []).filter(m => m.bracket_type === 'group')
+    
+    // Debug: Log matches by round
+    const mainByRound = new Map<number, any[]>()
+    mainMatches.forEach((m: any) => {
+      const round = m.round_number || 1
+      if (!mainByRound.has(round)) {
+        mainByRound.set(round, [])
+      }
+      mainByRound.get(round)!.push(m)
+    })
+    
+    console.log(`[Bracket API] Tournament ${tournamentId} - Main bracket matches by round:`)
+    mainByRound.forEach((matches, round) => {
+      console.log(`  Round ${round}: ${matches.length} matches`)
+      matches.forEach((m: any) => {
+        console.log(`    - Match ${m.bracket_position || '?'}: ${m.match_id || 'NO MATCH ID'} (has match: ${!!m.match}, player1: ${m.match?.player1_id || 'null'}, player2: ${m.match?.player2_id || 'null'})`)
+      })
+    })
+    
     const bracketData = {
       groups: groups || [],
-      main: (matches || []).filter(m => m.bracket_type === 'main'),
-      backdraw: (matches || []).filter(m => m.bracket_type === 'backdraw'),
-      group: (matches || []).filter(m => m.bracket_type === 'group')
+      main: mainMatches,
+      backdraw: backdrawMatches,
+      group: groupMatches
     }
 
     return bracketData

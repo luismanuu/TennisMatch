@@ -163,7 +163,7 @@
 
         <!-- Empty State -->
         <div v-else class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <Icon name="heroicons:trophy-cup" class="w-24 h-24 text-foreground-muted mx-auto mb-6 opacity-50" />
+          <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted mx-auto mb-6 opacity-50" />
           <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay torneos</h3>
           <p class="text-size-4 font-regular text-foreground-muted">
             No se encontraron torneos con los filtros actuales

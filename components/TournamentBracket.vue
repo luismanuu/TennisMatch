@@ -187,7 +187,7 @@
 
     <!-- Empty State -->
     <div v-if="!bracketData || (!bracketData.groups?.length && !bracketData.main?.length && !bracketData.backdraw?.length)" class="text-center py-12">
-      <Icon name="heroicons:trophy-cup" class="w-24 h-24 text-foreground-muted mx-auto mb-4 opacity-50" />
+      <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted mx-auto mb-4 opacity-50" />
       <p class="text-size-3 font-regular text-foreground-muted">Los brackets aún no han sido generados</p>
     </div>
 
@@ -329,6 +329,10 @@ const backdrawCurrentRoundDeadline = ref<{ roundName: string; formattedDate: str
 // Bracketry container refs
 const mainBracketContainer = ref<HTMLElement | null>(null)
 const backdrawBracketContainer = ref<HTMLElement | null>(null)
+
+// Match maps for click handling
+const mainBracketMatchMap = ref<Map<string, any>>(new Map())
+const backdrawBracketMatchMap = ref<Map<string, any>>(new Map())
 
 // Lazy load Bracketry only on client side
 let createBracket: any = null
@@ -601,6 +605,8 @@ const convertToBracketryFormat = (matches: any[]) => {
 
   // Build contestants object (required by bracketry)
   const contestants: Record<string, { players: Array<{ title: string }> }> = {}
+  // Map to store original match data for click handling
+  const matchMap = new Map<string, any>()
   
   // Collect all unique players from matches
   matches.forEach((tm) => {
@@ -684,8 +690,15 @@ const convertToBracketryFormat = (matches: any[]) => {
         }
       }
       
+      const bracketryMatchId = tm.id || `bye_match_${index}`
+      
+      // Store match data in map for click handling (even for BYE matches)
+      if (tm.match) {
+        matchMap.set(bracketryMatchId, tm.match)
+      }
+      
       return {
-        matchId: tm.id || `bye_match_${index}`,
+        matchId: bracketryMatchId,
         roundIndex: (tm.round_number || 1) - 1,
         order: tm.bracket_position || index,
         sides: [
@@ -739,8 +752,15 @@ const convertToBracketryFormat = (matches: any[]) => {
       sides[1].scores = player2Scores
     }
     
+    const bracketryMatchId = match?.id || tm.id || `match_${index}`
+    
+    // Store match data in map for click handling
+    if (match) {
+      matchMap.set(bracketryMatchId, match)
+    }
+    
     return {
-      matchId: match?.id || tm.id || `match_${index}`,
+      matchId: bracketryMatchId,
       roundIndex: (tm.round_number || 1) - 1,
       order: tm.bracket_position || index,
       sides
@@ -795,19 +815,16 @@ const convertToBracketryFormat = (matches: any[]) => {
       // - 8 players = 3 rounds (Cuartos + Semifinales + Final)
       // - 16 players = 4 rounds
       roundsToCreate = Math.ceil(Math.log2(totalPlayers))
-      console.log(`Calculando rondas: ${totalPlayers} jugadores únicos = ${roundsToCreate} rondas totales`)
     } else {
       // Fallback: use number of matches * 2
       const round1MatchCount = round1Matches.length
       if (round1MatchCount > 0) {
         roundsToCreate = Math.ceil(Math.log2(round1MatchCount * 2))
-        console.log(`Fallback cálculo: ${round1MatchCount} partidos = ${roundsToCreate} rondas`)
       }
     }
   } else {
     // Use actual max round index + 1 (since roundIndex is 0-based)
     roundsToCreate = maxRoundIndex + 1
-    console.log(`Usando rondas reales: maxRoundIndex=${maxRoundIndex}, totalRounds=${roundsToCreate}`)
   }
   
   // Extract round deadlines from matches
@@ -842,15 +859,12 @@ const convertToBracketryFormat = (matches: any[]) => {
     
     rounds.push({ name: roundName })
   }
-
-  console.log(`Rounds created: ${rounds.length}`, rounds.map(r => r.name))
-  console.log(`Unique round indexes:`, uniqueRoundIndexes)
-  console.log(`Rounds to create: ${roundsToCreate}`)
   
   return {
     rounds,
     matches: bracketryMatches,
-    contestants
+    contestants,
+    matchMap
   }
 }
 
@@ -907,15 +921,67 @@ const loadBracket = async () => {
   try {
     bracketData.value = await getBracket(props.tournamentId)
     
-    // Debug: Log standings data
-    if (bracketData.value?.groups) {
-      bracketData.value.groups.forEach((group: any) => {
-        console.log(`Group ${group.group_name}:`, {
-          players: group.players?.length || 0,
-          standings: group.standings?.length || 0,
-          standingsData: group.standings
-        })
+    // Debug: Log bracket matches by round
+    if (bracketData.value?.main && bracketData.value.main.length > 0) {
+      console.log(`[TournamentBracket] Total main matches received: ${bracketData.value.main.length}`)
+      const matchesByRound = new Map<number, any[]>()
+      bracketData.value.main.forEach((tm: any) => {
+        const roundNum = tm.round_number || 1
+        if (!matchesByRound.has(roundNum)) {
+          matchesByRound.set(roundNum, [])
+        }
+        matchesByRound.get(roundNum)!.push(tm)
       })
+      const matchesByRoundArray = Array.from(matchesByRound.entries()).map(([round, matches]) => ({
+        round,
+        count: matches.length,
+        matches: matches.map((m: any) => ({
+          id: m.match_id,
+          round: m.round_number,
+          position: m.bracket_position,
+          bracket_type: m.bracket_type,
+          player1: m.match?.player1?.name || m.match?.player1_id || 'TBD',
+          player2: m.match?.player2?.name || m.match?.player2_id || 'TBD',
+          winner: m.match?.winner?.name || m.match?.winner_id || null,
+          hasMatch: !!m.match,
+          matchId: m.match?.id || 'NO MATCH ID',
+          isBye: m.is_bye
+        }))
+      }))
+      console.log('Main bracket matches by round:', matchesByRoundArray)
+      console.log('Total rounds found:', matchesByRoundArray.length)
+      console.log('Round numbers:', matchesByRoundArray.map(r => r.round))
+      
+      // Also log raw data for debugging
+      console.log('Raw main matches:', bracketData.value.main.map((m: any) => ({
+        tournament_match_id: m.id,
+        match_id: m.match_id,
+        round: m.round_number,
+        position: m.bracket_position,
+        bracket_type: m.bracket_type,
+        hasMatch: !!m.match,
+        matchData: m.match ? {
+          id: m.match.id,
+          status: m.match.status,
+          player1_id: m.match.player1_id,
+          player2_id: m.match.player2_id,
+          winner_id: m.match.winner_id,
+          score: m.match.score
+        } : null,
+        isBye: m.is_bye
+      })))
+      
+      // Check if any matches are completed
+      const completedMatches = bracketData.value.main.filter((m: any) => 
+        m.match?.status === 'completed' && m.match?.winner_id
+      )
+      console.log(`[TournamentBracket] Completed matches in main bracket: ${completedMatches.length}`, completedMatches.map((m: any) => ({
+        match_id: m.match_id,
+        round: m.round_number,
+        winner: m.match?.winner_id
+      })))
+    } else {
+      console.log('[TournamentBracket] No main matches found in bracketData')
     }
     
     // Extract round deadlines for main bracket
@@ -978,9 +1044,11 @@ const loadBracket = async () => {
         mainBracketContainer.value.innerHTML = ''
         const mainBracketData = convertToBracketryFormat(bracketData.value.main)
         if (mainBracketData && mainBracketData.matches && mainBracketData.matches.length > 0) {
-          console.log('Main bracket data:', mainBracketData)
-          console.log('Matches count:', mainBracketData.matches.length)
-          console.log('Contestants count:', Object.keys(mainBracketData.contestants || {}).length)
+          // Store match map for click handling
+          if (mainBracketData.matchMap) {
+            mainBracketMatchMap.value = mainBracketData.matchMap
+          }
+          
           try {
             // Pass options to createBracket with font settings
             // Using 'inherit' to inherit Instrument Sans from the project
@@ -994,7 +1062,14 @@ const loadBracket = async () => {
               matchTextColor: 'oklch(0.95 0 0)',
               highlightedPlayerTitleColor: 'oklch(0.70 0.22 150)',
               connectionLinesColor: 'oklch(0.55 0.01 250)', // Lighter color for visibility on dark background
-              highlightedConnectionLinesColor: 'oklch(0.70 0.22 150)' // Accent color for highlighted lines
+              highlightedConnectionLinesColor: 'oklch(0.70 0.22 150)', // Accent color for highlighted lines
+              onMatchClick: (match: any) => {
+                const matchId = match.matchId
+                const matchData = mainBracketMatchMap.value.get(matchId)
+                if (matchData && canViewMatchDetails(matchData)) {
+                  navigateTo(`/matches/${matchId}${props.tournamentId ? `?from=tournament&tournamentId=${props.tournamentId}` : ''}`)
+                }
+              }
             }
             createBracket(mainBracketData, mainBracketContainer.value, bracketOptions)
             
@@ -1021,9 +1096,11 @@ const loadBracket = async () => {
         backdrawBracketContainer.value.innerHTML = ''
         const backdrawBracketData = convertToBracketryFormat(bracketData.value.backdraw)
         if (backdrawBracketData && backdrawBracketData.matches && backdrawBracketData.matches.length > 0) {
-          console.log('Backdraw bracket data:', backdrawBracketData)
-          console.log('Matches count:', backdrawBracketData.matches.length)
-          console.log('Contestants count:', Object.keys(backdrawBracketData.contestants || {}).length)
+          // Store match map for click handling
+          if (backdrawBracketData.matchMap) {
+            backdrawBracketMatchMap.value = backdrawBracketData.matchMap
+          }
+          
           try {
             // Pass options to createBracket with font settings
             // Using 'inherit' to inherit Instrument Sans from the project
@@ -1037,7 +1114,14 @@ const loadBracket = async () => {
               matchTextColor: 'oklch(0.95 0 0)',
               highlightedPlayerTitleColor: 'oklch(0.70 0.22 150)',
               connectionLinesColor: 'oklch(0.55 0.01 250)', // Lighter color for visibility on dark background
-              highlightedConnectionLinesColor: 'oklch(0.70 0.22 150)' // Accent color for highlighted lines
+              highlightedConnectionLinesColor: 'oklch(0.70 0.22 150)', // Accent color for highlighted lines
+              onMatchClick: (match: any) => {
+                const matchId = match.matchId
+                const matchData = backdrawBracketMatchMap.value.get(matchId)
+                if (matchData && canViewMatchDetails(matchData)) {
+                  navigateTo(`/matches/${matchId}${props.tournamentId ? `?from=tournament&tournamentId=${props.tournamentId}` : ''}`)
+                }
+              }
             }
             createBracket(backdrawBracketData, backdrawBracketContainer.value, bracketOptions)
             
@@ -1068,6 +1152,11 @@ watch(() => props.tournamentId, () => {
     loadBracket()
   }
 }, { immediate: true })
+
+// Expose refresh method for parent components
+defineExpose({
+  refresh: loadBracket
+})
 
 // Group matches functions
 const openGroupMatches = async (groupId: string) => {

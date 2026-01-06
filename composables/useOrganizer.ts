@@ -377,6 +377,37 @@ export const useOrganizer = () => {
     }
   }
 
+  const updateBracket = async (tournamentId: string, bracketType: 'main' | 'backdraw' | 'all' = 'all') => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string }>(
+        `/api/organizer/tournaments/${tournamentId}/update-bracket`,
+        {
+          method: 'POST',
+          query: {
+            clerk_id: userId.value
+          },
+          body: {
+            bracketType
+          }
+        }
+      )
+      
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     isOrganizer: readonly(isOrganizer),
     loading: readonly(loading),
@@ -395,6 +426,7 @@ export const useOrganizer = () => {
     setPlayoffDeadline,
     getUnscheduledMatches,
     getPhaseStatus,
-    advancePhase
+    advancePhase,
+    updateBracket
   }
 }

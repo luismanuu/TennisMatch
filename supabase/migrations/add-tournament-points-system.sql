@@ -41,3 +41,4 @@ WHERE game_difference = 0 AND (games_won > 0 OR games_lost > 0);
 -- 2. Calculate points based on bracket_type and round_number
 -- 3. Update tournament_standings with calculated points
 
+

@@ -125,7 +125,7 @@
                     : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
                 ]"
               >
-                <Icon name="heroicons:trophy-cup" class="w-4 h-4 flex-shrink-0" />
+                <Icon name="heroicons:trophy" class="w-4 h-4 flex-shrink-0" />
                 <span>Torneos</span>
               </button>
               <button

@@ -718,6 +718,7 @@ export default defineEventHandler(async (event) => {
     
     // If match was completed and belongs to a tournament, update bracket and standings
     if (updatedMatch.status === 'completed' && updatedMatch.winner_id && updatedMatch.tournament_id) {
+      console.log(`[PUT /api/matches/${matchId}] Match completed, checking if tournament match...`)
       try {
         // Get tournament match info to check if it's a group stage match
         const { data: tournamentMatch } = await supabase
@@ -727,8 +728,10 @@ export default defineEventHandler(async (event) => {
           .single()
 
         if (tournamentMatch) {
+          console.log(`[PUT /api/matches/${matchId}] Tournament match found, bracket_type: ${tournamentMatch.bracket_type}, calling updateBracketAfterMatch...`)
           // Update bracket progression
           await updateBracketAfterMatch(matchId, updatedMatch.winner_id, supabase)
+          console.log(`[PUT /api/matches/${matchId}] updateBracketAfterMatch completed`)
 
           // If it's a group stage match, recalculate standings
           if (tournamentMatch.bracket_type === 'group' && tournamentMatch.group_id) {

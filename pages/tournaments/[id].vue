@@ -452,7 +452,7 @@ const getRoundIcon = (bracketType: string) => {
   const icons: Record<string, string> = {
     group: 'heroicons:user-group',
     main: 'heroicons:trophy',
-    backdraw: 'heroicons:trophy-cup'
+    backdraw: 'heroicons:trophy'
   }
   return icons[bracketType] || 'heroicons:calendar'
 }

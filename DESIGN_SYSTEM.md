@@ -553,3 +553,4 @@ By following this design system guide, you can create new pages that automatical
 
 For questions or improvements, refer to existing pages like `pages/admin/index.vue`, `pages/matches/[id].vue`, or `pages/index.vue` for reference implementations.
 
+
