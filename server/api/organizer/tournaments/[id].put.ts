@@ -5,7 +5,7 @@ import type { UpdateTournamentPayload } from '~/types'
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody<UpdateTournamentPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, category_id, start_date, end_date, status, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location } = body
+    const { clerk_id, name, category_id, start_date, end_date, status, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
     const tournamentId = getRouterParam(event, 'id')
 
     if (!clerk_id) {
@@ -95,6 +95,7 @@ export default defineEventHandler(async (event) => {
     if (description !== undefined) updateData.description = description?.trim() || null
     if (rules !== undefined) updateData.rules = rules?.trim() || null
     if (location !== undefined) updateData.location = location?.trim() || null
+    if (points_config !== undefined) updateData.points_config = points_config || null
 
     // Verify category if updating (allow null for open tournaments)
     if (category_id !== undefined && category_id !== null) {

@@ -353,7 +353,11 @@
           <!-- Bracket Visualization -->
           <div v-if="tournament.groups && tournament.groups.length > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-3">
             <h2 class="text-size-2 font-semibold text-foreground mb-4">Brackets</h2>
-            <TournamentBracket :tournament-id="tournament.id" :player-id="player?.id" />
+            <TournamentBracket 
+              :tournament-id="tournament.id" 
+              :player-id="player?.id"
+              :is-organizer="false"
+            />
           </div>
         </div>
       </div>
@@ -456,8 +460,8 @@ const getRoundIcon = (bracketType: string) => {
 const getBracketTypeLabel = (bracketType: string) => {
   const labels: Record<string, string> = {
     group: 'Fase de Grupos',
-    main: 'Bracket Principal',
-    backdraw: 'Bracket de Consolación'
+    main: 'Bracket Main',
+    backdraw: 'Bracket Back'
   }
   return labels[bracketType] || bracketType
 }

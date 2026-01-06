@@ -136,6 +136,47 @@
                 />
               </div>
             </div>
+            
+            <!-- Points Configuration Section -->
+            <div class="border-t-2 border-border-subtle pt-6 mt-6">
+              <h3 class="text-size-3 font-semibold text-foreground mb-4">Configuración de Puntos</h3>
+              <p class="text-size-5 text-foreground-muted mb-4">
+                Los puntos se usan como desempate cuando los jugadores tienen el mismo número de victorias. Los puntos se acumulan en todas las etapas del torneo.
+              </p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                    Puntos por Victoria - Fase de Grupos
+                  </label>
+                  <input
+                    v-model.number="tournamentForm.points_config.group_stage"
+                    type="number"
+                    min="1"
+                    class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                    placeholder="3 (por defecto)"
+                  />
+                  <p class="text-size-5 text-foreground-muted mt-2">
+                    Puntos otorgados por cada victoria en la fase de grupos
+                  </p>
+                </div>
+                <div>
+                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                    Puntos por Victoria - Playoffs
+                  </label>
+                  <input
+                    v-model.number="tournamentForm.points_config.playoffs"
+                    type="number"
+                    min="1"
+                    class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                    placeholder="5 (por defecto)"
+                  />
+                  <p class="text-size-5 text-foreground-muted mt-2">
+                    Puntos otorgados por cada victoria en playoffs (cuartos, semis, final)
+                  </p>
+                </div>
+              </div>
+            </div>
+            
             <div>
               <label class="block text-size-4 font-semibold text-foreground mb-2">Descripción (Opcional)</label>
               <textarea
@@ -269,7 +310,11 @@ const tournamentForm = ref<CreateTournamentPayload & { registration_open: boolea
   min_players: 4,
   max_players: undefined,
   description: '',
-  registration_open: true
+  registration_open: true,
+  points_config: {
+    group_stage: 3,
+    playoffs: 5
+  }
 })
 
 const resetForm = () => {
@@ -283,7 +328,11 @@ const resetForm = () => {
     min_players: 4,
     max_players: undefined,
     description: '',
-    registration_open: true
+    registration_open: true,
+    points_config: {
+      group_stage: 3,
+      playoffs: 5
+    }
   }
 }
 

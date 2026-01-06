@@ -5,7 +5,7 @@ import type { CreateTournamentPayload } from '~/types'
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody<CreateTournamentPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, category_id, start_date, end_date, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location } = body
+    const { clerk_id, name, category_id, start_date, end_date, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
 
     if (!clerk_id) {
       throw createError({
@@ -76,6 +76,7 @@ export default defineEventHandler(async (event) => {
         description: description?.trim() || null,
         rules: rules?.trim() || null,
         location: location?.trim() || null,
+        points_config: points_config || null,
         status: 'upcoming'
       })
       .select(`

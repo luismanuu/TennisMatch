@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import type { CreateMatchMessagePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -42,10 +43,17 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Verify match exists and user is part of it
+    // Verify match exists and user is part of it or is organizer
     const { data: match, error: matchError } = await supabase
       .from('matches')
-      .select('player1_id, player2_id, pending_player2_id, pending_player2:pending_players(id, invited_by_player_id)')
+      .select(`
+        player1_id, 
+        player2_id, 
+        pending_player2_id, 
+        tournament_id,
+        pending_player2:pending_players(id, invited_by_player_id),
+        tournament:tournaments(id, organizer_id, created_by)
+      `)
       .eq('id', matchId)
       .single()
     
@@ -62,10 +70,22 @@ export default defineEventHandler(async (event) => {
     const isPendingPlayerInviter = match.pending_player2_id && 
       (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
     
-    if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter) {
+    // Check if user is organizer of the tournament (if match belongs to a tournament)
+    let isTournamentOrganizer = false
+    if (match.tournament_id && match.tournament) {
+      try {
+        await verifyOrganizerOwnsTournament(currentPlayer.id, match.tournament_id, supabase)
+        isTournamentOrganizer = true
+      } catch (err) {
+        // Not organizer of this tournament
+        isTournamentOrganizer = false
+      }
+    }
+    
+    if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter && !isTournamentOrganizer) {
       throw createError({
         statusCode: 403,
-        statusMessage: 'Unauthorized: You are not part of this match'
+        statusMessage: 'Unauthorized: You are not part of this match or organizer of the tournament'
       })
     }
     

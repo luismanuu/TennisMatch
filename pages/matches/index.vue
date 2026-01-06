@@ -235,11 +235,12 @@
                 <!-- Status Badge and Date -->
                 <div class="flex items-center gap-4 flex-wrap">
                   <MatchTournamentBadge :match="match" />
-                  <div class="flex items-center gap-2 px-3 py-1 rounded-full border backdrop-blur-sm" :class="getStatusBadgeClass(match.status)">
+                  <div class="flex items-center gap-2 px-3 py-1 rounded-full border backdrop-blur-sm" :class="getStatusBadgeClass(match.status, match.scheduled_at)">
                     <Icon :name="getStatusIcon(match.status)" class="w-4 h-4" />
-                    <span class="text-size-4 font-semibold">{{ getStatusLabel(match.status) }}</span>
+                    <span class="text-size-4 font-semibold">{{ getStatusLabel(match.status, match.scheduled_at) }}</span>
                   </div>
-                  <div class="flex items-center gap-2 text-foreground-muted">
+                  <!-- Only show date if it exists (to avoid showing "Sin agendar" twice) -->
+                  <div v-if="(match.status === 'completed' && match.played_at) || (match.status !== 'completed' && match.scheduled_at)" class="flex items-center gap-2 text-foreground-muted">
                     <Icon name="heroicons:calendar" class="w-4 h-4" />
                     <span class="text-size-4">{{ formatDate(match.status === 'completed' && match.played_at ? match.played_at : match.scheduled_at) }}</span>
                   </div>
@@ -349,8 +350,10 @@ const loadMatches = async () => {
   }
 }
 
-const formatDate = (dateString: string) => {
+const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) return 'Sin agendar'
   const date = new Date(dateString)
+  if (isNaN(date.getTime())) return 'Fecha inválida'
   return date.toLocaleDateString('es-ES', {
     year: 'numeric',
     month: 'long',
@@ -360,7 +363,11 @@ const formatDate = (dateString: string) => {
   })
 }
 
-const getStatusLabel = (status: string) => {
+const getStatusLabel = (status: string, scheduledAt?: string | null) => {
+  // Si está scheduled pero sin fecha, mostrar "Sin agendar"
+  if (status === 'scheduled' && !scheduledAt) {
+    return 'Sin agendar'
+  }
   const labels: Record<string, string> = {
     scheduled: 'Programado',
     active: 'En Curso',
@@ -370,7 +377,11 @@ const getStatusLabel = (status: string) => {
   return labels[status] || status
 }
 
-const getStatusBadgeClass = (status: string) => {
+const getStatusBadgeClass = (status: string, scheduledAt?: string | null) => {
+  // Si está scheduled pero sin fecha, usar estilo amarillo
+  if (status === 'scheduled' && !scheduledAt) {
+    return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+  }
   const classes: Record<string, string> = {
     scheduled: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
     active: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',

@@ -154,29 +154,50 @@
                   </div>
                   <div v-else-if="phaseStatus.currentPhase === 'playoffs'" class="text-size-4 text-foreground-muted">
                     <p v-if="phaseStatus.mainPlayoffsStatus">
-                      Bracket Principal: {{ phaseStatus.mainPlayoffsStatus.completedMatches }} / {{ phaseStatus.mainPlayoffsStatus.totalMatches }} completados
+                      Bracket Main: {{ phaseStatus.mainPlayoffsStatus.completedMatches }} / {{ phaseStatus.mainPlayoffsStatus.totalMatches }} completados
+                    </p>
+                    <p v-else class="text-yellow-400 font-semibold">
+                      ⚠️ Brackets de playoffs no generados
                     </p>
                     <p v-if="phaseStatus.backdrawPlayoffsStatus" class="mt-1">
-                      Bracket de Consolación: {{ phaseStatus.backdrawPlayoffsStatus.completedMatches }} / {{ phaseStatus.backdrawPlayoffsStatus.totalMatches }} completados
+                      Bracket Back: {{ phaseStatus.backdrawPlayoffsStatus.completedMatches }} / {{ phaseStatus.backdrawPlayoffsStatus.totalMatches }} completados
                     </p>
                     <p v-if="phaseStatus.canCompleteTournament" class="text-green-400 font-semibold mt-2">
                       ✓ Playoffs completados - Listo para finalizar torneo
                     </p>
                   </div>
                 </div>
-                <button
-                  v-if="canAdvancePhase"
-                  @click="handleAdvancePhase"
-                  :disabled="advancingPhase"
-                  class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 flex items-center gap-2"
-                >
-                  <Icon name="heroicons:arrow-right" class="w-4 h-4" />
-                  <span v-if="!advancingPhase">{{ getAdvanceButtonLabel() }}</span>
-                  <span v-else class="flex items-center gap-2">
-                    <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
-                    Avanzando...
-                  </span>
-                </button>
+                <div class="flex gap-3">
+                  <!-- Generate Playoffs Button (only show if in playoffs phase but no brackets) -->
+                  <button
+                    v-if="phaseStatus?.currentPhase === 'playoffs' && !hasPlayoffBrackets"
+                    @click="handleGeneratePlayoffs"
+                    :disabled="generatingPlayoffs"
+                    class="px-6 py-3 rounded-xl bg-yellow-500/20 text-yellow-400 border-2 border-yellow-500/30 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Icon name="heroicons:trophy" class="w-4 h-4" />
+                    <span v-if="!generatingPlayoffs">Generar Brackets de Playoffs</span>
+                    <span v-else class="flex items-center gap-2">
+                      <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
+                      Generando...
+                    </span>
+                  </button>
+                  
+                  <!-- Advance Phase Button -->
+                  <button
+                    v-if="canAdvancePhase"
+                    @click="handleAdvancePhase"
+                    :disabled="advancingPhase"
+                    class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Icon name="heroicons:arrow-right" class="w-4 h-4" />
+                    <span v-if="!advancingPhase">{{ getAdvanceButtonLabel() }}</span>
+                    <span v-else class="flex items-center gap-2">
+                      <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
+                      Avanzando...
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -358,7 +379,11 @@
               <span>Brackets</span>
             </button>
             <div v-show="showBrackets">
-              <TournamentBracket :tournament-id="tournament.id" />
+              <TournamentBracket 
+                :tournament-id="tournament.id" 
+                :is-organizer="true"
+                :tournament-organizer-id="tournament.organizer_id"
+              />
             </div>
           </div>
 
@@ -368,6 +393,16 @@
             <div class="space-y-4">
               <div>
                 <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha Límite Fase de Grupos</label>
+                
+                <!-- Current Deadline Display -->
+                <div v-if="currentGroupDeadline" class="mb-3 p-3 rounded-xl bg-accent-subtle/20 border border-accent/30">
+                  <div class="flex items-center gap-2 mb-1">
+                    <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" />
+                    <span class="text-size-4 font-semibold text-foreground">Fecha Límite Actual:</span>
+                  </div>
+                  <p class="text-size-3 text-foreground ml-7">{{ formatDeadline(currentGroupDeadline) }}</p>
+                </div>
+                
                 <input
                   v-model="groupDeadline"
                   type="datetime-local"
@@ -375,9 +410,10 @@
                 />
                 <button
                   @click="handleSetGroupDeadline"
-                  class="mt-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                  :disabled="!groupDeadline"
+                  class="mt-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Establecer Fecha Límite
+                  {{ currentGroupDeadline ? 'Actualizar Fecha Límite' : 'Establecer Fecha Límite' }}
                 </button>
               </div>
             </div>
@@ -399,7 +435,7 @@ const route = useRoute()
 const tournamentId = route.params.id as string
 
 const { userId, isLoaded } = useAuthState()
-const { getTournament: getOrgTournament, generateBrackets, registerPlayer, setGroupDeadline, getPhaseStatus, advancePhase, currentTournament, loading, error } = useOrganizer()
+const { getTournament: getOrgTournament, generateBrackets, generatePlayoffs, registerPlayer, setGroupDeadline, getPhaseStatus, advancePhase, currentTournament, loading, error } = useOrganizer()
 
 const tournament = computed(() => currentTournament.value)
 
@@ -492,6 +528,17 @@ const loadTournament = async () => {
         console.error('Error loading phase status:', err)
       }
     }
+    // Load group deadline into the input field
+    if (currentGroupDeadline.value) {
+      // Convert deadline to datetime-local format (YYYY-MM-DDTHH:mm)
+      const deadlineDate = new Date(currentGroupDeadline.value)
+      const year = deadlineDate.getFullYear()
+      const month = String(deadlineDate.getMonth() + 1).padStart(2, '0')
+      const day = String(deadlineDate.getDate()).padStart(2, '0')
+      const hours = String(deadlineDate.getHours()).padStart(2, '0')
+      const minutes = String(deadlineDate.getMinutes()).padStart(2, '0')
+      groupDeadline.value = `${year}-${month}-${day}T${hours}:${minutes}`
+    }
   } catch (err) {
     console.error('Error loading tournament:', err)
   }
@@ -535,12 +582,30 @@ const getAdvanceButtonLabel = () => {
   return 'Avanzar Fase'
 }
 
+const handleGeneratePlayoffs = async () => {
+  if (!userId.value) return
+  try {
+    generatingPlayoffs.value = true
+    await generatePlayoffs(tournamentId)
+    await loadTournament() // Reload to get updated brackets
+    await loadPhaseStatus() // Reload phase status
+    const toast = useToastNotifications()
+    toast.success('Brackets de playoffs generados exitosamente')
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al generar brackets de playoffs')
+  } finally {
+    generatingPlayoffs.value = false
+  }
+}
+
 const handleAdvancePhase = async () => {
   if (!userId.value) return
   try {
     advancingPhase.value = true
     await advancePhase(tournamentId)
     await loadTournament() // Reload to get updated phase
+    await loadPhaseStatus() // Reload phase status
     const toast = useToastNotifications()
     toast.success('Fase avanzada exitosamente')
   } catch (err: any) {
@@ -560,6 +625,24 @@ const searchResults = ref<PlayerSearchResult[]>([])
 const groupDeadline = ref('')
 const phaseStatus = ref<any>(null)
 const advancingPhase = ref(false)
+const generatingPlayoffs = ref(false)
+
+// Check if tournament has playoff brackets
+const hasPlayoffBrackets = computed(() => {
+  if (!phaseStatus.value) return false
+  return phaseStatus.value.mainPlayoffsStatus && phaseStatus.value.mainPlayoffsStatus.totalMatches > 0
+})
+
+// Load phase status
+const loadPhaseStatus = async () => {
+  if (tournamentId) {
+    try {
+      phaseStatus.value = await getPhaseStatus(tournamentId)
+    } catch (err) {
+      console.error('Error loading phase status:', err)
+    }
+  }
+}
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('es-ES', {
@@ -570,6 +653,25 @@ const formatDate = (dateString: string) => {
     minute: '2-digit'
   })
 }
+
+const formatDeadline = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// Get current group stage deadline from tournament rounds
+const currentGroupDeadline = computed(() => {
+  if (!tournament.value?.rounds) return null
+  const groupRound = tournament.value.rounds.find(
+    (r: any) => r.bracket_type === 'group' && r.round_number === 1
+  )
+  return groupRound?.deadline || null
+})
 
 const handleGenerateBrackets = async () => {
   if (!userId.value) return

@@ -40,7 +40,8 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Fetch match with all relations
+    // First, fetch match with basic relations to verify it exists
+    // Use optional foreign keys (with ?) for schedule fields in case they don't have FK constraints
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select(`
@@ -94,7 +95,9 @@ export default defineEventHandler(async (event) => {
         tournament:tournaments(
           id,
           name,
-          category_id
+          category_id,
+          organizer_id,
+          created_by
         ),
         tournament_match:tournament_matches(
           id,
@@ -111,23 +114,63 @@ export default defineEventHandler(async (event) => {
       .eq('id', matchId)
       .single()
     
-    if (matchError || !match) {
+    if (matchError) {
+      // Log the error for debugging
+      console.error('Match fetch error:', matchError)
+      // Try a simpler query without optional relations
+      const { data: simpleMatch, error: simpleError } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('id', matchId)
+        .single()
+      
+      if (simpleError || !simpleMatch) {
+        throw createError({
+          statusCode: 404,
+          statusMessage: `Match not found: ${matchError.message || simpleError?.message || 'Unknown error'}`
+        })
+      }
+      
+      // If simple query works, the match exists but there's an issue with relations
+      // Return the match without the problematic relations
+      throw createError({
+        statusCode: 500,
+        statusMessage: `Error loading match relations: ${matchError.message}`
+      })
+    }
+    
+    if (!match) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Match not found'
       })
     }
     
-    // Verify user is part of the match
+    // Verify user is part of the match OR is organizer of the tournament
     const isPlayer1 = match.player1_id === currentPlayer.id
     const isPlayer2 = match.player2_id === currentPlayer.id
     const isPendingPlayerInviter = match.pending_player2_id && 
       (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
     
-    if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter) {
+    // Check if user is organizer of the tournament (if match belongs to a tournament)
+    let isTournamentOrganizer = false
+    if (match.tournament_id) {
+      const { data: tournament, error: tournamentError } = await supabase
+        .from('tournaments')
+        .select('organizer_id, created_by')
+        .eq('id', match.tournament_id)
+        .single()
+      
+      if (!tournamentError && tournament) {
+        isTournamentOrganizer = tournament.organizer_id === currentPlayer.id || 
+                                tournament.created_by === currentPlayer.id
+      }
+    }
+    
+    if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter && !isTournamentOrganizer) {
       throw createError({
         statusCode: 403,
-        statusMessage: 'Unauthorized: You are not part of this match'
+        statusMessage: 'Unauthorized: You are not part of this match or organizer of the tournament'
       })
     }
     
@@ -151,6 +194,40 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Failed to fetch messages',
         data: messagesError
       })
+    }
+    
+    // Fetch schedule-related players separately if needed (in case FK constraints don't exist)
+    if ((match as any).schedule_proposed_by) {
+      const { data: scheduleProposer } = await supabase
+        .from('players')
+        .select('id, name')
+        .eq('id', (match as any).schedule_proposed_by)
+        .single()
+      if (scheduleProposer) {
+        (match as any).schedule_proposed_by_player = scheduleProposer
+      }
+    }
+    
+    if ((match as any).schedule_approved_by) {
+      const { data: scheduleApprover } = await supabase
+        .from('players')
+        .select('id, name')
+        .eq('id', (match as any).schedule_approved_by)
+        .single()
+      if (scheduleApprover) {
+        (match as any).schedule_approved_by_player = scheduleApprover
+      }
+    }
+    
+    if ((match as any).schedule_rejected_by) {
+      const { data: scheduleRejecter } = await supabase
+        .from('players')
+        .select('id, name')
+        .eq('id', (match as any).schedule_rejected_by)
+        .single()
+      if (scheduleRejecter) {
+        (match as any).schedule_rejected_by_player = scheduleRejecter
+      }
     }
     
     // Flatten tournament_match if it exists

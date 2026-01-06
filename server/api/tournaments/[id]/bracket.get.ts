@@ -13,12 +13,16 @@ export default defineEventHandler(async (event) => {
 
     const supabase = getSupabaseAdmin()
 
-    // Get groups with players
+    // Get groups with players and standings
     const { data: groups, error: groupsError } = await supabase
       .from('tournament_groups')
       .select(`
         *,
         players:tournament_group_players(
+          *,
+          player:players(*)
+        ),
+        standings:tournament_standings(
           *,
           player:players(*)
         )

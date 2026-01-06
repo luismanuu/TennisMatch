@@ -297,7 +297,7 @@
                   <div>
                     <h3 class="text-size-3 font-semibold text-foreground">{{ round.round_name }}</h3>
                     <p class="text-size-4 text-foreground-muted">
-                      {{ round.bracket_type === 'group' ? 'Fase de Grupos' : round.bracket_type === 'main' ? 'Bracket Principal' : 'Bracket Consolación' }}
+                      {{ round.bracket_type === 'group' ? 'Fase de Grupos' : round.bracket_type === 'main' ? 'Bracket Main' : 'Bracket Back' }}
                     </p>
                   </div>
                   <span

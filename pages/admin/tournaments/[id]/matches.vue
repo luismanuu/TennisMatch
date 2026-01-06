@@ -44,8 +44,8 @@
               >
                 <option value="">Todos los Brackets</option>
                 <option value="group">Fase de Grupos</option>
-                <option value="main">Bracket Principal</option>
-                <option value="backdraw">Bracket Consolación</option>
+                <option value="main">Bracket Main</option>
+                <option value="backdraw">Bracket Back</option>
               </select>
               <select
                 v-model="filterStatus"

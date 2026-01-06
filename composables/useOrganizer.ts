@@ -322,6 +322,35 @@ export const useOrganizer = () => {
     }
   }
 
+  const generatePlayoffs = async (tournamentId: string) => {
+    if (!userId.value) {
+      throw new Error('User not authenticated')
+    }
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<{ success: boolean; message: string; mainQualifiers: number; backdrawQualifiers: number; mainMatches: number; backdrawMatches: number }>(
+        `/api/organizer/tournaments/${tournamentId}/generate-playoffs`,
+        {
+          method: 'POST',
+          body: {
+            clerk_id: userId.value
+          }
+        }
+      )
+      
+      await getTournament(tournamentId)
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   const advancePhase = async (tournamentId: string) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
@@ -360,6 +389,7 @@ export const useOrganizer = () => {
     updateTournament,
     deleteTournament,
     generateBrackets,
+    generatePlayoffs,
     registerPlayer,
     setGroupDeadline,
     setPlayoffDeadline,

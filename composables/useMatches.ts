@@ -234,6 +234,85 @@ export const useMatches = () => {
     }
   }
   
+  const proposeSchedule = async (clerkId: string, matchId: string, payload: { scheduled_at: string }) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'propose_schedule',
+          data: payload
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  const approveSchedule = async (clerkId: string, matchId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'approve_schedule'
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  const rejectSchedule = async (clerkId: string, matchId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'reject_schedule'
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
   const proposeReschedule = async (clerkId: string, matchId: string, payload: ProposeReschedulePayload) => {
     loading.value = true
     error.value = null
@@ -313,6 +392,33 @@ export const useMatches = () => {
     }
   }
   
+  const organizerSetResult = async (clerkId: string, matchId: string, payload: { score?: string, winner_id: string, is_wo?: boolean }) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'organizer_set_result',
+          data: payload
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
   return {
     matches: readonly(matches),
     loading: readonly(loading),
@@ -325,10 +431,14 @@ export const useMatches = () => {
     approveScore,
     rejectScore,
     cancelMatch,
+    proposeSchedule,
+    approveSchedule,
+    rejectSchedule,
     fetchScheduledMatches,
     proposeReschedule,
     approveReschedule,
-    rejectReschedule
+    rejectReschedule,
+    organizerSetResult
   }
 }
 

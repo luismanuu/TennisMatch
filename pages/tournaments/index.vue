@@ -27,6 +27,18 @@
         <div class="mb-8 animate-fade-up animate-delay-1">
           <div class="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6">
             <button
+              @click="activeTab = 'all'"
+              :class="[
+                'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all whitespace-nowrap',
+                activeTab === 'all'
+                  ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                  : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50'
+              ]"
+            >
+              <Icon name="heroicons:sparkles" class="w-4 h-4" />
+              <span>Todos</span>
+            </button>
+            <button
               @click="activeTab = 'upcoming'"
               :class="[
                 'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all whitespace-nowrap',
@@ -136,7 +148,7 @@
                 <div class="flex items-center gap-4 text-size-4 text-foreground-muted">
                   <span class="flex items-center gap-1">
                     <Icon name="heroicons:users" class="w-4 h-4" />
-                    {{ tournament.registrations?.length || 0 }} registrados
+                    {{ getConfirmedRegistrationsCount(tournament) }} registrados
                   </span>
                   <span v-if="tournament.organizer" class="flex items-center gap-1">
                     <Icon name="heroicons:user" class="w-4 h-4" />
@@ -168,7 +180,7 @@ import type { Tournament } from '~/types'
 const { tournaments, loading, fetchTournaments, fetchPastTournaments } = useTournaments()
 const { categories, fetchCategories } = useCategories()
 
-const activeTab = ref<'upcoming' | 'active' | 'past'>('upcoming')
+const activeTab = ref<'all' | 'upcoming' | 'active' | 'past'>('all')
 const filters = ref({
   search: '',
   category_id: ''
@@ -202,6 +214,14 @@ const formatDate = (dateString: string) => {
   })
 }
 
+const getConfirmedRegistrationsCount = (tournament: Tournament) => {
+  if (!tournament.registrations || tournament.registrations.length === 0) return 0
+  // Count only confirmed registrations that haven't been withdrawn
+  return tournament.registrations.filter(
+    (reg: any) => reg.status === 'confirmed' && !reg.withdrawn_at
+  ).length
+}
+
 const loadTournaments = async () => {
   try {
     // Handle "open" filter (tournaments without category)
@@ -212,6 +232,13 @@ const loadTournaments = async () => {
     
     if (activeTab.value === 'past') {
       await fetchPastTournaments({
+        category_id: categoryFilter,
+        search: filters.value.search || undefined
+      })
+    } else if (activeTab.value === 'all') {
+      // Load both upcoming and active tournaments
+      await fetchTournaments({
+        status: undefined, // Don't filter by status to get both upcoming and active
         category_id: categoryFilter,
         search: filters.value.search || undefined
       })

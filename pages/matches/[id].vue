@@ -38,9 +38,12 @@
                 ? 'No tienes permiso para ver este partido. Solo puedes ver los partidos en los que participas.' 
                 : error.message || 'Error al cargar el partido' }}
             </p>
-            <NuxtLink to="/matches" class="btn-secondary text-size-3 w-full justify-center group">
+            <NuxtLink 
+              :to="getBackUrl()" 
+              class="btn-secondary text-size-3 w-full justify-center group"
+            >
               <Icon name="heroicons:arrow-left" class="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-              Volver a Partidos
+              {{ getBackLabel() }}
             </NuxtLink>
           </div>
         </div>
@@ -50,11 +53,11 @@
           <!-- Header with Back Button and Status -->
           <div class="flex items-center justify-between animate-fade-up animate-delay-1">
             <NuxtLink 
-              to="/matches" 
+              :to="getBackUrl()" 
               class="group flex items-center gap-2 text-size-3 text-foreground-muted hover:text-foreground transition-all"
             >
               <Icon name="heroicons:arrow-left" class="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-              <span>Volver a Partidos</span>
+              <span>{{ getBackLabel() }}</span>
             </NuxtLink>
             <div class="flex items-center gap-3">
               <MatchTournamentBadge :match="match" />
@@ -178,8 +181,12 @@
                   </div>
                   <div>
                     <p class="text-size-4 font-semibold text-foreground-muted mb-1">Fecha y Hora</p>
-                    <p class="text-size-3 text-foreground font-semibold">
+                    <p v-if="match.scheduled_at" class="text-size-3 text-foreground font-semibold">
                       {{ formatDateTime(match.scheduled_at) }}
+                    </p>
+                    <p v-else class="text-size-3 text-yellow-400 font-semibold flex items-center gap-2">
+                      <Icon name="heroicons:clock" class="w-5 h-5" />
+                      Sin agendar - Los jugadores deben programar este partido
                     </p>
                   </div>
                 </div>
@@ -250,9 +257,9 @@
 
             <!-- Actions Section -->
             <div class="pt-8 border-t border-border-subtle space-y-4">
-              <!-- Start Match Button -->
+              <!-- Start Match Button - Only show if match is scheduled with a date (players only, not organizers) -->
               <button
-                v-if="match.status === 'scheduled' && !match.pending_player2_id"
+                v-if="match.status === 'scheduled' && match.scheduled_at && !match.pending_player2_id && isPlayerInMatch && !isTournamentOrganizer"
                 @click="handleStartMatch"
                 :disabled="actionLoading"
                 class="btn-primary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
@@ -260,9 +267,85 @@
                 <Icon name="heroicons:play" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
                 Iniciar Partido
               </button>
+              
+              <!-- Schedule Match Button - Show when match is scheduled but has no date and no pending proposal (players only, not organizers) -->
+              <button
+                v-if="match.status === 'scheduled' && !match.scheduled_at && !match.schedule_proposed_by && isPlayerInMatch && !isTournamentOrganizer"
+                @click="openScheduleForm"
+                class="btn-primary text-size-3 w-full justify-center group"
+              >
+                <Icon name="heroicons:calendar" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                Proponer Fecha
+              </button>
+              
+              <!-- Schedule Proposal Waiting - Show when you proposed and waiting for response -->
+              <div v-if="match.status === 'scheduled' && !match.scheduled_at && match.schedule_proposed_by === currentPlayerId && !match.schedule_approved_by && !match.schedule_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30 mb-4">
+                <div class="flex items-center gap-3 mb-3">
+                  <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
+                  <div class="flex-1">
+                    <p class="text-size-4 font-semibold text-foreground mb-1">Esperando respuesta</p>
+                    <p class="text-size-5 text-foreground-muted">Has propuesto jugar el:</p>
+                  </div>
+                </div>
+                <div class="pl-9">
+                  <p class="text-size-4 font-semibold text-foreground mb-2">
+                    {{ formatDateTime(match.schedule_proposed_scheduled_at) }}
+                  </p>
+                  <p class="text-size-5 text-foreground-subtle">Esperando que el otro jugador acepte o rechace tu propuesta...</p>
+                </div>
+              </div>
+              
+              <!-- Schedule Proposal Pending - Show when there's a pending proposal from the other player -->
+              <div v-if="match.status === 'scheduled' && !match.scheduled_at && match.schedule_proposed_by && match.schedule_proposed_by !== currentPlayerId && !match.schedule_approved_by && !match.schedule_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="space-y-3 mb-4">
+                <div class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30">
+                  <div class="flex items-center gap-3 mb-3">
+                    <Icon name="heroicons:calendar-days" class="w-6 h-6 text-accent flex-shrink-0" />
+                    <div class="flex-1">
+                      <p class="text-size-4 font-semibold text-foreground mb-1">Propuesta de Fecha</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        <NuxtLink v-if="match.schedule_proposed_by_player" :to="`/players/${match.schedule_proposed_by_player.id}`" class="text-accent hover:underline font-semibold">
+                          {{ match.schedule_proposed_by_player.name }}
+                        </NuxtLink>
+                        <span v-else class="font-semibold">El otro jugador</span>
+                        <span> propone jugar el:</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="pl-9">
+                    <p class="text-size-4 font-semibold text-foreground mb-4">
+                      {{ formatDateTime(match.schedule_proposed_scheduled_at) }}
+                    </p>
+                    <div class="flex gap-3">
+                      <button
+                        @click="handleApproveSchedule"
+                        :disabled="actionLoading"
+                        class="btn-primary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2" />
+                        Aceptar
+                      </button>
+                      <button
+                        @click="handleRejectSchedule"
+                        :disabled="actionLoading"
+                        class="btn-secondary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2" />
+                        Rechazar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-              <!-- Score Proposal -->
-              <div v-if="match.status === 'active' && !match.score_proposed_by && isPlayerInMatch">
+              <!-- Organizer Info Message -->
+              <div v-if="isTournamentOrganizer && match.status === 'scheduled' && !match.scheduled_at" class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-center">
+                <Icon name="heroicons:information-circle" class="w-6 h-6 text-yellow-400 mx-auto mb-2" />
+                <p class="text-size-4 text-yellow-400 font-semibold mb-1">Partido sin agendar</p>
+                <p class="text-size-5 text-foreground-muted">Los jugadores deben programar este partido</p>
+              </div>
+
+              <!-- Score Proposal (players only) -->
+              <div v-if="match.status === 'active' && !match.score_proposed_by && isPlayerInMatch && !isTournamentOrganizer">
                 <button
                   @click="showScoreForm = true"
                   class="btn-primary text-size-3 w-full justify-center group"
@@ -272,8 +355,8 @@
                 </button>
               </div>
 
-              <!-- Score Approval/Rejection -->
-              <div v-if="match.status === 'active' && match.score_proposed_by && match.score_proposed_by !== currentPlayerId">
+              <!-- Score Approval/Rejection (players only) -->
+              <div v-if="match.status === 'active' && match.score_proposed_by && match.score_proposed_by !== currentPlayerId && isPlayerInMatch && !isTournamentOrganizer">
                 <div class="flex gap-3">
                   <button
                     @click="handleApproveScore"
@@ -294,8 +377,36 @@
                 </div>
               </div>
 
-              <!-- Reschedule Match -->
-              <div v-if="match.status === 'active' && isPlayerInMatch">
+              <!-- Organizer Match Administration - Available in any state -->
+              <div v-if="isTournamentOrganizer" class="space-y-3">
+                <div class="p-4 rounded-xl bg-accent-subtle/20 border border-accent/30">
+                  <div class="flex items-center gap-2 mb-3">
+                    <Icon name="heroicons:shield-check" class="w-5 h-5 text-accent" />
+                    <h3 class="text-size-3 font-semibold text-foreground">Administración del Partido</h3>
+                  </div>
+                  <p class="text-size-4 text-foreground-muted mb-4">
+                    <span v-if="match.status === 'completed'">
+                      Como organizador, puedes modificar el resultado del partido en cualquier momento.
+                    </span>
+                    <span v-else>
+                      Como organizador, puedes establecer el resultado del partido en cualquier momento, incluso si no se ha programado o jugado.
+                    </span>
+                  </p>
+                  <button
+                    @click="openOrganizerResultForm"
+                    class="btn-primary text-size-3 w-full justify-center group"
+                  >
+                    <Icon 
+                      :name="match.status === 'completed' ? 'heroicons:pencil-square' : 'heroicons:document-text'" 
+                      class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" 
+                    />
+                    {{ match.status === 'completed' ? 'Editar Resultado' : 'Establecer Resultado' }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Reschedule Match (players only, not organizers) -->
+              <div v-if="match.status === 'active' && isPlayerInMatch && !isTournamentOrganizer">
                 <button
                   v-if="!match.reschedule_proposed_by || match.reschedule_rejected_by"
                   @click="openRescheduleForm"
@@ -355,9 +466,9 @@
                 </div>
               </div>
 
-              <!-- Cancel Match -->
+              <!-- Cancel Match (players only, not organizers) -->
               <button
-                v-if="match.status === 'scheduled' && isPlayerInMatch"
+                v-if="match.status === 'scheduled' && isPlayerInMatch && !isTournamentOrganizer"
                 @click="handleCancelMatch"
                 :disabled="actionLoading"
                 class="btn-danger text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
@@ -425,6 +536,73 @@
                         type="button"
                         @click="showRescheduleForm = false"
                         class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
+          <!-- Schedule Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showScheduleForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showScheduleForm = false">
+                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:calendar" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Programar Partido</h2>
+                    </div>
+                    <button
+                      @click="showScheduleForm = false"
+                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <form @submit.prevent="handleSchedule" class="space-y-6">
+                    <div>
+                      <label for="schedule_scheduled_at" class="block text-size-4 font-semibold text-foreground mb-3">
+                        Fecha y Hora
+                      </label>
+                      <input
+                        id="schedule_scheduled_at"
+                        v-model="scheduleForm.scheduled_at"
+                        type="datetime-local"
+                        :min="minDateTime"
+                        required
+                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
+                      />
+                      <p v-if="isScheduleDateInPast" class="text-size-4 font-regular text-red-400 mt-2 flex items-center gap-2">
+                        <Icon name="heroicons:exclamation-triangle" class="w-4 h-4" />
+                        No puedes programar un partido en el pasado
+                      </p>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div v-if="scheduleFormError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
+                      <p class="text-size-4 font-regular text-red-400">{{ scheduleFormError }}</p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                      <button
+                        type="submit"
+                        :disabled="actionLoading"
+                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                        Programar
+                      </button>
+                      <button
+                        type="button"
+                        @click="showScheduleForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center group"
                       >
                         Cancelar
                       </button>
@@ -509,6 +687,104 @@
             </Transition>
           </Teleport>
 
+          <!-- Organizer Result Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showOrganizerResultForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showOrganizerResultForm = false">
+                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:shield-check" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">
+                        {{ match.status === 'completed' ? 'Editar Resultado' : 'Establecer Resultado' }}
+                      </h2>
+                    </div>
+                    <button
+                      @click="showOrganizerResultForm = false"
+                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <form @submit.prevent="handleOrganizerSetResult" class="space-y-6">
+                    <div>
+                      <label for="organizer_winner" class="block text-size-4 font-semibold text-foreground mb-3">
+                        Ganador
+                      </label>
+                      <select
+                        id="organizer_winner"
+                        v-model="organizerResultForm.winner_id"
+                        required
+                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
+                      >
+                        <option value="">Selecciona el ganador</option>
+                        <option v-if="match?.player1" :value="match.player1_id">{{ match.player1.name }}</option>
+                        <option v-if="match?.player2" :value="match.player2_id">{{ match.player2.name }}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label class="flex items-center gap-3 cursor-pointer">
+                        <input
+                          v-model="organizerResultForm.is_wo"
+                          type="checkbox"
+                          class="w-5 h-5 rounded border-border-subtle text-accent focus:ring-accent"
+                        />
+                        <span class="text-size-4 font-semibold text-foreground">Marcar como Walkover (WO)</span>
+                      </label>
+                      <p class="text-size-5 text-foreground-muted mt-2 ml-8">
+                        Usa esta opción si el partido no se jugó (por ejemplo, por ausencia de un jugador)
+                      </p>
+                    </div>
+
+                    <div v-if="!organizerResultForm.is_wo">
+                      <label for="organizer_score" class="block text-size-4 font-semibold text-foreground mb-3">
+                        Resultado
+                      </label>
+                      <input
+                        id="organizer_score"
+                        v-model="organizerResultForm.score"
+                        type="text"
+                        required
+                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
+                        placeholder="Ej: 6-4, 6-3"
+                      />
+                      <p class="text-size-5 text-foreground-muted mt-2">
+                        Formato: sets separados por comas (ej: "6-4, 6-3" o "6-2, 4-6, 6-1")
+                      </p>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div v-if="organizerResultFormError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
+                      <p class="text-size-4 font-regular text-red-400">{{ organizerResultFormError }}</p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                      <button
+                        type="submit"
+                        :disabled="actionLoading || !organizerResultForm.winner_id || (!organizerResultForm.is_wo && !organizerResultForm.score)"
+                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                        {{ match.status === 'completed' ? 'Actualizar Resultado' : 'Establecer Resultado' }}
+                      </button>
+                      <button
+                        type="button"
+                        @click="showOrganizerResultForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+
           <!-- Chat Section -->
           <div class="glass-card-elevated p-6 md:p-8 animate-fade-up animate-delay-3">
             <div class="flex items-center justify-between mb-6">
@@ -519,6 +795,7 @@
                 <h2 class="text-size-2 font-semibold text-foreground">Chat del Partido</h2>
               </div>
               <button
+                v-if="isPlayerInMatch || isTournamentOrganizer"
                 @click="toggleChat"
                 class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface border border-border-subtle text-foreground hover:border-accent/50 hover:bg-surface-elevated transition-all group"
               >
@@ -535,29 +812,26 @@
               <div v-if="isChatOpen" class="space-y-4">
                 <!-- Messages -->
                 <div ref="messagesContainer" class="space-y-3 mb-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                  <div v-if="chatLoading && chatMessages.length === 0" class="text-center py-8">
+                  <div v-if="initialLoading && chatMessages.length === 0" class="text-center py-8">
                     <Icon name="heroicons:arrow-path" class="w-8 h-8 text-foreground-muted animate-spin mx-auto mb-3" />
                     <p class="text-size-4 text-foreground-muted">Cargando mensajes...</p>
                   </div>
-                  <div v-else-if="!chatLoading && chatMessages.length === 0" class="text-center py-12">
+                  <div v-else-if="!initialLoading && chatMessages.length === 0" class="text-center py-12">
                     <div class="w-16 h-16 rounded-full bg-surface border border-border-subtle flex items-center justify-center mx-auto mb-4">
                       <Icon name="heroicons:chat-bubble-left" class="w-8 h-8 text-foreground-muted" />
                     </div>
                     <p class="text-size-4 text-foreground-muted mb-1">No hay mensajes aún</p>
                     <p class="text-size-4 text-foreground-subtle">¡Sé el primero en escribir!</p>
                   </div>
-                  <div
-                    v-for="(message, index) in chatMessages"
-                    :key="message.id"
-                    :class="[
-                      'p-4 rounded-xl transition-all animate-fade-up',
-                      message.player_id === currentPlayerId
-                        ? 'bg-gradient-to-br from-accent-subtle/50 to-accent-subtle/20 border border-accent/30 ml-auto max-w-[85%]'
-                        : 'bg-surface border border-border-subtle max-w-[85%]'
-                    ]"
-                    :style="{ animationDelay: `${index * 0.05}s` }"
-                  >
-                    <div class="flex items-center gap-2 mb-2">
+                  <template v-for="(message, index) in chatMessages" :key="message.id">
+                    <!-- Show user info only if not grouped with previous message -->
+                    <div
+                      v-if="!shouldGroupMessage(message, chatMessages[index - 1])"
+                      :class="[
+                        'flex items-center gap-2 mb-2',
+                        message.player_id === currentPlayerId ? 'justify-end' : 'justify-start'
+                      ]"
+                    >
                       <div class="w-6 h-6 rounded-full bg-surface border border-border-subtle flex items-center justify-center flex-shrink-0">
                         <span class="text-xs font-bold" :class="message.player_id === currentPlayerId ? 'text-accent' : 'text-foreground-muted'">
                           {{ getPlayerInitials(message.player?.name || 'Jugador') }}
@@ -574,12 +848,46 @@
                         Jugador
                       </p>
                     </div>
-                    <p class="text-size-3 text-foreground mb-2 leading-relaxed">{{ message.message }}</p>
-                    <p class="text-size-4 text-foreground-subtle flex items-center gap-1">
-                      <Icon name="heroicons:clock" class="w-3 h-3" />
-                      {{ formatTime(message.created_at) }}
-                    </p>
-                  </div>
+                    
+                    <!-- Message bubble -->
+                    <div
+                      :class="[
+                        'p-4 rounded-xl transition-all animate-fade-up',
+                        message.player_id === currentPlayerId
+                          ? 'bg-gradient-to-br from-accent-subtle/50 to-accent-subtle/20 border border-accent/30 ml-auto max-w-[85%]'
+                          : 'bg-surface border border-border-subtle max-w-[85%]',
+                        message._error ? 'border-red-500/50 bg-red-500/10' : '',
+                        message._sending ? 'opacity-70' : ''
+                      ]"
+                      :style="{ animationDelay: `${index * 0.02}s` }"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <p class="text-size-3 text-foreground leading-relaxed flex-1">
+                          {{ message.message }}
+                          <span v-if="message._sending" class="ml-2 inline-block">
+                            <Icon name="heroicons:arrow-path" class="w-3 h-3 text-foreground-muted animate-spin inline" />
+                          </span>
+                          <span v-if="message._error" class="ml-2 text-red-400 text-size-4">
+                            <Icon name="heroicons:exclamation-circle" class="w-4 h-4 inline" />
+                          </span>
+                        </p>
+                      </div>
+                      <div class="flex items-center justify-between mt-2">
+                        <p class="text-size-4 text-foreground-subtle flex items-center gap-1">
+                          <Icon name="heroicons:clock" class="w-3 h-3" />
+                          {{ formatTime(message.created_at) }}
+                        </p>
+                        <button
+                          v-if="message._error"
+                          @click="retrySendMessage(message)"
+                          class="text-size-4 text-accent hover:text-accent/80 transition-colors flex items-center gap-1"
+                          title="Reintentar envío"
+                        >
+                          <Icon name="heroicons:arrow-path" class="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </template>
                 </div>
 
                 <!-- Message Input -->
@@ -588,7 +896,10 @@
                     <input
                       v-model="messageInput"
                       type="text"
-                      :disabled="chatLoading || !isPlayerInMatch"
+                      :disabled="sendingMessage || (!isPlayerInMatch && !isTournamentOrganizer)"
+                      @focus="pausePolling"
+                      @blur="resumePolling"
+                      @keydown.enter.exact.prevent="handleSendMessage"
                       placeholder="Escribe un mensaje..."
                       class="w-full px-4 py-3 pr-12 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all disabled:opacity-50"
                     />
@@ -598,12 +909,22 @@
                   </div>
                   <button
                     type="submit"
-                    :disabled="chatLoading || !messageInput.trim() || !isPlayerInMatch"
-                    class="btn-primary text-size-3 px-6 disabled:opacity-50 disabled:cursor-not-allowed group"
+                    :disabled="sendingMessage || !messageInput.trim() || (!isPlayerInMatch && !isTournamentOrganizer)"
+                    class="btn-primary text-size-3 px-6 disabled:opacity-50 disabled:cursor-not-allowed group relative"
                   >
-                    <Icon name="heroicons:paper-airplane" class="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    <Icon 
+                      v-if="!sendingMessage"
+                      name="heroicons:paper-airplane" 
+                      class="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" 
+                    />
+                    <Icon 
+                      v-else
+                      name="heroicons:arrow-path" 
+                      class="w-5 h-5 animate-spin" 
+                    />
                   </button>
                 </form>
+                
               </div>
             </Transition>
           </div>
@@ -614,7 +935,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Match } from '~/types'
+import type { Match, MatchMessage } from '~/types'
 
 definePageMeta({
   middleware: 'auth'
@@ -623,15 +944,21 @@ definePageMeta({
 const route = useRoute()
 const matchId = route.params.id as string
 
-const { isLoaded, userId } = useAuthState()
+const { isLoaded, userId, user } = useAuthState()
 const { player, fetchPlayer } = usePlayer()
-const { getMatch, updateMatchStatus, proposeScore, approveScore, rejectScore, cancelMatch, proposeReschedule, approveReschedule, rejectReschedule, loading, error } = useMatches()
-const { fetchMessages, sendMessage, messages: chatMessages, loading: chatLoading } = useMatchChat()
+const { getMatch, updateMatchStatus, proposeScore, approveScore, rejectScore, cancelMatch, proposeSchedule, approveSchedule, rejectSchedule, proposeReschedule, approveReschedule, rejectReschedule, organizerSetResult, loading, error } = useMatches()
+const { fetchMessages, sendMessage, messages: chatMessages, loading: chatLoading, isPolling, setPolling, removeOptimisticMessage } = useMatchChat()
+const sendingMessage = ref(false)
+const initialLoading = ref(false)
+const isPollingPaused = ref(false)
+const failedMessages = ref<Map<string, any>>(new Map())
 
 const match = ref<Match | null>(null)
 const actionLoading = ref(false)
 const showScoreForm = ref(false)
+const showOrganizerResultForm = ref(false)
 const showRescheduleForm = ref(false)
+const showScheduleForm = ref(false)
 const isChatOpen = ref(false)
 const messageInput = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
@@ -639,10 +966,20 @@ const scoreForm = ref({
   score: '',
   winner_id: ''
 })
+const organizerResultForm = ref({
+  score: '',
+  winner_id: '',
+  is_wo: false
+})
+const organizerResultFormError = ref<string | null>(null)
 const rescheduleForm = ref({
   scheduled_at: ''
 })
 const rescheduleFormError = ref<string | null>(null)
+const scheduleForm = ref({
+  scheduled_at: ''
+})
+const scheduleFormError = ref<string | null>(null)
 
 // Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm)
 const minDateTime = computed(() => {
@@ -663,6 +1000,14 @@ const isRescheduleDateInPast = computed(() => {
   return selectedDate < now
 })
 
+// Check if selected schedule date is in the past
+const isScheduleDateInPast = computed(() => {
+  if (!scheduleForm.value.scheduled_at) return false
+  const selectedDate = new Date(scheduleForm.value.scheduled_at)
+  const now = new Date()
+  return selectedDate < now
+})
+
 const currentPlayerId = computed(() => player.value?.id)
 const isPlayerInMatch = computed(() => {
   if (!match.value || !currentPlayerId.value) return false
@@ -670,8 +1015,51 @@ const isPlayerInMatch = computed(() => {
          match.value.player2_id === currentPlayerId.value
 })
 
+// Check if user is organizer of the tournament
+const isTournamentOrganizer = computed(() => {
+  if (!match.value?.tournament_id || !currentPlayerId.value) return false
+  // Check if user has organizer role
+  const role = user.value?.publicMetadata?.role as string | undefined
+  if (role !== 'tournament_organizer') return false
+  
+  // Check if user is the organizer of this tournament
+  // We'll verify this when loading the match
+  return match.value.tournament?.organizer_id === currentPlayerId.value ||
+         match.value.tournament?.created_by === currentPlayerId.value
+})
+
+// Check if user can view this match (player or organizer)
+const canViewMatch = computed(() => {
+  return isPlayerInMatch.value || isTournamentOrganizer.value
+})
+
+// Get back URL based on where user came from
+const getBackUrl = () => {
+  const tournamentId = route.query.tournamentId as string | undefined
+  if (!tournamentId) return '/matches'
+  
+  // If user is organizer, go to organizer tournament page
+  if (isTournamentOrganizer.value) {
+    return `/organizer/tournaments/${tournamentId}`
+  }
+  
+  // Otherwise, go to public tournament page
+  return `/tournaments/${tournamentId}`
+}
+
+// Get back label based on where user came from
+const getBackLabel = () => {
+  const tournamentId = route.query.tournamentId as string | undefined
+  if (!tournamentId) return 'Volver a Partidos'
+  return 'Volver al Torneo'
+}
+
 const statusLabel = computed(() => {
   if (!match.value) return ''
+  // Si está scheduled pero sin fecha, mostrar "Sin agendar"
+  if (match.value.status === 'scheduled' && !match.value.scheduled_at) {
+    return 'Sin agendar'
+  }
   const labels: Record<string, string> = {
     scheduled: 'Programado',
     active: 'En Curso',
@@ -683,6 +1071,10 @@ const statusLabel = computed(() => {
 
 const statusBadgeClass = computed(() => {
   if (!match.value) return ''
+  // Si está scheduled pero sin fecha, usar estilo diferente
+  if (match.value.status === 'scheduled' && !match.value.scheduled_at) {
+    return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30 backdrop-blur-sm'
+  }
   const classes: Record<string, string> = {
     scheduled: 'bg-blue-500/10 text-blue-400 border-blue-500/30 backdrop-blur-sm',
     active: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30 backdrop-blur-sm',
@@ -719,14 +1111,28 @@ const openRescheduleForm = () => {
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  rescheduleForm.value.scheduled_at = `${year}-${month}-${day}T${hours}:${minutes}`
+  // Default to 00:00 (midnight)
+  rescheduleForm.value.scheduled_at = `${year}-${month}-${day}T00:00`
   showRescheduleForm.value = true
 }
 
-const formatDateTime = (dateString: string) => {
+const openScheduleForm = () => {
+  scheduleFormError.value = null
+  // Set default date to current date with time 00:00 (midnight)
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  // Default to 00:00 (midnight)
+  scheduleForm.value.scheduled_at = `${year}-${month}-${day}T00:00`
+  showScheduleForm.value = true
+}
+
+const formatDateTime = (dateString: string | null | undefined) => {
+  if (!dateString) return 'Sin agendar'
   const date = new Date(dateString)
+  // Verificar si la fecha es válida
+  if (isNaN(date.getTime())) return 'Fecha inválida'
   return date.toLocaleString('es-ES', {
     year: 'numeric',
     month: 'long',
@@ -738,16 +1144,64 @@ const formatDateTime = (dateString: string) => {
 
 const formatTime = (dateString: string) => {
   const date = new Date(dateString)
-  return date.toLocaleTimeString('es-ES', {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  
+  // Show relative time for recent messages
+  if (diffMins < 1) {
+    return 'Ahora'
+  } else if (diffMins < 60) {
+    return `Hace ${diffMins} min${diffMins > 1 ? 's' : ''}`
+  } else if (diffHours < 24) {
+    return `Hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`
+  } else if (diffDays === 1) {
+    return 'Ayer'
+  } else if (diffDays < 7) {
+    return `Hace ${diffDays} día${diffDays > 1 ? 's' : ''}`
+  }
+  
+  // For older messages, show date and time
+  const isToday = date.toDateString() === now.toDateString()
+  if (isToday) {
+    return date.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  
+  return date.toLocaleString('es-ES', {
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   })
 }
 
-const scrollToBottom = () => {
+// Check if messages should be grouped (same user, within 5 minutes)
+const shouldGroupMessage = (current: any, previous: any) => {
+  if (!previous) return false
+  if (current.player_id !== previous.player_id) return false
+  
+  const currentTime = new Date(current.created_at).getTime()
+  const previousTime = new Date(previous.created_at).getTime()
+  const diffMins = (currentTime - previousTime) / 60000
+  
+  return diffMins < 5
+}
+
+// Smart scroll: only scroll if user is near bottom (within 100px)
+const scrollToBottom = (force = false) => {
   nextTick(() => {
     if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      const container = messagesContainer.value
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100
+      
+      if (force || isNearBottom) {
+        container.scrollTop = container.scrollHeight
+      }
     }
   })
 }
@@ -775,7 +1229,7 @@ const loadMatch = async () => {
     // Load messages if user is part of the match
     if (isPartOfMatch && userId.value) {
       try {
-        await fetchMessages(matchId, userId.value)
+        await fetchMessages(matchId, userId.value, undefined, 3, false)
         scrollToBottom()
       } catch (err: any) {
         // If 403, user is not part of match - don't load messages
@@ -820,6 +1274,44 @@ const handleProposeScore = async () => {
   }
 }
 
+const openOrganizerResultForm = () => {
+  organizerResultFormError.value = null
+  // Pre-fill form with current match data if editing
+  if (match.value && match.value.status === 'completed') {
+    organizerResultForm.value = {
+      winner_id: match.value.winner_id || '',
+      score: match.value.score && match.value.score !== 'WO' ? match.value.score : '',
+      is_wo: match.value.score === 'WO'
+    }
+  } else {
+    organizerResultForm.value = { score: '', winner_id: '', is_wo: false }
+  }
+  showOrganizerResultForm.value = true
+}
+
+const handleOrganizerSetResult = async () => {
+  if (!userId.value || !match.value) return
+  
+  organizerResultFormError.value = null
+  actionLoading.value = true
+  
+  try {
+    await organizerSetResult(userId.value, match.value.id, {
+      winner_id: organizerResultForm.value.winner_id,
+      score: organizerResultForm.value.is_wo ? undefined : organizerResultForm.value.score,
+      is_wo: organizerResultForm.value.is_wo
+    })
+    showOrganizerResultForm.value = false
+    organizerResultForm.value = { score: '', winner_id: '', is_wo: false }
+    await loadMatch()
+  } catch (err: any) {
+    organizerResultFormError.value = err.data?.message || err.message || 'Error al establecer el resultado'
+    console.error('Error setting result as organizer:', err)
+  } finally {
+    actionLoading.value = false
+  }
+}
+
 const handleApproveScore = async () => {
   if (!userId.value || !match.value) return
   
@@ -859,6 +1351,42 @@ const handleCancelMatch = async () => {
     await loadMatch()
   } catch (err) {
     console.error('Error cancelling match:', err)
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleSchedule = async () => {
+  if (!userId.value || !match.value) return
+  
+  scheduleFormError.value = null
+  
+  if (!scheduleForm.value.scheduled_at) {
+    scheduleFormError.value = 'Debes seleccionar una fecha y hora'
+    return
+  }
+  
+  const selectedDate = new Date(scheduleForm.value.scheduled_at)
+  if (selectedDate <= new Date()) {
+    scheduleFormError.value = 'No puedes programar un partido en el pasado'
+    return
+  }
+  
+  actionLoading.value = true
+  
+  try {
+    await proposeSchedule(userId.value, match.value.id, {
+      scheduled_at: scheduleForm.value.scheduled_at
+    })
+    
+    // Reload match to get updated data
+    await loadMatch()
+    
+    // Reset form and close modal
+    scheduleForm.value = { scheduled_at: '' }
+    showScheduleForm.value = false
+  } catch (err: any) {
+    scheduleFormError.value = err.data?.message || err.message || 'Error al programar el partido'
   } finally {
     actionLoading.value = false
   }
@@ -932,19 +1460,54 @@ const handleRejectReschedule = async () => {
   }
 }
 
+const handleApproveSchedule = async () => {
+  if (!userId.value || !match.value) return
+  
+  actionLoading.value = true
+  try {
+    await approveSchedule(userId.value, match.value.id)
+    await loadMatch()
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al aprobar la fecha')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleRejectSchedule = async () => {
+  if (!userId.value || !match.value) return
+  
+  actionLoading.value = true
+  try {
+    await rejectSchedule(userId.value, match.value.id)
+    await loadMatch()
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al rechazar la fecha')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
 const toggleChat = async () => {
+  if (!isPlayerInMatch.value && !isTournamentOrganizer.value) return
+  
   isChatOpen.value = !isChatOpen.value
   
   if (isChatOpen.value) {
     // Open chat - load messages and start polling
-    if (userId.value && isPlayerInMatch.value) {
+    if (userId.value && (isPlayerInMatch.value || isTournamentOrganizer.value)) {
       try {
-        await fetchMessages(matchId, userId.value)
-        scrollToBottom()
-        previousMessagesCount.value = chatMessages.value.length
+        initialLoading.value = true
+        await fetchMessages(matchId, userId.value, undefined, 3, false)
+        scrollToBottom(true)
+        previousMessagesCount.value = chatMessages.value.filter((m: any) => !m._optimistic).length
         pollCount.value = 0
       } catch (err: any) {
         // Silently handle errors
+      } finally {
+        initialLoading.value = false
       }
       
       if (!messagesPollInterval) {
@@ -958,13 +1521,13 @@ const toggleChat = async () => {
 }
 
 const reloadMessages = async () => {
-  if (!userId.value || !isPlayerInMatch.value) return
+  if (!userId.value || (!isPlayerInMatch.value && !isTournamentOrganizer.value)) return
   
   try {
     // Always do full refresh when manually reloading
-    await fetchMessages(matchId, userId.value)
+    await fetchMessages(matchId, userId.value, undefined, 3, false)
     scrollToBottom()
-    previousMessagesCount.value = chatMessages.value.length
+    previousMessagesCount.value = chatMessages.value.filter((m: any) => !m._optimistic).length
     pollCount.value = 0 // Reset poll count
   } catch (err: any) {
     // Silently handle errors
@@ -973,18 +1536,56 @@ const reloadMessages = async () => {
 
 const handleSendMessage = async () => {
   if (!userId.value || !messageInput.value.trim()) return
+  if (!isPlayerInMatch.value && !isTournamentOrganizer.value) return
+  
+  const messageText = messageInput.value.trim()
+  messageInput.value = '' // Clear input immediately for better UX
+  sendingMessage.value = true
   
   try {
     await sendMessage(matchId, userId.value, {
-      message: messageInput.value.trim()
+      message: messageText
     })
-    messageInput.value = ''
-    scrollToBottom()
+    scrollToBottom(true) // Force scroll for sent messages
     // Update previous count after sending
-    previousMessagesCount.value = chatMessages.value.length
-  } catch (err) {
-    // Silently handle errors
+    previousMessagesCount.value = chatMessages.value.filter((m: any) => !m._optimistic).length
+  } catch (err: any) {
+    // Restore message text on error
+    messageInput.value = messageText
+    const toast = useToastNotifications()
+    toast.error('Error al enviar mensaje. Intenta de nuevo.')
+  } finally {
+    sendingMessage.value = false
   }
+}
+
+const retrySendMessage = async (message: any) => {
+  if (!userId.value || !message.message) return
+  
+  // Remove the failed optimistic message
+  removeOptimisticMessage(message.id)
+  
+  // Try sending again
+  sendingMessage.value = true
+  try {
+    await sendMessage(matchId, userId.value, {
+      message: message.message
+    })
+    scrollToBottom(true)
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error('Error al reenviar mensaje. Intenta de nuevo.')
+  } finally {
+    sendingMessage.value = false
+  }
+}
+
+const pausePolling = () => {
+  isPollingPaused.value = true
+}
+
+const resumePolling = () => {
+  isPollingPaused.value = false
 }
 
 // Polling interval for messages (optimized)
@@ -1018,35 +1619,48 @@ const startMessagesPolling = () => {
   const pollInterval = isPageVisible.value ? POLL_INTERVAL_ACTIVE : POLL_INTERVAL_INACTIVE
   
   messagesPollInterval = setInterval(async () => {
-    // Only poll if chat is open, user is part of the match
-    if (isChatOpen.value && userId.value && matchId && isPlayerInMatch.value && match.value) {
+    // Only poll if chat is open, user is part of the match, and polling is not paused
+    // Also skip polling if we're currently sending a message to avoid race conditions
+    if (isChatOpen.value && !isPollingPaused.value && !sendingMessage.value && !chatLoading.value && userId.value && matchId && (isPlayerInMatch.value || isTournamentOrganizer.value) && match.value) {
       try {
+        setPolling(true)
         pollCount.value++
         
         // Every N polls, do a full refresh to ensure consistency
         const shouldDoFullRefresh = pollCount.value % FULL_REFRESH_INTERVAL === 0
         
+        // Store current message count before fetching (excluding optimistic messages)
+        const messageCountBefore = chatMessages.value.filter((m: any) => !m._optimistic).length
+        
         let newMessages: MatchMessage[]
-        if (shouldDoFullRefresh || chatMessages.value.length === 0) {
-          // Full refresh - get all messages
-          newMessages = await fetchMessages(matchId, userId.value)
+        if (shouldDoFullRefresh || chatMessages.value.filter((m: any) => !m._optimistic).length === 0) {
+          // Full refresh - get all messages (pass isPolling=true to prevent loading state)
+          newMessages = await fetchMessages(matchId, userId.value, undefined, 3, true)
         } else {
           // Incremental update - get only new messages
-          const lastMessage = chatMessages.value[chatMessages.value.length - 1]
+          // Use the last non-optimistic message for since parameter
+          const realMessages = chatMessages.value.filter((m: any) => !m._optimistic)
+          const lastMessage = realMessages[realMessages.length - 1]
           const since = lastMessage?.created_at
-          newMessages = await fetchMessages(matchId, userId.value, since)
+          newMessages = await fetchMessages(matchId, userId.value, since, 3, true)
         }
         
-        // Scroll to bottom if new messages arrived
-        if (newMessages.length > 0 || shouldDoFullRefresh) {
+        // Only scroll if new messages arrived and user is not focused on input
+        const currentRealCount = chatMessages.value.filter((m: any) => !m._optimistic).length
+        const hasNewMessages = currentRealCount > messageCountBefore
+        if ((hasNewMessages || shouldDoFullRefresh) && !isPollingPaused.value) {
           scrollToBottom()
-          previousMessagesCount.value = chatMessages.value.length
+          previousMessagesCount.value = currentRealCount
         }
       } catch (err: any) {
         // Stop polling if user is no longer authorized (403)
         if (err?.statusCode === 403) {
           stopMessagesPolling()
         }
+        // For other errors, continue polling but log
+        console.error('Error polling messages:', err)
+      } finally {
+        setPolling(false)
       }
     }
   }, pollInterval)
@@ -1075,7 +1689,7 @@ watch([isLoaded, userId], async () => {
     await fetchPlayer(userId.value)
     await loadMatch()
     // Don't start polling automatically - wait for user to open chat
-    if (!isPlayerInMatch.value) {
+    if (!isPlayerInMatch.value && !isTournamentOrganizer.value) {
       stopMessagesPolling()
       isChatOpen.value = false
     }
@@ -1083,12 +1697,12 @@ watch([isLoaded, userId], async () => {
 })
 
 // Watch for changes in match or player to reload messages if chat is open
-watch([match, currentPlayerId, isPlayerInMatch], async () => {
-  if (isPlayerInMatch.value && match.value && currentPlayerId.value && userId.value && isChatOpen.value) {
+watch([match, currentPlayerId, isPlayerInMatch, isTournamentOrganizer], async () => {
+  if ((isPlayerInMatch.value || isTournamentOrganizer.value) && match.value && currentPlayerId.value && userId.value && isChatOpen.value) {
     // Reload messages when match or player changes - always full refresh
     try {
-      await fetchMessages(matchId, userId.value) // No 'since' parameter = full refresh
-      previousMessagesCount.value = chatMessages.value.length
+      await fetchMessages(matchId, userId.value, undefined, 3, false) // No 'since' parameter = full refresh
+      previousMessagesCount.value = chatMessages.value.filter((m: any) => !m._optimistic).length
       scrollToBottom()
       pollCount.value = 0 // Reset poll count
     } catch (err: any) {
@@ -1100,7 +1714,7 @@ watch([match, currentPlayerId, isPlayerInMatch], async () => {
     }
   } else {
     stopMessagesPolling()
-    if (!isPlayerInMatch.value) {
+    if (!isPlayerInMatch.value && !isTournamentOrganizer.value) {
       isChatOpen.value = false
     }
   }

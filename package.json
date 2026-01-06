@@ -30,6 +30,7 @@
     "@clerk/nuxt": "^1.2.0",
     "@nuxt/ui": "^2.18.0",
     "@supabase/supabase-js": "^2.39.0",
+    "bracketry": "^1.1.3",
     "nuxt": "^3.11.0",
     "vue": "latest",
     "vue-router": "latest"

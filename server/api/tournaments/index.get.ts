@@ -12,7 +12,11 @@ export default defineEventHandler(async (event) => {
         *,
         category:categories(*),
         created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*)
+        organizer:players!tournaments_organizer_id_fkey(*),
+        registrations:tournament_registrations(
+          *,
+          player:players(*)
+        )
       `)
       .order('start_date', { ascending: true })
 

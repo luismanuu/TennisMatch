@@ -71,8 +71,16 @@ export interface Match {
   tournament?: Tournament
   status: 'scheduled' | 'active' | 'completed' | 'cancelled'
   score?: string
-  scheduled_at: string
+  scheduled_at: string | null
   played_at?: string
+  schedule_proposed_by?: string
+  schedule_proposed_by_player?: Player
+  schedule_proposed_at?: string
+  schedule_proposed_scheduled_at?: string
+  schedule_approved_by?: string
+  schedule_approved_by_player?: Player
+  schedule_rejected_by?: string
+  schedule_rejected_by_player?: Player
   score_proposed_by?: string
   score_proposed_by_player?: Player
   score_proposed_at?: string
@@ -115,6 +123,14 @@ export interface Tournament {
   description?: string
   rules?: string
   location?: string
+  points_config?: {
+    group_stage?: number
+    playoffs?: number | {
+      quarterfinals?: number
+      semifinals?: number
+      final?: number
+    }
+  }
   created_at: string
   updated_at: string
 }
@@ -195,6 +211,8 @@ export interface TournamentStanding {
   games_won: number
   games_lost: number
   head_to_head_wins: number
+  points: number
+  game_difference: number
   final_position?: number
   qualified: boolean
   updated_at: string
@@ -224,6 +242,14 @@ export interface CreateTournamentPayload {
   description?: string
   rules?: string
   location?: string
+  points_config?: {
+    group_stage?: number
+    playoffs?: number | {
+      quarterfinals?: number
+      semifinals?: number
+      final?: number
+    }
+  }
 }
 
 export interface UpdateTournamentPayload {
@@ -241,6 +267,14 @@ export interface UpdateTournamentPayload {
   description?: string
   rules?: string
   location?: string
+  points_config?: {
+    group_stage?: number
+    playoffs?: number | {
+      quarterfinals?: number
+      semifinals?: number
+      final?: number
+    }
+  }
 }
 
 export interface RegisterPlayerPayload {

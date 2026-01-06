@@ -4,20 +4,31 @@
 -- 2. Los jugadores ya están registrados y asignados a grupos
 -- 3. El torneo está en fase de grupos (current_phase = 'group_stage')
 -- 4. El torneo está activo (status = 'active')
+--
+-- IMPORTANTE: Los partidos se crean SIN agendar automáticamente.
+-- Los jugadores deben agendar sus propios partidos usando la aplicación.
+-- Los partidos se crean con:
+--   - status: 'scheduled' (indica que está en el torneo pero sin fecha/hora)
+--   - scheduled_at: NULL (los jugadores lo agendarán después)
+--   - score: NULL
+--   - played_at: NULL
+--   - winner_id: NULL
+--
+-- ⚠️ ESTE SCRIPT ES IDEMPOTENTE: Puede ejecutarse múltiples veces sin crear duplicados.
+-- Si los partidos ya existen, simplemente los omite.
 
--- IMPORTANTE: Reemplaza 'TOURNAMENT_ID_AQUI' con el UUID del torneo
--- El UUID es el campo 'id' de la tabla tournaments
--- Ejemplo: '5e0d74f3-f79d-49f8-b328-e1a74ff01b2c'
+-- UUID del torneo: 5e0d74f3-f79d-49f8-b328-e1a74ff01b2c
 
 DO $$
 DECLARE
-  v_tournament_id UUID := 'TOURNAMENT_ID_AQUI'; -- ⚠️ CAMBIAR ESTE UUID (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+  v_tournament_id UUID := '5e0d74f3-f79d-49f8-b328-e1a74ff01b2c'; -- UUID del torneo
   v_group_record RECORD;
   v_player_ids UUID[];
   v_match_pair RECORD;
   v_match_id UUID;
   v_tournament_match_id UUID;
   v_match_count INTEGER := 0;
+  v_skipped_count INTEGER := 0;
 BEGIN
   -- Verificar que el torneo existe
   IF NOT EXISTS (SELECT 1 FROM tournaments WHERE id = v_tournament_id) THEN
@@ -65,12 +76,16 @@ BEGIN
               (m.player1_id = v_player_ids[j] AND m.player2_id = v_player_ids[i])
             )
         ) THEN
+          v_skipped_count := v_skipped_count + 1;
           RAISE NOTICE 'Match between players % and % already exists in group %, skipping', 
             v_player_ids[i], v_player_ids[j], v_group_record.group_name;
           CONTINUE;
         END IF;
         
         -- Crear el partido en la tabla matches
+        -- IMPORTANTE: Los partidos se crean SIN agendar automáticamente
+        -- Los jugadores deben agendar sus propios partidos usando la aplicación
+        -- Solo se incluyen los campos mínimos necesarios
         INSERT INTO matches (
           player1_id,
           player2_id,
@@ -81,12 +96,13 @@ BEGIN
           v_player_ids[i],
           v_player_ids[j],
           v_tournament_id,
-          'scheduled',
-          NULL -- Los jugadores programarán después
+          'scheduled', -- Estado: programado para el torneo pero sin fecha/hora aún
+          NULL -- Los jugadores agendarán después (scheduled_at será NULL hasta que lo agenden)
         )
         RETURNING id INTO v_match_id;
         
         -- Crear el registro en tournament_matches
+        -- Usar ON CONFLICT como protección adicional (aunque ya verificamos arriba)
         INSERT INTO tournament_matches (
           tournament_id,
           match_id,
@@ -102,7 +118,7 @@ BEGIN
           v_group_record.id,
           false
         )
-        RETURNING id INTO v_tournament_match_id;
+        ON CONFLICT (tournament_id, match_id) DO NOTHING;
         
         v_match_count := v_match_count + 1;
         RAISE NOTICE 'Created match % in group %', v_match_count, v_group_record.group_name;
@@ -110,7 +126,12 @@ BEGIN
     END LOOP;
   END LOOP;
   
-  RAISE NOTICE 'Successfully created % matches for tournament %', v_match_count, v_tournament_id;
+  RAISE NOTICE '========================================';
+  RAISE NOTICE 'Resumen para torneo %:', v_tournament_id;
+  RAISE NOTICE '  - Partidos creados: %', v_match_count;
+  RAISE NOTICE '  - Partidos omitidos (ya existían): %', v_skipped_count;
+  RAISE NOTICE '  - Total procesados: %', v_match_count + v_skipped_count;
+  RAISE NOTICE '========================================';
 END $$;
 
 -- Verificar los partidos creados
@@ -123,7 +144,7 @@ SELECT
 FROM tournament_groups tg
 LEFT JOIN tournament_matches tm ON tg.id = tm.group_id AND tm.bracket_type = 'group'
 LEFT JOIN matches m ON tm.match_id = m.id
-WHERE tg.tournament_id = 'TOURNAMENT_ID_AQUI' -- ⚠️ CAMBIAR ESTE UUID (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+WHERE tg.tournament_id = '5e0d74f3-f79d-49f8-b328-e1a74ff01b2c' -- UUID del torneo
 GROUP BY tg.id, tg.group_name, tg.group_number
 ORDER BY tg.group_number;
 
