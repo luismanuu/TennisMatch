@@ -390,7 +390,9 @@
           <!-- Deadline Management -->
           <div v-if="tournament && tournament.status === 'active'" class="glass-card-elevated p-6 animate-fade-up animate-delay-3">
             <h2 class="text-size-2 font-semibold text-foreground mb-4">Gestionar Fechas Límite</h2>
-            <div class="space-y-4">
+            
+            <!-- Group Stage Deadline (only show if in group_stage phase) -->
+            <div v-if="tournament.current_phase === 'group_stage'" class="space-y-4">
               <div>
                 <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha Límite Fase de Grupos</label>
                 
@@ -406,8 +408,12 @@
                 <input
                   v-model="groupDeadline"
                   type="datetime-local"
+                  :min="minDateTime"
                   class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
                 />
+                <p v-if="isGroupDeadlineInPast" class="text-size-4 font-regular text-red-400 mt-2">
+                  No puedes establecer una fecha límite en el pasado
+                </p>
                 <button
                   @click="handleSetGroupDeadline"
                   :disabled="!groupDeadline"
@@ -415,6 +421,99 @@
                 >
                   {{ currentGroupDeadline ? 'Actualizar Fecha Límite' : 'Establecer Fecha Límite' }}
                 </button>
+              </div>
+            </div>
+
+            <!-- Playoffs Deadlines (only show if in playoffs phase) -->
+            <div v-if="tournament.current_phase === 'playoffs'" class="space-y-6">
+              <!-- Main Bracket Deadlines -->
+              <div>
+                <h3 class="text-size-3 font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" />
+                  Bracket Main
+                </h3>
+                <div class="space-y-4">
+                  <div
+                    v-for="(round, index) in mainPlayoffRounds"
+                    :key="`main-${index}`"
+                    class="p-4 rounded-xl bg-surface border-2 border-border-subtle"
+                  >
+                    <label class="block text-size-4 font-semibold text-foreground mb-2">
+                      {{ getRoundName(round.round_number) }}
+                    </label>
+                    
+                    <!-- Current Deadline Display -->
+                    <div v-if="getPlayoffDeadline('main', round.round_number)" class="mb-3 p-3 rounded-xl bg-accent-subtle/20 border border-accent/30">
+                      <div class="flex items-center gap-2 mb-1">
+                        <Icon name="heroicons:calendar-days" class="w-4 h-4 text-accent" />
+                        <span class="text-size-5 font-semibold text-foreground">Fecha Límite Actual:</span>
+                      </div>
+                      <p class="text-size-4 text-foreground ml-6">{{ formatDeadline(getPlayoffDeadline('main', round.round_number)) }}</p>
+                    </div>
+                    
+                    <input
+                      v-model="playoffDeadlines.main[round.round_number]"
+                      type="datetime-local"
+                      :min="minDateTime"
+                      class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    @click="handleSetPlayoffDeadlines('main')"
+                    :disabled="!hasValidPlayoffDeadlines('main') || mainPlayoffRounds.length === 0"
+                    class="w-full px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Establecer Fechas Límite Bracket Main
+                  </button>
+                  <p v-if="mainPlayoffRounds.length === 0" class="text-size-4 text-yellow-400 mt-2">
+                    ⚠️ No se encontraron rondas de playoffs. Asegúrate de que los brackets estén generados.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Backdraw Bracket Deadlines -->
+              <div>
+                <h3 class="text-size-3 font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Icon name="heroicons:trophy" class="w-5 h-5 text-accent-secondary" />
+                  Bracket Back
+                </h3>
+                <div class="space-y-4">
+                  <div
+                    v-for="(round, index) in backdrawPlayoffRounds"
+                    :key="`backdraw-${index}`"
+                    class="p-4 rounded-xl bg-surface border-2 border-border-subtle"
+                  >
+                    <label class="block text-size-4 font-semibold text-foreground mb-2">
+                      {{ getRoundName(round.round_number) }}
+                    </label>
+                    
+                    <!-- Current Deadline Display -->
+                    <div v-if="getPlayoffDeadline('backdraw', round.round_number)" class="mb-3 p-3 rounded-xl bg-accent-subtle/20 border border-accent/30">
+                      <div class="flex items-center gap-2 mb-1">
+                        <Icon name="heroicons:calendar-days" class="w-4 h-4 text-accent" />
+                        <span class="text-size-5 font-semibold text-foreground">Fecha Límite Actual:</span>
+                      </div>
+                      <p class="text-size-4 text-foreground ml-6">{{ formatDeadline(getPlayoffDeadline('backdraw', round.round_number)) }}</p>
+                    </div>
+                    
+                    <input
+                      v-model="playoffDeadlines.backdraw[round.round_number]"
+                      type="datetime-local"
+                      :min="minDateTime"
+                      class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    @click="handleSetPlayoffDeadlines('backdraw')"
+                    :disabled="!hasValidPlayoffDeadlines('backdraw') || backdrawPlayoffRounds.length === 0"
+                    class="w-full px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Establecer Fechas Límite Bracket Back
+                  </button>
+                  <p v-if="backdrawPlayoffRounds.length === 0" class="text-size-4 text-yellow-400 mt-2">
+                    ⚠️ No se encontraron rondas de playoffs. Asegúrate de que los brackets estén generados.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -528,6 +627,10 @@ const loadTournament = async () => {
         console.error('Error loading phase status:', err)
       }
     }
+    // Load bracket data if in playoffs phase to get round numbers
+    if (tournament.value?.current_phase === 'playoffs') {
+      await loadBracketData()
+    }
     // Load group deadline into the input field
     if (currentGroupDeadline.value) {
       // Convert deadline to datetime-local format (YYYY-MM-DDTHH:mm)
@@ -538,6 +641,81 @@ const loadTournament = async () => {
       const hours = String(deadlineDate.getHours()).padStart(2, '0')
       const minutes = String(deadlineDate.getMinutes()).padStart(2, '0')
       groupDeadline.value = `${year}-${month}-${day}T${hours}:${minutes}`
+    } else {
+      // Set default to today at 00:00 if no deadline exists
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, '0')
+      const day = String(now.getDate()).padStart(2, '0')
+      groupDeadline.value = `${year}-${month}-${day}T00:00`
+    }
+    
+    // Load playoff deadlines into input fields
+    if (tournament.value?.current_phase === 'playoffs') {
+      // Ensure bracket data is loaded
+      if (!bracketData.value) {
+        await loadBracketData()
+      }
+      
+      // Wait for rounds to be computed
+      await nextTick()
+      
+      // Set default date to today at 00:00
+      const now = new Date()
+      const defaultYear = now.getFullYear()
+      const defaultMonth = String(now.getMonth() + 1).padStart(2, '0')
+      const defaultDay = String(now.getDate()).padStart(2, '0')
+      const defaultDateTime = `${defaultYear}-${defaultMonth}-${defaultDay}T00:00`
+      
+      // Load main bracket deadlines
+      mainPlayoffRounds.value.forEach(round => {
+        // Main bracket
+        const mainDeadline = getPlayoffDeadline('main', round.round_number)
+        if (mainDeadline) {
+          const deadlineDate = new Date(mainDeadline)
+          const year = deadlineDate.getFullYear()
+          const month = String(deadlineDate.getMonth() + 1).padStart(2, '0')
+          const day = String(deadlineDate.getDate()).padStart(2, '0')
+          const hours = String(deadlineDate.getHours()).padStart(2, '0')
+          const minutes = String(deadlineDate.getMinutes()).padStart(2, '0')
+          playoffDeadlines.value.main[round.round_number] = `${year}-${month}-${day}T${hours}:${minutes}`
+        } else {
+          // Set default to today at 00:00 if no deadline exists
+          playoffDeadlines.value.main[round.round_number] = defaultDateTime
+        }
+        
+        // Backdraw bracket
+        const backdrawDeadline = getPlayoffDeadline('backdraw', round.round_number)
+        if (backdrawDeadline) {
+          const deadlineDate = new Date(backdrawDeadline)
+          const year = deadlineDate.getFullYear()
+          const month = String(deadlineDate.getMonth() + 1).padStart(2, '0')
+          const day = String(deadlineDate.getDate()).padStart(2, '0')
+          const hours = String(deadlineDate.getHours()).padStart(2, '0')
+          const minutes = String(deadlineDate.getMinutes()).padStart(2, '0')
+          playoffDeadlines.value.backdraw[round.round_number] = `${year}-${month}-${day}T${hours}:${minutes}`
+        } else {
+          // Set default to today at 00:00 if no deadline exists
+          playoffDeadlines.value.backdraw[round.round_number] = defaultDateTime
+        }
+      })
+      
+      // Load backdraw bracket deadlines
+      backdrawPlayoffRounds.value.forEach(round => {
+        const backdrawDeadline = getPlayoffDeadline('backdraw', round.round_number)
+        if (backdrawDeadline) {
+          const deadlineDate = new Date(backdrawDeadline)
+          const year = deadlineDate.getFullYear()
+          const month = String(deadlineDate.getMonth() + 1).padStart(2, '0')
+          const day = String(deadlineDate.getDate()).padStart(2, '0')
+          const hours = String(deadlineDate.getHours()).padStart(2, '0')
+          const minutes = String(deadlineDate.getMinutes()).padStart(2, '0')
+          playoffDeadlines.value.backdraw[round.round_number] = `${year}-${month}-${day}T${hours}:${minutes}`
+        } else if (!playoffDeadlines.value.backdraw[round.round_number]) {
+          // Set default to today at 00:00 if no deadline exists and not already set
+          playoffDeadlines.value.backdraw[round.round_number] = defaultDateTime
+        }
+      })
     }
   } catch (err) {
     console.error('Error loading tournament:', err)
@@ -627,11 +805,272 @@ const phaseStatus = ref<any>(null)
 const advancingPhase = ref(false)
 const generatingPlayoffs = ref(false)
 
+// Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm)
+const minDateTime = computed(() => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+})
+
+// Check if selected group deadline is in the past
+const isGroupDeadlineInPast = computed(() => {
+  if (!groupDeadline.value) return false
+  const selectedDate = new Date(groupDeadline.value)
+  const now = new Date()
+  return selectedDate < now
+})
+
+// Playoff deadlines management
+const playoffDeadlines = ref<{
+  main: Record<number, string>
+  backdraw: Record<number, string>
+}>({
+  main: {},
+  backdraw: {}
+})
+
 // Check if tournament has playoff brackets
 const hasPlayoffBrackets = computed(() => {
   if (!phaseStatus.value) return false
   return phaseStatus.value.mainPlayoffsStatus && phaseStatus.value.mainPlayoffsStatus.totalMatches > 0
 })
+
+// Load playoff rounds from bracket matches if not in DB
+const bracketData = ref<any>(null)
+const loadBracketData = async () => {
+  if (!tournament.value || tournament.value.current_phase !== 'playoffs') return
+  try {
+    const data = await $fetch(`/api/tournaments/${tournamentId}/bracket`)
+    bracketData.value = data
+  } catch (err) {
+    console.error('Error loading bracket data:', err)
+  }
+}
+
+// Get round name for display (helper function)
+const getRoundNameForNumber = (roundNumber: number, totalRounds: number) => {
+  const positionFromEnd = totalRounds - roundNumber
+  
+  if (positionFromEnd === 0) return 'Final'
+  if (positionFromEnd === 1) return 'Semifinales'
+  if (positionFromEnd === 2) return 'Cuartos de Final'
+  return `${roundNumber}ª Ronda`
+}
+
+// Helper function to calculate rounds for a specific bracket type (main or backdraw)
+// Uses EXACTLY the same logic as TournamentBracket component
+const calculateRoundsForBracket = (bracketType: 'main' | 'backdraw') => {
+  if (!bracketData.value) return []
+  
+  // Get matches for this specific bracket type only
+  const matches = bracketData.value[bracketType] || []
+  
+  console.log(`[Deadline Rounds ${bracketType}] Matches:`, matches.length)
+  
+  if (matches.length === 0) return []
+  
+  // Convert to bracketry format to get roundIndex (same as TournamentBracket)
+  // roundIndex = (round_number || 1) - 1 (0-based)
+  const uniqueRoundIndexes = [...new Set(
+    matches.map((m: any) => (m.round_number || 1) - 1)
+  )].sort((a, b) => a - b)
+  
+  const maxRoundIndex = Math.max(...uniqueRoundIndexes, 0)
+  
+  console.log(`[Deadline Rounds ${bracketType}] Unique round indexes (0-based):`, uniqueRoundIndexes)
+  console.log(`[Deadline Rounds ${bracketType}] Max round index:`, maxRoundIndex)
+  
+  // Calculate total rounds needed (EXACT same logic as TournamentBracket)
+  let roundsToCreate = uniqueRoundIndexes.length
+  
+  // If we only have round 0 (first round), calculate how many rounds we need
+  // based on the actual number of unique players in the first round
+  if (roundsToCreate === 1 && uniqueRoundIndexes[0] === 0) {
+    console.log(`[Deadline Rounds ${bracketType}] Only one round found (roundIndex 0), calculating from players...`)
+    // Get all unique players from round 1 matches
+    const round1Matches = matches.filter((tm: any) => (tm.round_number || 1) === 1)
+    const uniquePlayers = new Set<string>()
+    
+    round1Matches.forEach((tm: any) => {
+      const match = tm.match
+      if (match?.player1_id && !tm.is_bye) {
+        uniquePlayers.add(match.player1_id)
+      }
+      if (match?.player2_id && !tm.is_bye) {
+        uniquePlayers.add(match.player2_id)
+      }
+    })
+    
+    const totalPlayers = uniquePlayers.size
+    console.log(`[Deadline Rounds ${bracketType}] Round 1 matches:`, round1Matches.length)
+    console.log(`[Deadline Rounds ${bracketType}] Unique players in round 1:`, totalPlayers)
+    
+    if (totalPlayers > 0) {
+      // Calculate total rounds needed for single elimination bracket
+      // Formula: ceil(log2(totalPlayers))
+      roundsToCreate = Math.ceil(Math.log2(totalPlayers))
+      console.log(`[Deadline Rounds ${bracketType}] Calculando rondas: ${totalPlayers} jugadores únicos = ${roundsToCreate} rondas totales`)
+    } else {
+      // Fallback: use number of matches * 2
+      const round1MatchCount = round1Matches.length
+      if (round1MatchCount > 0) {
+        roundsToCreate = Math.ceil(Math.log2(round1MatchCount * 2))
+        console.log(`[Deadline Rounds ${bracketType}] Fallback cálculo: ${round1MatchCount} partidos = ${roundsToCreate} rondas`)
+      }
+    }
+  } else {
+    // Use actual max round index + 1 (since roundIndex is 0-based)
+    roundsToCreate = maxRoundIndex + 1
+    console.log(`[Deadline Rounds ${bracketType}] Usando rondas reales: maxRoundIndex=${maxRoundIndex}, totalRounds=${roundsToCreate}`)
+  }
+  
+  // Generate rounds (EXACT same logic as TournamentBracket)
+  // TournamentBracket generates rounds from 0 to roundsToCreate-1 (0-based)
+  // But we need round_number (1-based), so we generate from 1 to roundsToCreate
+  const allRounds = []
+  for (let i = 0; i < roundsToCreate; i++) {
+    // Determine round name based on position (from end to beginning) - same as TournamentBracket
+    const positionFromEnd = roundsToCreate - 1 - i
+    let roundName = ''
+    
+    if (positionFromEnd === 0) {
+      // Last round = Final
+      roundName = 'Final'
+    } else if (positionFromEnd === 1) {
+      // Second to last = Semifinales
+      roundName = 'Semifinales'
+    } else if (positionFromEnd === 2) {
+      // Third to last = Cuartos de Final
+      roundName = 'Cuartos de Final'
+    } else {
+      // Earlier rounds = numbered
+      const roundNumber = i + 1
+      roundName = `${roundNumber}ª Ronda`
+    }
+    
+    // round_number is 1-based (i + 1)
+    allRounds.push({
+      round_number: i + 1,
+      round_name: roundName
+    })
+  }
+  
+  console.log(`[Deadline Rounds ${bracketType}] Rounds created: ${allRounds.length}`, allRounds.map(r => `${r.round_number}: ${r.round_name}`))
+  console.log(`[Deadline Rounds ${bracketType}] Rounds to create: ${roundsToCreate}`)
+  
+  return allRounds
+}
+
+// Get playoff rounds for Main bracket
+const mainPlayoffRounds = computed(() => {
+  // First, try to get from tournament rounds
+  if (tournament.value?.rounds) {
+    const mainRounds = tournament.value.rounds
+      .filter((round: any) => round.bracket_type === 'main')
+      .map((round: any) => ({
+        round_number: round.round_number,
+        round_name: getRoundNameForNumber(round.round_number, round.round_number)
+      }))
+    if (mainRounds.length > 0) {
+      return mainRounds.sort((a: any, b: any) => a.round_number - b.round_number)
+    }
+  }
+  
+  // If no rounds in DB, calculate from bracket data
+  return calculateRoundsForBracket('main')
+})
+
+// Get playoff rounds for Backdraw bracket
+const backdrawPlayoffRounds = computed(() => {
+  // First, try to get from tournament rounds
+  if (tournament.value?.rounds) {
+    const backdrawRounds = tournament.value.rounds
+      .filter((round: any) => round.bracket_type === 'backdraw')
+      .map((round: any) => ({
+        round_number: round.round_number,
+        round_name: getRoundNameForNumber(round.round_number, round.round_number)
+      }))
+    if (backdrawRounds.length > 0) {
+      return backdrawRounds.sort((a: any, b: any) => a.round_number - b.round_number)
+    }
+  }
+  
+  // If no rounds in DB, calculate from bracket data
+  return calculateRoundsForBracket('backdraw')
+})
+
+// Legacy: keep playoffRounds for backward compatibility (uses main bracket)
+const playoffRounds = computed(() => mainPlayoffRounds.value)
+
+// Get round name for display (uses playoffRounds)
+const getRoundName = (roundNumber: number) => {
+  const round = playoffRounds.value.find(r => r.round_number === roundNumber)
+  return round?.round_name || `${roundNumber}ª Ronda`
+}
+
+// Get current playoff deadline for a specific bracket and round
+const getPlayoffDeadline = (bracketType: 'main' | 'backdraw', roundNumber: number) => {
+  if (!tournament.value?.rounds) return null
+  const round = tournament.value.rounds.find(
+    (r: any) => r.bracket_type === bracketType && r.round_number === roundNumber
+  )
+  return round?.deadline || null
+}
+
+// Check if playoff deadlines are valid
+const hasValidPlayoffDeadlines = (bracketType: 'main' | 'backdraw') => {
+  const rounds = bracketType === 'main' ? mainPlayoffRounds.value : backdrawPlayoffRounds.value
+  if (!rounds || rounds.length === 0) {
+    return false
+  }
+  const deadlines = playoffDeadlines.value[bracketType]
+  return rounds.some(round => {
+    const deadlineValue = deadlines[round.round_number]
+    return deadlineValue && deadlineValue.trim() !== ''
+  })
+}
+
+// Set playoff deadlines
+const handleSetPlayoffDeadlines = async (bracketType: 'main' | 'backdraw') => {
+  if (!userId.value) return
+  
+  const rounds = bracketType === 'main' ? mainPlayoffRounds.value : backdrawPlayoffRounds.value
+  const deadlines = playoffDeadlines.value[bracketType]
+  const roundsToSave = rounds
+    .filter(round => deadlines[round.round_number] && deadlines[round.round_number].trim() !== '')
+    .map(round => ({
+      round_number: round.round_number,
+      round_name: round.round_name,
+      deadline: deadlines[round.round_number]
+    }))
+  
+  if (roundsToSave.length === 0) {
+    const toast = useToastNotifications()
+    toast.error('Debes establecer al menos una fecha límite')
+    return
+  }
+  
+  try {
+    await $fetch(`/api/organizer/tournaments/${tournamentId}/playoff-deadline`, {
+      method: 'PUT',
+      body: {
+        clerk_id: userId.value,
+        bracket_type: bracketType,
+        rounds: roundsToSave
+      }
+    })
+    await loadTournament()
+    const toast = useToastNotifications()
+    toast.success(`Fechas límite del Bracket ${bracketType === 'main' ? 'Main' : 'Back'} establecidas exitosamente`)
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al establecer fechas límite')
+  }
+}
 
 // Load phase status
 const loadPhaseStatus = async () => {

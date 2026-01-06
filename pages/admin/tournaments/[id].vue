@@ -331,8 +331,12 @@
                 <input
                   v-model="groupDeadline"
                   type="datetime-local"
+                  :min="minDateTime"
                   class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
                 />
+                <p v-if="isGroupDeadlineInPast" class="text-size-4 font-regular text-red-400 mt-2">
+                  No puedes establecer una fecha límite en el pasado
+                </p>
                 <button
                   @click="handleSetGroupDeadline"
                   class="mt-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
@@ -374,6 +378,25 @@ const tournamentStats = ref({
   scheduledMatches: 0,
   unscheduledMatches: 0,
   completionRate: 0
+})
+
+// Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm)
+const minDateTime = computed(() => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+})
+
+// Check if selected group deadline is in the past
+const isGroupDeadlineInPast = computed(() => {
+  if (!groupDeadline.value) return false
+  const selectedDate = new Date(groupDeadline.value)
+  const now = new Date()
+  return selectedDate < now
 })
 
 const formatDate = (dateString: string) => {
@@ -432,6 +455,15 @@ const loadTournament = async () => {
   try {
     await getTournament(tournamentId)
     await loadTournamentStats()
+    
+    // Set default group deadline to today at 00:00 if not set
+    if (!groupDeadline.value && tournament.value) {
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, '0')
+      const day = String(now.getDate()).padStart(2, '0')
+      groupDeadline.value = `${year}-${month}-${day}T00:00`
+    }
   } catch (err) {
     console.error('Error loading tournament:', err)
   }

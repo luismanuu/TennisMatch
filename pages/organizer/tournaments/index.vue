@@ -69,17 +69,25 @@
                 <input
                   v-model="tournamentForm.start_date"
                   type="datetime-local"
+                  :min="minDateTime"
                   required
                   class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
                 />
+                <p v-if="isStartDateInPast" class="text-size-4 font-regular text-red-400 mt-2">
+                  No puedes crear un torneo con fecha de inicio en el pasado
+                </p>
               </div>
               <div>
                 <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha de Fin (Opcional)</label>
                 <input
                   v-model="tournamentForm.end_date"
                   type="datetime-local"
+                  :min="tournamentForm.start_date || minDateTime"
                   class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
                 />
+                <p v-if="isEndDateInPast" class="text-size-4 font-regular text-red-400 mt-2">
+                  La fecha de fin no puede ser anterior a la fecha de inicio
+                </p>
               </div>
               <div>
                 <label class="block text-size-4 font-semibold text-foreground mb-2">Tipo de Torneo</label>
@@ -317,12 +325,46 @@ const tournamentForm = ref<CreateTournamentPayload & { registration_open: boolea
   }
 })
 
+// Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm)
+const minDateTime = computed(() => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+})
+
+// Check if selected start date is in the past
+const isStartDateInPast = computed(() => {
+  if (!tournamentForm.value.start_date) return false
+  const selectedDate = new Date(tournamentForm.value.start_date)
+  const now = new Date()
+  return selectedDate < now
+})
+
+// Check if selected end date is before start date
+const isEndDateInPast = computed(() => {
+  if (!tournamentForm.value.end_date || !tournamentForm.value.start_date) return false
+  const endDate = new Date(tournamentForm.value.end_date)
+  const startDate = new Date(tournamentForm.value.start_date)
+  return endDate < startDate
+})
+
 const resetForm = () => {
+  // Set default dates to today at 00:00
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  
   tournamentForm.value = {
     name: '',
     category_id: '',
-    start_date: '',
+    start_date: `${year}-${month}-${day}T00:00`,
     end_date: '',
+    tournament_type: 'groups_playoffs',
     group_size: 4,
     players_per_group_advance: 2,
     min_players: 4,
@@ -372,6 +414,13 @@ const loadTournaments = async () => {
 }
 
 onMounted(async () => {
+  // Set default dates to today at 00:00
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  tournamentForm.value.start_date = `${year}-${month}-${day}T00:00`
+  
   await fetchCategories()
   await loadTournaments()
 })

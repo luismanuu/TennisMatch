@@ -370,15 +370,14 @@ const handleSubmit = async () => {
   }
 }
 
-// Set default date to today
+// Set default date to today at 00:00
 onMounted(async () => {
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  formData.value.scheduled_at = `${year}-${month}-${day}T${hours}:${minutes}`
+  // Default to 00:00 (midnight)
+  formData.value.scheduled_at = `${year}-${month}-${day}T00:00`
 
   await loadData()
 })

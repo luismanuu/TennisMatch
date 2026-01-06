@@ -135,6 +135,18 @@
         <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
         Bracket Main
       </h3>
+      
+      <!-- Current Round Deadline Info -->
+      <div v-if="mainCurrentRoundDeadline" class="mb-6 glass-card-elevated p-4 rounded-xl">
+        <div class="flex items-center gap-3">
+          <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" />
+          <div>
+            <span class="text-size-4 font-semibold text-foreground">Fecha límite de {{ mainCurrentRoundDeadline.roundName }}:</span>
+            <span class="text-size-4 text-foreground-muted ml-2">{{ mainCurrentRoundDeadline.formattedDate }}</span>
+          </div>
+        </div>
+      </div>
+      
       <ClientOnly>
         <div ref="mainBracketContainer" class="bracketry-container"></div>
         <template #fallback>
@@ -151,6 +163,18 @@
         <Icon name="heroicons:trophy" class="w-6 h-6 text-accent-secondary" />
         Bracket Back
       </h3>
+      
+      <!-- Current Round Deadline Info -->
+      <div v-if="backdrawCurrentRoundDeadline" class="mb-6 glass-card-elevated p-4 rounded-xl">
+        <div class="flex items-center gap-3">
+          <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent-secondary" />
+          <div>
+            <span class="text-size-4 font-semibold text-foreground">Fecha límite de {{ backdrawCurrentRoundDeadline.roundName }}:</span>
+            <span class="text-size-4 text-foreground-muted ml-2">{{ backdrawCurrentRoundDeadline.formattedDate }}</span>
+          </div>
+        </div>
+      </div>
+      
       <ClientOnly>
         <div ref="backdrawBracketContainer" class="bracketry-container"></div>
         <template #fallback>
@@ -299,6 +323,8 @@ const props = defineProps<Props>()
 
 const { getBracket, loading } = useTournaments()
 const bracketData = ref<any>(null)
+const mainCurrentRoundDeadline = ref<{ roundName: string; formattedDate: string } | null>(null)
+const backdrawCurrentRoundDeadline = ref<{ roundName: string; formattedDate: string } | null>(null)
 
 // Bracketry container refs
 const mainBracketContainer = ref<HTMLElement | null>(null)
@@ -784,11 +810,21 @@ const convertToBracketryFormat = (matches: any[]) => {
     console.log(`Usando rondas reales: maxRoundIndex=${maxRoundIndex}, totalRounds=${roundsToCreate}`)
   }
   
+  // Extract round deadlines from matches
+  const roundDeadlines = new Map<number, string>()
+  matches.forEach((tm: any) => {
+    const roundNum = tm.round_number || 1
+    if (tm.round_deadline && !roundDeadlines.has(roundNum)) {
+      roundDeadlines.set(roundNum, tm.round_deadline)
+    }
+  })
+  
   const rounds = []
   for (let i = 0; i < roundsToCreate; i++) {
     // Determine round name based on position (from end to beginning)
     const positionFromEnd = roundsToCreate - 1 - i
     let roundName = ''
+    const roundNumber = i + 1 // 1-based round number
     
     if (positionFromEnd === 0) {
       // Last round = Final
@@ -801,7 +837,6 @@ const convertToBracketryFormat = (matches: any[]) => {
       roundName = 'Cuartos de Final'
     } else {
       // Earlier rounds = numbered
-      const roundNumber = i + 1
       roundName = `${roundNumber}ª Ronda`
     }
     
@@ -819,6 +854,55 @@ const convertToBracketryFormat = (matches: any[]) => {
   }
 }
 
+// Helper function to get current round deadline (first round with pending matches)
+const getCurrentRoundDeadline = (matches: any[], roundsToCreate: number): { roundName: string; formattedDate: string } | null => {
+  const roundDeadlines = new Map<number, string>()
+  
+  // Extract deadlines from matches, prioritizing rounds with incomplete matches
+  matches.forEach((tm: any) => {
+    const roundNum = tm.round_number || 1
+    const match = tm.match
+    // Only consider rounds with matches that are not completed
+    if (tm.round_deadline && !roundDeadlines.has(roundNum) && 
+        (!match || match.status !== 'completed')) {
+      roundDeadlines.set(roundNum, tm.round_deadline)
+    }
+  })
+  
+  // Find the earliest round (lowest round number) with a deadline
+  const sortedRounds = Array.from(roundDeadlines.keys()).sort((a, b) => a - b)
+  if (sortedRounds.length === 0) return null
+  
+  const currentRoundNumber = sortedRounds[0]
+  const deadline = roundDeadlines.get(currentRoundNumber)
+  if (!deadline) return null
+  
+  // Determine round name based on position
+  const positionFromEnd = roundsToCreate - currentRoundNumber
+  let roundName = ''
+  
+  if (positionFromEnd === 0) {
+    roundName = 'Final'
+  } else if (positionFromEnd === 1) {
+    roundName = 'Semifinales'
+  } else if (positionFromEnd === 2) {
+    roundName = 'Cuartos de Final'
+  } else {
+    roundName = `${currentRoundNumber}ª Ronda`
+  }
+  
+  const deadlineDate = new Date(deadline)
+  const formattedDate = deadlineDate.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  
+  return { roundName, formattedDate }
+}
+
 const loadBracket = async () => {
   try {
     bracketData.value = await getBracket(props.tournamentId)
@@ -832,6 +916,56 @@ const loadBracket = async () => {
           standingsData: group.standings
         })
       })
+    }
+    
+    // Extract round deadlines for main bracket
+    if (bracketData.value?.main && bracketData.value.main.length > 0) {
+      const uniqueRoundIndexes = [...new Set(bracketData.value.main.map((tm: any) => (tm.round_number || 1) - 1))].sort((a, b) => (a as number) - (b as number)) as number[]
+      const maxRoundIndex = Math.max(...(uniqueRoundIndexes.length > 0 ? uniqueRoundIndexes : [0]), 0)
+      let roundsToCreate = uniqueRoundIndexes.length
+      
+      if (roundsToCreate === 1 && uniqueRoundIndexes[0] === 0) {
+        const round1Matches = bracketData.value.main.filter((tm: any) => (tm.round_number || 1) === 1)
+        const uniquePlayers = new Set<string>()
+        round1Matches.forEach((tm: any) => {
+          const match = tm.match
+          if (match?.player1_id && !tm.is_bye) uniquePlayers.add(match.player1_id)
+          if (match?.player2_id && !tm.is_bye) uniquePlayers.add(match.player2_id)
+        })
+        const totalPlayers = uniquePlayers.size
+        if (totalPlayers > 0) {
+          roundsToCreate = Math.ceil(Math.log2(totalPlayers))
+        }
+      } else {
+        roundsToCreate = maxRoundIndex + 1
+      }
+      
+      mainCurrentRoundDeadline.value = getCurrentRoundDeadline(bracketData.value.main, roundsToCreate)
+    }
+    
+    // Extract round deadlines for backdraw bracket
+    if (bracketData.value?.backdraw && bracketData.value.backdraw.length > 0) {
+      const uniqueRoundIndexes = [...new Set(bracketData.value.backdraw.map((tm: any) => (tm.round_number || 1) - 1))].sort((a, b) => (a as number) - (b as number)) as number[]
+      const maxRoundIndex = Math.max(...(uniqueRoundIndexes.length > 0 ? uniqueRoundIndexes : [0]), 0)
+      let roundsToCreate = uniqueRoundIndexes.length
+      
+      if (roundsToCreate === 1 && uniqueRoundIndexes[0] === 0) {
+        const round1Matches = bracketData.value.backdraw.filter((tm: any) => (tm.round_number || 1) === 1)
+        const uniquePlayers = new Set<string>()
+        round1Matches.forEach((tm: any) => {
+          const match = tm.match
+          if (match?.player1_id && !tm.is_bye) uniquePlayers.add(match.player1_id)
+          if (match?.player2_id && !tm.is_bye) uniquePlayers.add(match.player2_id)
+        })
+        const totalPlayers = uniquePlayers.size
+        if (totalPlayers > 0) {
+          roundsToCreate = Math.ceil(Math.log2(totalPlayers))
+        }
+      } else {
+        roundsToCreate = maxRoundIndex + 1
+      }
+      
+      backdrawCurrentRoundDeadline.value = getCurrentRoundDeadline(bracketData.value.backdraw, roundsToCreate)
     }
 
     // Initialize Bracketry for main bracket (only on client side)
@@ -1115,6 +1249,20 @@ onMounted(() => {
   font-weight: 600 !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Style for round titles with deadlines */
+.bracketry-container .round-title {
+  line-height: 1.4 !important;
+}
+
+.bracketry-container .round-title span {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75em !important;
+  opacity: 0.7;
+  font-weight: 400 !important;
+  color: oklch(0.70 0.01 250) !important;
 }
 
 .bracketry-container .match {
