@@ -70,6 +70,7 @@ export const useTournaments = () => {
         : '/api/tournaments/past'
 
       const data = await $fetch<Tournament[]>(url)
+      tournaments.value = data
       return data
     } catch (err: any) {
       error.value = err

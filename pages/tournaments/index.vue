@@ -71,8 +71,8 @@
                   : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50'
               ]"
             >
-              <Icon name="heroicons:archive" class="w-4 h-4" />
-              <span>Pasados</span>
+              <Icon name="heroicons:check-circle" class="w-4 h-4" />
+              <span>Completados</span>
             </button>
           </div>
         </div>
@@ -236,12 +236,22 @@ const loadTournaments = async () => {
         search: filters.value.search || undefined
       })
     } else if (activeTab.value === 'all') {
-      // Load both upcoming and active tournaments
-      await fetchTournaments({
+      // Load all tournaments including completed ones
+      // First get upcoming and active (this updates tournaments.value)
+      const activeData = await fetchTournaments({
         status: undefined, // Don't filter by status to get both upcoming and active
         category_id: categoryFilter,
         search: filters.value.search || undefined
       })
+      // Save the active data before fetchPastTournaments overwrites it
+      const activeTournaments = [...activeData]
+      // Then get completed tournaments (this will overwrite tournaments.value)
+      const completedData = await fetchPastTournaments({
+        category_id: categoryFilter,
+        search: filters.value.search || undefined
+      })
+      // Combine both lists
+      tournaments.value = [...activeTournaments, ...completedData]
     } else {
       await fetchTournaments({
         status: activeTab.value,
