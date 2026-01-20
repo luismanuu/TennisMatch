@@ -236,6 +236,69 @@
             <div class="text-size-4 font-regular text-foreground-muted">{{ stat.label }}</div>
           </div>
         </div>
+
+        <!-- Quick Links to Key Features -->
+        <div class="mt-12 grid md:grid-cols-3 gap-6 animate-fade-up animate-delay-4">
+          <NuxtLink 
+            to="/my-ranking"
+            class="glass-card-elevated p-6 hover-lift group transition-all"
+          >
+            <div class="flex items-center gap-4 mb-4">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:chart-bar-square" class="w-6 h-6 text-background" />
+              </div>
+              <div>
+                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors">
+                  Mi Ranking
+                </h3>
+                <p class="text-size-5 text-foreground-muted">Sigue tu progreso</p>
+              </div>
+            </div>
+            <p class="text-size-4 text-foreground-muted">
+              Visualiza tu ELO, historial de partidas y estadísticas detalladas
+            </p>
+          </NuxtLink>
+
+          <NuxtLink 
+            to="/leaderboard"
+            class="glass-card-elevated p-6 hover-lift group transition-all"
+          >
+            <div class="flex items-center gap-4 mb-4">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
+              </div>
+              <div>
+                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-amber-400 transition-colors">
+                  Leaderboard
+                </h3>
+                <p class="text-size-5 text-foreground-muted">Rankings globales</p>
+              </div>
+            </div>
+            <p class="text-size-4 text-foreground-muted">
+              Descubre los mejores jugadores y compite por el top
+            </p>
+          </NuxtLink>
+
+          <NuxtLink 
+            to="/tournaments"
+            class="glass-card-elevated p-6 hover-lift group transition-all"
+          >
+            <div class="flex items-center gap-4 mb-4">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:sparkles" class="w-6 h-6 text-background" />
+              </div>
+              <div>
+                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-purple-400 transition-colors">
+                  Torneos
+                </h3>
+                <p class="text-size-5 text-foreground-muted">Competencias</p>
+              </div>
+            </div>
+            <p class="text-size-4 text-foreground-muted">
+              Participa en torneos organizados y gana premios
+            </p>
+          </NuxtLink>
+        </div>
       </div>
     </div>
 
@@ -261,8 +324,8 @@
 
             <!-- Subheadline -->
             <p class="text-size-2 font-regular text-foreground-muted mb-8 max-w-2xl mx-auto">
-              La plataforma definitiva para jugadores amateur. Registra partidos, 
-              compite en torneos y sigue tu evolución con el sistema ELO.
+              La plataforma definitiva para jugadores amateur. Sistema ELO avanzado, 
+              matchmaking inteligente, torneos organizados y rankings en tiempo real.
             </p>
 
             <!-- CTA Buttons -->
@@ -301,50 +364,273 @@
       </section>
 
       <!-- Features Section -->
-      <section class="py-24 bg-surface">
-        <div class="max-w-6xl mx-auto px-6">
-          <h2 class="text-3xl font-bold text-white text-center mb-12">
-            Características Principales
-          </h2>
-          <div class="grid md:grid-cols-3 gap-8">
-            <div class="bg-background p-8 rounded-2xl border border-border">
-              <div class="text-4xl mb-4">📊</div>
-              <h3 class="text-xl font-semibold text-white mb-2">Sistema ELO</h3>
-              <p class="text-gray-400">Rating dinámico basado en tus resultados competitivos.</p>
+      <section class="section-padding relative z-10">
+        <div class="container-medium px-6">
+          <div class="text-center mb-16">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
+              <Icon name="heroicons:sparkles" class="w-4 h-4 text-accent" />
+              <span class="text-size-4 font-semibold text-accent">Características Principales</span>
             </div>
-            <div class="bg-background p-8 rounded-2xl border border-border">
-              <div class="text-4xl mb-4">🏆</div>
-              <h3 class="text-xl font-semibold text-white mb-2">Torneos</h3>
-              <p class="text-gray-400">Participa en competencias organizadas automáticamente.</p>
+            <h2 class="text-size-1 font-semibold text-foreground mb-4">
+              Todo lo que necesitas para competir
+            </h2>
+            <p class="text-size-3 font-regular text-foreground-muted max-w-2xl mx-auto">
+              Una plataforma completa con sistema de ranking, matchmaking inteligente y torneos organizados
+            </p>
+          </div>
+          
+          <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Sistema ELO -->
+            <div class="glass-card-elevated p-8 hover-lift group">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:chart-bar" class="w-8 h-8 text-accent" />
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Sistema ELO Avanzado</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Rating dinámico basado en tus resultados competitivos con 7 tiers (Bronze a Grandmaster)
+              </p>
+              <ul class="space-y-2 text-size-4 text-foreground-muted">
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Partidos de colocación iniciales</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Decay mensual para mantener actividad</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Historial completo de cambios</span>
+                </li>
+              </ul>
             </div>
-            <div class="bg-background p-8 rounded-2xl border border-border">
-              <div class="text-4xl mb-4">📝</div>
-              <h3 class="text-xl font-semibold text-white mb-2">Registro de Partidos</h3>
-              <p class="text-gray-400">Guarda el historial completo de tus encuentros.</p>
+
+            <!-- Matchmaking -->
+            <div class="glass-card-elevated p-8 hover-lift group">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border-2 border-blue-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:magnifying-glass" class="w-8 h-8 text-blue-400" />
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Matchmaking Inteligente</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Encuentra oponentes perfectos basado en tu nivel, ubicación y actividad reciente
+              </p>
+              <ul class="space-y-2 text-size-4 text-foreground-muted">
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Búsqueda por tier (2 arriba, 1 abajo)</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Filtrado por ciudad y segmento</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Límite de 4 partidos/mes por oponente</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Torneos -->
+            <div class="glass-card-elevated p-8 hover-lift group">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 border-2 border-purple-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:trophy" class="w-8 h-8 text-purple-400" />
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Torneos Organizados</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Participa en competencias estructuradas con brackets automáticos y seguimiento en tiempo real
+              </p>
+              <ul class="space-y-2 text-size-4 text-foreground-muted">
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Brackets automáticos</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Múltiples fases y grupos</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Programación inteligente</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Partidos Competitivos -->
+            <div class="glass-card-elevated p-8 hover-lift group">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500/20 to-green-500/5 border-2 border-green-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:check-badge" class="w-8 h-8 text-green-400" />
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Partidos Competitivos</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Diferencia entre partidos competitivos (afectan ELO) y amistosos (solo registro)
+              </p>
+              <ul class="space-y-2 text-size-4 text-foreground-muted">
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Partidos competitivos afectan ranking</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Partidos amistosos sin impacto ELO</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Historial completo de ambos tipos</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Leaderboard -->
+            <div class="glass-card-elevated p-8 hover-lift group">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 border-2 border-amber-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:bars-3-bottom-left" class="w-8 h-8 text-amber-400" />
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Leaderboards Múltiples</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Rankings globales, por ciudad, segmento y tier para competir en diferentes categorías
+              </p>
+              <ul class="space-y-2 text-size-4 text-foreground-muted">
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Ranking global</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Ranking por ciudad/segmento</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Ranking por tier</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Perfiles y Estadísticas -->
+            <div class="glass-card-elevated p-8 hover-lift group">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 border-2 border-cyan-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:user-circle" class="w-8 h-8 text-cyan-400" />
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Perfiles y Estadísticas</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Perfiles públicos con historial completo, estadísticas detalladas y gráficos de progreso
+              </p>
+              <ul class="space-y-2 text-size-4 text-foreground-muted">
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Historial de partidas competitivas</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Gráficos de progreso ELO</span>
+                </li>
+                <li class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span>Estadísticas de win rate y rachas</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Rating Tiers Section -->
+      <section class="section-padding bg-surface relative z-10">
+        <div class="container-medium px-6">
+          <div class="text-center mb-16">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
+              <Icon name="heroicons:star" class="w-4 h-4 text-accent" />
+              <span class="text-size-4 font-semibold text-accent">Sistema de Tiers</span>
+            </div>
+            <h2 class="text-size-1 font-semibold text-foreground mb-4">
+              Sube de nivel y alcanza nuevos tiers
+            </h2>
+            <p class="text-size-3 font-regular text-foreground-muted max-w-2xl mx-auto">
+              Desde Bronze hasta Grandmaster, cada victoria te acerca más al siguiente nivel
+            </p>
+          </div>
+          
+          <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div 
+              v-for="tier in ratingTiers" 
+              :key="tier.tier"
+              class="glass-card p-6 text-center hover-lift group"
+            >
+              <div 
+                class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center border-2 transition-all group-hover:scale-110"
+                :style="{ 
+                  backgroundColor: `${tier.color}20`,
+                  borderColor: `${tier.color}40`,
+                  color: tier.color
+                }"
+              >
+                <Icon name="heroicons:trophy" class="w-8 h-8" />
+              </div>
+              <h3 class="text-size-2 font-bold mb-2" :style="{ color: tier.color }">
+                {{ tier.tier }}
+              </h3>
+              <p class="text-size-4 text-foreground-muted">
+                {{ tier.minElo.toLocaleString() }} - {{ tier.maxElo === Infinity ? '∞' : tier.maxElo.toLocaleString() }} ELO
+              </p>
             </div>
           </div>
         </div>
       </section>
 
       <!-- How It Works Section -->
-      <section class="py-24">
-        <div class="max-w-4xl mx-auto px-6 text-center">
-          <h2 class="text-3xl font-bold text-white mb-12">Cómo Funciona</h2>
-          <div class="grid md:grid-cols-3 gap-8">
-            <div>
-              <div class="w-12 h-12 rounded-full bg-accent text-black font-bold text-xl flex items-center justify-center mx-auto mb-4">1</div>
-              <h3 class="text-xl font-semibold text-white mb-2">Crea tu cuenta</h3>
-              <p class="text-gray-400">Regístrate en menos de 30 segundos</p>
+      <section class="section-padding relative z-10">
+        <div class="container-medium px-6">
+          <div class="text-center mb-16">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
+              <Icon name="heroicons:question-mark-circle" class="w-4 h-4 text-accent" />
+              <span class="text-size-4 font-semibold text-accent">Cómo Funciona</span>
             </div>
-            <div>
-              <div class="w-12 h-12 rounded-full bg-accent text-black font-bold text-xl flex items-center justify-center mx-auto mb-4">2</div>
-              <h3 class="text-xl font-semibold text-white mb-2">Completa tu perfil</h3>
-              <p class="text-gray-400">Agrega tu nivel de juego</p>
+            <h2 class="text-size-1 font-semibold text-foreground mb-4">
+              Comienza en 3 simples pasos
+            </h2>
+            <p class="text-size-3 font-regular text-foreground-muted max-w-2xl mx-auto">
+              Únete a la comunidad de tenistas más grande de Ecuador en menos de un minuto
+            </p>
+          </div>
+          
+          <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            <div class="glass-card-elevated p-8 text-center hover-lift">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-accent/80 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
+                1
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Crea tu cuenta</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Regístrate en menos de 30 segundos con tu email
+              </p>
+              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
+                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
+                <span>Verificación instantánea</span>
+              </div>
             </div>
-            <div>
-              <div class="w-12 h-12 rounded-full bg-accent text-black font-bold text-xl flex items-center justify-center mx-auto mb-4">3</div>
-              <h3 class="text-xl font-semibold text-white mb-2">Comienza a competir</h3>
-              <p class="text-gray-400">Registra partidos y únete a torneos</p>
+            <div class="glass-card-elevated p-8 text-center hover-lift">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
+                2
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Completa tu perfil</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Agrega tu ciudad, categoría y nivel de juego
+              </p>
+              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
+                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
+                <span>Configuración rápida</span>
+              </div>
+            </div>
+            <div class="glass-card-elevated p-8 text-center hover-lift">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
+                3
+              </div>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Comienza a competir</h3>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Juega 3 partidos de colocación y obtén tu ranking inicial
+              </p>
+              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
+                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
+                <span>Matchmaking automático</span>
+              </div>
             </div>
           </div>
         </div>
@@ -480,19 +766,79 @@ const dashboardFeatures = computed(() => {
   }
 })
 
-const stats = [
-  { value: player.value?.elo || '1,000', label: 'Puntos ELO', icon: 'heroicons:trophy' },
-  { value: '0', label: 'Partidos', icon: 'heroicons:calendar' },
-  { value: '0', label: 'Victorias', icon: 'heroicons:star' },
-  { value: '-', label: 'Win Rate', icon: 'heroicons:chart-bar' }
-]
+// Stats with real data
+const stats = computed(() => {
+  const totalMatches = player.value?.total_matches_played || 0
+  const elo = player.value?.elo || 1000
+  const winStreak = player.value?.win_streak || 0
+  const placementMatches = player.value?.placement_matches_completed || 0
+  
+  // Calculate win rate if we have rating history
+  let winRate = '-'
+  if (ratingStats.value && ratingStats.value.wins + ratingStats.value.losses > 0) {
+    winRate = `${Math.round(ratingStats.value.win_rate)}%`
+  }
+  
+  return [
+    { value: elo.toLocaleString(), label: 'Puntos ELO', icon: 'heroicons:trophy' },
+    { value: totalMatches.toString(), label: 'Partidos', icon: 'heroicons:calendar' },
+    { value: winStreak > 0 ? `${winStreak} 🔥` : '0', label: 'Racha', icon: 'heroicons:fire' },
+    { value: winRate, label: 'Win Rate', icon: 'heroicons:chart-bar' }
+  ]
+})
+
+// Rating stats from history
+const ratingStats = ref<{ wins: number; losses: number; win_rate: number; peak_elo: number } | null>(null)
+
+// Load rating stats if player exists
+const loadRatingStats = async () => {
+  if (!player.value?.id) return
+  
+  try {
+    const historyResponse = await $fetch<{
+      success: boolean
+      history: any[]
+      stats: { wins: number; losses: number; win_rate: number; total_elo_change: number; peak_elo: number }
+    }>(`/api/players/${player.value.id}/rating-history`, {
+      query: { limit: 100 }
+    })
+    
+    if (historyResponse?.success && historyResponse.stats) {
+      ratingStats.value = historyResponse.stats
+    }
+  } catch (err) {
+    console.error('Failed to load rating stats:', err)
+  }
+}
+
+// Watch for player changes to load stats
+watch(() => player.value?.id, (newId) => {
+  if (newId) {
+    loadRatingStats()
+  }
+}, { immediate: true })
 
 const getPlayerInitials = (name: string) => {
   if (!name) return '?'
-  const parts = name.trim().split(' ')
+  const parts = name.trim().split(' ').filter(p => p.length > 0)
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    const first = parts[0]?.[0]
+    const last = parts[parts.length - 1]?.[0]
+    if (first && last) {
+      return (first + last).toUpperCase()
+    }
   }
   return name.substring(0, 2).toUpperCase()
 }
+
+// Rating tiers for display
+const ratingTiers = [
+  { tier: 'Bronze', minElo: 1, maxElo: 1499, color: '#CD7F32' },
+  { tier: 'Silver', minElo: 1500, maxElo: 1999, color: '#C0C0C0' },
+  { tier: 'Gold', minElo: 2000, maxElo: 2499, color: '#FFD700' },
+  { tier: 'Platinum', minElo: 2500, maxElo: 2999, color: '#E5E4E2' },
+  { tier: 'Diamond', minElo: 3000, maxElo: 3499, color: '#B9F2FF' },
+  { tier: 'Master', minElo: 3500, maxElo: 3999, color: '#9932CC' },
+  { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity, color: '#FF4500' },
+]
 </script>

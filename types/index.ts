@@ -384,9 +384,7 @@ export interface ProposeReschedulePayload {
 
 // ============================================
 // MATCHMAKING AND RANKING SYSTEM TYPES
-// ============================================
-
-export interface CitySegment {
+// ============================================export interface CitySegment {
   id: string
   name: string
   description?: string
