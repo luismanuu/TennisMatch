@@ -328,6 +328,7 @@ if (process.client) {
 .clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)) {
   background: var(--surface) !important;
   border: 2px solid var(--border) !important;
+  color: var(--foreground) !important;
   padding: 0.4375rem 0.75rem !important;
   font-size: 0.8125rem !important;
   height: 2.125rem !important;
@@ -337,12 +338,14 @@ if (process.client) {
 .clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput):hover) {
   border-color: var(--border-subtle) !important;
   border-width: 2px !important;
+  color: var(--foreground) !important;
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput):focus) {
   border-color: var(--accent) !important;
   border-width: 2px !important;
   box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+  color: var(--foreground) !important;
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)[data-invalid="true"]) {
@@ -543,6 +546,19 @@ if (process.client) {
   flex-wrap: nowrap !important;
 }
 
+/* Ensure input text is visible */
+.clerk-wrapper :deep(input[type="text"]),
+.clerk-wrapper :deep(input[type="email"]),
+.clerk-wrapper :deep(input[type="password"]),
+.clerk-wrapper :deep(input[type="tel"]) {
+  color: var(--foreground) !important;
+}
+
+.clerk-wrapper :deep(input::placeholder) {
+  color: var(--foreground-subtle) !important;
+  opacity: 1 !important;
+}
+
 /* Individual OTP input segments (visual only) - Exclude from all form field styles */
 .clerk-wrapper :deep(.cl-otpCodeFieldInput),
 .clerk-wrapper :deep(.cl-input.cl-otpCodeFieldInput) {
@@ -567,6 +583,12 @@ if (process.client) {
   margin: 0 !important;
   flex-shrink: 0 !important;
   flex-grow: 0 !important;
+}
+
+/* OTP hidden input that receives actual input - ensure text is visible */
+.clerk-wrapper :deep(input[data-input-otp="true"]) {
+  color: var(--foreground) !important;
+  caret-color: var(--accent) !important;
 }
 
 /* Verification code input fields (OTP) - Fallback for other OTP implementations */

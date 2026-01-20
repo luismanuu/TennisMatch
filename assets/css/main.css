@@ -581,6 +581,24 @@ textarea:focus-visible,
   z-index: 1 !important;
 }
 
+/* Ensure all input types have visible text */
+.cl-formFieldInput[type="text"],
+.cl-formFieldInput[type="email"],
+.cl-formFieldInput[type="password"],
+.cl-formFieldInput[type="tel"],
+.cl-formFieldInput[type="number"],
+input[type="text"].cl-formFieldInput,
+input[type="email"].cl-formFieldInput,
+input[type="password"].cl-formFieldInput,
+input[type="tel"].cl-formFieldInput {
+  color: var(--foreground) !important;
+}
+
+.cl-formFieldInput::placeholder {
+  color: var(--foreground-subtle) !important;
+  opacity: 1 !important;
+}
+
 /* Ensure input wrapper allows interaction */
 .cl-formFieldInputGroup,
 .cl-formFieldRow,
@@ -596,6 +614,7 @@ textarea:focus-visible,
 .cl-formFieldInput:hover {
   border-color: var(--border-subtle) !important;
   border-width: 2px !important;
+  color: var(--foreground) !important;
 }
 
 .cl-formFieldInput:focus {
@@ -603,6 +622,7 @@ textarea:focus-visible,
   border-color: var(--accent) !important;
   border-width: 2px !important;
   box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+  color: var(--foreground) !important;
 }
 
 .cl-formFieldInput::placeholder {
@@ -623,7 +643,8 @@ input[type="text"][autocomplete="one-time-code"],
 [class*="otpField"] input,
 [class*="codeField"] input,
 div[class*="otp"] input,
-div[class*="code"] input {
+div[class*="code"] input,
+input[data-input-otp="true"] {
   background: var(--surface) !important;
   border: 2px solid var(--border) !important;
   border-radius: var(--radius-md) !important;
@@ -640,6 +661,11 @@ div[class*="code"] input {
   display: inline-block !important;
   margin: 0 0.25rem !important;
   font-weight: normal !important;
+}
+
+/* OTP hidden input caret */
+input[data-input-otp="true"] {
+  caret-color: var(--accent) !important;
 }
 
 input[type="text"][inputmode="numeric"]:hover,

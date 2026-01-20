@@ -294,6 +294,7 @@ onMounted(() => {
 .clerk-wrapper :deep(.cl-formFieldInput) {
   background: var(--surface) !important;
   border: 2px solid var(--border) !important;
+  color: var(--foreground) !important;
   padding: 0.4375rem 0.75rem !important;
   font-size: 0.8125rem !important;
   height: 2.125rem !important;
@@ -381,6 +382,19 @@ onMounted(() => {
   gap: 0.5rem !important;
   justify-content: center !important;
   align-items: center !important;
+}
+
+/* Ensure input text is visible */
+.clerk-wrapper :deep(input[type="text"]),
+.clerk-wrapper :deep(input[type="email"]),
+.clerk-wrapper :deep(input[type="password"]),
+.clerk-wrapper :deep(input[type="tel"]) {
+  color: var(--foreground) !important;
+}
+
+.clerk-wrapper :deep(input::placeholder) {
+  color: var(--foreground-subtle) !important;
+  opacity: 1 !important;
 }
 
 .clerk-wrapper :deep(.cl-formButtonPrimary) {

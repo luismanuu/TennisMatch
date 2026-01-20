@@ -542,6 +542,7 @@ watch([invitationToken, redirectPath], ([token, redirect]) => {
 .clerk-wrapper :deep(.cl-formFieldInput) {
   background: var(--surface) !important;
   border: 2px solid var(--border) !important;
+  color: var(--foreground) !important;
   padding: 0.4375rem 0.75rem !important;
   font-size: 0.8125rem !important;
   height: 2.125rem !important;
@@ -631,15 +632,30 @@ watch([invitationToken, redirectPath], ([token, redirect]) => {
   align-items: center !important;
 }
 
+/* Ensure input text is visible */
+.clerk-wrapper :deep(input[type="text"]),
+.clerk-wrapper :deep(input[type="email"]),
+.clerk-wrapper :deep(input[type="password"]),
+.clerk-wrapper :deep(input[type="tel"]) {
+  color: var(--foreground) !important;
+}
+
+.clerk-wrapper :deep(input::placeholder) {
+  color: var(--foreground-subtle) !important;
+  opacity: 1 !important;
+}
+
 .clerk-wrapper :deep(.cl-formFieldInput:hover) {
   border-color: var(--border-subtle) !important;
   border-width: 2px !important;
+  color: var(--foreground) !important;
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput:focus) {
   border-color: var(--accent) !important;
   border-width: 2px !important;
   box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+  color: var(--foreground) !important;
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]) {
