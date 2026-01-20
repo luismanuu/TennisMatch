@@ -523,6 +523,13 @@ if (process.client) {
   letter-spacing: 0.75rem !important;
   text-align: center !important;
   text-indent: 0 !important;
+  /* Mobile touch improvements */
+  -webkit-appearance: none !important;
+  -moz-appearance: textfield !important;
+  appearance: none !important;
+  touch-action: manipulation !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
 }
 
 /* OTP Code Field Input Container */
@@ -534,9 +541,9 @@ if (process.client) {
   align-items: center !important;
 }
 
-/* OTP Code Field Inputs (visual segments) */
+/* OTP Code Field Inputs - KEEP pointer-events enabled for hidden input */
 .clerk-wrapper :deep(.cl-otpCodeFieldInputs) {
-  pointer-events: none !important;
+  pointer-events: auto !important;
   position: relative !important;
   display: flex !important;
   flex-direction: row !important;
@@ -559,102 +566,109 @@ if (process.client) {
   opacity: 1 !important;
 }
 
-/* Individual OTP input segments (visual only) - Exclude from all form field styles */
+/* ═══════════════════════════════════════════════════════════════════════════
+   OTP CODE INPUT STYLING - Using HEX for mobile compatibility
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Visual OTP digit segments */
 .clerk-wrapper :deep(.cl-otpCodeFieldInput),
-.clerk-wrapper :deep(.cl-input.cl-otpCodeFieldInput) {
-  background: var(--surface) !important;
-  border: 2px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
-  color: var(--foreground) !important;
-  pointer-events: none !important;
-  /* Proper sizing for OTP inputs */
-  min-width: 2.5rem !important;
+.clerk-wrapper :deep(.cl-input.cl-otpCodeFieldInput),
+.clerk-wrapper :deep([data-input-otp-placeholder="true"]) {
+  background: #252535 !important;
+  border: 2px solid #6b6b8a !important;
+  border-radius: 8px !important;
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  height: 3rem !important;
   width: 2.5rem !important;
+  min-width: 2.5rem !important;
   max-width: 2.5rem !important;
-  height: 2.5rem !important;
-  min-height: 2.5rem !important;
-  max-height: 2.5rem !important;
+  color: #f2f2f7 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  transition: border-color 150ms ease !important;
-  /* Override form field padding but keep proper spacing */
   padding: 0 !important;
   margin: 0 !important;
   flex-shrink: 0 !important;
-  flex-grow: 0 !important;
-}
-
-/* OTP hidden input that receives actual input - ensure text is visible */
-.clerk-wrapper :deep(input[data-input-otp="true"]) {
-  color: var(--foreground) !important;
-  caret-color: var(--accent) !important;
-}
-
-/* Verification code input fields (OTP) - Fallback for other OTP implementations */
-.clerk-wrapper :deep(input[type="text"][inputmode="numeric"]:not([data-input-otp])),
-.clerk-wrapper :deep(input[type="tel"]:not([data-input-otp])),
-.clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp])),
-.clerk-wrapper :deep(.cl-otpCodeInput:not([data-input-otp])),
-.clerk-wrapper :deep(.cl-codeInput:not([data-input-otp])) {
-  background: var(--surface) !important;
-  border: 2px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
-  padding: 0.4375rem 0.75rem !important;
-  font-size: 0.8125rem !important;
-  height: 2.125rem !important;
-  width: 2.5rem !important;
-  min-width: 2.5rem !important;
-  max-width: 2.5rem !important;
-  text-align: center !important;
-  color: var(--foreground) !important;
+  pointer-events: none !important;
   transition: border-color 150ms ease, box-shadow 150ms ease !important;
-  box-sizing: border-box !important;
-  display: inline-block !important;
-  margin: 0 0.25rem !important;
-  font-weight: normal !important;
-  pointer-events: auto !important;
-  cursor: text !important;
-  opacity: 1 !important;
-  user-select: auto !important;
-  -webkit-user-select: auto !important;
-  -moz-user-select: auto !important;
-  -ms-user-select: auto !important;
 }
 
-/* OTP container hover state - only apply if not already focused */
-.clerk-wrapper :deep([data-input-otp-container="true"]:hover:not(:focus-within) .cl-otpCodeFieldInput) {
-  border-color: var(--border-subtle) !important;
-  /* Prevent any other hover styles from applying */
-  box-shadow: none !important;
-}
-
-/* OTP container focus state */
+/* OTP segment focus state */
 .clerk-wrapper :deep([data-input-otp-container="true"]:focus-within .cl-otpCodeFieldInput) {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2) !important;
+  background: #2a2a3e !important;
 }
 
-/* Fallback OTP inputs hover/focus */
-.clerk-wrapper :deep(input[type="text"][inputmode="numeric"]:not([data-input-otp]):hover),
-.clerk-wrapper :deep(input[type="tel"]:not([data-input-otp]):hover),
-.clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp]):hover) {
-  border-color: var(--border-subtle) !important;
-  border-width: 2px !important;
-}
-
-.clerk-wrapper :deep(input[type="text"][inputmode="numeric"]:not([data-input-otp]):focus),
-.clerk-wrapper :deep(input[type="tel"]:not([data-input-otp]):focus),
-.clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp]):focus) {
-  border-color: var(--accent) !important;
-  border-width: 2px !important;
-  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
-  outline: none !important;
-}
-
-/* OTP Code Field container */
-.clerk-wrapper :deep(.cl-otpCodeField) {
+/* OTP Container - Must be interactive */
+.clerk-wrapper :deep(.cl-otpCodeFieldInputs),
+.clerk-wrapper :deep(.cl-otpCodeField),
+.clerk-wrapper :deep([data-input-otp-container="true"]) {
+  display: flex !important;
+  gap: 0.5rem !important;
+  justify-content: center !important;
+  align-items: center !important;
   pointer-events: auto !important;
+  position: relative !important;
+  cursor: text !important;
+  user-select: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 0.25rem !important;
+  overflow: visible !important;
+  flex-wrap: nowrap !important;
+}
+
+/* CRITICAL: Override inline pointer-events:none on wrapper divs */
+.clerk-wrapper :deep([data-input-otp-container="true"] > div) {
+  pointer-events: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Hidden input that receives all keystrokes - CRITICAL */
+.clerk-wrapper :deep(input[data-input-otp="true"]) {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  z-index: 20 !important;
+  opacity: 1 !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  color: transparent !important;
+  caret-color: #4ade80 !important;
+  font-size: 1.25rem !important;
+  letter-spacing: 0.75rem !important;
+  box-sizing: border-box !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  cursor: text !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  /* Override Clerk's inline width calculation */
+  clip-path: none !important;
+}
+
+/* OTP Error Message - Add spacing after OTP fields */
+.clerk-wrapper :deep(.cl-otpCodeFieldErrorText),
+.clerk-wrapper :deep(.cl-otpCodeField .cl-otpCodeFieldErrorText),
+.clerk-wrapper :deep(.cl-otpCodeField ~ .cl-otpCodeFieldErrorText),
+.clerk-wrapper :deep(.cl-otpCodeFieldInputContainer ~ .cl-otpCodeFieldErrorText) {
+  margin-top: var(--spacing-3) !important;
+  display: block !important;
+}
+
+/* Also target the container div that holds the error */
+.clerk-wrapper :deep(.cl-otpCodeField > div:last-child) {
+  margin-top: var(--spacing-3) !important;
 }
 
 /* Footer */

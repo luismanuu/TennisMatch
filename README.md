@@ -119,6 +119,21 @@ The application uses Clerk for authentication. Users can:
 - Sign in to their account
 - Access protected routes (automatically redirected to sign-in if not authenticated)
 
+### Development Email Limits
+
+⚠️ **Important**: Clerk limits development instances to 100 emails per month. If you hit this limit:
+
+1. **Enable Test Emails** (Recommended):
+   - Go to Clerk Dashboard → **Configure** → **Email & SMS** → Enable test emails
+   - View test emails at [https://go.clerk.com/test-emails](https://go.clerk.com/test-emails)
+   - See `CLERK_TEST_EMAILS.md` for detailed instructions
+
+2. **Benefits of Test Emails**:
+   - Unlimited testing (no email limit)
+   - View emails in dashboard without sending
+   - Faster development workflow
+   - Better debugging capabilities
+
 ## Database
 
 Supabase is used as the database. The connection is configured and ready for:

@@ -129,6 +129,8 @@ export async function createInvitation(email: string, name: string, invitationTo
     // 1. Email provider is not configured in Clerk Dashboard
     // 2. You're in development mode with email sending disabled
     // 3. Email delivery is delayed or blocked
+    // 4. Development email limit (100/month) has been reached - use test emails instead
+    //    See: https://go.clerk.com/test-emails or CLERK_TEST_EMAILS.md
     const invitation = await client.invitations.createInvitation(invitationPayload)
     
     console.log('Clerk invitation response:', {
