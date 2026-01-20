@@ -5,12 +5,27 @@ import type { CreatePlayerPayload } from '~/types'
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody<CreatePlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, phone_number, category_id } = body
+    const { clerk_id, name, phone_number, city_id, category_id } = body
     
-    if (!clerk_id || !name || !category_id) {
+    if (!clerk_id || !name || !category_id || !city_id) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, name, category_id'
+        statusMessage: 'Missing required fields: clerk_id, name, category_id, city_id'
+      })
+    }
+    
+    // Verify city exists
+    const supabase = getSupabaseAdmin()
+    const { data: city, error: cityError } = await supabase
+      .from('cities')
+      .select('id')
+      .eq('id', city_id)
+      .single()
+    
+    if (cityError || !city) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid city_id'
       })
     }
     
@@ -28,7 +43,6 @@ export default defineEventHandler(async (event) => {
     }
     
     // Verify category exists
-    const supabase = getSupabaseAdmin()
     const { data: category, error: categoryError } = await supabase
       .from('categories')
       .select('id')
@@ -63,12 +77,14 @@ export default defineEventHandler(async (event) => {
         clerk_id,
         name,
         phone_number: phone_number || null,
+        city_id,
         category_id,
         elo: 1000
       })
       .select(`
         *,
-        category:categories(*)
+        category:categories(*),
+        city:cities(*)
       `)
       .single()
     

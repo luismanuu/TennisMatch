@@ -23,6 +23,8 @@ export default defineEventHandler(async (event) => {
         name,
         category_id,
         category:categories(*),
+        city_id,
+        city:cities(*),
         elo,
         created_at
       `)

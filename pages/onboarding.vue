@@ -95,8 +95,72 @@
           </div>
         </div>
 
-        <!-- Step 3: Category Selection -->
+        <!-- Step 3: City Selection -->
         <div v-else-if="currentStep === 3" class="max-w-2xl mx-auto">
+          <div class="text-center mb-8">
+            <h1 class="text-size-1 font-semibold text-foreground mb-4">
+              ¿En qué ciudad juegas?
+            </h1>
+            <p class="text-size-3 font-regular text-foreground-muted">
+              Necesitamos tu ciudad para el sistema de ranking y matchmaking
+            </p>
+          </div>
+
+          <div class="glass-card-elevated p-8">
+            <div v-if="citiesLoading" class="mb-6">
+              <div class="flex items-center justify-center py-8">
+                <Icon name="heroicons:arrow-path" class="w-6 h-6 text-accent animate-spin" />
+                <span class="ml-3 text-size-4 font-regular text-foreground-muted">Cargando ciudades...</span>
+              </div>
+            </div>
+            <div v-else class="mb-6">
+              <label for="city" class="block text-size-4 font-semibold text-foreground mb-2">
+                Ciudad
+              </label>
+              <select
+                id="city"
+                v-model="formData.city_id"
+                required
+                :disabled="citiesLoading"
+                class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="" disabled>Selecciona tu ciudad</option>
+                <option
+                  v-for="city in cities"
+                  :key="city.id"
+                  :value="city.id"
+                >
+                  {{ city.name }}
+                </option>
+              </select>
+              <p class="text-size-4 font-regular text-foreground-muted mt-2">
+                Este campo es obligatorio para participar en el ranking
+              </p>
+            </div>
+
+            <div class="flex gap-4 pt-4">
+              <button
+                @click="currentStep = 4"
+                :disabled="!formData.city_id || citiesLoading"
+                class="btn-primary text-size-3 flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continuar
+                <svg class="w-5 h-5 ml-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+              <button
+                @click="currentStep = 2"
+                class="btn-secondary text-size-3 px-6"
+              >
+                Atrás
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Category Selection -->
+        <div v-else-if="currentStep === 4" class="max-w-2xl mx-auto">
           <div class="text-center mb-8">
             <h1 class="text-size-1 font-semibold text-foreground mb-4">
               Selecciona tu categoría
@@ -159,7 +223,7 @@
                 <span v-else>Completar Perfil</span>
               </button>
               <button
-                @click="currentStep = 2"
+                @click="currentStep = 3"
                 class="btn-secondary text-size-3 px-6"
               >
                 Atrás
@@ -168,8 +232,8 @@
           </div>
         </div>
 
-        <!-- Step 4: Complete -->
-        <div v-else-if="currentStep === 4" class="max-w-2xl mx-auto text-center">
+        <!-- Step 5: Complete -->
+        <div v-else-if="currentStep === 5" class="max-w-2xl mx-auto text-center">
           <div class="w-24 h-24 rounded-2xl bg-green-500/20 flex items-center justify-center mx-auto mb-8">
             <span class="text-5xl">✅</span>
           </div>
@@ -201,6 +265,7 @@ const { isLoaded: authLoaded } = auth
 const { isLoaded: userLoaded, user } = useUser()
 const { loading, createPlayer } = usePlayer()
 const { categories, loading: categoriesLoading, fetchCategories } = useCategories()
+const { cities, loading: citiesLoading, fetchCities } = useCities()
 
 const isLoaded = computed(() => authLoaded.value && userLoaded.value)
 const userId = computed(() => user.value?.id || null)
@@ -209,6 +274,7 @@ const currentStep = ref(1)
 const formData = ref({
   name: '',
   phone_number: '',
+  city_id: '',
   category_id: ''
 })
 
@@ -217,16 +283,17 @@ const selectCategory = (categoryId: string) => {
 }
 
 const handleComplete = async () => {
-  if (!userId.value || !formData.value.category_id) return
+  if (!userId.value || !formData.value.category_id || !formData.value.city_id) return
 
   try {
     await createPlayer(userId.value, {
       name: user.value?.fullName || user.value?.firstName || 'Usuario',
       phone_number: formData.value.phone_number || undefined,
+      city_id: formData.value.city_id,
       category_id: formData.value.category_id
     })
     
-    currentStep.value = 4
+    currentStep.value = 5
   } catch (error) {
     console.error('Error creating profile:', error)
     // Error handling is done by the composable
@@ -240,14 +307,20 @@ const handleSkip = () => {
 onMounted(async () => {
   if (isLoaded.value && user.value) {
     formData.value.name = user.value.fullName || user.value.firstName || ''
-    await fetchCategories()
+    await Promise.all([
+      fetchCategories(),
+      fetchCities()
+    ])
   }
 })
 
 watch([isLoaded, () => user.value], async () => {
   if (isLoaded.value && user.value) {
     formData.value.name = user.value.fullName || user.value.firstName || ''
-    await fetchCategories()
+    await Promise.all([
+      fetchCategories(),
+      fetchCities()
+    ])
   }
 }, { immediate: false })
 </script>

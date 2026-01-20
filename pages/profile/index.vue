@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="min-h-screen bg-background relative overflow-hidden">
     <!-- Ambient Background Effects -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
@@ -20,7 +20,7 @@
             Mi Perfil
           </h1>
           <p class="text-size-3 font-regular text-foreground-muted">
-            Gestiona tu información personal y preferencias
+            Gestiona tu informacion personal y preferencias
           </p>
         </div>
 
@@ -69,15 +69,42 @@
             </NuxtLink>
           </div>
 
+          <!-- Email Management Section -->
+          <div class="mb-8 p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                  <Icon name="heroicons:envelope" class="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <p class="text-size-4 font-semibold text-foreground-muted">Email</p>
+                  <p class="text-size-2 font-semibold text-foreground">
+                    {{ user?.primaryEmailAddress?.emailAddress || 'No disponible' }}
+                  </p>
+                </div>
+              </div>
+              <button
+                @click="openUserProfileModal"
+                class="btn-secondary text-size-3 !py-2 !px-4 group"
+              >
+                <Icon name="heroicons:cog-6-tooth" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                Gestionar Cuenta
+              </button>
+            </div>
+            <p class="text-size-4 font-regular text-foreground-muted">
+              Gestiona tu direccion de correo electronico y configuracion de cuenta
+            </p>
+          </div>
+
           <!-- Profile Info Grid -->
-          <div class="grid md:grid-cols-2 gap-6 mb-8">
+          <div class="grid md:grid-cols-3 gap-6 mb-8">
             <!-- Category -->
             <div class="p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
               <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
                   <Icon name="heroicons:star" class="w-5 h-5 text-accent" />
                 </div>
-                <p class="text-size-4 font-semibold text-foreground-muted">Categoría</p>
+                <p class="text-size-4 font-semibold text-foreground-muted">Categoria</p>
               </div>
               <p class="text-size-2 font-semibold text-foreground mb-2">
                 {{ player.category?.name || 'No seleccionada' }}
@@ -87,13 +114,26 @@
               </p>
             </div>
 
+            <!-- City -->
+            <div class="p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
+                  <Icon name="heroicons:map-pin" class="w-5 h-5 text-accent-secondary" />
+                </div>
+                <p class="text-size-4 font-semibold text-foreground-muted">Ciudad</p>
+              </div>
+              <p class="text-size-2 font-semibold text-foreground">
+                {{ player.city?.name || 'No especificada' }}
+              </p>
+            </div>
+
             <!-- Phone Number -->
             <div class="p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
               <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
                   <Icon name="heroicons:phone" class="w-5 h-5 text-accent-secondary" />
                 </div>
-                <p class="text-size-4 font-semibold text-foreground-muted">Teléfono</p>
+                <p class="text-size-4 font-semibold text-foreground-muted">Telefono</p>
               </div>
               <p class="text-size-2 font-semibold text-foreground">
                 {{ player.phone_number || 'No proporcionado' }}
@@ -108,11 +148,11 @@
                 <div class="w-12 h-12 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center">
                   <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
                 </div>
-                <p class="text-size-3 font-semibold text-foreground">Puntuación ELO</p>
+                <p class="text-size-3 font-semibold text-foreground">Puntuacion ELO</p>
               </div>
               <p class="text-size-1 font-bold text-gradient-static mb-2">{{ player.elo }}</p>
               <p class="text-size-4 font-regular text-foreground-muted">
-                Tu calificación actual en el sistema
+                Tu calificacion actual en el sistema
               </p>
             </div>
           </div>
@@ -121,7 +161,7 @@
           <div class="pt-8 border-t border-border-subtle">
             <div class="flex items-center gap-3 mb-6">
               <Icon name="heroicons:chart-bar" class="w-6 h-6 text-foreground-muted" />
-              <h3 class="text-size-2 font-semibold text-foreground">Estadísticas</h3>
+              <h3 class="text-size-2 font-semibold text-foreground">Estadisticas</h3>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
@@ -172,10 +212,54 @@
         </div>
       </div>
     </div>
+
+    <!-- UserProfile Modal -->
+    <Transition name="modal">
+      <div
+        v-if="showUserProfileModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+      >
+        <!-- Backdrop -->
+        <div 
+          class="absolute inset-0 bg-black/70 backdrop-blur-md" 
+          @click="closeUserProfileModal"
+        ></div>
+        
+        <!-- Modal Content -->
+        <div class="user-profile-modal-container relative z-10">
+          <!-- Close button -->
+          <button
+            @click="closeUserProfileModal"
+            class="absolute top-4 right-4 z-20 p-2 rounded-full bg-surface-elevated border border-border hover:bg-surface hover:border-accent transition-all group"
+            aria-label="Cerrar modal"
+          >
+            <Icon name="heroicons:x-mark" class="w-5 h-5 text-foreground-muted group-hover:text-accent transition-colors" />
+          </button>
+          
+          <ClientOnly>
+            <div class="user-profile-wrapper">
+              <UserProfile 
+                :routing="'hash'"
+              />
+            </div>
+            <template #fallback>
+              <div class="flex flex-col items-center justify-center py-16 px-8 bg-surface rounded-xl">
+                <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mb-6">
+                  <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
+                </div>
+                <p class="text-size-3 font-regular text-foreground-muted">Cargando gestion de cuenta...</p>
+              </div>
+            </template>
+          </ClientOnly>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
+import { UserProfile } from '@clerk/vue'
+
 definePageMeta({
   middleware: 'auth'
 })
@@ -187,6 +271,7 @@ const { player, loading, error, fetchPlayer } = usePlayer()
 
 const isLoaded = computed(() => authLoaded.value && userLoaded.value)
 const userId = computed(() => user.value?.id || null)
+const showUserProfileModal = ref(false)
 
 const loadProfile = async () => {
   if (userId.value) {
@@ -220,5 +305,60 @@ const getPlayerInitials = (name: string) => {
   }
   return name.substring(0, 2).toUpperCase()
 }
+
+const openUserProfileModal = () => {
+  showUserProfileModal.value = true
+}
+
+const closeUserProfileModal = () => {
+  showUserProfileModal.value = false
+}
 </script>
 
+<style scoped>
+/* Modal container with glass-morphism styling */
+.user-profile-modal-container {
+  max-width: 95vw;
+  width: auto;
+  max-height: 90vh;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  box-shadow: 
+    0 25px 50px -12px oklch(0 0 0 / 0.4),
+    0 0 0 1px var(--border);
+}
+
+.user-profile-wrapper {
+  width: 100%;
+  overflow: auto;
+  max-height: 85vh;
+}
+
+/* Modal transitions */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-enter-active .user-profile-modal-container,
+.modal-leave-active .user-profile-modal-container {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .user-profile-modal-container,
+.modal-leave-to .user-profile-modal-container {
+  opacity: 0;
+  transform: scale(0.95) translateY(-10px);
+}
+
+.modal-enter-to .user-profile-modal-container,
+.modal-leave-from .user-profile-modal-container {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+</style>

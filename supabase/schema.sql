@@ -8,12 +8,22 @@ CREATE TABLE IF NOT EXISTS categories (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Cities table for player location and matchmaking
+CREATE TABLE IF NOT EXISTS cities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  "order" INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Players table linked to Clerk users
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clerk_id TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   phone_number TEXT,
+  city_id UUID REFERENCES cities(id),
   category_id UUID REFERENCES categories(id),
   elo INTEGER NOT NULL DEFAULT 1000,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -23,7 +33,9 @@ CREATE TABLE IF NOT EXISTS players (
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_players_clerk_id ON players(clerk_id);
 CREATE INDEX IF NOT EXISTS idx_players_category_id ON players(category_id);
+CREATE INDEX IF NOT EXISTS idx_players_city_id ON players(city_id);
 CREATE INDEX IF NOT EXISTS idx_categories_order ON categories("order");
+CREATE INDEX IF NOT EXISTS idx_cities_order ON cities("order");
 
 -- Enable Row Level Security
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
@@ -33,17 +45,17 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 -- Users can read their own profile
 CREATE POLICY "Users can read their own profile"
   ON players FOR SELECT
-  USING (auth.jwt() ->> 'sub' = clerk_id);
+  USING ((SELECT auth.jwt()) ->> 'sub' = clerk_id);
 
 -- Users can update their own profile
 CREATE POLICY "Users can update their own profile"
   ON players FOR UPDATE
-  USING (auth.jwt() ->> 'sub' = clerk_id);
+  USING ((SELECT auth.jwt()) ->> 'sub' = clerk_id);
 
 -- Users can insert their own profile
 CREATE POLICY "Users can insert their own profile"
   ON players FOR INSERT
-  WITH CHECK (auth.jwt() ->> 'sub' = clerk_id);
+  WITH CHECK ((SELECT auth.jwt()) ->> 'sub' = clerk_id);
 
 -- RLS Policies for categories table
 -- Categories are publicly readable
@@ -53,7 +65,9 @@ CREATE POLICY "Categories are publicly readable"
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
@@ -82,3 +96,9 @@ INSERT INTO categories (name, description, "order") VALUES
   ('7ma Categoría', 'NIVEL PRINCIPIANTE', 7)
 ON CONFLICT (name) DO NOTHING;
 
+-- Seed initial cities
+INSERT INTO cities (name, "order") VALUES
+  ('Guayaquil', 1),
+  ('Samborondón', 2),
+  ('Daule', 3)
+ON CONFLICT (name) DO NOTHING;

@@ -15,16 +15,21 @@
 
     <div class="section-padding relative z-10">
       <div class="container-medium px-6">
-        <!-- Header -->
-        <div class="text-center mb-12 animate-fade-up">
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">Torneos</h1>
-          <p class="text-size-3 font-regular text-foreground-muted">
-            Explora y regístrate en los torneos disponibles
-          </p>
-        </div>
+        <!-- Coming Soon Hero for Players -->
+        <TournamentsComingSoonHero v-if="isPlayerView" />
 
-        <!-- Tabs -->
-        <div class="mb-8 animate-fade-up animate-delay-1">
+        <!-- Full Tournaments UI for Staff (Admin/Organizer) -->
+        <template v-else>
+          <!-- Header -->
+          <div class="text-center mb-12 animate-fade-up">
+            <h1 class="text-size-1 font-semibold text-foreground mb-4">Torneos</h1>
+            <p class="text-size-3 font-regular text-foreground-muted">
+              Explora y regístrate en los torneos disponibles
+            </p>
+          </div>
+
+          <!-- Tabs -->
+          <div class="mb-8 animate-fade-up animate-delay-1">
           <div class="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6">
             <button
               @click="activeTab = 'all'"
@@ -161,14 +166,15 @@
           </div>
         </div>
 
-        <!-- Empty State -->
-        <div v-else class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted mx-auto mb-6 opacity-50" />
-          <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay torneos</h3>
-          <p class="text-size-4 font-regular text-foreground-muted">
-            No se encontraron torneos con los filtros actuales
-          </p>
-        </div>
+          <!-- Empty State -->
+          <div v-else class="glass-card-elevated p-12 text-center animate-fade-in-scale">
+            <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted mx-auto mb-6 opacity-50" />
+            <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay torneos</h3>
+            <p class="text-size-4 font-regular text-foreground-muted">
+              No se encontraron torneos con los filtros actuales
+            </p>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -176,6 +182,14 @@
 
 <script setup lang="ts">
 import type { Tournament } from '~/types'
+
+// Role checks for gating
+const { isAdmin } = useAdmin()
+const { isOrganizer } = useOrganizer()
+
+// Determine if user is staff (admin or organizer)
+const isStaff = computed(() => isAdmin.value || isOrganizer.value)
+const isPlayerView = computed(() => !isStaff.value)
 
 const { tournaments, loading, fetchTournaments, fetchPastTournaments } = useTournaments()
 const { categories, fetchCategories } = useCategories()
@@ -265,12 +279,17 @@ const loadTournaments = async () => {
 }
 
 watch(activeTab, () => {
-  loadTournaments()
+  if (isStaff.value) {
+    loadTournaments()
+  }
 })
 
 onMounted(async () => {
-  await fetchCategories()
-  await loadTournaments()
+  // Only load data if user is staff (admin/organizer)
+  if (isStaff.value) {
+    await fetchCategories()
+    await loadTournaments()
+  }
 })
 </script>
 

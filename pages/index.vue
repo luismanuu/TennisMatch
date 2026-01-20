@@ -145,7 +145,9 @@
                 </div>
                 <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
               </NuxtLink>
+              <!-- View Tournaments (only for staff - admin/organizer) -->
               <NuxtLink 
+                v-if="isStaff"
                 to="/tournaments"
                 class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
@@ -386,6 +388,10 @@ const { isLoaded, isAuthenticated, userId, user, isSignedIn } = useAuthState()
 
 const { player, fetchPlayer } = usePlayer()
 const { isOrganizer } = useOrganizer()
+const { isAdmin } = useAdmin()
+
+// Determine if user is staff (admin or organizer)
+const isStaff = computed(() => isAdmin.value || isOrganizer.value)
 
 // Debug: Log auth state in development
 if (process.dev && process.client) {
@@ -432,12 +438,21 @@ onMounted(async () => {
   }
 })
 
-// Dashboard data
-const dashboardFeatures = [
-  'Seguir tu calificación ELO',
-  'Ver y crear torneos',
-  'Gestionar tu perfil de jugador'
-]
+// Dashboard data - different features for players vs staff
+const dashboardFeatures = computed(() => {
+  if (isStaff.value) {
+    return [
+      'Seguir tu calificación ELO',
+      'Ver y crear torneos',
+      'Gestionar tu perfil de jugador'
+    ]
+  } else {
+    return [
+      'Seguir tu calificación ELO',
+      'Gestionar tu perfil de jugador'
+    ]
+  }
+})
 
 const stats = [
   { value: player.value?.elo || '1,000', label: 'Puntos ELO', icon: 'heroicons:trophy' },

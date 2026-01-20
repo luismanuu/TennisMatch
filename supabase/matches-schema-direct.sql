@@ -102,18 +102,21 @@ CREATE POLICY "Authenticated users can create matches"
     EXISTS (
       SELECT 1 FROM players
       WHERE players.id = matches.player1_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
--- Users can update matches they created
-CREATE POLICY "Users can update matches they created"
+-- Users can update matches they are part of (player1 or player2)
+CREATE POLICY "Users can update matches they are part of"
   ON matches FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM players
-      WHERE players.id = matches.player1_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      WHERE (
+        players.id = matches.player1_id
+        OR players.id = matches.player2_id
+      )
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 

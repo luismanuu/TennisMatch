@@ -59,15 +59,15 @@ DROP POLICY IF EXISTS "Categories are publicly readable" ON "categories";
 
 CREATE POLICY "Users can read their own profile"
   ON "players" FOR SELECT
-  USING (auth.jwt() ->> 'sub' = clerk_id);
+  USING ((SELECT auth.jwt()) ->> 'sub' = clerk_id);
 
 CREATE POLICY "Users can update their own profile"
   ON "players" FOR UPDATE
-  USING (auth.jwt() ->> 'sub' = clerk_id);
+  USING ((SELECT auth.jwt()) ->> 'sub' = clerk_id);
 
 CREATE POLICY "Users can insert their own profile"
   ON "players" FOR INSERT
-  WITH CHECK (auth.jwt() ->> 'sub' = clerk_id);
+  WITH CHECK ((SELECT auth.jwt()) ->> 'sub' = clerk_id);
 
 CREATE POLICY "Categories are publicly readable"
   ON "categories" FOR SELECT
@@ -75,7 +75,9 @@ CREATE POLICY "Categories are publicly readable"
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;

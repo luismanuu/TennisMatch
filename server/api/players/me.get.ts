@@ -23,7 +23,8 @@ export default defineEventHandler(async (event) => {
       .from('players')
       .select(`
         *,
-        category:categories(*)
+        category:categories(*),
+        city:cities(*)
       `)
       .eq('clerk_id', clerkId)
       .eq('status', 'active')

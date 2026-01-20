@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   try {
     const playerId = getRouterParam(event, 'id')
     const body = await readBody<UpdatePlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, phone_number, category_id } = body
+    const { clerk_id, name, phone_number, city_id, category_id } = body
     
     if (!playerId || !clerk_id) {
       throw createError({
@@ -48,6 +48,22 @@ export default defineEventHandler(async (event) => {
       }
     }
     
+    // If city_id is provided, verify it exists
+    if (city_id) {
+      const { data: city, error: cityError } = await supabase
+        .from('cities')
+        .select('id')
+        .eq('id', city_id)
+        .single()
+      
+      if (cityError || !city) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Invalid city_id'
+        })
+      }
+    }
+    
     // Validate phone number format if provided
     if (phone_number !== undefined && phone_number !== null && phone_number.trim() !== '') {
       // Basic phone number validation (allows international formats)
@@ -68,6 +84,15 @@ export default defineEventHandler(async (event) => {
     if (phone_number !== undefined) {
       updatePayload.phone_number = phone_number && phone_number.trim() !== '' ? phone_number.trim() : null
     }
+    if (city_id !== undefined) {
+      if (!city_id) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'City is required for ranking and matchmaking'
+        })
+      }
+      updatePayload.city_id = city_id
+    }
     if (category_id !== undefined) {
       updatePayload.category_id = category_id
     }
@@ -79,7 +104,8 @@ export default defineEventHandler(async (event) => {
       .eq('id', playerId)
       .select(`
         *,
-        category:categories(*)
+        category:categories(*),
+        city:cities(*)
       `)
       .single()
     

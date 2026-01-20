@@ -15,11 +15,21 @@ export interface Category {
   updated_at: string
 }
 
+export interface City {
+  id: string
+  name: string
+  order: number
+  created_at: string
+  updated_at: string
+}
+
 export interface Player {
   id: string
   clerk_id: string
   name: string
   phone_number?: string
+  city_id?: string
+  city?: City
   category_id?: string
   category?: Category
   elo: number
@@ -32,12 +42,14 @@ export interface Player {
 export interface CreatePlayerPayload {
   name: string
   phone_number?: string
+  city_id: string
   category_id: string
 }
 
 export interface UpdatePlayerPayload {
   name?: string
   phone_number?: string
+  city_id?: string
   category_id?: string
 }
 
@@ -353,4 +365,3 @@ export interface CreateMatchMessagePayload {
 export interface ProposeReschedulePayload {
   scheduled_at: string
 }
-

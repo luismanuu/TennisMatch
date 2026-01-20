@@ -168,7 +168,7 @@ CREATE POLICY "Admins and organizers can create tournaments"
     EXISTS (
       SELECT 1 FROM players
       WHERE players.id = tournaments.created_by
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
@@ -182,7 +182,7 @@ CREATE POLICY "Admins and tournament creators can update tournaments"
         players.id = tournaments.created_by
         OR players.id = tournaments.organizer_id
       )
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
@@ -196,41 +196,42 @@ CREATE POLICY "Admins and tournament creators can delete tournaments"
         players.id = tournaments.created_by
         OR players.id = tournaments.organizer_id
       )
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
 -- RLS Policies for tournament_registrations
--- Players can read their own registrations
-CREATE POLICY "Players can read their own registrations"
-  ON tournament_registrations FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM players
-      WHERE players.id = tournament_registrations.player_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
-    )
-  );
-
 -- Tournament registrations are publicly readable (for tournament pages)
 CREATE POLICY "Tournament registrations are publicly readable"
   ON tournament_registrations FOR SELECT
   USING (true);
 
--- Players can register themselves (if tournament allows)
-CREATE POLICY "Players can register for tournaments"
+-- Players can register themselves, or admins/organizers can register any player
+CREATE POLICY "Players and organizers can register for tournaments"
   ON tournament_registrations FOR INSERT
   WITH CHECK (
+    -- Players can register themselves
     EXISTS (
       SELECT 1 FROM players
       WHERE players.id = tournament_registrations.player_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+    OR
+    -- Admins and organizers can register any player
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_registrations.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
--- Admins and organizers can manage registrations
-CREATE POLICY "Admins and organizers can manage registrations"
-  ON tournament_registrations FOR ALL
+-- Admins and organizers can update registrations
+CREATE POLICY "Admins and organizers can update registrations"
+  ON tournament_registrations FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM tournaments
@@ -239,7 +240,22 @@ CREATE POLICY "Admins and organizers can manage registrations"
         OR players.id = tournaments.organizer_id
       )
       WHERE tournaments.id = tournament_registrations.tournament_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can delete registrations
+CREATE POLICY "Admins and organizers can delete registrations"
+  ON tournament_registrations FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_registrations.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
@@ -248,8 +264,24 @@ CREATE POLICY "Tournament groups are publicly readable"
   ON tournament_groups FOR SELECT
   USING (true);
 
-CREATE POLICY "Admins and organizers can manage tournament groups"
-  ON tournament_groups FOR ALL
+-- Admins and organizers can insert tournament groups
+CREATE POLICY "Admins and organizers can insert tournament groups"
+  ON tournament_groups FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_groups.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can update tournament groups
+CREATE POLICY "Admins and organizers can update tournament groups"
+  ON tournament_groups FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM tournaments
@@ -258,7 +290,22 @@ CREATE POLICY "Admins and organizers can manage tournament groups"
         OR players.id = tournaments.organizer_id
       )
       WHERE tournaments.id = tournament_groups.tournament_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can delete tournament groups
+CREATE POLICY "Admins and organizers can delete tournament groups"
+  ON tournament_groups FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_groups.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
@@ -267,8 +314,24 @@ CREATE POLICY "Tournament group players are publicly readable"
   ON tournament_group_players FOR SELECT
   USING (true);
 
-CREATE POLICY "Admins and organizers can manage tournament group players"
-  ON tournament_group_players FOR ALL
+-- Admins and organizers can insert tournament group players
+CREATE POLICY "Admins and organizers can insert tournament group players"
+  ON tournament_group_players FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_group_players.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can update tournament group players
+CREATE POLICY "Admins and organizers can update tournament group players"
+  ON tournament_group_players FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM tournaments
@@ -277,7 +340,22 @@ CREATE POLICY "Admins and organizers can manage tournament group players"
         OR players.id = tournaments.organizer_id
       )
       WHERE tournaments.id = tournament_group_players.tournament_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can delete tournament group players
+CREATE POLICY "Admins and organizers can delete tournament group players"
+  ON tournament_group_players FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_group_players.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
@@ -286,8 +364,24 @@ CREATE POLICY "Tournament matches are publicly readable"
   ON tournament_matches FOR SELECT
   USING (true);
 
-CREATE POLICY "Admins and organizers can manage tournament matches"
-  ON tournament_matches FOR ALL
+-- Admins and organizers can insert tournament matches
+CREATE POLICY "Admins and organizers can insert tournament matches"
+  ON tournament_matches FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_matches.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can update tournament matches
+CREATE POLICY "Admins and organizers can update tournament matches"
+  ON tournament_matches FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM tournaments
@@ -296,7 +390,22 @@ CREATE POLICY "Admins and organizers can manage tournament matches"
         OR players.id = tournaments.organizer_id
       )
       WHERE tournaments.id = tournament_matches.tournament_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can delete tournament matches
+CREATE POLICY "Admins and organizers can delete tournament matches"
+  ON tournament_matches FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_matches.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
@@ -305,8 +414,24 @@ CREATE POLICY "Tournament rounds are publicly readable"
   ON tournament_rounds FOR SELECT
   USING (true);
 
-CREATE POLICY "Admins and organizers can manage tournament rounds"
-  ON tournament_rounds FOR ALL
+-- Admins and organizers can insert tournament rounds
+CREATE POLICY "Admins and organizers can insert tournament rounds"
+  ON tournament_rounds FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_rounds.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can update tournament rounds
+CREATE POLICY "Admins and organizers can update tournament rounds"
+  ON tournament_rounds FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM tournaments
@@ -315,7 +440,22 @@ CREATE POLICY "Admins and organizers can manage tournament rounds"
         OR players.id = tournaments.organizer_id
       )
       WHERE tournaments.id = tournament_rounds.tournament_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can delete tournament rounds
+CREATE POLICY "Admins and organizers can delete tournament rounds"
+  ON tournament_rounds FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_rounds.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
@@ -324,8 +464,24 @@ CREATE POLICY "Tournament standings are publicly readable"
   ON tournament_standings FOR SELECT
   USING (true);
 
-CREATE POLICY "Admins and organizers can manage tournament standings"
-  ON tournament_standings FOR ALL
+-- Admins and organizers can insert tournament standings
+CREATE POLICY "Admins and organizers can insert tournament standings"
+  ON tournament_standings FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_standings.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can update tournament standings
+CREATE POLICY "Admins and organizers can update tournament standings"
+  ON tournament_standings FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM tournaments
@@ -334,7 +490,22 @@ CREATE POLICY "Admins and organizers can manage tournament standings"
         OR players.id = tournaments.organizer_id
       )
       WHERE tournaments.id = tournament_standings.tournament_id
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
+    )
+  );
+
+-- Admins and organizers can delete tournament standings
+CREATE POLICY "Admins and organizers can delete tournament standings"
+  ON tournament_standings FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM tournaments
+      JOIN players ON (
+        players.id = tournaments.created_by
+        OR players.id = tournaments.organizer_id
+      )
+      WHERE tournaments.id = tournament_standings.tournament_id
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 

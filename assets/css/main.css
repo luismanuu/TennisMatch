@@ -1068,3 +1068,759 @@ span:has(+ a[href*="clerk"]),
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--border);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLERK USERPROFILE COMPONENT STYLING
+   Complete dark theme override for account management
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE ROOT CONTAINER
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Only the outer container gets border - remove from nested elements */
+.cl-userProfile-root {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* Inner containers - no border */
+.cl-userProfile-root .cl-rootBox,
+.cl-userProfile-root .cl-card,
+.cl-userProfile-root .cl-cardBox {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Main profile container */
+.cl-profilePage-root,
+.cl-userProfile-root .cl-main {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE NAVBAR (Sidebar Navigation)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-navbar,
+.cl-navbarButtons,
+.cl-userProfile-root .cl-navbar {
+  background: var(--background) !important;
+  border-right: 1px solid var(--border-subtle) !important;
+  padding: var(--spacing-4) !important;
+}
+
+/* Navbar title */
+.cl-navbarTitle,
+.cl-userProfile-root .cl-headerTitle {
+  color: var(--foreground) !important;
+  font-size: var(--font-size-3) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  margin-bottom: var(--spacing-2) !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+.cl-navbarSubtitle,
+.cl-userProfile-root .cl-headerSubtitle {
+  color: var(--foreground-muted) !important;
+  font-size: var(--font-size-4) !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* Navigation buttons */
+.cl-navbarButton,
+.cl-userProfile-root button[class*="navbarButton"] {
+  background: transparent !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground-muted) !important;
+  font-size: var(--font-size-4) !important;
+  font-weight: var(--font-weight-regular) !important;
+  padding: var(--spacing-3) var(--spacing-4) !important;
+  margin-bottom: var(--spacing-1) !important;
+  transition: all 200ms ease !important;
+  width: 100% !important;
+  text-align: left !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--spacing-3) !important;
+}
+
+.cl-navbarButton:hover,
+.cl-userProfile-root button[class*="navbarButton"]:hover {
+  background: var(--surface) !important;
+  color: var(--foreground) !important;
+}
+
+/* Active navigation button */
+.cl-navbarButton[data-active="true"],
+.cl-navbarButton--active,
+.cl-userProfile-root button[class*="navbarButton"][data-active="true"] {
+  background: var(--accent-subtle) !important;
+  color: var(--accent) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  border-left: 3px solid var(--accent) !important;
+}
+
+/* Navbar button icons */
+.cl-navbarButtonIcon,
+.cl-navbarButton svg {
+  color: inherit !important;
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE PAGE CONTENT
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-pageScrollBox,
+.cl-page,
+.cl-userProfile-root .cl-page {
+  background: transparent !important;
+  padding: var(--spacing-6) !important;
+}
+
+/* Page header */
+.cl-headerTitle,
+.cl-page .cl-headerTitle {
+  color: var(--foreground) !important;
+  font-size: var(--font-size-2) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  margin-bottom: var(--spacing-2) !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+.cl-headerSubtitle,
+.cl-page .cl-headerSubtitle {
+  color: var(--foreground-muted) !important;
+  font-size: var(--font-size-4) !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE SECTIONS (Profile cards/sections)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Profile sections - clean look without nested borders */
+.cl-profileSection,
+.cl-userProfile-root [class*="profileSection"]:not([class*="profileSectionContent"]):not([class*="profileSectionTitle"]):not([class*="profileSectionPrimaryButton"]):not([class*="profileSectionItem"]) {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin-bottom: var(--spacing-4) !important;
+}
+
+/* Profile section content areas - subtle dividers only */
+.cl-profileSectionContent,
+.cl-userProfile-root [class*="profileSectionContent"] {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  border-radius: 0 !important;
+  padding: var(--spacing-4) 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.cl-profileSectionContent:last-child,
+.cl-userProfile-root [class*="profileSectionContent"]:last-child {
+  border-bottom: none !important;
+}
+
+/* Section title */
+.cl-profileSectionTitle,
+.cl-userProfile-root [class*="profileSectionTitle"] {
+  color: var(--foreground) !important;
+  font-size: var(--font-size-3) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  margin-bottom: var(--spacing-3) !important;
+}
+
+/* Section subtitle */
+.cl-profileSectionSubtitle {
+  color: var(--foreground-muted) !important;
+  font-size: var(--font-size-4) !important;
+}
+
+/* Section primary button (action buttons within sections) */
+.cl-profileSectionPrimaryButton,
+.cl-userProfile-root [class*="profileSectionPrimaryButton"] {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground) !important;
+  font-size: var(--font-size-4) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  padding: var(--spacing-2) var(--spacing-4) !important;
+  transition: all 200ms ease !important;
+  cursor: pointer !important;
+}
+
+.cl-profileSectionPrimaryButton:hover,
+.cl-userProfile-root [class*="profileSectionPrimaryButton"]:hover {
+  background: var(--surface) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE AVATAR & USER INFO
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-userButtonAvatarBox,
+.cl-avatarBox,
+.cl-userProfile-root [class*="avatarBox"] {
+  border: 2px solid var(--accent) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.cl-userButtonAvatarImage,
+.cl-avatarImage {
+  border-radius: var(--radius-md) !important;
+}
+
+/* User info text */
+.cl-userPreviewMainIdentifier,
+.cl-userProfile-root [class*="userPreviewMainIdentifier"] {
+  color: var(--foreground) !important;
+  font-size: var(--font-size-3) !important;
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+.cl-userPreviewSecondaryIdentifier,
+.cl-userProfile-root [class*="userPreviewSecondaryIdentifier"] {
+  color: var(--foreground-muted) !important;
+  font-size: var(--font-size-4) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE ACTION BUTTONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Primary action button */
+.cl-userProfile-root .cl-formButtonPrimary,
+.cl-userProfile-root button[class*="formButtonPrimary"] {
+  background: var(--foreground) !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--background) !important;
+  font-size: var(--font-size-4) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  padding: var(--spacing-3) var(--spacing-5) !important;
+  transition: all 200ms ease !important;
+}
+
+.cl-userProfile-root .cl-formButtonPrimary:hover,
+.cl-userProfile-root button[class*="formButtonPrimary"]:hover {
+  background: var(--accent) !important;
+  color: var(--background) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px -4px var(--glow-accent) !important;
+}
+
+/* Secondary/Reset button */
+.cl-userProfile-root .cl-formButtonReset,
+.cl-userProfile-root button[class*="formButtonReset"] {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground-muted) !important;
+  font-size: var(--font-size-4) !important;
+  padding: var(--spacing-2) var(--spacing-4) !important;
+  transition: all 200ms ease !important;
+}
+
+.cl-userProfile-root .cl-formButtonReset:hover,
+.cl-userProfile-root button[class*="formButtonReset"]:hover {
+  background: var(--surface) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--foreground) !important;
+}
+
+/* Menu action buttons */
+.cl-menuButton,
+.cl-userProfile-root [class*="menuButton"],
+.cl-actionCard {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground) !important;
+  padding: var(--spacing-3) var(--spacing-4) !important;
+  transition: all 200ms ease !important;
+}
+
+.cl-menuButton:hover,
+.cl-userProfile-root [class*="menuButton"]:hover,
+.cl-actionCard:hover {
+  background: var(--surface-elevated) !important;
+  border-color: var(--accent) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE FORM FIELDS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-userProfile-root .cl-formFieldInput {
+  background: var(--surface) !important;
+  border: 2px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground) !important;
+  font-size: var(--font-size-4) !important;
+  padding: var(--spacing-3) var(--spacing-4) !important;
+  transition: border-color 200ms ease, box-shadow 200ms ease !important;
+}
+
+.cl-userProfile-root .cl-formFieldInput:hover {
+  border-color: var(--border-subtle) !important;
+}
+
+.cl-userProfile-root .cl-formFieldInput:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-subtle) !important;
+}
+
+.cl-userProfile-root .cl-formFieldLabel {
+  color: var(--foreground) !important;
+  font-size: var(--font-size-4) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  margin-bottom: var(--spacing-2) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE BADGES & TAGS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-badge,
+.cl-userProfile-root [class*="badge"] {
+  background: var(--accent-subtle) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: 9999px !important;
+  color: var(--accent) !important;
+  font-size: 0.6875rem !important;
+  font-weight: var(--font-weight-semibold) !important;
+  padding: var(--spacing-1) var(--spacing-3) !important;
+}
+
+/* Primary badge (e.g., "Primario" for email) */
+.cl-badge--primary,
+.cl-userProfile-root [class*="badge"][class*="primary"] {
+  background: var(--accent-subtle) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE ACCORDION & COLLAPSIBLE SECTIONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-accordionTriggerButton,
+.cl-userProfile-root [class*="accordionTrigger"] {
+  background: transparent !important;
+  border: none !important;
+  color: var(--foreground) !important;
+  font-size: var(--font-size-3) !important;
+  font-weight: var(--font-weight-semibold) !important;
+  padding: var(--spacing-3) 0 !important;
+  width: 100% !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.cl-accordionTriggerButton:hover,
+.cl-userProfile-root [class*="accordionTrigger"]:hover {
+  color: var(--accent) !important;
+}
+
+.cl-accordionContent {
+  background: transparent !important;
+  padding: var(--spacing-4) 0 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE MENU & DROPDOWN
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-menuList,
+.cl-userProfile-root [class*="menuList"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+  padding: var(--spacing-2) !important;
+}
+
+.cl-menuItem,
+.cl-userProfile-root [class*="menuItem"] {
+  background: transparent !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--foreground) !important;
+  font-size: var(--font-size-4) !important;
+  padding: var(--spacing-3) var(--spacing-4) !important;
+  transition: all 200ms ease !important;
+}
+
+.cl-menuItem:hover,
+.cl-userProfile-root [class*="menuItem"]:hover {
+  background: var(--surface-elevated) !important;
+  color: var(--accent) !important;
+}
+
+/* Destructive menu item (e.g., remove, delete) */
+.cl-menuItem--danger,
+.cl-userProfile-root [class*="menuItem"][class*="danger"] {
+  color: oklch(0.70 0.18 25) !important;
+}
+
+.cl-menuItem--danger:hover,
+.cl-userProfile-root [class*="menuItem"][class*="danger"]:hover {
+  background: oklch(0.40 0.12 25 / 0.15) !important;
+  color: oklch(0.75 0.18 25) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE MODAL/DIALOG (within UserProfile)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-modalBackdrop,
+.cl-userProfile-root [class*="modalBackdrop"] {
+  background: oklch(0 0 0 / 0.6) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.cl-modalContent,
+.cl-userProfile-root [class*="modalContent"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-xl) !important;
+  padding: var(--spacing-6) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE FOOTER
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-userProfile-root .cl-footerPages,
+.cl-userProfile-root .cl-footer__pages {
+  background: transparent !important;
+  border-top: 1px solid var(--border-subtle) !important;
+  padding-top: var(--spacing-4) !important;
+  margin-top: var(--spacing-4) !important;
+}
+
+.cl-userProfile-root .cl-footerPagesLink,
+.cl-userProfile-root .cl-footer a {
+  color: var(--foreground-subtle) !important;
+  font-size: 0.6875rem !important;
+}
+
+.cl-userProfile-root .cl-footerPagesLink:hover,
+.cl-userProfile-root .cl-footer a:hover {
+  color: var(--foreground-muted) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE SCROLLBAR
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-userProfile-root ::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cl-userProfile-root ::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+.cl-userProfile-root ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.cl-userProfile-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-subtle);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE TEXT & TYPOGRAPHY
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Headings - always visible */
+.cl-userProfile-root h1,
+.cl-userProfile-root h2,
+.cl-userProfile-root h3,
+.cl-userProfile-root h4 {
+  color: var(--foreground) !important;
+}
+
+/* Section labels (Perfil, Correos electrónicos, etc.) - these are the labels on the left */
+.cl-userProfile-root .cl-profileSectionHeader,
+.cl-userProfile-root [class*="profileSectionHeader"],
+.cl-userProfile-root .cl-profileSectionTitle,
+.cl-userProfile-root [class*="profileSectionTitle"] {
+  color: var(--foreground) !important;
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+/* Main content text - good readability */
+.cl-userProfile-root .cl-userPreviewMainIdentifier,
+.cl-userProfile-root [class*="userPreviewMainIdentifier"],
+.cl-userProfile-root .cl-userPreviewTextContainer,
+.cl-userProfile-root [class*="userPreviewTextContainer"] {
+  color: var(--foreground) !important;
+}
+
+/* Secondary/muted text */
+.cl-userProfile-root .cl-userPreviewSecondaryIdentifier,
+.cl-userProfile-root [class*="userPreviewSecondaryIdentifier"],
+.cl-userProfile-root .cl-profileSectionSubtitle,
+.cl-userProfile-root [class*="profileSectionSubtitle"] {
+  color: var(--foreground-muted) !important;
+}
+
+/* Email and identifier text */
+.cl-userProfile-root [class*="identifier"],
+.cl-userProfile-root [class*="emailAddress"] {
+  color: var(--foreground) !important;
+}
+
+/* Links within UserProfile */
+.cl-userProfile-root a:not(.cl-footerPagesLink) {
+  color: var(--accent) !important;
+  text-decoration: none !important;
+  transition: color 200ms ease !important;
+}
+
+.cl-userProfile-root a:not(.cl-footerPagesLink):hover {
+  color: oklch(0.75 0.22 150) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE ICONS
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cl-userProfile-root svg {
+  color: var(--foreground-muted) !important;
+}
+
+.cl-userProfile-root button:hover svg,
+.cl-userProfile-root a:hover svg {
+  color: var(--accent) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE HEADER OVERRIDES (Show headers for UserProfile)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Re-enable headers specifically for UserProfile component */
+.cl-userProfile-root .cl-header,
+.cl-userProfile-root .cl-headerTitle,
+.cl-userProfile-root .cl-headerSubtitle {
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   USERPROFILE ADDITIONAL OVERRIDES - Deep content sections
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Page scroll box and content area - no borders, single scroll only */
+.cl-userProfile-root .cl-pageScrollBox,
+.cl-userProfile-root .cl-scrollBox,
+.cl-userProfile-root [class*="pageScrollBox"],
+.cl-userProfile-root [class*="scrollBox"] {
+  background: var(--surface) !important;
+  color: var(--foreground) !important;
+  border: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* When in modal - single scroll only (modal container handles scrolling) */
+.user-profile-modal-container .cl-userProfile-root,
+.user-profile-modal-container .cl-userProfile-root .cl-pageScrollBox,
+.user-profile-modal-container .cl-userProfile-root .cl-scrollBox,
+.user-profile-modal-container .cl-userProfile-root [class*="pageScrollBox"],
+.user-profile-modal-container .cl-userProfile-root [class*="scrollBox"],
+.user-profile-modal-container .cl-userProfile-root [class*="rootBox"],
+.user-profile-modal-container .cl-userProfile-root [class*="cardBox"] {
+  max-height: none !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
+/* Ensure page content text is visible - no borders */
+.cl-userProfile-root .cl-page,
+.cl-userProfile-root [class*="page"] {
+  color: var(--foreground) !important;
+  border: none !important;
+}
+
+/* Section label text (on the left of content) */
+.cl-userProfile-root .cl-profileSectionTitleText,
+.cl-userProfile-root [class*="profileSectionTitleText"],
+.cl-userProfile-root .cl-text,
+.cl-userProfile-root span[class*="cl-text"] {
+  color: var(--foreground) !important;
+}
+
+/* Remove borders from all inner containers */
+.cl-userProfile-root > div,
+.cl-userProfile-root [class*="main"],
+.cl-userProfile-root [class*="content"],
+.cl-userProfile-root [class*="box"]:not(.cl-userProfile-root) {
+  border: none !important;
+}
+
+/* Profile section items (rows) */
+.cl-userProfile-root .cl-profileSection__profile,
+.cl-userProfile-root .cl-profileSection__emailAddresses,
+.cl-userProfile-root .cl-profileSection__connectedAccounts,
+.cl-userProfile-root .cl-profileSection__security,
+.cl-userProfile-root [class*="profileSection__"] {
+  background: var(--surface-elevated) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-lg) !important;
+  margin-bottom: var(--spacing-4) !important;
+}
+
+/* Section item rows (email rows, account rows, etc.) - clean flat design */
+.cl-userProfile-root .cl-profileSectionItem,
+.cl-userProfile-root [class*="profileSectionItem"] {
+  background: transparent !important;
+  border: none !important;
+  padding: var(--spacing-3) 0 !important;
+}
+
+/* Section item content text */
+.cl-userProfile-root .cl-profileSectionItemList,
+.cl-userProfile-root [class*="profileSectionItemList"] {
+  color: var(--foreground) !important;
+  border: none !important;
+}
+
+/* User preview in profile section */
+.cl-userProfile-root .cl-userPreview,
+.cl-userProfile-root [class*="userPreview"] {
+  color: var(--foreground) !important;
+  border: none !important;
+}
+
+.cl-userProfile-root .cl-userPreview__primaryIdentifier,
+.cl-userProfile-root [class*="userPreview__primaryIdentifier"] {
+  color: var(--foreground) !important;
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+/* Internal card backgrounds */
+.cl-userProfile-root [class*="internal"],
+.cl-userProfile-root [class^="cl-internal"] {
+  background: transparent !important;
+}
+
+/* Action cards (Add email, Connect account, etc.) */
+.cl-userProfile-root .cl-profileSectionContent__emailAddresses,
+.cl-userProfile-root .cl-profileSectionContent__connectedAccounts,
+.cl-userProfile-root [class*="profileSectionContent__"] {
+  background: transparent !important;
+}
+
+/* Button items in sections (Add email button, Connect account button) */
+.cl-userProfile-root .cl-profileSectionContent button,
+.cl-userProfile-root [class*="profileSectionContent"] button:not(.cl-formButtonPrimary),
+.cl-userProfile-root button[class*="cl-button"],
+.cl-userProfile-root [class*="buttonArrow"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--spacing-3) var(--spacing-4) !important;
+  transition: all 200ms ease !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.cl-userProfile-root .cl-profileSectionContent button:hover,
+.cl-userProfile-root [class*="profileSectionContent"] button:not(.cl-formButtonPrimary):hover,
+.cl-userProfile-root button[class*="cl-button"]:hover {
+  background: var(--surface-elevated) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* Ensure all buttons are clickable */
+.cl-userProfile-root button {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Arrow/chevron icons in buttons */
+.cl-userProfile-root button svg,
+.cl-userProfile-root button img {
+  opacity: 0.7 !important;
+}
+
+.cl-userProfile-root button:hover svg,
+.cl-userProfile-root button:hover img {
+  opacity: 1 !important;
+}
+
+/* Item action menu trigger (three dots) */
+.cl-userProfile-root .cl-menuButton__member,
+.cl-userProfile-root [class*="menuButton"] {
+  background: transparent !important;
+  border: none !important;
+  padding: var(--spacing-2) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.cl-userProfile-root .cl-menuButton__member:hover,
+.cl-userProfile-root [class*="menuButton"]:hover {
+  background: var(--surface-elevated) !important;
+}
+
+/* Security page specific */
+.cl-userProfile-root .cl-profileSection__activeSessions,
+.cl-userProfile-root .cl-profileSection__mfa,
+.cl-userProfile-root .cl-profileSection__danger {
+  background: var(--surface-elevated) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+/* Danger zone styling */
+.cl-userProfile-root .cl-profileSection__danger {
+  border-color: oklch(0.50 0.15 25 / 0.3) !important;
+}
+
+.cl-userProfile-root .cl-profileSection__danger .cl-profileSectionTitle {
+  color: oklch(0.70 0.18 25) !important;
+}
+
+/* Active sessions card */
+.cl-userProfile-root .cl-activeDeviceListItem,
+.cl-userProfile-root [class*="activeDeviceListItem"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--spacing-4) !important;
+  margin-bottom: var(--spacing-3) !important;
+}
+
+.cl-userProfile-root .cl-activeDeviceListItem:hover,
+.cl-userProfile-root [class*="activeDeviceListItem"]:hover {
+  border-color: var(--border) !important;
+}

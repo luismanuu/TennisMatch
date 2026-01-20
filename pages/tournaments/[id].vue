@@ -371,6 +371,21 @@ import type { Tournament } from '~/types'
 const route = useRoute()
 const tournamentId = route.params.id as string
 
+// Role checks for gating
+const { isAdmin } = useAdmin()
+const { isOrganizer } = useOrganizer()
+
+// Determine if user is staff (admin or organizer)
+const isStaff = computed(() => isAdmin.value || isOrganizer.value)
+const isPlayerView = computed(() => !isStaff.value)
+
+// Redirect players to tournaments index (coming soon page)
+watchEffect(() => {
+  if (isPlayerView.value) {
+    navigateTo('/tournaments')
+  }
+})
+
 const { currentTournament, loading, getTournament, registerForTournament } = useTournaments()
 const { userId } = useAuthState()
 const { player, fetchPlayer } = usePlayer()
@@ -590,10 +605,14 @@ const loadPlayerProfile = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([
-    loadTournament(),
-    loadPlayerProfile()
-  ])
+  // Only load data if user is staff (admin/organizer)
+  // Players will be redirected by watchEffect
+  if (isStaff.value) {
+    await Promise.all([
+      loadTournament(),
+      loadPlayerProfile()
+    ])
+  }
 })
 </script>
 

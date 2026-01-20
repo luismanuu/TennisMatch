@@ -70,6 +70,34 @@
               </p>
             </div>
 
+            <!-- City Field -->
+            <div>
+              <label for="city" class="flex items-center gap-2 text-size-4 font-semibold text-foreground mb-3">
+                <Icon name="heroicons:map-pin" class="w-5 h-5 text-foreground-muted" />
+                Ciudad
+              </label>
+              <select
+                id="city"
+                v-model="formData.city_id"
+                required
+                :disabled="citiesLoading"
+                class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="" disabled>Selecciona tu ciudad</option>
+                <option
+                  v-for="city in cities"
+                  :key="city.id"
+                  :value="city.id"
+                >
+                  {{ city.name }}
+                </option>
+              </select>
+              <p class="text-size-4 font-regular text-foreground-muted mt-2 flex items-center gap-2">
+                <Icon name="heroicons:information-circle" class="w-4 h-4" />
+                Requerido para el sistema de ranking y matchmaking
+              </p>
+            </div>
+
             <!-- Category Field -->
             <div>
               <label for="category" class="flex items-center gap-2 text-size-4 font-semibold text-foreground mb-3">
@@ -134,7 +162,7 @@
             <div class="flex gap-4 pt-4">
               <button
                 type="submit"
-                :disabled="loading || categoriesLoading"
+                :disabled="loading || categoriesLoading || citiesLoading"
                 class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Icon v-if="loading" name="heroicons:arrow-path" class="w-5 h-5 mr-2 animate-spin" />
@@ -168,6 +196,7 @@ const { isLoaded: authLoaded } = auth
 const { isLoaded: userLoaded, user } = useUser()
 const { player, loading, error, fetchPlayer, updatePlayer, createPlayer } = usePlayer()
 const { categories, loading: categoriesLoading, fetchCategories } = useCategories()
+const { cities, loading: citiesLoading, fetchCities } = useCities()
 
 const isLoaded = computed(() => authLoaded.value && userLoaded.value)
 const userId = computed(() => user.value?.id || null)
@@ -175,6 +204,7 @@ const userId = computed(() => user.value?.id || null)
 const formData = ref({
   name: '',
   phone_number: '',
+  city_id: '',
   category_id: ''
 })
 
@@ -188,8 +218,11 @@ const selectedCategory = computed(() => {
 const loadData = async () => {
   if (!isLoaded.value || !userId.value) return
 
-  // Load categories
-  await fetchCategories()
+  // Load categories and cities
+  await Promise.all([
+    fetchCategories(),
+    fetchCities()
+  ])
 
   // Load player profile
   await fetchPlayer(userId.value)
@@ -199,6 +232,7 @@ const loadData = async () => {
     formData.value = {
       name: player.value.name,
       phone_number: player.value.phone_number || '',
+      city_id: player.value.city_id || '',
       category_id: player.value.category_id || ''
     }
   } else if (user.value) {
@@ -206,6 +240,7 @@ const loadData = async () => {
     formData.value = {
       name: user.value.fullName || '',
       phone_number: '',
+      city_id: '',
       category_id: ''
     }
   }
@@ -223,6 +258,7 @@ const handleSubmit = async () => {
       await updatePlayer(player.value.id, userId.value, {
         name: formData.value.name,
         phone_number: formData.value.phone_number || undefined,
+        city_id: formData.value.city_id,
         category_id: formData.value.category_id
       })
     } else {
@@ -230,6 +266,7 @@ const handleSubmit = async () => {
       await createPlayer(userId.value, {
         name: formData.value.name,
         phone_number: formData.value.phone_number || undefined,
+        city_id: formData.value.city_id,
         category_id: formData.value.category_id
       })
     }

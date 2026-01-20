@@ -58,12 +58,12 @@ CREATE POLICY "Players can read messages for their matches"
       SELECT 1 FROM matches
       WHERE matches.id = match_messages.match_id
       AND (
-        matches.player1_id = (SELECT id FROM players WHERE clerk_id = (auth.jwt() ->> 'sub'))
-        OR matches.player2_id = (SELECT id FROM players WHERE clerk_id = (auth.jwt() ->> 'sub'))
+        matches.player1_id = (SELECT id FROM players WHERE clerk_id = ((SELECT auth.jwt()) ->> 'sub'))
+        OR matches.player2_id = (SELECT id FROM players WHERE clerk_id = ((SELECT auth.jwt()) ->> 'sub'))
         OR EXISTS (
           SELECT 1 FROM pending_players
           WHERE pending_players.id = matches.pending_player2_id
-          AND pending_players.invited_by_player_id = (SELECT id FROM players WHERE clerk_id = (auth.jwt() ->> 'sub'))
+          AND pending_players.invited_by_player_id = (SELECT id FROM players WHERE clerk_id = ((SELECT auth.jwt()) ->> 'sub'))
         )
       )
     )
@@ -77,16 +77,16 @@ CREATE POLICY "Players can create messages for their matches"
       SELECT 1 FROM matches
       WHERE matches.id = match_messages.match_id
       AND (
-        matches.player1_id = (SELECT id FROM players WHERE clerk_id = (auth.jwt() ->> 'sub'))
-        OR matches.player2_id = (SELECT id FROM players WHERE clerk_id = (auth.jwt() ->> 'sub'))
+        matches.player1_id = (SELECT id FROM players WHERE clerk_id = ((SELECT auth.jwt()) ->> 'sub'))
+        OR matches.player2_id = (SELECT id FROM players WHERE clerk_id = ((SELECT auth.jwt()) ->> 'sub'))
         OR EXISTS (
           SELECT 1 FROM pending_players
           WHERE pending_players.id = matches.pending_player2_id
-          AND pending_players.invited_by_player_id = (SELECT id FROM players WHERE clerk_id = (auth.jwt() ->> 'sub'))
+          AND pending_players.invited_by_player_id = (SELECT id FROM players WHERE clerk_id = ((SELECT auth.jwt()) ->> 'sub'))
         )
       )
     )
-    AND match_messages.player_id = (SELECT id FROM players WHERE clerk_id = (auth.jwt() ->> 'sub'))
+    AND match_messages.player_id = (SELECT id FROM players WHERE clerk_id = ((SELECT auth.jwt()) ->> 'sub'))
   );
 
 -- Update RLS policy for matches to allow both players to update
@@ -102,7 +102,7 @@ CREATE POLICY "Users can update matches they are part of"
         players.id = matches.player1_id
         OR players.id = matches.player2_id
       )
-      AND players.clerk_id = (auth.jwt() ->> 'sub')
+      AND players.clerk_id = ((SELECT auth.jwt()) ->> 'sub')
     )
   );
 
