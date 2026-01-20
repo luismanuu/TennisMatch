@@ -131,11 +131,12 @@
         </div>
 
         <!-- Matches List -->
-        <div v-if="!loading && !error && filteredMatches.length > 0" class="space-y-4">
+        <div v-if="!loading && !error && paginatedFilteredMatches.length > 0" class="space-y-4">
           <div 
-            v-for="(match, index) in filteredMatches" 
+            v-for="(match, index) in paginatedFilteredMatches" 
             :key="match.id"
             class="glass-card-elevated p-6 md:p-8 hover-lift cursor-pointer animate-fade-up"
+            :class="getMatchCardClass(match)"
             :style="{ animationDelay: `${(index + 2) * 0.1}s` }"
             @click="navigateTo(`/matches/${match.id}`)"
           >
@@ -145,8 +146,8 @@
                 <div class="flex items-center gap-6 mb-4">
                   <!-- Player 1 -->
                   <div class="flex items-center gap-3">
-                    <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center flex-shrink-0">
-                      <span class="text-xl font-bold text-accent">
+                    <div :class="['w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player1_id)]">
+                      <span class="text-xl font-bold">
                         {{ getPlayerInitials(match.player1?.name || 'Jugador 1') }}
                       </span>
                     </div>
@@ -186,8 +187,8 @@
 
                   <!-- Player 2 -->
                   <div class="flex items-center gap-3">
-                    <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-accent-secondary/20 to-accent-secondary/5 border-2 border-accent-secondary/30 flex items-center justify-center flex-shrink-0">
-                      <span class="text-xl font-bold text-accent-secondary">
+                    <div :class="['w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player2_id)]">
+                      <span class="text-xl font-bold">
                         {{ getPlayerInitials(match.player2?.name || match.pending_player2?.name || 'Jugador 2') }}
                       </span>
                     </div>
@@ -292,8 +293,34 @@
           </div>
         </div>
 
+        <!-- Pagination -->
+        <div v-if="!loading && !error && totalFilteredPages > 1" class="flex items-center justify-center gap-4 mt-8 animate-fade-up">
+          <button
+            @click="currentPage = Math.max(1, currentPage - 1); if (!statusFilter) loadMatches(currentPage)"
+            :disabled="currentPage === 1"
+            class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+          >
+            <Icon name="heroicons:chevron-left" class="w-4 h-4" />
+            Anterior
+          </button>
+          <div class="flex items-center gap-2">
+            <span class="text-size-4 text-foreground-muted">Página</span>
+            <span class="text-size-3 font-semibold text-foreground">{{ currentPage }}</span>
+            <span class="text-size-4 text-foreground-muted">de</span>
+            <span class="text-size-3 font-semibold text-foreground">{{ totalFilteredPages }}</span>
+          </div>
+          <button
+            @click="currentPage = Math.min(totalFilteredPages, currentPage + 1); if (!statusFilter) loadMatches(currentPage)"
+            :disabled="currentPage >= totalFilteredPages"
+            class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+          >
+            Siguiente
+            <Icon name="heroicons:chevron-right" class="w-4 h-4" />
+          </button>
+        </div>
+
         <!-- Empty State -->
-        <div v-if="!loading && !error && filteredMatches.length === 0" class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
+        <div v-if="!loading && !error && paginatedFilteredMatches.length === 0" class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
           <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
             <Icon name="heroicons:calendar-x" class="w-12 h-12 text-accent" />
           </div>
@@ -324,29 +351,107 @@ definePageMeta({
 
 // Use shared auth state composable for consistent behavior
 const { isAuthenticated, isLoaded, userId } = useAuthState()
+const { player, fetchPlayer } = usePlayer()
 
-const { matches, loading, error, fetchMatches } = useMatches()
+const { matches, pagination, loading, error, fetchMatches } = useMatches()
 
 const statusFilter = ref<string | null>(null)
+const currentPage = ref(1)
+const pageSize = 10
 
 const filteredMatches = computed(() => {
-  // If filter is set to 'cancelled', show only cancelled matches
+  let filtered = matches.value
+  
+  // Apply status filter
   if (statusFilter.value === 'cancelled') {
-    return matches.value.filter(m => m.status === 'cancelled')
+    filtered = filtered.filter(m => m.status === 'cancelled')
+  } else if (!statusFilter.value) {
+    filtered = filtered.filter(m => m.status !== 'cancelled')
+  } else {
+    filtered = filtered.filter(m => m.status === statusFilter.value)
   }
   
-  // If no filter (null), show all matches except cancelled ones
+  // Apply pagination if no filter is active
   if (!statusFilter.value) {
-    return matches.value.filter(m => m.status !== 'cancelled')
+    const start = (currentPage.value - 1) * pageSize
+    const end = start + pageSize
+    return filtered.slice(start, end)
   }
   
-  // For other filters, show matches with that specific status
-  return matches.value.filter(m => m.status === statusFilter.value)
+  // If filter is active, show all filtered results (no pagination)
+  return filtered
 })
 
-const loadMatches = async () => {
+const paginatedFilteredMatches = computed(() => {
+  if (statusFilter.value) {
+    // When filtered, calculate pagination from filtered results
+    const start = (currentPage.value - 1) * pageSize
+    const end = start + pageSize
+    return filteredMatches.value.slice(start, end)
+  }
+  return filteredMatches.value
+})
+
+const totalFilteredPages = computed(() => {
+  if (statusFilter.value) {
+    return Math.ceil(filteredMatches.value.length / pageSize)
+  }
+  return pagination.value?.totalPages || 1
+})
+
+const loadMatches = async (page: number = 1) => {
   if (isLoaded.value && userId.value) {
-    await fetchMatches(userId.value)
+    // If there's a filter, load all matches (with high limit) for frontend filtering
+    // Otherwise, use pagination
+    const limit = statusFilter.value ? 1000 : pageSize
+    await fetchMatches(userId.value, page, limit)
+    currentPage.value = page
+  }
+}
+
+// Determine if current user won the match
+const didUserWin = (match: Match) => {
+  if (!match.winner_id || !player.value) return null
+  // Check if the winner is the current player
+  return match.winner_id === player.value.id
+}
+
+// Get match card border color based on result
+const getMatchCardClass = (match: Match) => {
+  if (match.status === 'completed' && match.winner_id && player.value) {
+    const won = didUserWin(match)
+    if (won === true) {
+      return 'border-l-4 border-green-500'
+    } else if (won === false) {
+      return 'border-l-4 border-red-500'
+    }
+  }
+  return ''
+}
+
+// Get player icon classes based on match result
+const getPlayerIconClasses = (match: Match, playerId: string | null) => {
+  if (!playerId) {
+    // Default colors for players without ID
+    return 'bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 text-accent'
+  }
+  
+  // For completed matches, show green for winner, red for loser
+  if (match.status === 'completed' && match.winner_id) {
+    if (match.winner_id === playerId) {
+      // Winner: green
+      return 'bg-gradient-to-br from-green-500/20 to-green-500/5 border-2 border-green-500/50 text-green-400'
+    } else {
+      // Loser: red
+      return 'bg-gradient-to-br from-red-500/20 to-red-500/5 border-2 border-red-500/50 text-red-400'
+    }
+  }
+  
+  // Default colors for non-completed matches
+  if (match.player1_id === playerId) {
+    return 'bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 text-accent'
+  } else {
+    return 'bg-gradient-to-br from-accent-secondary/20 to-accent-secondary/5 border-2 border-accent-secondary/30 text-accent-secondary'
   }
 }
 
@@ -412,13 +517,26 @@ const getPlayerInitials = (name: string) => {
 
 onMounted(async () => {
   if (isLoaded.value && userId.value) {
-    await loadMatches()
+    // Load player data to determine match results
+    if (!player.value?.id) {
+      await fetchPlayer(userId.value)
+    }
+    await loadMatches(1)
   }
 })
 
 watch([isLoaded, userId], async () => {
   if (isLoaded.value && userId.value) {
-    await loadMatches()
+    await loadMatches(1)
+  }
+})
+
+// Reload when status filter changes
+watch(statusFilter, () => {
+  // Reset to page 1 when filter changes
+  currentPage.value = 1
+  if (isLoaded.value && userId.value) {
+    loadMatches(1)
   }
 })
 </script>

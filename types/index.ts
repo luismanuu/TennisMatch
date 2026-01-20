@@ -11,6 +11,7 @@ export interface Category {
   name: string
   description?: string
   order: number
+  default_elo: number
   created_at: string
   updated_at: string
 }
@@ -33,10 +34,24 @@ export interface Player {
   category_id?: string
   category?: Category
   elo: number
+  mmr: number
+  mmr_uncertainty: number
+  placement_matches_completed: number
+  win_streak: number
+  loss_streak: number
+  last_match_at?: string
+  matches_this_month: number
+  last_decay_check?: string
+  total_matches_played: number
   status?: 'active' | 'deleted'
   deleted_at?: string
   created_at: string
   updated_at: string
+}
+
+// Helper to check if player is unrated
+export function isPlayerUnrated(player: Player): boolean {
+  return player.total_matches_played === 0
 }
 
 export interface CreatePlayerPayload {
@@ -85,6 +100,7 @@ export interface Match {
   score?: string
   scheduled_at: string | null
   played_at?: string
+  is_competitive?: boolean // Whether this match counts towards ratings (default: true)
   schedule_proposed_by?: string
   schedule_proposed_by_player?: Player
   schedule_proposed_at?: string
@@ -364,4 +380,131 @@ export interface CreateMatchMessagePayload {
 
 export interface ProposeReschedulePayload {
   scheduled_at: string
+}
+
+// ============================================
+// MATCHMAKING AND RANKING SYSTEM TYPES
+// ============================================
+
+export interface CitySegment {
+  id: string
+  name: string
+  description?: string
+  created_at: string
+  updated_at: string
+  cities?: City[]
+}
+
+export interface CitySegmentCity {
+  id: string
+  city_segment_id: string
+  city_id: string
+  city?: City
+  city_segment?: CitySegment
+  created_at: string
+}
+
+export interface RatingHistory {
+  id: string
+  player_id: string
+  match_id: string
+  elo_before: number
+  elo_after: number
+  elo_change: number
+  mmr_before: number
+  mmr_after: number
+  mmr_change: number
+  uncertainty_before: number
+  uncertainty_after: number
+  k_factor: number
+  expected_score: number
+  actual_score: number
+  is_placement_match: boolean
+  is_unrated_match: boolean
+  win_streak_bonus: number
+  opponent_id?: string
+  opponent_elo?: number
+  opponent_mmr?: number
+  was_winner: boolean
+  rating_reversed: boolean
+  reversed_at?: string
+  created_at: string
+}
+
+// Rating tiers based on ELO
+export type RatingTier = 
+  | 'Bronze'
+  | 'Silver'
+  | 'Gold'
+  | 'Platinum'
+  | 'Diamond'
+  | 'Master'
+  | 'Grandmaster'
+  | 'Unrated'
+
+export interface RatingTierInfo {
+  tier: RatingTier
+  minElo: number
+  maxElo: number
+  color: string
+}
+
+// Matchmaking recommendation
+export interface MatchmakingRecommendation {
+  player: Player
+  expected_win_probability: number
+  mmr_difference: number
+  rating_tier: RatingTier
+  is_unrated: boolean
+  last_active_days_ago?: number
+}
+
+// Monthly decay status
+export interface MonthlyDecayStatus {
+  matches_this_month: number
+  matches_required: number
+  days_remaining_in_month: number
+  will_decay: boolean
+  estimated_decay: number
+  last_decay_check?: string
+}
+
+// Rating calculation result
+export interface RatingCalculationResult {
+  player1: {
+    eloChange: number
+    newElo: number
+    mmrChange: number
+    newMmr: number
+    newUncertainty: number
+    winStreakBonus: number
+  }
+  player2: {
+    eloChange: number
+    newElo: number
+    mmrChange: number
+    newMmr: number
+    newUncertainty: number
+    winStreakBonus: number
+  }
+}
+
+// City segment management payloads
+export interface CreateCitySegmentPayload {
+  name: string
+  description?: string
+  city_ids?: string[]
+}
+
+export interface UpdateCitySegmentPayload {
+  name?: string
+  description?: string
+}
+
+export interface AddCitiesToSegmentPayload {
+  city_ids: string[]
+}
+
+export interface RemoveCityFromSegmentPayload {
+  city_id: string
 }

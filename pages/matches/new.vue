@@ -173,6 +173,23 @@
                   placeholder="Ej: Club de Tenis Quito"
                 />
               </div>
+
+              <!-- Match Type (only show for non-matchmaking matches) -->
+              <div v-if="!isFromMatchmaking" class="pt-4 border-t border-border-subtle">
+                <label class="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    v-model="isCompetitive"
+                    type="checkbox"
+                    class="w-5 h-5 rounded border-border-subtle bg-surface text-accent focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background cursor-pointer"
+                  />
+                  <div class="flex-1">
+                    <p class="text-size-4 font-semibold text-foreground">Partido Competitivo</p>
+                    <p class="text-size-5 text-foreground-muted">
+                      Si está marcado, este partido afectará tu ELO y contará para partidos de colocación. Desmarca para un partido amistoso.
+                    </p>
+                  </div>
+                </label>
+              </div>
             </div>
 
             <!-- Error Message -->
@@ -224,6 +241,7 @@ const { createMatch, loading, error } = useMatches()
 const { createPendingPlayer, loading: pendingLoading } = usePendingPlayers()
 const { searchPlayers, results: searchResults, clearResults } = usePlayerSearch()
 
+const route = useRoute()
 const opponentType = ref<'registered' | 'new'>('registered')
 const searchQuery = ref('')
 const showSearchResults = ref(false)
@@ -231,6 +249,10 @@ const selectedOpponent = ref<PlayerSearchResult | null>(null)
 const submitting = ref(false)
 const success = ref(false)
 const formError = ref<string | null>(null)
+const isCompetitive = ref(true) // Default to competitive
+
+// Check if coming from matchmaking (has opponent query param)
+const isFromMatchmaking = computed(() => !!route.query.opponent)
 
 const newOpponent = ref({
   name: '',
@@ -289,6 +311,24 @@ const loadData = async () => {
 
   await fetchCategories()
   await fetchPlayer(userId.value)
+  
+  // If coming from matchmaking, pre-select the opponent
+  if (isFromMatchmaking.value && route.query.opponent) {
+    const opponentId = route.query.opponent as string
+    try {
+      // Fetch opponent details
+      const opponent = await $fetch<PlayerSearchResult>(`/api/players/${opponentId}`)
+      if (opponent) {
+        selectedOpponent.value = opponent
+        searchQuery.value = opponent.name
+        opponentType.value = 'registered'
+        // Matchmaking matches are always competitive
+        isCompetitive.value = true
+      }
+    } catch (err) {
+      console.error('Failed to load opponent:', err)
+    }
+  }
 }
 
 const handleSubmit = async () => {
@@ -339,12 +379,16 @@ const handleSubmit = async () => {
     }
 
     // Create match
+    // If from matchmaking, always competitive. Otherwise use user's choice
+    const matchIsCompetitive = isFromMatchmaking.value ? true : isCompetitive.value
+    
     const match = await createMatch(userId.value, {
       player1_id: player.value.id,
       player2_id: player2Id,
       pending_player2_id: pendingPlayerId,
       scheduled_at: formData.value.scheduled_at,
-      location: formData.value.location || undefined
+      location: formData.value.location || undefined,
+      is_competitive: matchIsCompetitive
     })
 
     success.value = true

@@ -43,16 +43,28 @@
                 <span class="hidden sm:inline">Partidos</span>
               </NuxtLink>
               <NuxtLink 
-                to="/tournaments" 
+                to="/my-ranking" 
                 :class="[
                   'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
-                  isTournamentsPage
+                  isMyRankingPage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
-                <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isTournamentsPage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Torneos</span>
+                <Icon name="heroicons:chart-bar-square" :class="['w-4 h-4 transition-transform', isMyRankingPage ? 'text-accent' : 'group-hover:scale-110']" />
+                <span class="hidden sm:inline">Mi Ranking</span>
+              </NuxtLink>
+              <NuxtLink 
+                to="/leaderboard" 
+                :class="[
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  isLeaderboardPage
+                    ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
+                    : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isLeaderboardPage ? 'text-accent' : 'group-hover:scale-110']" />
+                <span class="hidden sm:inline">Leaderboard</span>
               </NuxtLink>
               <!-- Organizer Tournaments Link (only for organizers) -->
               <NuxtLink 
@@ -79,6 +91,18 @@
               >
                 <Icon name="heroicons:user-circle" :class="['w-4 h-4 transition-transform', isProfilePage ? 'text-accent' : 'group-hover:scale-110']" />
                 <span class="hidden sm:inline">Mi Perfil</span>
+              </NuxtLink>
+              <NuxtLink 
+                to="/tournaments" 
+                :class="[
+                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  isTournamentsPage
+                    ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
+                    : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isTournamentsPage ? 'text-accent' : 'group-hover:scale-110']" />
+                <span class="hidden sm:inline">Torneos</span>
               </NuxtLink>
               <SignOutButton>
                 <button class="flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group">
@@ -145,6 +169,8 @@ const route = useRoute()
 const isDashboard = computed(() => route.path === '/')
 const isMatchesPage = computed(() => route.path.startsWith('/matches'))
 const isTournamentsPage = computed(() => route.path.startsWith('/tournaments') && !route.path.startsWith('/organizer/tournaments'))
+const isMyRankingPage = computed(() => route.path.startsWith('/my-ranking'))
+const isLeaderboardPage = computed(() => route.path.startsWith('/leaderboard'))
 const isProfilePage = computed(() => route.path.startsWith('/profile'))
 const isOrganizerTournamentsPage = computed(() => route.path.startsWith('/organizer/tournaments'))
 

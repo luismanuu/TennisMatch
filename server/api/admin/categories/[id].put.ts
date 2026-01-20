@@ -9,9 +9,10 @@ export default defineEventHandler(async (event) => {
       name?: string
       description?: string
       order?: number
+      default_elo?: number
     }>(event)
 
-    const { clerk_id, name, description, order } = body
+    const { clerk_id, name, description, order, default_elo } = body
 
     if (!categoryId || !clerk_id) {
       throw createError({
@@ -60,6 +61,7 @@ export default defineEventHandler(async (event) => {
     if (name !== undefined) updateData.name = name.trim()
     if (description !== undefined) updateData.description = description?.trim() || null
     if (order !== undefined) updateData.order = order
+    if (default_elo !== undefined) updateData.default_elo = default_elo
 
     const { data: category, error: updateError } = await supabase
       .from('categories')

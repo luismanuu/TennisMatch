@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { checkIsOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { updateBracketAfterMatch, recalculateGroupStandings } from '~/server/utils/tournament-brackets'
+import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -750,6 +751,22 @@ export default defineEventHandler(async (event) => {
       } catch (bracketError) {
         // Log error but don't fail the request
         console.error('Error updating bracket after match:', bracketError)
+      }
+    }
+    
+    // Update player ratings after match completion (for ALL matches - tournament and regular)
+    if (updatedMatch.status === 'completed' && updatedMatch.winner_id && updatedMatch.player1_id && updatedMatch.player2_id) {
+      console.log(`[PUT /api/matches/${matchId}] Match completed, updating player ratings...`)
+      try {
+        const ratingResult = await updateRatingsAfterMatch(matchId, supabase)
+        if (ratingResult) {
+          console.log(`[PUT /api/matches/${matchId}] Ratings updated - Player1: ${ratingResult.player1.eloChange > 0 ? '+' : ''}${ratingResult.player1.eloChange} ELO, Player2: ${ratingResult.player2.eloChange > 0 ? '+' : ''}${ratingResult.player2.eloChange} ELO`)
+        } else {
+          console.warn(`[PUT /api/matches/${matchId}] Rating update returned null - check logs for errors`)
+        }
+      } catch (ratingError) {
+        // Log error but don't fail the request - ratings are important but not critical to match flow
+        console.error('Error updating ratings after match:', ratingError)
       }
     }
     

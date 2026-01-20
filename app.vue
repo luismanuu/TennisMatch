@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-// Add premium font
+// Add premium font and critical CSS to prevent FOUC
 useHead({
   title: 'Tenis Ecuador - La plataforma para tenistas amateur',
   meta: [
@@ -42,7 +42,12 @@ useHead({
     { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
     { 
       rel: 'stylesheet', 
-      href: 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap' 
+      href: 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap'
+    }
+  ],
+  noscript: [
+    {
+      innerHTML: '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">'
     }
   ],
   htmlAttrs: {
@@ -55,14 +60,31 @@ useHead({
   style: [
     {
       children: `
+        /* Critical CSS - prevents FOUC */
         :root {
           --font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+          --background: oklch(0.145 0 0);
+          --foreground: oklch(0.95 0 0);
+        }
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        html {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
         }
         body {
           font-family: var(--font-sans);
           font-feature-settings: 'ss01' on, 'ss02' on, 'cv01' on;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
+          background-color: var(--background);
+          color: var(--foreground);
+          min-height: 100vh;
+        }
+        .app-root {
+          isolation: isolate;
+          min-height: 100vh;
         }
       `
     }
@@ -71,10 +93,7 @@ useHead({
 </script>
 
 <style>
-@import '@/assets/css/design-system.css';
-@import '@/assets/css/main.css';
-
-/* App-specific overrides */
+/* App-specific overrides only - CSS files are loaded via nuxt.config.ts */
 .app-root {
   isolation: isolate;
 }

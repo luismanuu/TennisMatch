@@ -4,8 +4,15 @@ export const useMatches = () => {
   const matches = ref<Match[]>([])
   const loading = ref(false)
   const error = ref<Error | null>(null)
+  const pagination = ref<{
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasMore: boolean
+  } | null>(null)
   
-  const fetchMatches = async (clerkId?: string) => {
+  const fetchMatches = async (clerkId?: string, page: number = 1, limit: number = 10) => {
     loading.value = true
     error.value = null
     
@@ -19,11 +26,22 @@ export const useMatches = () => {
         clerkId = userId.value
       }
       
-      const data = await $fetch<Match[]>('/api/matches', {
-        query: { clerk_id: clerkId }
+      const response = await $fetch<{
+        matches: Match[]
+        pagination: {
+          page: number
+          limit: number
+          total: number
+          totalPages: number
+          hasMore: boolean
+        }
+      }>('/api/matches', {
+        query: { clerk_id: clerkId, page, limit }
       })
-      matches.value = data
-      return data
+      
+      matches.value = response.matches
+      pagination.value = response.pagination
+      return response.matches
     } catch (err: any) {
       error.value = err
       throw err
@@ -421,6 +439,7 @@ export const useMatches = () => {
   
   return {
     matches: readonly(matches),
+    pagination: readonly(pagination),
     loading: readonly(loading),
     error: readonly(error),
     fetchMatches,

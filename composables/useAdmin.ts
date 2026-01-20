@@ -310,7 +310,7 @@ export const useAdmin = () => {
     }
   }
 
-  const createCategory = async (payload: { name: string; description?: string; order?: number }) => {
+  const createCategory = async (payload: { name: string; description?: string; order?: number; default_elo?: number }) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
     }
@@ -340,7 +340,7 @@ export const useAdmin = () => {
     }
   }
 
-  const updateCategory = async (categoryId: string, payload: { name?: string; description?: string; order?: number }) => {
+  const updateCategory = async (categoryId: string, payload: { name?: string; description?: string; order?: number; default_elo?: number }) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
     }

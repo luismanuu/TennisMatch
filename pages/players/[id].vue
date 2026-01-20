@@ -105,21 +105,195 @@
                 <div class="text-size-4 font-regular text-foreground-muted">ELO</div>
               </div>
               <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">-</div>
+                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.total_matches_played || 0 }}</div>
                 <div class="text-size-4 font-regular text-foreground-muted">Partidos</div>
               </div>
               <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">-</div>
-                <div class="text-size-4 font-regular text-foreground-muted">Victorias</div>
+                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.win_streak || 0 }}</div>
+                <div class="text-size-4 font-regular text-foreground-muted">Racha Victorias</div>
               </div>
               <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">-</div>
-                <div class="text-size-4 font-regular text-foreground-muted">Win Rate</div>
+                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.placement_matches_completed || 0 }}/3</div>
+                <div class="text-size-4 font-regular text-foreground-muted">Colocación</div>
               </div>
             </div>
-            <p class="text-size-4 font-regular text-foreground-muted mt-4 text-center">
-              Las estadísticas detalladas estarán disponibles próximamente
-            </p>
+          </div>
+
+          <!-- Ranking and Match History Tabs -->
+          <div class="mt-8 pt-8 border-t border-border-subtle">
+            <!-- Tab Navigation -->
+            <div class="flex gap-2 mb-6 border-b border-border-subtle">
+              <button
+                @click="activeTab = 'ranking'"
+                :class="[
+                  'px-6 py-3 text-size-3 font-semibold transition-all border-b-2 -mb-px',
+                  activeTab === 'ranking'
+                    ? 'text-accent border-accent'
+                    : 'text-foreground-muted border-transparent hover:text-foreground'
+                ]"
+              >
+                Ranking
+              </button>
+              <button
+                @click="activeTab = 'matches'"
+                :class="[
+                  'px-6 py-3 text-size-3 font-semibold transition-all border-b-2 -mb-px',
+                  activeTab === 'matches'
+                    ? 'text-accent border-accent'
+                    : 'text-foreground-muted border-transparent hover:text-foreground'
+                ]"
+              >
+                Historial de Partidas
+              </button>
+            </div>
+
+            <!-- Ranking Tab -->
+            <div v-if="activeTab === 'ranking'" class="animate-fade-in">
+              <div v-if="rankingLoading" class="text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando ranking...</p>
+              </div>
+              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position" class="space-y-6">
+                <!-- Global Ranking -->
+                <div class="p-6 rounded-xl bg-surface border border-border-subtle">
+                  <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-size-3 font-semibold text-foreground">Ranking Global</h4>
+                    <RatingTierBadge 
+                      :elo="publicPlayer.elo" 
+                      :total-matches-played="publicPlayer.total_matches_played"
+                      :show-elo="false"
+                    />
+                  </div>
+                  <div class="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        #{{ rankingPosition.position.global_rank }}
+                        <span class="text-size-4 font-regular text-foreground-muted">
+                          de {{ rankingPosition.position.total_players }}
+                        </span>
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        Top {{ rankingPosition.position.percentile }}%
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Jugadores por debajo</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        {{ rankingPosition.position.players_below }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Segment Ranking -->
+                <div v-if="rankingPosition.position.segment_rank" class="p-6 rounded-xl bg-surface border border-border-subtle">
+                  <h4 class="text-size-3 font-semibold text-foreground mb-4">
+                    Ranking en {{ rankingPosition.position.segment_name || 'Tu Región' }}
+                  </h4>
+                  <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        #{{ rankingPosition.position.segment_rank }}
+                        <span class="text-size-4 font-regular text-foreground-muted">
+                          de {{ rankingPosition.position.segment_total }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Tier Ranking -->
+                <div v-if="rankingPosition.position.tier_rank" class="p-6 rounded-xl bg-surface border border-border-subtle">
+                  <h4 class="text-size-3 font-semibold text-foreground mb-4">
+                    Ranking en {{ rankingPosition.tier }}
+                  </h4>
+                  <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        #{{ rankingPosition.position.tier_rank }}
+                        <span class="text-size-4 font-regular text-foreground-muted">
+                          de {{ rankingPosition.position.tier_total }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else-if="rankingPosition && rankingPosition.is_unrated" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted">
+                  Este jugador aún no ha completado partidos de colocación
+                </p>
+              </div>
+            </div>
+
+            <!-- Match History Tab -->
+            <div v-if="activeTab === 'matches'" class="animate-fade-in">
+              <div v-if="matchHistoryLoading" class="text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando partidos...</p>
+              </div>
+              <div v-else-if="matchHistory.length > 0" class="space-y-4">
+                <div 
+                  v-for="match in matchHistory" 
+                  :key="match.id"
+                  class="p-6 rounded-xl bg-surface border border-border-subtle hover:border-accent/50 transition-all cursor-pointer"
+                  @click="navigateTo(`/matches/${match.id}`)"
+                >
+                  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <!-- Match Info -->
+                    <div class="flex-1">
+                      <div class="flex items-center gap-4 mb-3">
+                        <!-- Opponent -->
+                        <div class="flex items-center gap-3">
+                          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-surface-elevated to-surface border-2 border-border-subtle flex items-center justify-center">
+                            <span class="text-lg font-bold text-foreground-muted">
+                              {{ getOpponentInitials(match) }}
+                            </span>
+                          </div>
+                          <div>
+                            <p class="text-size-3 font-semibold text-foreground">
+                              {{ getOpponentName(match) }}
+                            </p>
+                            <p v-if="match.played_at" class="text-size-5 text-foreground-muted">
+                              {{ formatMatchDate(match.played_at) }}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-3 flex-wrap">
+                        <span 
+                          class="px-3 py-1 rounded-full text-size-5 font-semibold"
+                          :class="getMatchStatusClass(match.status)"
+                        >
+                          {{ getMatchStatusLabel(match.status) }}
+                        </span>
+                        <span v-if="match.tournament" class="px-3 py-1 rounded-full bg-accent-subtle/30 border border-accent/30 text-size-5 text-foreground-muted">
+                          {{ match.tournament.name }}
+                        </span>
+                      </div>
+                    </div>
+                    <!-- Result -->
+                    <div v-if="match.status === 'completed' && match.score" class="text-center md:text-right">
+                      <p class="text-size-2 font-bold text-foreground mb-1">{{ match.score }}</p>
+                      <p v-if="match.winner" class="text-size-5 text-foreground-muted">
+                        Ganador: {{ match.winner.name }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted">
+                  No hay partidos registrados
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -212,6 +386,13 @@ const playerId = route.params.id as string
 const { publicPlayer, publicLoading, publicError, fetchPublicPlayer } = usePlayer()
 const { publicPendingPlayer, publicPendingLoading, publicPendingError, fetchPublicPendingPlayer } = usePendingPlayers()
 
+// Ranking and match history data
+const rankingPosition = ref<any>(null)
+const rankingLoading = ref(false)
+const matchHistory = ref<any[]>([])
+const matchHistoryLoading = ref(false)
+const activeTab = ref<'ranking' | 'matches'>('ranking')
+
 const canGoBack = computed(() => {
   // Check if we can go back (browser history)
   return typeof window !== 'undefined' && window.history.length > 1
@@ -243,8 +424,93 @@ const loadProfile = async () => {
     // If not found, try as pending player
     if (!player) {
       await fetchPublicPendingPlayer(playerId)
+    } else {
+      // Load ranking and match history for regular players
+      await loadRankingAndMatches()
     }
   }
+}
+
+const loadRankingAndMatches = async () => {
+  if (!playerId) return
+
+  // Load ranking position
+  rankingLoading.value = true
+  try {
+    const rankingData = await $fetch(`/api/players/${playerId}/ranking-position`).catch(() => null)
+    rankingPosition.value = rankingData
+  } catch (err) {
+    console.error('Error loading ranking:', err)
+  } finally {
+    rankingLoading.value = false
+  }
+
+  // Load match history (only last 20 matches for other players' profiles)
+  matchHistoryLoading.value = true
+  try {
+    const response = await $fetch<{
+      success: boolean
+      matches: any[]
+    }>(`/api/players/${playerId}/matches`, {
+      query: { limit: 20 }
+    }).catch(() => ({ success: false, matches: [] }))
+    
+    if (response.success) {
+      matchHistory.value = response.matches
+    }
+  } catch (err) {
+    console.error('Error loading match history:', err)
+  } finally {
+    matchHistoryLoading.value = false
+  }
+}
+
+const getOpponentName = (match: any) => {
+  if (match.player1_id === playerId) {
+    return match.player2?.name || match.pending_player2?.name || 'Jugador 2'
+  }
+  return match.player1?.name || 'Jugador 1'
+}
+
+const getOpponentInitials = (match: any) => {
+  const name = getOpponentName(match)
+  if (!name) return '?'
+  const parts = name.trim().split(' ')
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
+  return name.substring(0, 2).toUpperCase()
+}
+
+const formatMatchDate = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const getMatchStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    scheduled: 'Programado',
+    active: 'En Curso',
+    completed: 'Completado',
+    cancelled: 'Cancelado'
+  }
+  return labels[status] || status
+}
+
+const getMatchStatusClass = (status: string) => {
+  const classes: Record<string, string> = {
+    scheduled: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+    active: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+    completed: 'bg-green-500/20 text-green-400 border border-green-500/30',
+    cancelled: 'bg-red-500/20 text-red-400 border border-red-500/30'
+  }
+  return classes[status] || 'bg-surface border border-border-subtle text-foreground-muted'
 }
 
 onMounted(async () => {

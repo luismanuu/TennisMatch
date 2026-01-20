@@ -71,7 +71,15 @@
                 </div>
                 <p class="text-size-3 font-regular text-foreground">{{ player.phone_number }}</p>
               </div>
-              <div v-if="player?.category" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
+              <!-- Loading state -->
+              <div v-if="playerLoading" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle">
+                <div class="flex items-center gap-3">
+                  <div class="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+                  <p class="text-size-4 font-regular text-foreground-muted">Cargando perfil...</p>
+                </div>
+              </div>
+              <!-- Profile complete -->
+              <div v-else-if="player?.category" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
                 <div class="flex items-center gap-3 mb-2">
                   <Icon name="heroicons:star" class="w-4 h-4 text-foreground-muted" />
                   <p class="text-size-4 font-semibold text-foreground-muted">Categoría</p>
@@ -81,7 +89,22 @@
                   {{ player.category.description }}
                 </p>
               </div>
-              <div v-else class="p-4 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
+              <!-- Profile incomplete - only show when NOT loading and player exists but has no category -->
+              <div v-else-if="!playerLoading && player && !player.category" class="p-4 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
+                <div class="flex items-center gap-3 mb-2">
+                  <Icon name="heroicons:exclamation-triangle" class="w-5 h-5 text-accent" />
+                  <p class="text-size-4 font-semibold text-foreground">Perfil incompleto</p>
+                </div>
+                <p class="text-size-4 font-regular text-foreground-muted mb-3">
+                  Completa tu perfil para comenzar a jugar
+                </p>
+                <NuxtLink to="/onboarding" class="btn-primary text-size-4 !py-2 !px-4 inline-flex items-center group">
+                  <span>Completar Perfil</span>
+                  <Icon name="heroicons:arrow-right" class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                </NuxtLink>
+              </div>
+              <!-- Profile doesn't exist yet - only show when NOT loading and no player -->
+              <div v-else-if="!playerLoading && !player" class="p-4 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
                 <div class="flex items-center gap-3 mb-2">
                   <Icon name="heroicons:exclamation-triangle" class="w-5 h-5 text-accent" />
                   <p class="text-size-4 font-semibold text-foreground">Perfil incompleto</p>
@@ -129,37 +152,35 @@
                 <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
               </NuxtLink>
               <NuxtLink 
-                to="/matches/new"
+                to="/matchmaking"
                 class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
                 <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:plus" class="w-6 h-6 text-background" />
+                  <Icon name="heroicons:magnifying-glass" class="w-6 h-6 text-background" />
                 </div>
                 <div class="flex-1">
                   <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors block">
-                    Registrar Partido
+                    Busca Partida Competitiva
                   </span>
                   <span class="text-size-4 font-regular text-foreground-muted">
-                    Programa un nuevo encuentro
+                    Encuentra oponentes de tu nivel
                   </span>
                 </div>
                 <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
               </NuxtLink>
-              <!-- View Tournaments (only for staff - admin/organizer) -->
               <NuxtLink 
-                v-if="isStaff"
-                to="/tournaments"
+                to="/matches/new"
                 class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
                 <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
+                  <Icon name="heroicons:plus" class="w-6 h-6 text-background" />
                 </div>
                 <div class="flex-1">
                   <span class="text-size-3 font-semibold text-foreground group-hover:text-accent-secondary transition-colors block">
-                    Ver Torneos
+                    Registrar Partido
                   </span>
                   <span class="text-size-4 font-regular text-foreground-muted">
-                    Explora y regístrate en torneos
+                    Programa un nuevo encuentro
                   </span>
                 </div>
                 <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
@@ -386,7 +407,7 @@ definePageMeta({
 // Use shared auth state composable for consistent behavior
 const { isLoaded, isAuthenticated, userId, user, isSignedIn } = useAuthState()
 
-const { player, fetchPlayer } = usePlayer()
+const { player, loading: playerLoading, fetchPlayer } = usePlayer()
 const { isOrganizer } = useOrganizer()
 const { isAdmin } = useAdmin()
 
@@ -411,6 +432,11 @@ const loadPlayerProfile = async () => {
     return
   }
   
+  // Don't reload if already loading or already loaded
+  if (playerLoading.value || player.value) {
+    return
+  }
+  
   try {
     await fetchPlayer(userId.value)
   } catch (error) {
@@ -421,7 +447,7 @@ const loadPlayerProfile = async () => {
 
 // Computed property to safely track when profile should be loaded
 const shouldLoadProfile = computed(() => {
-  return !!(isLoaded.value && isSignedIn.value && userId.value && !player.value)
+  return !!(isLoaded.value && isSignedIn.value && userId.value && !player.value && !playerLoading.value)
 })
 
 // Watch for auth state changes and load profile when ready
@@ -433,7 +459,7 @@ watch(shouldLoadProfile, async (shouldLoad) => {
 
 // Also check on mount in case Clerk is already loaded
 onMounted(async () => {
-  if (isLoaded.value && userId.value) {
+  if (isLoaded.value && userId.value && !playerLoading.value) {
     await loadPlayerProfile()
   }
 })

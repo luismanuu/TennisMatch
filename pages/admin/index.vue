@@ -98,6 +98,18 @@
                 <span>Categorías</span>
               </button>
               <button
+                @click="activeTab = 'city-segments'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'city-segments'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:map" class="w-4 h-4 flex-shrink-0" />
+                <span>Regiones</span>
+              </button>
+              <button
                 @click="activeTab = 'matches'"
                 :class="[
                   'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
@@ -809,7 +821,7 @@
               {{ editingCategoryId ? 'Edit Category' : 'Create New Category' }}
             </h2>
             <form @submit.prevent="editingCategoryId ? handleUpdateCategory(editingCategoryId) : handleCreateCategory" class="space-y-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label class="block text-size-4 font-semibold text-foreground mb-2">
                     Name *
@@ -844,6 +856,20 @@
                     class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
                     placeholder="Auto"
                   />
+                </div>
+                <div>
+                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                    ELO Inicial
+                  </label>
+                  <input
+                    v-model.number="categoryForm.default_elo"
+                    type="number"
+                    min="500"
+                    max="4000"
+                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    placeholder="Auto (basado en orden)"
+                  />
+                  <p class="text-size-5 text-foreground-muted mt-1">ELO inicial para nuevos jugadores</p>
                 </div>
               </div>
               <div class="flex items-center gap-4">
@@ -899,6 +925,7 @@
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Order</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Name</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Description</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">ELO Inicial</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
@@ -912,6 +939,11 @@
                     <td class="p-4 text-size-4 font-semibold text-foreground">{{ category.name }}</td>
                     <td class="p-4 text-size-4 font-regular text-foreground-muted">
                       {{ category.description || 'N/A' }}
+                    </td>
+                    <td class="p-4">
+                      <span class="px-2 py-1 rounded-lg bg-accent-subtle/30 text-accent font-semibold text-size-4">
+                        {{ category.default_elo || 1000 }}
+                      </span>
                     </td>
                     <td class="p-4">
                       <div class="flex gap-2">
@@ -1136,6 +1168,19 @@
             </div>
           </NuxtLink>
         </div>
+
+        <!-- City Segments Tab -->
+        <div v-show="activeTab === 'city-segments' && !loading">
+          <NuxtLink to="/admin/city-segments" class="block">
+            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+              <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
+              <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Regiones de Matchmaking</h3>
+              <p class="text-size-4 font-regular text-foreground-muted">
+                Configurar regiones de ciudades para el sistema de matchmaking
+              </p>
+            </div>
+          </NuxtLink>
+        </div>
       </div>
     </div>
   </div>
@@ -1177,7 +1222,7 @@ const {
 
 
 // Tab management
-const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'tournaments' | 'organizers'>('overview')
+const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'tournaments' | 'organizers' | 'city-segments'>('overview')
 
 const successMessage = ref<string | null>(null)
 const resendingIds = ref<Set<string>>(new Set())
@@ -1250,7 +1295,8 @@ const deletingCategoryIds = ref<Set<string>>(new Set())
 const categoryForm = ref({
   name: '',
   description: '',
-  order: undefined as number | undefined
+  order: undefined as number | undefined,
+  default_elo: undefined as number | undefined
 })
 
 const inviteForm = ref({
@@ -1502,7 +1548,8 @@ const resetCategoryForm = () => {
   categoryForm.value = {
     name: '',
     description: '',
-    order: undefined
+    order: undefined,
+    default_elo: undefined
   }
   categoryError.value = null
   editingCategoryId.value = null
@@ -1517,7 +1564,8 @@ const handleCreateCategory = async () => {
     await createCategory({
       name: categoryForm.value.name,
       description: categoryForm.value.description || undefined,
-      order: categoryForm.value.order
+      order: categoryForm.value.order,
+      default_elo: categoryForm.value.default_elo
     })
     
     const toast = useToastNotifications()
@@ -1538,7 +1586,8 @@ const handleEditCategory = (category: any) => {
   categoryForm.value = {
     name: category.name,
     description: category.description || '',
-    order: category.order
+    order: category.order,
+    default_elo: category.default_elo
   }
   // Scroll to form
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1553,7 +1602,8 @@ const handleUpdateCategory = async (categoryId: string) => {
     await updateCategory(categoryId, {
       name: categoryForm.value.name,
       description: categoryForm.value.description || undefined,
-      order: categoryForm.value.order
+      order: categoryForm.value.order,
+      default_elo: categoryForm.value.default_elo
     })
     
     const toast = useToastNotifications()
@@ -1648,6 +1698,9 @@ watch(activeTab, (newTab) => {
   } else if (newTab === 'organizers') {
     // Navigate to organizers page
     navigateTo('/admin/organizers')
+  } else if (newTab === 'city-segments') {
+    // Navigate to city segments page
+    navigateTo('/admin/city-segments')
   }
 })
 

@@ -8,9 +8,10 @@ export default defineEventHandler(async (event) => {
       name: string
       description?: string
       order?: number
+      default_elo?: number
     }>(event)
 
-    const { clerk_id, name, description, order } = body
+    const { clerk_id, name, description, order, default_elo } = body
 
     if (!clerk_id) {
       throw createError({
@@ -57,12 +58,19 @@ export default defineEventHandler(async (event) => {
       categoryOrder = maxOrderResult ? (maxOrderResult.order as number) + 1 : 0
     }
 
+    // Calculate default_elo based on order if not provided
+    // Formula: 2500 - ((order - 1) * 250) for categories 1-7
+    const defaultEloValue = default_elo !== undefined 
+      ? default_elo 
+      : Math.max(1000, 2500 - ((categoryOrder - 1) * 250))
+
     const { data: category, error: insertError } = await supabase
       .from('categories')
       .insert({
         name: name.trim(),
         description: description?.trim() || null,
-        order: categoryOrder
+        order: categoryOrder,
+        default_elo: defaultEloValue
       })
       .select()
       .single()

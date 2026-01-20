@@ -5,6 +5,9 @@ export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
     const clerk_id = query.clerk_id as string
+    const page = parseInt(query.page as string) || 1
+    const limit = parseInt(query.limit as string) || 10
+    const offset = (page - 1) * limit
     
     if (!clerk_id) {
       throw createError({
@@ -27,7 +30,16 @@ export default defineEventHandler(async (event) => {
     
     if (playerError || !currentPlayer) {
       // If player doesn't exist, return empty array (user hasn't created profile yet)
-      return []
+      return {
+        matches: [],
+        pagination: {
+          page: 1,
+          limit,
+          total: 0,
+          totalPages: 0,
+          hasMore: false
+        }
+      }
     }
     
     // Fetch all matches where user is player1, player2, or invited a pending_player2
@@ -221,7 +233,21 @@ export default defineEventHandler(async (event) => {
       return dateB - dateA
     })
     
-    return filteredData
+    // Calculate pagination
+    const total = filteredData.length
+    const totalPages = Math.ceil(total / limit)
+    const paginatedData = filteredData.slice(offset, offset + limit)
+    
+    return {
+      matches: paginatedData,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore: page < totalPages
+      }
+    }
   } catch (error: any) {
     console.error('Unexpected error in matches endpoint:', error)
     throw createError({

@@ -42,10 +42,10 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Verify category exists
+    // Verify category exists and get default_elo
     const { data: category, error: categoryError } = await supabase
       .from('categories')
-      .select('id')
+      .select('id, default_elo')
       .eq('id', category_id)
       .single()
     
@@ -55,6 +55,9 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Invalid category_id'
       })
     }
+    
+    // Use category's default_elo or fallback to 1000
+    const initialElo = (category as any).default_elo || 1000
     
     // Check if player already exists
     const { data: existingPlayer } = await supabase
@@ -70,7 +73,10 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Create player profile
+    // Calculate initial MMR from ELO
+    const initialMmr = (initialElo - 2250) / 750
+    
+    // Create player profile with category's default ELO
     const { data: player, error: insertError } = await supabase
       .from('players')
       .insert({
@@ -79,7 +85,9 @@ export default defineEventHandler(async (event) => {
         phone_number: phone_number || null,
         city_id,
         category_id,
-        elo: 1000
+        elo: initialElo,
+        mmr: initialMmr,
+        mmr_uncertainty: 2.0  // Initial uncertainty for new players
       })
       .select(`
         *,

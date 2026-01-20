@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="min-h-screen bg-background relative overflow-hidden">
     <!-- Ambient Background Effects -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
@@ -141,19 +141,76 @@
             </div>
           </div>
 
-          <!-- ELO Rating -->
+          <!-- Rating Section -->
           <div class="mb-8">
+            <!-- ELO Rating with Tier -->
             <div class="p-8 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30 hover-lift">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-12 h-12 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center">
-                  <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center">
+                    <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
+                  </div>
+                  <div>
+                    <p class="text-size-3 font-semibold text-foreground">Puntuación ELO</p>
+                    <p class="text-size-4 text-foreground-muted">Clasificación Actual</p>
+                  </div>
                 </div>
-                <p class="text-size-3 font-semibold text-foreground">Puntuacion ELO</p>
+                <RatingTierBadge 
+                  :elo="player.elo" 
+                  :total-matches-played="player.total_matches_played || 0"
+                  :placement-matches-completed="player.placement_matches_completed || 0"
+                  :show-provisional="true"
+                />
               </div>
-              <p class="text-size-1 font-bold text-gradient-static mb-2">{{ player.elo }}</p>
-              <p class="text-size-4 font-regular text-foreground-muted">
-                Tu calificacion actual en el sistema
+              <div class="flex items-baseline gap-3">
+                <p class="text-size-1 font-bold text-gradient-static">{{ player.elo }}</p>
+                <NuxtLink 
+                  v-if="!isUnrated"
+                  to="/my-ranking" 
+                  class="btn-secondary text-size-4 !py-2 !px-4 group"
+                >
+                  <Icon name="heroicons:chart-bar-square" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                  Ver Mi Ranking
+                </NuxtLink>
+              </div>
+              <p class="text-size-4 font-regular text-foreground-muted mt-2">
+                {{ isUnrated ? '¡Juega tu primer partido para obtener tu clasificación!' : 'Tu calificación actual en el sistema' }}
               </p>
+
+              <!-- Placement Progress (only show if rated and not completed) -->
+              <PlacementProgress 
+                v-if="!isUnrated && (player.placement_matches_completed || 0) < 3"
+                :completed="player.placement_matches_completed || 0"
+                :match-results="placementMatchResults"
+              />
+            </div>
+
+            <!-- Monthly Decay Warning -->
+            <MonthlyDecayWarning 
+              v-if="decayStatus && !isUnrated"
+              :matches-this-month="decayStatus.matches_this_month"
+              :matches-required="decayStatus.matches_required"
+              :days-remaining="decayStatus.days_remaining_in_month"
+              :estimated-decay="decayStatus.estimated_decay"
+              :show-matchmaking-link="true"
+              :is-in-placement="(player.placement_matches_completed || 0) < 3"
+            />
+
+            <!-- Win/Loss Streak -->
+            <div v-if="!isUnrated && (player.win_streak > 0 || player.loss_streak > 0)" class="flex gap-4">
+              <div 
+                v-if="player.win_streak > 0"
+                class="flex-1 p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30"
+              >
+                <div class="flex items-center gap-2 mb-2">
+                  <Icon name="heroicons:fire" class="w-5 h-5 text-green-400" />
+                  <span class="text-size-3 font-semibold text-green-400">¡Racha de victorias!</span>
+                </div>
+                <p class="text-size-4 text-foreground-muted">
+                  {{ player.win_streak }} victoria(s) consecutiva(s)
+                  <span v-if="player.win_streak >= 5" class="text-green-400"> (¡Máximo bonus!)</span>
+                </p>
+              </div>
             </div>
           </div>
 
@@ -175,29 +232,34 @@
                 <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center mx-auto mb-3">
                   <Icon name="heroicons:calendar" class="w-5 h-5 text-accent-secondary" />
                 </div>
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">0</div>
+                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ player.total_matches_played || 0 }}</div>
                 <div class="text-size-4 font-regular text-foreground-muted">Partidos</div>
               </div>
               <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
                 <div class="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center justify-center mx-auto mb-3">
                   <Icon name="heroicons:star" class="w-5 h-5 text-green-400" />
                 </div>
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">0</div>
+                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ ratingStats?.wins || 0 }}</div>
                 <div class="text-size-4 font-regular text-foreground-muted">Victorias</div>
               </div>
               <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
                 <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center mx-auto mb-3">
                   <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" />
                 </div>
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">-</div>
+                <div class="text-size-1 font-semibold text-gradient-static mb-1">
+                  {{ ratingStats && ratingStats.wins + ratingStats.losses > 0 
+                    ? Math.round(ratingStats.win_rate) + '%' 
+                    : '-' }}
+                </div>
                 <div class="text-size-4 font-regular text-foreground-muted">Win Rate</div>
               </div>
             </div>
           </div>
+
         </div>
 
-        <!-- No Profile State -->
-        <div v-else class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
+        <!-- No Profile State - only show when NOT loading and no player exists -->
+        <div v-else-if="!loading && !player" class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
           <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
             <Icon name="heroicons:user-circle" class="w-12 h-12 text-accent" />
           </div>
@@ -268,26 +330,88 @@ const auth = useAuth()
 const { isLoaded: authLoaded, isSignedIn } = auth
 const { isLoaded: userLoaded, user } = useUser()
 const { player, loading, error, fetchPlayer } = usePlayer()
+const { status: decayStatus, fetchDecayStatus, checkDecayOnLogin } = useMonthlyDecay()
 
 const isLoaded = computed(() => authLoaded.value && userLoaded.value)
 const userId = computed(() => user.value?.id || null)
 const showUserProfileModal = ref(false)
 
+// Rating stats from history
+const ratingStats = ref<{ wins: number; losses: number; win_rate: number; peak_elo: number } | null>(null)
+
+// Placement match results
+const placementMatchResults = ref<Array<'win' | 'loss' | null>>([])
+
+// Check if player is unrated
+const isUnrated = computed(() => (player.value?.total_matches_played ?? 0) === 0)
+
+const loadPlacementMatchResults = async (playerId: string) => {
+  try {
+    // Fetch rating history to get placement match results
+    // Note: rating_history only contains competitive matches (is_competitive = true)
+    const historyResponse = await $fetch<any>(`/api/players/${playerId}/rating-history`, {
+      query: { limit: 100 }
+    })
+    
+    if (historyResponse?.history) {
+      // Filter placement matches and get results in order
+      // Only competitive matches appear in rating_history, so we don't need to filter by is_competitive
+      const placementMatches = historyResponse.history
+        .filter((h: any) => h.is_placement_match === true)
+        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) // Oldest first
+      
+      // Map to win/loss/null array
+      placementMatchResults.value = placementMatches.map((match: any) => {
+        if (match.was_winner === true) return 'win'
+        return 'loss'
+      })
+      
+      // Fill remaining slots with null
+      while (placementMatchResults.value.length < 3) {
+        placementMatchResults.value.push(null)
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load placement match results:', err)
+    placementMatchResults.value = []
+  }
+}
+
 const loadProfile = async () => {
   if (userId.value) {
     await fetchPlayer(userId.value)
+    
+    // Load decay status if player exists and is rated
+    if (player.value?.id && !isUnrated.value) {
+      await fetchDecayStatus(player.value.id)
+      
+      // Load rating stats
+      try {
+        const historyResponse = await $fetch<any>(`/api/players/${player.value.id}/rating-history`, {
+          query: { limit: 100 }
+        })
+        ratingStats.value = historyResponse.stats
+      } catch (err) {
+        console.error('Failed to load rating stats:', err)
+      }
+      
+      // Load placement match results if in placement
+      if ((player.value.placement_matches_completed || 0) < 3) {
+        await loadPlacementMatchResults(player.value.id)
+      }
+    }
   }
 }
 
 onMounted(async () => {
-  if (isLoaded.value && userId.value) {
+  if (isLoaded.value && userId.value && !loading.value) {
     await loadProfile()
   }
 })
 
 // Computed property to safely track when profile should be loaded
 const shouldLoadProfile = computed(() => {
-  return !!(isLoaded.value && isSignedIn.value && userId.value && !player.value)
+  return !!(isLoaded.value && isSignedIn.value && userId.value && !player.value && !loading.value)
 })
 
 // Watch for auth state changes and load profile when ready
@@ -299,9 +423,13 @@ watch(shouldLoadProfile, async (shouldLoad) => {
 
 const getPlayerInitials = (name: string) => {
   if (!name) return '?'
-  const parts = name.trim().split(' ')
+  const parts = name.trim().split(' ').filter(p => p.length > 0)
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    const first = parts[0]?.[0] || ''
+    const last = parts[parts.length - 1]?.[0] || ''
+    if (first && last) {
+      return (first + last).toUpperCase()
+    }
   }
   return name.substring(0, 2).toUpperCase()
 }

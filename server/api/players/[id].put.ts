@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { updateClerkUserName } from '~/server/utils/clerk'
+import { eloToMmr } from '~/server/utils/rating-system'
 import type { UpdatePlayerPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
     // Verify the player exists and belongs to the clerk_id
     const { data: existingPlayer, error: fetchError } = await supabase
       .from('players')
-      .select('*')
+      .select('*, category:categories(id, default_elo)')
       .eq('id', playerId)
       .eq('clerk_id', clerk_id)
       .single()
@@ -32,11 +33,12 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // If category_id is provided, verify it exists
-    if (category_id) {
+    // If category_id is provided, verify it exists and get default_elo
+    let newCategoryDefaultElo: number | null = null
+    if (category_id !== undefined && category_id !== null) {
       const { data: category, error: categoryError } = await supabase
         .from('categories')
-        .select('id')
+        .select('id, default_elo')
         .eq('id', category_id)
         .single()
       
@@ -46,6 +48,8 @@ export default defineEventHandler(async (event) => {
           statusMessage: 'Invalid category_id'
         })
       }
+      
+      newCategoryDefaultElo = (category as any).default_elo || 1000
     }
     
     // If city_id is provided, verify it exists
@@ -93,8 +97,24 @@ export default defineEventHandler(async (event) => {
       }
       updatePayload.city_id = city_id
     }
+    
+    // Handle category change: only adjust ELO if player hasn't played any placement matches
     if (category_id !== undefined) {
       updatePayload.category_id = category_id
+      
+      // Check if category is actually changing
+      const isCategoryChanging = category_id !== existingPlayer.category_id
+      const hasNoPlacementMatches = (existingPlayer.placement_matches_completed || 0) === 0
+      
+      // Only adjust ELO if:
+      // 1. Category is actually changing
+      // 2. Player hasn't played any placement matches yet
+      // 3. New category has a default_elo
+      if (isCategoryChanging && hasNoPlacementMatches && newCategoryDefaultElo !== null) {
+        updatePayload.elo = newCategoryDefaultElo
+        updatePayload.mmr = eloToMmr(newCategoryDefaultElo)
+      }
+      // If player has already played matches, keep their current ELO (don't update it)
     }
     
     // Update player in Supabase

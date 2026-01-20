@@ -5,6 +5,23 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-01-01',
   devtools: { enabled: true },
   
+  // Load CSS synchronously to prevent FOUC
+  css: [
+    '@/assets/css/design-system.css',
+    '@/assets/css/main.css'
+  ],
+  
+  // App configuration for better rendering
+  app: {
+    head: {
+      htmlAttrs: {
+        lang: 'es',
+        class: 'dark'
+      }
+    },
+    pageTransition: { name: 'page', mode: 'out-in' }
+  },
+  
   modules: [
     '@nuxt/ui',
     '@clerk/nuxt'

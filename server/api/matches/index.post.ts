@@ -6,7 +6,7 @@ import type { CreateMatchPayload } from '~/types'
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody<CreateMatchPayload & { clerk_id: string }>(event)
-    const { clerk_id, player1_id, player2_id, pending_player2_id, scheduled_at, location } = body
+    const { clerk_id, player1_id, player2_id, pending_player2_id, scheduled_at, location, is_competitive } = body
     
     if (!clerk_id || !player1_id || !scheduled_at) {
       throw createError({
@@ -105,11 +105,13 @@ export default defineEventHandler(async (event) => {
     }
     
     // Create the match with status 'scheduled'
+    // is_competitive defaults to true if not specified
     const matchData: any = {
       player1_id,
       scheduled_at: new Date(scheduled_at).toISOString(),
       status: 'scheduled',
-      location: location || null
+      location: location || null,
+      is_competitive: is_competitive !== undefined ? is_competitive : true
     }
     
     if (player2_id) {
