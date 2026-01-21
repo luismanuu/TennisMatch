@@ -109,9 +109,23 @@ export default defineEventHandler(async (event) => {
     // is_competitive defaults to true if not specified
     // match_proposed_by is set to player1 (the creator) UNLESS it's a tournament match
     // Tournament matches don't require acceptance - they're assigned by admin/organizer
+    
+    // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
+    // Treat it as local time and convert to ISO string for storage
+    let scheduledAtISO: string
+    if (scheduled_at.includes('T') && !scheduled_at.includes('Z') && !scheduled_at.includes('+') && !scheduled_at.includes('-', 10)) {
+      // This is a datetime-local format (no timezone), treat as local time
+      // The string is already in the correct format for PostgreSQL TIMESTAMP WITH TIME ZONE
+      // PostgreSQL will interpret it as local time if no timezone is specified
+      scheduledAtISO = scheduled_at
+    } else {
+      // Already has timezone info or is ISO format
+      scheduledAtISO = new Date(scheduled_at).toISOString()
+    }
+    
     const matchData: any = {
       player1_id,
-      scheduled_at: new Date(scheduled_at).toISOString(),
+      scheduled_at: scheduledAtISO,
       status: 'scheduled',
       location: location || null,
       is_competitive: is_competitive !== undefined ? is_competitive : true

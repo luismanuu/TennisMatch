@@ -364,15 +364,27 @@ export default defineEventHandler(async (event) => {
         const acceptanceData = data as { scheduled_at?: string, location?: string } | undefined
         if (acceptanceData) {
           if (acceptanceData.scheduled_at) {
+            // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
+            // Treat it as local time
+            let scheduledAtISO: string
+            if (acceptanceData.scheduled_at.includes('T') && !acceptanceData.scheduled_at.includes('Z') && !acceptanceData.scheduled_at.includes('+') && !acceptanceData.scheduled_at.includes('-', 10)) {
+              // This is a datetime-local format (no timezone), use as-is
+              // PostgreSQL will interpret it correctly
+              scheduledAtISO = acceptanceData.scheduled_at
+            } else {
+              // Already has timezone info or is ISO format
+              scheduledAtISO = new Date(acceptanceData.scheduled_at).toISOString()
+            }
+            
             // Validate date is in the future
-            const proposedDate = new Date(acceptanceData.scheduled_at)
+            const proposedDate = new Date(scheduledAtISO)
             if (proposedDate <= new Date()) {
               throw createError({
                 statusCode: 400,
                 statusMessage: 'Proposed scheduled date must be in the future'
               })
             }
-            updateData.acceptance_proposed_scheduled_at = acceptanceData.scheduled_at
+            updateData.acceptance_proposed_scheduled_at = scheduledAtISO
           }
           
           if (acceptanceData.location !== undefined) {
@@ -628,8 +640,18 @@ export default defineEventHandler(async (event) => {
           })
         }
         
+        // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
+        let scheduledAtISO: string
+        if (scheduleData.scheduled_at.includes('T') && !scheduleData.scheduled_at.includes('Z') && !scheduleData.scheduled_at.includes('+') && !scheduleData.scheduled_at.includes('-', 10)) {
+          // This is a datetime-local format (no timezone), use as-is
+          scheduledAtISO = scheduleData.scheduled_at
+        } else {
+          // Already has timezone info or is ISO format
+          scheduledAtISO = new Date(scheduleData.scheduled_at).toISOString()
+        }
+        
         // Validate date is in the future
-        const scheduledDate = new Date(scheduleData.scheduled_at)
+        const scheduledDate = new Date(scheduledAtISO)
         if (scheduledDate <= new Date()) {
           throw createError({
             statusCode: 400,
@@ -658,7 +680,7 @@ export default defineEventHandler(async (event) => {
         
         updateData.schedule_proposed_by = currentPlayer.id
         updateData.schedule_proposed_at = new Date().toISOString()
-        updateData.schedule_proposed_scheduled_at = scheduleData.scheduled_at
+        updateData.schedule_proposed_scheduled_at = scheduledAtISO
         // Clear any previous approval/rejection
         updateData.schedule_approved_by = null
         updateData.schedule_rejected_by = null
@@ -671,7 +693,7 @@ export default defineEventHandler(async (event) => {
             type: 'schedule_proposal',
             metadata: {
               proposed_by: currentPlayer.id,
-              scheduled_at: scheduleData.scheduled_at
+              scheduled_at: scheduledAtISO
             }
           })
         }
@@ -798,8 +820,18 @@ export default defineEventHandler(async (event) => {
           })
         }
         
+        // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
+        let rescheduledAtISO: string
+        if (rescheduleData.scheduled_at.includes('T') && !rescheduleData.scheduled_at.includes('Z') && !rescheduleData.scheduled_at.includes('+') && !rescheduleData.scheduled_at.includes('-', 10)) {
+          // This is a datetime-local format (no timezone), use as-is
+          rescheduledAtISO = rescheduleData.scheduled_at
+        } else {
+          // Already has timezone info or is ISO format
+          rescheduledAtISO = new Date(rescheduleData.scheduled_at).toISOString()
+        }
+        
         // Validate new date is in the future
-        const newDate = new Date(rescheduleData.scheduled_at)
+        const newDate = new Date(rescheduledAtISO)
         if (newDate <= new Date()) {
           throw createError({
             statusCode: 400,
@@ -828,7 +860,7 @@ export default defineEventHandler(async (event) => {
         
         updateData.reschedule_proposed_by = currentPlayer.id
         updateData.reschedule_proposed_at = new Date().toISOString()
-        updateData.reschedule_proposed_scheduled_at = rescheduleData.scheduled_at
+        updateData.reschedule_proposed_scheduled_at = rescheduledAtISO
         // Clear any previous approval/rejection
         updateData.reschedule_approved_by = null
         updateData.reschedule_rejected_by = null
@@ -841,7 +873,7 @@ export default defineEventHandler(async (event) => {
             type: 'reschedule_proposal',
             metadata: {
               proposed_by: currentPlayer.id,
-              new_scheduled_at: rescheduleData.scheduled_at,
+              new_scheduled_at: rescheduledAtISO,
               original_scheduled_at: match.scheduled_at
             }
           })

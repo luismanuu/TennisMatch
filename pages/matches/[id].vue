@@ -1782,8 +1782,13 @@ const handleAcceptMatchWithChanges = async () => {
   
   actionLoading.value = true
   try {
+    // Convert datetime-local to ISO string (preserves local time as UTC)
+    const scheduledAtISO = acceptMatchForm.value.scheduled_at 
+      ? new Date(acceptMatchForm.value.scheduled_at).toISOString()
+      : null
+    
     const payload = acceptMatchForm.value.proposeChanges ? {
-      scheduled_at: acceptMatchForm.value.scheduled_at || undefined,
+      scheduled_at: scheduledAtISO || acceptMatchForm.value.scheduled_at || undefined,
       location: acceptMatchForm.value.location || undefined
     } : undefined
     
@@ -1860,7 +1865,9 @@ const handleSchedule = async () => {
     return
   }
   
-  const selectedDate = new Date(scheduleForm.value.scheduled_at)
+  // Convert datetime-local to ISO string (preserves local time as UTC)
+  const scheduledAtISO = new Date(scheduleForm.value.scheduled_at).toISOString()
+  const selectedDate = new Date(scheduledAtISO)
   if (selectedDate <= new Date()) {
     scheduleFormError.value = 'No puedes programar un partido en el pasado'
     return
@@ -1870,7 +1877,7 @@ const handleSchedule = async () => {
   
   try {
     await proposeSchedule(userId.value, match.value.id, {
-      scheduled_at: scheduleForm.value.scheduled_at
+      scheduled_at: scheduledAtISO
     })
     
     // Reload match to get updated data
@@ -1898,8 +1905,10 @@ const handleProposeReschedule = async () => {
     return
   }
   
+  // Convert datetime-local to ISO string (preserves local time as UTC)
+  const rescheduledAtISO = new Date(rescheduleForm.value.scheduled_at).toISOString()
   // Validate date is not in the past
-  const selectedDate = new Date(rescheduleForm.value.scheduled_at)
+  const selectedDate = new Date(rescheduledAtISO)
   const now = new Date()
   
   if (selectedDate < now) {
@@ -1910,7 +1919,7 @@ const handleProposeReschedule = async () => {
   actionLoading.value = true
   try {
     await proposeReschedule(userId.value, match.value.id, {
-      scheduled_at: rescheduleForm.value.scheduled_at
+      scheduled_at: rescheduledAtISO
     })
     showRescheduleForm.value = false
     rescheduleForm.value = { scheduled_at: '' }
