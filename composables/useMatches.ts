@@ -12,7 +12,13 @@ export const useMatches = () => {
     hasMore: boolean
   } | null>(null)
   
-  const fetchMatches = async (clerkId?: string, page: number = 1, limit: number = 10) => {
+  interface MatchFilters {
+    status?: string
+    start_date?: string
+    end_date?: string
+  }
+  
+  const fetchMatches = async (clerkId?: string, page: number = 1, limit: number = 10, filters?: MatchFilters) => {
     loading.value = true
     error.value = null
     
@@ -26,6 +32,11 @@ export const useMatches = () => {
         clerkId = userId.value
       }
       
+      const queryParams: any = { clerk_id: clerkId, page, limit }
+      if (filters?.status) queryParams.status = filters.status
+      if (filters?.start_date) queryParams.start_date = filters.start_date
+      if (filters?.end_date) queryParams.end_date = filters.end_date
+      
       const response = await $fetch<{
         matches: Match[]
         pagination: {
@@ -36,7 +47,7 @@ export const useMatches = () => {
           hasMore: boolean
         }
       }>('/api/matches', {
-        query: { clerk_id: clerkId, page, limit }
+        query: queryParams
       })
       
       matches.value = response.matches

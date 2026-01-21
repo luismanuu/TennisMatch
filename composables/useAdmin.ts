@@ -12,15 +12,15 @@ export const useAdmin = () => {
   
   // Pagination state
   const pendingPlayersPage = ref(1)
-  const pendingPlayersPageSize = ref(50)
+  const pendingPlayersPageSize = ref(15)
   const pendingPlayersTotal = ref(0)
   
   const playersPage = ref(1)
-  const playersPageSize = ref(50)
+  const playersPageSize = ref(15)
   const playersTotal = ref(0)
   
   const matchesPage = ref(1)
-  const matchesPageSize = ref(50)
+  const matchesPageSize = ref(15)
   const matchesTotal = ref(0)
   
   // Check if current user is admin
@@ -550,7 +550,7 @@ export const useAdmin = () => {
   const pendingOrganizerInvitations = ref<any[]>([])
 
   const organizersPage = ref(1)
-  const organizersPageSize = ref(50)
+  const organizersPageSize = ref(15)
   const organizersTotal = ref(0)
   const organizersPendingTotal = ref(0)
 

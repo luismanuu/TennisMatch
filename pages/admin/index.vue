@@ -746,8 +746,24 @@
                   {{ cat.name }}
                 </option>
               </select>
+              <select
+                v-model="playerRankingFilter"
+                @change="filterPlayers"
+                class="px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+              >
+                <option value="">All Rankings</option>
+                <option value="top10">Top 10</option>
+                <option value="top50">Top 50</option>
+                <option value="top100">Top 100</option>
+                <option value="bronze">Bronze (0-1499)</option>
+                <option value="silver">Silver (1500-1999)</option>
+                <option value="gold">Gold (2000-2499)</option>
+                <option value="platinum">Platinum (2500-2999)</option>
+                <option value="diamond">Diamond (3000-3499)</option>
+                <option value="grandmaster">Grandmaster (4000+)</option>
+              </select>
               <button
-                v-if="playerSearch || playerCategoryFilter || playerTierFilter"
+                v-if="playerSearch || playerCategoryFilter || playerTierFilter || playerRankingFilter"
                 @click="clearPlayerFilters"
                 class="btn-secondary text-size-4"
               >
@@ -860,7 +876,7 @@
                 <thead class="bg-surface border-b border-border-subtle">
                   <tr>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Name</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Email (Clerk ID)</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Email</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Category</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">ELO / Tier</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Rank</th>
@@ -872,7 +888,7 @@
                 </thead>
                 <tbody>
                   <tr 
-                    v-for="player in filteredPlayers" 
+                    v-for="player in filteredPlayersWithRanking" 
                     :key="player.id"
                     :class="[
                       'border-b border-border-subtle hover:bg-surface/50 transition-colors',
@@ -880,8 +896,20 @@
                     ]"
                   >
                     <td class="p-4">
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-2 flex-wrap">
                         <span class="text-size-4 font-regular text-foreground">{{ player.name }}</span>
+                        <span 
+                          v-if="player.role === 'admin'"
+                          class="px-2 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-600 border border-purple-500/30"
+                        >
+                          Admin
+                        </span>
+                        <span 
+                          v-else-if="player.role === 'tournament_organizer'"
+                          class="px-2 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-600 border border-blue-500/30"
+                        >
+                          Organizador
+                        </span>
                         <span 
                           v-if="player.status === 'deleted'"
                           class="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
@@ -890,13 +918,19 @@
                         </span>
                       </div>
                     </td>
-                    <td class="p-4 text-size-4 font-regular text-foreground-muted font-mono text-xs">
-                      {{ player.clerk_id }}
+                    <td class="p-4 text-size-4 font-regular text-foreground-muted">
+                      {{ player.email || 'N/A' }}
                     </td>
                     <td class="p-4 text-size-4 font-regular text-foreground">
                       {{ player.category?.name || 'N/A' }}
                     </td>
                     <td class="p-4 text-size-4 font-regular text-foreground">{{ player.elo }}</td>
+                    <td class="p-4 text-size-4 font-regular text-foreground-muted">
+                      {{ getTierFromElo(player.elo || 0) }}
+                    </td>
+                    <td class="p-4 text-size-4 font-regular text-foreground-muted">
+                      {{ player.placement_matches_completed || 0 }}/3
+                    </td>
                     <td class="p-4 text-size-4 font-regular text-foreground-muted">
                       {{ player.phone_number || 'N/A' }}
                     </td>
@@ -937,6 +971,18 @@
                 </tbody>
               </table>
             </div>
+            
+            <!-- Pagination -->
+            <div v-if="playersTotal > 0" class="mt-6">
+              <PaginationControls
+                :current-page="playersPage"
+                :total-pages="Math.ceil(playersTotal / playersPageSize)"
+                :total="playersTotal"
+                :page-size="playersPageSize"
+                :loading="loading"
+                @page-change="handlePlayersPageChange"
+              />
+            </div>
           </div>
 
           <!-- Empty State -->
@@ -945,15 +991,15 @@
               <Icon name="heroicons:user-group" class="w-12 h-12 text-accent" />
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-4">
-              {{ playerSearch || playerCategoryFilter || playerTierFilter ? 'No se encontraron jugadores' : 'No hay jugadores' }}
+              {{ playerSearch || playerCategoryFilter || playerTierFilter || playerRankingFilter ? 'No se encontraron jugadores' : 'No hay jugadores' }}
             </h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 leading-relaxed">
-              {{ playerSearch || playerCategoryFilter || playerTierFilter
+              {{ playerSearch || playerCategoryFilter || playerTierFilter || playerRankingFilter
                 ? 'Intenta ajustar tu búsqueda o filtros.' 
                 : 'No hay jugadores registrados en el sistema.' }}
             </p>
             <button
-              v-if="playerSearch || playerCategoryFilter || playerTierFilter"
+              v-if="playerSearch || playerCategoryFilter || playerTierFilter || playerRankingFilter"
               @click="clearPlayerFilters"
               class="btn-secondary text-size-4 group"
             >
@@ -1176,6 +1222,26 @@
                 </button>
               </div>
             </div>
+            <!-- 24-hour filter toggle -->
+            <div class="mt-4 pt-4 border-t border-border-subtle">
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="block text-size-4 font-semibold text-foreground mb-1">Mostrar solo últimas 24 horas</label>
+                  <p class="text-size-5 text-foreground-muted">Por defecto se muestran solo los partidos de las últimas 24 horas</p>
+                </div>
+                <button
+                  @click="toggle24HourFilter"
+                  :class="[
+                    'px-4 py-2 rounded-lg text-size-4 font-semibold transition-colors',
+                    useDefault24HourFilter 
+                      ? 'bg-accent text-white' 
+                      : 'bg-surface border-2 border-border-subtle text-foreground hover:border-accent'
+                  ]"
+                >
+                  {{ useDefault24HourFilter ? 'Activado' : 'Desactivado' }}
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Error State -->
@@ -1281,15 +1347,16 @@
             </div>
             
             <!-- Pagination -->
-            <PaginationControls
-              v-if="matchesTotal > matchesPageSize"
-              :current-page="matchesPage"
-              :total-pages="Math.ceil(matchesTotal / matchesPageSize)"
-              :total="matchesTotal"
-              :page-size="matchesPageSize"
-              :loading="loading"
-              @page-change="handleMatchesPageChange"
-            />
+            <div v-if="matchesTotal > 0" class="mt-6">
+              <PaginationControls
+                :current-page="matchesPage"
+                :total-pages="Math.ceil(matchesTotal / matchesPageSize)"
+                :total="matchesTotal"
+                :page-size="matchesPageSize"
+                :loading="loading"
+                @page-change="handleMatchesPageChange"
+              />
+            </div>
           </div>
 
           <!-- Empty State -->
@@ -1441,11 +1508,20 @@ const playerForm = ref({
 })
 const allCategories = ref<any[]>([])
 const allPlayersList = ref<any[]>([])
+const playersWithRanking = computed(() => {
+  // Sort players by ELO descending to calculate ranking
+  const sorted = [...allPlayersList.value].sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
+  return sorted.map((player: any, index: number) => ({
+    ...player,
+    ranking_position: index + 1
+  }))
+})
 
 // Player search and filters (client-side filtering on current page)
 const playerSearch = ref('')
 const playerCategoryFilter = ref('')
 const playerTierFilter = ref('')
+const playerRankingFilter = ref('')
 const filteredPlayers = computed(() => {
   let result = allPlayersList.value
 
@@ -1453,7 +1529,8 @@ const filteredPlayers = computed(() => {
     const searchLower = playerSearch.value.toLowerCase()
     result = result.filter((p: any) => 
       p.name.toLowerCase().includes(searchLower) ||
-      p.clerk_id.toLowerCase().includes(searchLower)
+      (p.email && p.email.toLowerCase().includes(searchLower)) ||
+      (p.clerk_id && p.clerk_id.toLowerCase().includes(searchLower))
     )
   }
 
@@ -1468,7 +1545,66 @@ const filteredPlayers = computed(() => {
     })
   }
 
+  if (playerRankingFilter.value) {
+    // Sort by ELO descending first for ranking filters
+    const sortedByElo = [...result].sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
+    
+    if (playerRankingFilter.value === 'top10') {
+      result = sortedByElo.slice(0, 10)
+    } else if (playerRankingFilter.value === 'top50') {
+      result = sortedByElo.slice(0, 50)
+    } else if (playerRankingFilter.value === 'top100') {
+      result = sortedByElo.slice(0, 100)
+    } else if (playerRankingFilter.value === 'bronze') {
+      result = result.filter((p: any) => {
+        const elo = p.elo || 0
+        return elo >= 1 && elo <= 1499
+      })
+    } else if (playerRankingFilter.value === 'silver') {
+      result = result.filter((p: any) => {
+        const elo = p.elo || 0
+        return elo >= 1500 && elo <= 1999
+      })
+    } else if (playerRankingFilter.value === 'gold') {
+      result = result.filter((p: any) => {
+        const elo = p.elo || 0
+        return elo >= 2000 && elo <= 2499
+      })
+    } else if (playerRankingFilter.value === 'platinum') {
+      result = result.filter((p: any) => {
+        const elo = p.elo || 0
+        return elo >= 2500 && elo <= 2999
+      })
+    } else if (playerRankingFilter.value === 'diamond') {
+      result = result.filter((p: any) => {
+        const elo = p.elo || 0
+        return elo >= 3000 && elo <= 3499
+      })
+    } else if (playerRankingFilter.value === 'grandmaster') {
+      result = result.filter((p: any) => {
+        const elo = p.elo || 0
+        return elo >= 4000
+      })
+    }
+  }
+
   return result
+})
+
+// Add ranking position to filtered players
+const filteredPlayersWithRanking = computed(() => {
+  // First, get all players sorted by ELO to calculate global ranking
+  const allSorted = [...allPlayersList.value].sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
+  const rankingMap = new Map()
+  allSorted.forEach((player: any, index: number) => {
+    rankingMap.set(player.id, index + 1)
+  })
+  
+  // Apply ranking to filtered players
+  return filteredPlayers.value.map((player: any) => ({
+    ...player,
+    ranking_position: rankingMap.get(player.id) || null
+  }))
 })
 
 // Match filters
@@ -1478,6 +1614,9 @@ const matchFilters = ref({
   start_date: '',
   end_date: ''
 })
+
+// Track if we're using the default 24-hour filter
+const useDefault24HourFilter = ref(true)
 
 // Category management
 const categoryLoading = ref(false)
@@ -1637,6 +1776,7 @@ const clearPlayerFilters = () => {
   playerSearch.value = ''
   playerCategoryFilter.value = ''
   playerTierFilter.value = ''
+  playerRankingFilter.value = ''
   // Reset to page 1 when clearing filters
   loadPlayers(1)
 }
@@ -1881,27 +2021,60 @@ const loadCategories = async () => {
 const loadMatches = async (page?: number) => {
   try {
     successMessage.value = null
+    
+    // Default: show matches from last 24 hours if no date filters are set and default filter is enabled
+    // This filter is applied on the backend to avoid loading all matches
+    let startDate = matchFilters.value.start_date
+    let endDate = matchFilters.value.end_date
+    
+    // If no date filters are explicitly set and default 24-hour filter is enabled
+    // Calculate 24 hours ago in UTC (database stores in UTC)
+    if (!startDate && !endDate && useDefault24HourFilter.value) {
+      const now = new Date()
+      const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
+      // Use ISO string format (YYYY-MM-DDTHH:mm:ss) for precise timestamp filtering
+      // This will be sent to the backend API to filter at database level
+      startDate = twentyFourHoursAgo.toISOString()
+    }
+    
+    // Always send filters to backend - backend will apply them at database level
     await fetchAllMatches({
       status: matchFilters.value.status || undefined,
       player_id: matchFilters.value.player_id || undefined,
-      start_date: matchFilters.value.start_date || undefined,
-      end_date: matchFilters.value.end_date || undefined
+      start_date: startDate || undefined,
+      end_date: endDate || undefined
     }, page)
   } catch (err) {
     console.error('Error loading matches:', err)
   }
 }
 
+const toggle24HourFilter = () => {
+  useDefault24HourFilter.value = !useDefault24HourFilter.value
+  // Clear date filters when toggling
+  matchFilters.value.start_date = ''
+  matchFilters.value.end_date = ''
+  loadMatches(1)
+}
+
 const handleMatchesPageChange = (page: number) => {
   loadMatches(page)
 }
 
-// Reset pagination when filters change
-watch([() => matchFilters.value.status, () => matchFilters.value.start_date, () => matchFilters.value.end_date], () => {
+// Watch for date filter changes to disable 24-hour filter (but don't reload automatically)
+// Only disable the 24-hour filter when dates are set, but don't trigger any reloads
+watch([() => matchFilters.value.start_date, () => matchFilters.value.end_date], ([startDate, endDate]) => {
   if (activeTab.value === 'matches') {
-    loadMatches(1)
+    // If user sets date filters manually, disable the 24-hour default filter
+    if (startDate || endDate) {
+      useDefault24HourFilter.value = false
+    } else {
+      // If both dates are cleared, re-enable 24-hour filter
+      useDefault24HourFilter.value = true
+    }
+    // Don't reload automatically - wait for user to click "Apply Filters"
   }
-}, { deep: true })
+})
 
 const loadStats = async () => {
   try {

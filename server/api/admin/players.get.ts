@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { getClerkClient } from '~/server/utils/clerk'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -16,6 +17,7 @@ export default defineEventHandler(async (event) => {
     await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
+    const clerkClient = getClerkClient()
 
     // Check if we should include deleted players
     const includeDeleted = query.include_deleted === 'true'
@@ -81,8 +83,31 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // Enrich players with email and role from Clerk
+    const playersWithEmail = await Promise.all(
+      (players || []).map(async (player) => {
+        try {
+          const clerkUser = await clerkClient.users.getUser(player.clerk_id)
+          const role = clerkUser.publicMetadata?.role as string | undefined
+          return {
+            ...player,
+            email: clerkUser.emailAddresses[0]?.emailAddress || '',
+            role: role || 'player'
+          }
+        } catch (err) {
+          // Skip if user doesn't exist in Clerk
+          console.warn(`Could not fetch Clerk user for ${player.clerk_id}:`, err)
+          return {
+            ...player,
+            email: '',
+            role: 'player'
+          }
+        }
+      })
+    )
+
     return {
-      data: players || [],
+      data: playersWithEmail,
       total: count || 0,
       page: Math.floor(offset / limit) + 1,
       page_size: limit

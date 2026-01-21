@@ -50,7 +50,7 @@ export interface NotificationResponse {
  */
 export const useNotifications = () => {
   const authState = useAuthState()
-  const toast = useToast()
+  const toast = useToastNotifications()
   
   const notifications = ref<Notification[]>([])
   const categorized = ref<NotificationResponse['categorized'] | null>(null)

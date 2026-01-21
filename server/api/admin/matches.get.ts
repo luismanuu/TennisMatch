@@ -1,6 +1,9 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 
+// Ecuador timezone offset: UTC-5
+const ECUADOR_UTC_OFFSET = -5
+
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
@@ -66,11 +69,36 @@ export default defineEventHandler(async (event) => {
     }
 
     if (startDate) {
-      queryBuilder = queryBuilder.gte('scheduled_at', startDate)
+      // If startDate is just a date (YYYY-MM-DD), ensure it starts at 00:00:00 in Ecuador timezone
+      let startDateValue = startDate
+      if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        // Convert start of day in Ecuador (00:00:00) to UTC
+        // Ecuador is UTC-5, so 00:00:00 on day X in Ecuador = 05:00:00 on day X-1 in UTC
+        // Example: 2026-01-22 00:00:00 Ecuador = 2026-01-21 05:00:00 UTC
+        const [year, month, day] = startDate.split('-').map(Number)
+        // Create UTC date: day X at 05:00 UTC = day X at 00:00 Ecuador
+        // We need day X-1 at 05:00 UTC
+        const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
+        startDateValue = utcDate.toISOString()
+      }
+      queryBuilder = queryBuilder.gte('scheduled_at', startDateValue)
     }
 
     if (endDate) {
-      queryBuilder = queryBuilder.lte('scheduled_at', endDate)
+      // If endDate is just a date (YYYY-MM-DD), include the entire day in Ecuador timezone
+      let endDateValue = endDate
+      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        // Convert end of day in Ecuador (23:59:59.999) to UTC
+        // Ecuador is UTC-5, so 23:59:59.999 on day X in Ecuador = 04:59:59.999 on day X+1 in UTC
+        // To include the entire day, we use 05:00:00 on day X+1 in UTC
+        // Example: 2026-01-22 23:59:59.999 Ecuador = 2026-01-23 04:59:59.999 UTC
+        // We use 2026-01-23 05:00:00 UTC to include everything
+        const [year, month, day] = endDate.split('-').map(Number)
+        // Create UTC date: day X+1 at 05:00 UTC = day X+1 at 00:00 Ecuador (includes all of day X)
+        const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
+        endDateValue = utcDate.toISOString()
+      }
+      queryBuilder = queryBuilder.lte('scheduled_at', endDateValue)
     }
 
     // Get total count
@@ -85,10 +113,26 @@ export default defineEventHandler(async (event) => {
       countQuery = countQuery.or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
     }
     if (startDate) {
-      countQuery = countQuery.gte('scheduled_at', startDate)
+      // If startDate is just a date (YYYY-MM-DD), ensure it starts at 00:00:00 in Ecuador timezone
+      let startDateValue = startDate
+      if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        // Convert start of day in Ecuador (00:00:00) to UTC
+        const [year, month, day] = startDate.split('-').map(Number)
+        const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
+        startDateValue = utcDate.toISOString()
+      }
+      countQuery = countQuery.gte('scheduled_at', startDateValue)
     }
     if (endDate) {
-      countQuery = countQuery.lte('scheduled_at', endDate)
+      // If endDate is just a date (YYYY-MM-DD), include the entire day in Ecuador timezone
+      let endDateValue = endDate
+      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        // Convert end of day in Ecuador (23:59:59.999) to UTC
+        const [year, month, day] = endDate.split('-').map(Number)
+        const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
+        endDateValue = utcDate.toISOString()
+      }
+      countQuery = countQuery.lte('scheduled_at', endDateValue)
     }
     
     const { count, error: countError } = await countQuery

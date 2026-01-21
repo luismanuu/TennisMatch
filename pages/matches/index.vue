@@ -315,7 +315,7 @@
         <!-- Pagination -->
         <div v-if="!loading && !error && totalFilteredPages > 1" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
           <button
-            @click="currentPage = Math.max(1, currentPage - 1); if (!statusFilter) loadMatches(currentPage)"
+            @click="handlePreviousPage"
             :disabled="currentPage === 1"
             class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 sm:gap-2"
           >
@@ -329,7 +329,7 @@
             <span class="text-xs sm:text-size-3 font-semibold text-foreground">{{ totalFilteredPages }}</span>
           </div>
           <button
-            @click="currentPage = Math.min(totalFilteredPages, currentPage + 1); if (!statusFilter) loadMatches(currentPage)"
+            @click="handleNextPage"
             :disabled="currentPage >= totalFilteredPages"
             class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 sm:gap-2"
           >
@@ -540,11 +540,32 @@ const totalFilteredPages = computed(() => {
 
 const loadMatches = async (page: number = 1) => {
   if (isLoaded.value && userId.value) {
-    // Always load all matches (with high limit) to ensure proper sorting
-    // Frontend will handle pagination to maintain consistent ordering
-    const limit = 1000 // Load enough matches to handle sorting properly
-    await fetchMatches(userId.value, 1, limit) // Always load from page 1 to get all matches
+    // Use backend filtering instead of loading all matches
+    // Default: show matches from last 24 hours (handled by backend)
+    // Status filter is handled by backend when statusFilter is set
+    const filters: { status?: string } = {}
+    if (statusFilter.value && statusFilter.value !== 'pending') {
+      filters.status = statusFilter.value
+    }
+    // For 'pending' filter, we still need to load and filter client-side
+    // because it requires complex logic based on match state
+    const limit = statusFilter.value === 'pending' ? 1000 : 50 // Load more for pending filter
+    await fetchMatches(userId.value, 1, limit, filters)
     currentPage.value = page
+  }
+}
+
+const handlePreviousPage = () => {
+  currentPage.value = Math.max(1, currentPage.value - 1)
+  if (!statusFilter.value) {
+    loadMatches(currentPage.value)
+  }
+}
+
+const handleNextPage = () => {
+  currentPage.value = Math.min(totalFilteredPages.value, currentPage.value + 1)
+  if (!statusFilter.value) {
+    loadMatches(currentPage.value)
   }
 }
 

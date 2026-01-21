@@ -8,6 +8,10 @@ export default defineEventHandler(async (event) => {
     const page = parseInt(query.page as string) || 1
     const limit = parseInt(query.limit as string) || 10
     const offset = (page - 1) * limit
+    const status = query.status as string | undefined
+    // Default: show matches from last 24 hours if no date filters are set
+    const startDate = query.start_date as string | undefined
+    const endDate = query.end_date as string | undefined
     
     if (!clerk_id) {
       throw createError({
@@ -42,9 +46,8 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Fetch all matches where user is player1, player2, or invited a pending_player2
-    // Use a single query with OR condition to get all relevant matches
-    const { data: allMatches, error: matchesError } = await supabase
+    // Build query for matches where user is player1, player2, or invited a pending_player2
+    let matchesQuery = supabase
       .from('matches')
       .select(`
         *,
@@ -89,6 +92,31 @@ export default defineEventHandler(async (event) => {
         )
       `)
       .or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
+    
+    // Apply status filter if provided
+    if (status) {
+      matchesQuery = matchesQuery.eq('status', status)
+    } else {
+      // Default: exclude cancelled matches unless explicitly requested
+      matchesQuery = matchesQuery.neq('status', 'cancelled')
+    }
+    
+    // Apply date filters if provided
+    if (startDate) {
+      matchesQuery = matchesQuery.gte('scheduled_at', startDate)
+    }
+    if (endDate) {
+      matchesQuery = matchesQuery.lte('scheduled_at', endDate)
+    }
+    
+    // Default: show matches from last 24 hours if no date filters are set
+    if (!startDate && !endDate) {
+      const now = new Date()
+      const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
+      matchesQuery = matchesQuery.gte('scheduled_at', twentyFourHoursAgo.toISOString())
+    }
+    
+    const { data: allMatches, error: matchesError } = await matchesQuery
       .order('scheduled_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
     
@@ -114,7 +142,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Also fetch matches where user invited a pending_player2
-    const { data: pendingMatches, error: pendingError } = await supabase
+    let pendingMatchesQuery = supabase
       .from('matches')
       .select(`
         *,
@@ -159,6 +187,29 @@ export default defineEventHandler(async (event) => {
         )
       `)
       .not('pending_player2_id', 'is', null)
+    
+    // Apply same filters to pending matches query
+    if (status) {
+      pendingMatchesQuery = pendingMatchesQuery.eq('status', status)
+    } else {
+      pendingMatchesQuery = pendingMatchesQuery.neq('status', 'cancelled')
+    }
+    
+    if (startDate) {
+      pendingMatchesQuery = pendingMatchesQuery.gte('scheduled_at', startDate)
+    }
+    if (endDate) {
+      pendingMatchesQuery = pendingMatchesQuery.lte('scheduled_at', endDate)
+    }
+    
+    // Default: show matches from last 24 hours if no date filters are set
+    if (!startDate && !endDate) {
+      const now = new Date()
+      const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
+      pendingMatchesQuery = pendingMatchesQuery.gte('scheduled_at', twentyFourHoursAgo.toISOString())
+    }
+    
+    const { data: pendingMatches, error: pendingError } = await pendingMatchesQuery
       .order('scheduled_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
     
