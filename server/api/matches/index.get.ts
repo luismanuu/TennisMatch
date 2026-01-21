@@ -89,6 +89,8 @@ export default defineEventHandler(async (event) => {
         )
       `)
       .or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
+      .order('scheduled_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
     
     if (matchesError) {
       console.error('Error fetching matches:', {
@@ -157,6 +159,8 @@ export default defineEventHandler(async (event) => {
         )
       `)
       .not('pending_player2_id', 'is', null)
+      .order('scheduled_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
     
     // Combine matches and filter pending matches where user is the inviter
     let filteredData = (allMatches || []).map((match: any) => ({ ...match }))
@@ -172,6 +176,27 @@ export default defineEventHandler(async (event) => {
       const newMatches = userPendingMatches.filter((m: any) => !existingIds.has(m.id))
       filteredData = [...filteredData, ...newMatches]
     }
+    
+    // Sort by scheduled_at descending BEFORE enriching (to maintain order)
+    // This ensures proper ordering even after merging results from different queries
+    filteredData.sort((a: any, b: any) => {
+      // Only compare if both have scheduled_at
+      if (!a.scheduled_at && !b.scheduled_at) return 0
+      if (!a.scheduled_at) return 1 // Put matches without scheduled_at at the end
+      if (!b.scheduled_at) return -1 // Put matches without scheduled_at at the end
+      
+      // Parse dates and handle invalid dates
+      const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
+      const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+      
+      // Handle invalid dates
+      if (isNaN(dateA) && isNaN(dateB)) return 0
+      if (isNaN(dateA)) return 1
+      if (isNaN(dateB)) return -1
+      
+      // Descending order (newest first) - most recent scheduled_at first
+      return dateB - dateA
+    })
     
     // Collect all player IDs from optional relationships for batch lookup
     const allPlayerIds = new Set<string>()
@@ -246,12 +271,36 @@ export default defineEventHandler(async (event) => {
       return enriched
     })
     
-    // Sort by scheduled_at descending
+    // Re-sort after enriching to ensure correct order (in case enrichment changed anything)
     filteredData.sort((a: any, b: any) => {
-      const dateA = new Date(a.scheduled_at || a.created_at).getTime()
-      const dateB = new Date(b.scheduled_at || b.created_at).getTime()
+      // Only compare if both have scheduled_at
+      if (!a.scheduled_at && !b.scheduled_at) return 0
+      if (!a.scheduled_at) return 1 // Put matches without scheduled_at at the end
+      if (!b.scheduled_at) return -1 // Put matches without scheduled_at at the end
+      
+      // Parse dates and handle invalid dates
+      const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
+      const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+      
+      // Handle invalid dates
+      if (isNaN(dateA) && isNaN(dateB)) return 0
+      if (isNaN(dateA)) return 1
+      if (isNaN(dateB)) return -1
+      
+      // Descending order (newest first)
       return dateB - dateA
     })
+    
+    // Debug: Log first few matches to verify sorting
+    if (filteredData.length > 0) {
+      console.log('[Matches API] Sorted matches (first 5):', 
+        filteredData.slice(0, 5).map((m: any) => ({
+          id: m.id?.substring(0, 8),
+          scheduled_at: m.scheduled_at,
+          date: m.scheduled_at ? new Date(m.scheduled_at).toLocaleString('es-ES') : 'null'
+        }))
+      )
+    }
     
     // Calculate pagination
     const total = filteredData.length

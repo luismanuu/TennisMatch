@@ -380,7 +380,8 @@ onMounted(() => {
 })
 
 const filteredMatches = computed(() => {
-  let filtered = matches.value
+  // Start with a copy to avoid mutating the original array
+  let filtered = [...matches.value]
   
   // Apply status filter
   if (statusFilter.value === 'pending') {
@@ -444,25 +445,82 @@ const filteredMatches = computed(() => {
     filtered = filtered.filter(m => m.status === statusFilter.value)
   }
   
-  // Apply pagination if no filter is active
-  if (!statusFilter.value) {
-    const start = (currentPage.value - 1) * pageSize
-    const end = start + pageSize
-    return filtered.slice(start, end)
-  }
+  // Always re-sort to maintain order
+  // This ensures consistent ordering regardless of filter
+  // Sort BEFORE pagination to ensure correct order
+  filtered.sort((a, b) => {
+    // When "Todos" filter is active, prioritize scheduled/active matches over completed ones
+    if (!statusFilter.value) {
+      // Priority order: scheduled/active first, then completed
+      const statusPriority: Record<string, number> = {
+        scheduled: 1,
+        active: 1,
+        completed: 2,
+        cancelled: 3
+      }
+      
+      const priorityA = statusPriority[a.status] || 99
+      const priorityB = statusPriority[b.status] || 99
+      
+      // If different priorities, sort by priority
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB
+      }
+      
+      // For completed matches, use played_at if available, otherwise scheduled_at
+      // Sort completed matches with oldest first (so they appear at bottom)
+      if (a.status === 'completed' && b.status === 'completed') {
+        const dateA = new Date(a.played_at || a.scheduled_at || '').getTime()
+        const dateB = new Date(b.played_at || b.scheduled_at || '').getTime()
+        
+        if (isNaN(dateA) && isNaN(dateB)) return 0
+        if (isNaN(dateA)) return 1
+        if (isNaN(dateB)) return -1
+        
+        // Ascending order for completed matches (oldest first)
+        return dateA - dateB
+      }
+    }
+    
+    // For scheduled/active matches, use scheduled_at and sort newest first
+    // Get the appropriate date field
+    const getDate = (match: any) => {
+      if (match.status === 'completed' && match.played_at) {
+        return match.played_at
+      }
+      return match.scheduled_at
+    }
+    
+    const dateAStr = getDate(a)
+    const dateBStr = getDate(b)
+    
+    // Only compare if both have dates
+    if (!dateAStr && !dateBStr) return 0
+    if (!dateAStr) return 1 // Put matches without date at the end
+    if (!dateBStr) return -1 // Put matches without date at the end
+    
+    const dateA = new Date(dateAStr).getTime()
+    const dateB = new Date(dateBStr).getTime()
+    
+    // Handle invalid dates
+    if (isNaN(dateA) && isNaN(dateB)) return 0
+    if (isNaN(dateA)) return 1
+    if (isNaN(dateB)) return -1
+    
+    // For non-completed matches or when specific filter is active, descending order (newest first)
+    // For completed matches in "Todos" filter, this won't be reached due to the check above
+    return dateB - dateA
+  })
   
-  // If filter is active, show all filtered results (no pagination)
+  // Return all filtered and sorted matches (pagination is handled by paginatedFilteredMatches)
   return filtered
 })
 
 const paginatedFilteredMatches = computed(() => {
-  if (statusFilter.value) {
-    // When filtered, calculate pagination from filtered results
-    const start = (currentPage.value - 1) * pageSize
-    const end = start + pageSize
-    return filteredMatches.value.slice(start, end)
-  }
-  return filteredMatches.value
+  // Always apply pagination to maintain consistent display
+  const start = (currentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return filteredMatches.value.slice(start, end)
 })
 
 const totalFilteredPages = computed(() => {
@@ -474,10 +532,10 @@ const totalFilteredPages = computed(() => {
 
 const loadMatches = async (page: number = 1) => {
   if (isLoaded.value && userId.value) {
-    // If there's a filter, load all matches (with high limit) for frontend filtering
-    // Otherwise, use pagination
-    const limit = statusFilter.value ? 1000 : pageSize
-    await fetchMatches(userId.value, page, limit)
+    // Always load all matches (with high limit) to ensure proper sorting
+    // Frontend will handle pagination to maintain consistent ordering
+    const limit = 1000 // Load enough matches to handle sorting properly
+    await fetchMatches(userId.value, 1, limit) // Always load from page 1 to get all matches
     currentPage.value = page
   }
 }

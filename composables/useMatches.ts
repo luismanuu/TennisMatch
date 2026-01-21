@@ -41,6 +41,18 @@ export const useMatches = () => {
       
       matches.value = response.matches
       pagination.value = response.pagination
+      
+      // Debug: Log first few matches to verify sorting
+      if (process.dev && matches.value.length > 0) {
+        console.log('[useMatches] Received matches (first 5):', 
+          matches.value.slice(0, 5).map(m => ({
+            id: m.id?.substring(0, 8),
+            scheduled_at: m.scheduled_at,
+            date: m.scheduled_at ? new Date(m.scheduled_at).toLocaleString('es-ES') : 'null'
+          }))
+        )
+      }
+      
       return response.matches
     } catch (err: any) {
       error.value = err

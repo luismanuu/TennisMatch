@@ -61,6 +61,20 @@ export default defineEventHandler(async (event) => {
           status,
           score,
           tournament_id,
+          match_proposed_by,
+          match_accepted_by,
+          match_rejected_by,
+          score_proposed_by,
+          score_approved_by,
+          schedule_proposed_by,
+          schedule_approved_by,
+          schedule_rejected_by,
+          reschedule_proposed_by,
+          reschedule_approved_by,
+          reschedule_rejected_by,
+          acceptance_proposed_scheduled_at,
+          acceptance_change_approved_by,
+          acceptance_change_rejected_by,
           player1:players!matches_player1_id_fkey(
             id,
             name,
@@ -93,23 +107,68 @@ export default defineEventHandler(async (event) => {
     // Ensure notifications is an array (safety check)
     const notificationsList = notifications || []
     
-    // Categorize notifications by type
+    // Filter notifications to only include those where current user has a pending action
+    // This matches the logic from the "Acciones Pendientes" filter
+    const actionableNotifications = notificationsList.filter((n: any) => {
+      const match = n.match
+      if (!match) return false
+      
+      const isPlayer1 = match.player1_id === currentPlayer.id
+      const isPlayer2 = match.player2_id === currentPlayer.id
+      
+      // User must be involved in the match
+      if (!isPlayer1 && !isPlayer2) return false
+      
+      // 1. Match proposal - only count if user is player2 (needs to accept)
+      if (n.type === 'match_proposal') {
+        return isPlayer2 && match.match_proposed_by && match.match_proposed_by !== currentPlayer.id && !match.match_accepted_by && !match.match_rejected_by
+      }
+      
+      // 2. Score proposal - only count if user is NOT the proposer (needs to approve)
+      if (n.type === 'score_proposal') {
+        return match.score_proposed_by && match.score_proposed_by !== currentPlayer.id && !match.score_approved_by
+      }
+      
+      // 3. Schedule proposal - only count if user is NOT the proposer (needs to approve)
+      if (n.type === 'schedule_proposal') {
+        return match.schedule_proposed_by && match.schedule_proposed_by !== currentPlayer.id && !match.schedule_approved_by && !match.schedule_rejected_by
+      }
+      
+      // 4. Reschedule proposal - only count if user is NOT the proposer (needs to approve)
+      if (n.type === 'reschedule_proposal') {
+        return match.reschedule_proposed_by && match.reschedule_proposed_by !== currentPlayer.id && !match.reschedule_approved_by && !match.reschedule_rejected_by
+      }
+      
+      // 5. Acceptance change - only count if user is player1 (needs to approve)
+      if (n.type === 'acceptance_change') {
+        return isPlayer1 && match.match_proposed_by === currentPlayer.id && match.acceptance_proposed_scheduled_at && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by
+      }
+      
+      // 6. Match created - don't count (informational only, no action required)
+      if (n.type === 'match_created') {
+        return false
+      }
+      
+      return false
+    })
+    
+    // Categorize actionable notifications by type
     const categorized = {
-      match_proposals: notificationsList.filter(n => n.type === 'match_proposal'),
-      match_created: notificationsList.filter(n => n.type === 'match_created'),
-      score_proposals: notificationsList.filter(n => n.type === 'score_proposal'),
-      schedule_proposals: notificationsList.filter(n => n.type === 'schedule_proposal'),
-      reschedule_proposals: notificationsList.filter(n => n.type === 'reschedule_proposal'),
-      acceptance_changes: notificationsList.filter(n => n.type === 'acceptance_change')
+      match_proposals: actionableNotifications.filter((n: any) => n.type === 'match_proposal'),
+      match_created: actionableNotifications.filter((n: any) => n.type === 'match_created'),
+      score_proposals: actionableNotifications.filter((n: any) => n.type === 'score_proposal'),
+      schedule_proposals: actionableNotifications.filter((n: any) => n.type === 'schedule_proposal'),
+      reschedule_proposals: actionableNotifications.filter((n: any) => n.type === 'reschedule_proposal'),
+      acceptance_changes: actionableNotifications.filter((n: any) => n.type === 'acceptance_change')
     }
     
-    // Count totals
-    const totalCount = notificationsList.length
-    const unreadCount = notificationsList.filter(n => !n.is_read).length
+    // Count totals (only actionable notifications)
+    const totalCount = actionableNotifications.length
+    const unreadCount = actionableNotifications.filter((n: any) => !n.is_read).length
     
     return {
       success: true,
-      notifications: notificationsList,
+      notifications: actionableNotifications, // Only return actionable notifications
       categorized,
       count: {
         total: totalCount,
