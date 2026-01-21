@@ -12,15 +12,16 @@
     
     <!-- Additional action button for this page -->
     <div class="fixed top-16 left-0 right-0 z-40 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
-      <div class="container-wide px-6 py-3">
+      <div class="container-wide px-4 sm:px-6 py-2 sm:py-3">
         <div class="flex justify-end">
           <NuxtLink 
             v-if="isAuthenticated"
             to="/matches/new" 
-            class="btn-primary text-size-4 !py-2 !px-4 group"
+            class="btn-primary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
           >
-            <Icon name="heroicons:plus" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-            Programar Partido
+            <Icon name="heroicons:plus" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
+            <span class="hidden sm:inline">Programar Partido</span>
+            <span class="sm:hidden">Nuevo</span>
           </NuxtLink>
         </div>
       </div>
@@ -32,15 +33,15 @@
     <div class="section-padding relative z-10">
       <div class="container-medium px-6">
         <!-- Header -->
-        <div class="text-center mb-12 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:calendar" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Partidos</span>
+        <div class="text-center mb-8 sm:mb-12 animate-fade-up">
+          <div class="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-4 sm:mb-6">
+            <Icon name="heroicons:calendar" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent" />
+            <span class="text-xs sm:text-size-4 font-semibold text-accent">Partidos</span>
           </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">
+          <h1 class="text-size-2 sm:text-size-1 font-semibold text-foreground mb-3 sm:mb-4">
             Tus Partidos
           </h1>
-          <p class="text-size-3 font-regular text-foreground-muted">
+          <p class="text-size-4 sm:text-size-3 font-regular text-foreground-muted px-4">
             Gestiona tus partidos programados, en curso y completados
           </p>
         </div>
@@ -67,108 +68,114 @@
         </div>
 
         <!-- Status Filter -->
-        <div v-if="!loading && !error && matches.length > 0" class="mb-8 flex gap-3 flex-wrap justify-center animate-fade-up animate-delay-1">
+        <div v-if="!loading && !error && matches.length > 0" class="mb-6 sm:mb-8 flex gap-2 sm:gap-3 flex-wrap justify-center animate-fade-up animate-delay-1">
           <button
             @click="statusFilter = null"
             :class="[
-              'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
               statusFilter === null
                 ? 'bg-accent text-background border-2 border-accent'
                 : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
             ]"
           >
-            <Icon name="heroicons:squares-2x2" class="w-4 h-4" />
-            Todos
+            <Icon name="heroicons:squares-2x2" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">Todos</span>
+            <span class="sm:hidden">Todos</span>
           </button>
           <button
             @click="statusFilter = 'pending'"
             :class="[
-              'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
               statusFilter === 'pending'
                 ? 'bg-orange-500/20 text-orange-400 border-2 border-orange-500/50 backdrop-blur-sm'
                 : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-orange-500/50 hover:bg-surface-elevated'
             ]"
           >
-            <Icon name="heroicons:bell-alert" class="w-4 h-4" />
-            Acciones Pendientes
+            <Icon name="heroicons:bell-alert" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">Acciones Pendientes</span>
+            <span class="sm:hidden">Pendientes</span>
           </button>
           <button
             @click="statusFilter = 'scheduled'"
             :class="[
-              'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
               statusFilter === 'scheduled'
                 ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500/50 backdrop-blur-sm'
                 : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-blue-500/50 hover:bg-surface-elevated'
             ]"
           >
-            <Icon name="heroicons:calendar" class="w-4 h-4" />
-            Programados
+            <Icon name="heroicons:calendar" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">Programados</span>
+            <span class="sm:hidden">Prog.</span>
           </button>
           <button
             @click="statusFilter = 'active'"
             :class="[
-              'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
               statusFilter === 'active'
                 ? 'bg-yellow-500/20 text-yellow-400 border-2 border-yellow-500/50 backdrop-blur-sm'
                 : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-yellow-500/50 hover:bg-surface-elevated'
             ]"
           >
-            <Icon name="heroicons:play-circle" class="w-4 h-4" />
-            En Curso
+            <Icon name="heroicons:play-circle" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">En Curso</span>
+            <span class="sm:hidden">Curso</span>
           </button>
           <button
             @click="statusFilter = 'completed'"
             :class="[
-              'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
               statusFilter === 'completed'
                 ? 'bg-green-500/20 text-green-400 border-2 border-green-500/50 backdrop-blur-sm'
                 : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-green-500/50 hover:bg-surface-elevated'
             ]"
           >
-            <Icon name="heroicons:check-circle" class="w-4 h-4" />
-            Completados
+            <Icon name="heroicons:check-circle" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">Completados</span>
+            <span class="sm:hidden">Compl.</span>
           </button>
           <button
             @click="statusFilter = 'cancelled'"
             :class="[
-              'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
               statusFilter === 'cancelled'
                 ? 'bg-red-500/20 text-red-400 border-2 border-red-500/50 backdrop-blur-sm'
                 : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-red-500/50 hover:bg-surface-elevated'
             ]"
           >
-            <Icon name="heroicons:x-circle" class="w-4 h-4" />
-            Cancelados
+            <Icon name="heroicons:x-circle" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">Cancelados</span>
+            <span class="sm:hidden">Cancel.</span>
           </button>
         </div>
 
         <!-- Matches List -->
-        <div v-if="!loading && !error && paginatedFilteredMatches.length > 0" class="space-y-4">
+        <div v-if="!loading && !error && paginatedFilteredMatches.length > 0" class="space-y-3 sm:space-y-4">
           <div 
             v-for="(match, index) in paginatedFilteredMatches" 
             :key="match.id"
-            class="glass-card-elevated p-6 md:p-8 hover-lift cursor-pointer animate-fade-up"
+            class="glass-card-elevated p-4 sm:p-6 md:p-8 hover-lift cursor-pointer animate-fade-up"
             :class="getMatchCardClass(match)"
             :style="{ animationDelay: `${(index + 2) * 0.1}s` }"
             @click="navigateTo(`/matches/${match.id}`)"
           >
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6">
               <!-- Players -->
-              <div class="flex-1">
-                <div class="flex items-center gap-6 mb-4">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-3 sm:gap-4 md:gap-6 mb-3 md:mb-4">
                   <!-- Player 1 -->
-                  <div class="flex items-center gap-3">
-                    <div :class="['w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player1_id)]">
-                      <span class="text-xl font-bold">
+                  <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    <div :class="['w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player1_id)]">
+                      <span class="text-lg sm:text-xl font-bold">
                         {{ getPlayerInitials(match.player1?.name || 'Jugador 1') }}
                       </span>
                     </div>
-                    <div>
+                    <div class="min-w-0 flex-1">
                       <div v-if="match.player1" class="mb-1">
                         <NuxtLink
                           :to="`/players/${match.player1.id}`"
                           @click.stop
-                          class="text-size-2 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block"
+                          class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block truncate"
                         >
                           {{ match.player1.name }}
                         </NuxtLink>
@@ -179,11 +186,11 @@
                           Eliminado
                         </span>
                       </div>
-                      <p v-else class="text-size-2 font-semibold text-foreground mb-1">
+                      <p v-else class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-1 truncate">
                         Jugador 1
                       </p>
-                      <div v-if="match.player1?.category" class="px-2 py-1 rounded-full bg-surface border border-border-subtle inline-block">
-                        <p class="text-size-4 font-regular text-foreground-muted">
+                      <div v-if="match.player1?.category" class="px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block">
+                        <p class="text-xs sm:text-size-4 font-regular text-foreground-muted">
                           {{ match.player1.category.name }}
                         </p>
                       </div>
@@ -191,25 +198,25 @@
                   </div>
 
                   <!-- VS Divider -->
-                  <div class="flex flex-col items-center">
-                    <div class="w-12 h-12 rounded-full bg-surface border-2 border-border-subtle flex items-center justify-center">
-                      <span class="text-size-3 font-bold text-foreground-muted">VS</span>
+                  <div class="flex flex-col items-center flex-shrink-0 px-1">
+                    <div class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-surface border-2 border-border-subtle flex items-center justify-center">
+                      <span class="text-xs sm:text-size-3 font-bold text-foreground-muted">VS</span>
                     </div>
                   </div>
 
                   <!-- Player 2 -->
-                  <div class="flex items-center gap-3">
-                    <div :class="['w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player2_id)]">
-                      <span class="text-xl font-bold">
+                  <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    <div :class="['w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player2_id)]">
+                      <span class="text-lg sm:text-xl font-bold">
                         {{ getPlayerInitials(match.player2?.name || match.pending_player2?.name || 'Jugador 2') }}
                       </span>
                     </div>
-                    <div>
+                    <div class="min-w-0 flex-1">
                       <div v-if="match.player2" class="mb-1">
                         <NuxtLink
                           :to="`/players/${match.player2.id}`"
                           @click.stop
-                          class="text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block"
+                          class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block truncate"
                         >
                           {{ match.player2.name }}
                         </NuxtLink>
@@ -224,20 +231,20 @@
                         v-else-if="match.pending_player2"
                         :to="`/players/${match.pending_player2.id}`"
                         @click.stop
-                        class="text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block mb-1"
+                        class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block mb-1 truncate"
                       >
                         {{ match.pending_player2.name }}
                       </NuxtLink>
-                      <p v-else class="text-size-2 font-semibold text-foreground mb-1">
+                      <p v-else class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-1 truncate">
                         Jugador 2
                       </p>
-                      <div v-if="match.player2?.category || match.pending_player2?.category" class="px-2 py-1 rounded-full bg-surface border border-border-subtle inline-block mb-1">
-                        <p class="text-size-4 font-regular text-foreground-muted">
+                      <div v-if="match.player2?.category || match.pending_player2?.category" class="px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block mb-1">
+                        <p class="text-xs sm:text-size-4 font-regular text-foreground-muted">
                           {{ match.player2?.category?.name || match.pending_player2?.category?.name }}
                         </p>
                       </div>
-                      <div v-if="match.pending_player2" class="px-2 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30 inline-block">
-                        <p class="text-size-4 font-semibold text-yellow-400">
+                      <div v-if="match.pending_player2" class="px-2 py-0.5 sm:py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30 inline-block">
+                        <p class="text-xs sm:text-size-4 font-semibold text-yellow-400">
                           Pendiente
                         </p>
                       </div>
@@ -246,40 +253,40 @@
                 </div>
                 
                 <!-- Status Badge and Date -->
-                <div class="flex items-center gap-4 flex-wrap">
+                <div class="flex items-center gap-2 sm:gap-3 md:gap-4 flex-wrap mt-3">
                   <MatchTournamentBadge :match="match" />
-                  <div class="flex items-center gap-2 px-3 py-1 rounded-full border backdrop-blur-sm" :class="getStatusBadgeClass(match.status, match.scheduled_at)">
-                    <Icon :name="getStatusIcon(match.status)" class="w-4 h-4" />
-                    <span class="text-size-4 font-semibold">{{ getStatusLabel(match.status, match.scheduled_at) }}</span>
+                  <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-full border backdrop-blur-sm" :class="getStatusBadgeClass(match.status, match.scheduled_at)">
+                    <Icon :name="getStatusIcon(match.status)" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span class="text-xs sm:text-size-4 font-semibold">{{ getStatusLabel(match.status, match.scheduled_at) }}</span>
                   </div>
                   <!-- Only show date if it exists (to avoid showing "Sin agendar" twice) -->
-                  <div v-if="(match.status === 'completed' && match.played_at) || (match.status !== 'completed' && match.scheduled_at)" class="flex items-center gap-2 text-foreground-muted">
-                    <Icon name="heroicons:calendar" class="w-4 h-4" />
-                    <span class="text-size-4">{{ formatDate(match.status === 'completed' && match.played_at ? match.played_at : match.scheduled_at) }}</span>
+                  <div v-if="(match.status === 'completed' && match.played_at) || (match.status !== 'completed' && match.scheduled_at)" class="flex items-center gap-1.5 sm:gap-2 text-foreground-muted">
+                    <Icon name="heroicons:calendar" class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span class="text-xs sm:text-size-4 truncate">{{ formatDate(match.status === 'completed' && match.played_at ? match.played_at : match.scheduled_at) }}</span>
                   </div>
-                  <div v-if="match.location" class="flex items-center gap-2 text-foreground-muted">
-                    <Icon name="heroicons:map-pin" class="w-4 h-4" />
-                    <span class="text-size-4">{{ match.location }}</span>
+                  <div v-if="match.location" class="flex items-center gap-1.5 sm:gap-2 text-foreground-muted">
+                    <Icon name="heroicons:map-pin" class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span class="text-xs sm:text-size-4 truncate">{{ match.location }}</span>
                   </div>
                 </div>
               </div>
 
               <!-- Match Details -->
-              <div class="flex flex-col md:items-end gap-4 md:min-w-[200px]">
+              <div class="flex flex-col sm:flex-row md:flex-col md:items-end gap-3 sm:gap-4 md:gap-4 md:min-w-[200px] mt-2 md:mt-0">
                 <!-- Show result only if score has been approved (completed match or score_approved_by exists) -->
-                <div v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="text-center md:text-right">
-                  <div class="p-4 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30">
-                    <div class="flex items-center gap-2 mb-2 justify-center md:justify-end">
-                      <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" />
-                      <p class="text-size-4 font-semibold text-foreground-muted">Resultado</p>
+                <div v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="text-center sm:text-left md:text-right w-full sm:w-auto md:w-auto">
+                  <div class="p-3 sm:p-4 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30">
+                    <div class="flex items-center gap-2 mb-2 justify-center sm:justify-start md:justify-end">
+                      <Icon name="heroicons:trophy" class="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
+                      <p class="text-xs sm:text-size-4 font-semibold text-foreground-muted">Resultado</p>
                     </div>
-                    <p class="text-size-2 font-bold text-foreground mb-2">{{ match.score }}</p>
-                    <div v-if="match.winner" class="flex items-center gap-2 justify-center md:justify-end">
-                      <span class="text-size-4 text-foreground-muted">Ganador:</span>
+                    <p class="text-size-3 sm:text-size-2 font-bold text-foreground mb-2">{{ match.score }}</p>
+                    <div v-if="match.winner" class="flex items-center gap-2 justify-center sm:justify-start md:justify-end flex-wrap">
+                      <span class="text-xs sm:text-size-4 text-foreground-muted">Ganador:</span>
                       <NuxtLink
                         :to="`/players/${match.winner.id}`"
                         @click.stop
-                        class="text-size-4 font-semibold text-accent hover:underline transition-all"
+                        class="text-xs sm:text-size-4 font-semibold text-accent hover:underline transition-all"
                       >
                         {{ match.winner.name }}
                       </NuxtLink>
@@ -287,18 +294,18 @@
                   </div>
                 </div>
                 <!-- Show proposed score if active match has proposed score but not approved yet -->
-                <div v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="text-center md:text-right">
-                  <div class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
-                    <div class="flex items-center gap-2 mb-2 justify-center md:justify-end">
-                      <Icon name="heroicons:clock" class="w-5 h-5 text-yellow-400" />
-                      <p class="text-size-4 font-semibold text-foreground-muted">Puntuación Propuesta</p>
+                <div v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="text-center sm:text-left md:text-right w-full sm:w-auto md:w-auto">
+                  <div class="p-3 sm:p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+                    <div class="flex items-center gap-2 mb-2 justify-center sm:justify-start md:justify-end">
+                      <Icon name="heroicons:clock" class="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+                      <p class="text-xs sm:text-size-4 font-semibold text-foreground-muted">Puntuación Propuesta</p>
                     </div>
-                    <p class="text-size-2 font-bold text-yellow-400">{{ match.score }}</p>
+                    <p class="text-size-3 sm:text-size-2 font-bold text-yellow-400">{{ match.score }}</p>
                   </div>
                 </div>
-                <div v-else class="flex items-center gap-2 text-foreground-muted justify-center md:justify-end">
-                  <Icon name="heroicons:arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  <span class="text-size-4">Ver detalles</span>
+                <div v-else class="flex items-center gap-2 text-foreground-muted justify-center sm:justify-start md:justify-end">
+                  <Icon name="heroicons:arrow-right" class="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+                  <span class="text-xs sm:text-size-4">Ver detalles</span>
                 </div>
               </div>
             </div>
@@ -306,49 +313,50 @@
         </div>
 
         <!-- Pagination -->
-        <div v-if="!loading && !error && totalFilteredPages > 1" class="flex items-center justify-center gap-4 mt-8 animate-fade-up">
+        <div v-if="!loading && !error && totalFilteredPages > 1" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
           <button
             @click="currentPage = Math.max(1, currentPage - 1); if (!statusFilter) loadMatches(currentPage)"
             :disabled="currentPage === 1"
-            class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 sm:gap-2"
           >
-            <Icon name="heroicons:chevron-left" class="w-4 h-4" />
-            Anterior
+            <Icon name="heroicons:chevron-left" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span class="hidden sm:inline">Anterior</span>
           </button>
-          <div class="flex items-center gap-2">
-            <span class="text-size-4 text-foreground-muted">Página</span>
-            <span class="text-size-3 font-semibold text-foreground">{{ currentPage }}</span>
-            <span class="text-size-4 text-foreground-muted">de</span>
-            <span class="text-size-3 font-semibold text-foreground">{{ totalFilteredPages }}</span>
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <span class="text-xs sm:text-size-4 text-foreground-muted">Página</span>
+            <span class="text-xs sm:text-size-3 font-semibold text-foreground">{{ currentPage }}</span>
+            <span class="text-xs sm:text-size-4 text-foreground-muted">de</span>
+            <span class="text-xs sm:text-size-3 font-semibold text-foreground">{{ totalFilteredPages }}</span>
           </div>
           <button
             @click="currentPage = Math.min(totalFilteredPages, currentPage + 1); if (!statusFilter) loadMatches(currentPage)"
             :disabled="currentPage >= totalFilteredPages"
-            class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 sm:gap-2"
           >
-            Siguiente
-            <Icon name="heroicons:chevron-right" class="w-4 h-4" />
+            <span class="hidden sm:inline">Siguiente</span>
+            <Icon name="heroicons:chevron-right" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
 
         <!-- Empty State -->
-        <div v-if="!loading && !error && paginatedFilteredMatches.length === 0" class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:calendar-x" class="w-12 h-12 text-accent" />
+        <div v-if="!loading && !error && paginatedFilteredMatches.length === 0" class="glass-card-elevated p-8 sm:p-12 text-center max-w-md mx-auto animate-fade-in-scale">
+          <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+            <Icon name="heroicons:calendar-x" class="w-8 h-8 sm:w-12 sm:h-12 text-accent" />
           </div>
-          <h2 class="text-size-2 font-semibold text-foreground mb-4">
+          <h2 class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-3 sm:mb-4 px-4">
             {{ statusFilter === 'pending' ? 'No hay acciones pendientes' : statusFilter ? `No hay partidos ${getStatusLabel(statusFilter).toLowerCase()}` : 'No hay partidos' }}
           </h2>
-          <p class="text-size-4 font-regular text-foreground-muted mb-8 max-w-md mx-auto leading-relaxed">
+          <p class="text-size-4 sm:text-size-4 font-regular text-foreground-muted mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed px-4">
             {{ statusFilter === 'pending' ? 'No tienes partidos que requieran tu atención en este momento.' : statusFilter ? 'Intenta cambiar el filtro para ver otros partidos.' : 'Sé el primero en programar un partido en la plataforma.' }}
           </p>
           <NuxtLink 
             v-if="isAuthenticated && !statusFilter"
             to="/matches/new" 
-            class="btn-primary text-size-3 inline-flex items-center group"
+            class="btn-primary text-xs sm:text-size-3 inline-flex items-center group !py-2 sm:!py-3 !px-4 sm:!px-6"
           >
-            <Icon name="heroicons:plus" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-            Programar Primer Partido
+            <Icon name="heroicons:plus" class="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
+            <span class="hidden sm:inline">Programar Primer Partido</span>
+            <span class="sm:hidden">Programar Partido</span>
           </NuxtLink>
         </div>
       </div>
