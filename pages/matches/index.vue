@@ -90,7 +90,7 @@
             ]"
           >
             <Icon name="heroicons:bell-alert" class="w-4 h-4" />
-            Pendientes
+            Acciones Pendientes
           </button>
           <button
             @click="statusFilter = 'scheduled'"
@@ -337,10 +337,10 @@
             <Icon name="heroicons:calendar-x" class="w-12 h-12 text-accent" />
           </div>
           <h2 class="text-size-2 font-semibold text-foreground mb-4">
-            {{ statusFilter ? `No hay partidos ${getStatusLabel(statusFilter).toLowerCase()}` : 'No hay partidos' }}
+            {{ statusFilter === 'pending' ? 'No hay acciones pendientes' : statusFilter ? `No hay partidos ${getStatusLabel(statusFilter).toLowerCase()}` : 'No hay partidos' }}
           </h2>
           <p class="text-size-4 font-regular text-foreground-muted mb-8 max-w-md mx-auto leading-relaxed">
-            {{ statusFilter ? 'Intenta cambiar el filtro para ver otros partidos.' : 'Sé el primero en programar un partido en la plataforma.' }}
+            {{ statusFilter === 'pending' ? 'No tienes partidos que requieran tu atención en este momento.' : statusFilter ? 'Intenta cambiar el filtro para ver otros partidos.' : 'Sé el primero en programar un partido en la plataforma.' }}
           </p>
           <NuxtLink 
             v-if="isAuthenticated && !statusFilter"
@@ -384,24 +384,57 @@ const filteredMatches = computed(() => {
   
   // Apply status filter
   if (statusFilter.value === 'pending') {
-    // Show matches with any pending action
+    // Show matches where CURRENT USER has a pending action to take
     filtered = filtered.filter(m => {
-      // Match proposal pending acceptance
-      const hasPendingProposal = m.match_proposed_by && !m.match_accepted_by && !m.match_rejected_by
+      if (!player.value) return false
       
-      // Score proposal pending approval
-      const hasPendingScore = m.score_proposed_by && !m.score_approved_by
+      const isPlayer1 = m.player1_id === player.value.id
+      const isPlayer2 = m.player2_id === player.value.id
       
-      // Schedule proposal pending approval
-      const hasPendingSchedule = m.schedule_proposed_by && !m.schedule_approved_by && !m.schedule_rejected_by
+      // User must be involved in the match
+      if (!isPlayer1 && !isPlayer2) return false
       
-      // Reschedule proposal pending approval
-      const hasPendingReschedule = m.reschedule_proposed_by && !m.reschedule_approved_by && !m.reschedule_rejected_by
+      // 1. Match proposal pending acceptance (only for player2, not player1 who proposed)
+      if (m.match_proposed_by && !m.match_accepted_by && !m.match_rejected_by) {
+        // Only show if current user is player2 (the one who needs to accept)
+        if (isPlayer2 && m.match_proposed_by !== player.value.id) {
+          return true
+        }
+      }
       
-      // Acceptance change pending approval
-      const hasPendingAcceptanceChange = m.acceptance_proposed_scheduled_at && !m.acceptance_change_approved_by && !m.acceptance_change_rejected_by
+      // 2. Score proposal pending approval (only for the opponent, not the proposer)
+      if (m.score_proposed_by && !m.score_approved_by) {
+        // Only show if current user is NOT the one who proposed the score
+        if (m.score_proposed_by !== player.value.id) {
+          return true
+        }
+      }
       
-      return hasPendingProposal || hasPendingScore || hasPendingSchedule || hasPendingReschedule || hasPendingAcceptanceChange
+      // 3. Schedule proposal pending approval (only for the opponent, not the proposer)
+      if (m.schedule_proposed_by && !m.schedule_approved_by && !m.schedule_rejected_by) {
+        // Only show if current user is NOT the one who proposed the schedule
+        if (m.schedule_proposed_by !== player.value.id) {
+          return true
+        }
+      }
+      
+      // 4. Reschedule proposal pending approval (only for the opponent, not the proposer)
+      if (m.reschedule_proposed_by && !m.reschedule_approved_by && !m.reschedule_rejected_by) {
+        // Only show if current user is NOT the one who proposed the reschedule
+        if (m.reschedule_proposed_by !== player.value.id) {
+          return true
+        }
+      }
+      
+      // 5. Acceptance change pending approval (only for player1 who originally proposed, not player2)
+      if (m.acceptance_proposed_scheduled_at && !m.acceptance_change_approved_by && !m.acceptance_change_rejected_by) {
+        // Only show if current user is player1 (the one who originally proposed the match)
+        if (isPlayer1 && m.match_proposed_by === player.value.id) {
+          return true
+        }
+      }
+      
+      return false
     })
   } else if (statusFilter.value === 'cancelled') {
     filtered = filtered.filter(m => m.status === 'cancelled')

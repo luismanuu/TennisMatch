@@ -90,23 +90,26 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    // Ensure notifications is an array (safety check)
+    const notificationsList = notifications || []
+    
     // Categorize notifications by type
     const categorized = {
-      match_proposals: notifications.filter(n => n.type === 'match_proposal'),
-      match_created: notifications.filter(n => n.type === 'match_created'),
-      score_proposals: notifications.filter(n => n.type === 'score_proposal'),
-      schedule_proposals: notifications.filter(n => n.type === 'schedule_proposal'),
-      reschedule_proposals: notifications.filter(n => n.type === 'reschedule_proposal'),
-      acceptance_changes: notifications.filter(n => n.type === 'acceptance_change')
+      match_proposals: notificationsList.filter(n => n.type === 'match_proposal'),
+      match_created: notificationsList.filter(n => n.type === 'match_created'),
+      score_proposals: notificationsList.filter(n => n.type === 'score_proposal'),
+      schedule_proposals: notificationsList.filter(n => n.type === 'schedule_proposal'),
+      reschedule_proposals: notificationsList.filter(n => n.type === 'reschedule_proposal'),
+      acceptance_changes: notificationsList.filter(n => n.type === 'acceptance_change')
     }
     
     // Count totals
-    const totalCount = notifications.length
-    const unreadCount = notifications.filter(n => !n.is_read).length
+    const totalCount = notificationsList.length
+    const unreadCount = notificationsList.filter(n => !n.is_read).length
     
     return {
       success: true,
-      notifications,
+      notifications: notificationsList,
       categorized,
       count: {
         total: totalCount,

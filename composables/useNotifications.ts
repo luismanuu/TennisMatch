@@ -80,7 +80,7 @@ export const useNotifications = () => {
    * Fetch pending notifications from API
    */
   const fetchNotifications = async () => {
-    if (!authState.clerkId.value) {
+    if (!authState.userId.value) {
       console.log('[Notifications] No clerk ID, skipping fetch')
       return
     }
@@ -92,7 +92,7 @@ export const useNotifications = () => {
       const response = await $fetch<NotificationResponse>('/api/notifications/pending', {
         method: 'GET',
         params: {
-          clerk_id: authState.clerkId.value
+          clerk_id: authState.userId.value
         }
       })
       
@@ -126,13 +126,13 @@ export const useNotifications = () => {
    * Mark a notification as read
    */
   const markAsRead = async (notificationId: string) => {
-    if (!authState.clerkId.value) return
+    if (!authState.userId.value) return
     
     try {
       await $fetch(`/api/notifications/${notificationId}/read`, {
         method: 'POST',
         body: {
-          clerk_id: authState.clerkId.value
+          clerk_id: authState.userId.value
         }
       })
       
@@ -153,13 +153,13 @@ export const useNotifications = () => {
    * Dismiss a notification (hide permanently)
    */
   const dismiss = async (notificationId: string) => {
-    if (!authState.clerkId.value) return
+    if (!authState.userId.value) return
     
     try {
       await $fetch(`/api/notifications/${notificationId}/dismiss`, {
         method: 'POST',
         body: {
-          clerk_id: authState.clerkId.value
+          clerk_id: authState.userId.value
         }
       })
       
@@ -186,13 +186,13 @@ export const useNotifications = () => {
    * Mark all notifications as read
    */
   const markAllRead = async () => {
-    if (!authState.clerkId.value) return
+    if (!authState.userId.value) return
     
     try {
       await $fetch('/api/notifications/mark-all-read', {
         method: 'POST',
         body: {
-          clerk_id: authState.clerkId.value
+          clerk_id: authState.userId.value
         }
       })
       
@@ -223,7 +223,7 @@ export const useNotifications = () => {
     
     // Poll every 30 seconds
     pollInterval = setInterval(() => {
-      if (isTabActive && authState.clerkId.value) {
+      if (isTabActive && authState.userId.value) {
         fetchNotifications()
       }
     }, 30000) // 30 seconds
@@ -250,7 +250,7 @@ export const useNotifications = () => {
   
   // Setup polling on mount
   onMounted(() => {
-    if (authState.clerkId.value) {
+    if (authState.userId.value) {
       startPolling()
       
       // Listen for visibility changes

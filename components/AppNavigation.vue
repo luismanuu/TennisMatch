@@ -120,43 +120,23 @@
               </NuxtLink>
               
               <!-- Notification Bell -->
-              <div class="relative notification-bell-container flex-shrink-0">
-                <button
-                  @click="toggleNotifications"
-                  :class="[
-                    'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group relative',
-                    notificationDropdownOpen
-                      ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
-                      : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
-                  ]"
-                  :title="unreadCount > 0 ? `${unreadCount} notificaciones sin leer` : 'Notificaciones'"
-                >
-                  <Icon 
-                    :name="unreadCount > 0 ? 'heroicons:bell-alert' : 'heroicons:bell'" 
-                    :class="['w-4 h-4 transition-transform', notificationDropdownOpen ? 'text-accent' : 'group-hover:scale-110']" 
-                  />
-                  <span class="hidden sm:inline">Notificaciones</span>
-                  <!-- Badge for unread count -->
-                  <span 
-                    v-if="unreadCount > 0" 
-                    class="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 bg-accent text-white text-xs font-bold rounded-full border-2 border-background"
-                  >
-                    {{ unreadCount > 9 ? '9+' : unreadCount }}
-                  </span>
-                </button>
-                
-                <!-- Notification Dropdown -->
-                <NotificationDropdown
-                  :is-open="notificationDropdownOpen"
-                  :notifications="notifications"
-                  :unread-count="unreadCount"
-                  :loading="notificationsLoading"
-                  @close="notificationDropdownOpen = false"
-                  @mark-as-read="handleMarkAsRead"
-                  @dismiss="handleDismiss"
-                  @mark-all-read="handleMarkAllRead"
+              <NuxtLink
+                to="/matches?filter=pending"
+                class="relative flex items-center justify-center p-2 rounded-xl text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group flex-shrink-0"
+                :title="unreadCount > 0 ? `${unreadCount} notificaciones sin leer` : 'Notificaciones'"
+              >
+                <Icon 
+                  :name="unreadCount > 0 ? 'heroicons:bell-alert' : 'heroicons:bell'" 
+                  class="w-6 h-6 transition-transform group-hover:scale-110" 
                 />
-              </div>
+                <!-- Badge for unread count -->
+                <span 
+                  v-if="unreadCount > 0" 
+                  class="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 bg-accent text-white text-xs font-bold rounded-full border-2 border-background"
+                >
+                  {{ unreadCount > 9 ? '9+' : unreadCount }}
+                </span>
+              </NuxtLink>
               
               <SignOutButton>
                 <button class="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group">
@@ -219,18 +199,9 @@ const { isAuthenticated, authLoaded, user } = useAuthState()
 const { isOrganizer } = useOrganizer()
 const route = useRoute()
 
-// Notifications
-const {
-  notifications,
-  count,
-  loading: notificationsLoading,
-  unreadCount,
-  markAsRead,
-  dismiss,
-  markAllRead
-} = useNotifications()
+// Notifications - only need unreadCount for badge
+const { unreadCount } = useNotifications()
 
-const notificationDropdownOpen = ref(false)
 const mobileMenuOpen = ref(false)
 
 // Helpers to check current page
@@ -241,28 +212,6 @@ const isMyRankingPage = computed(() => route.path.startsWith('/my-ranking'))
 const isLeaderboardPage = computed(() => route.path.startsWith('/leaderboard'))
 const isProfilePage = computed(() => route.path.startsWith('/profile'))
 const isOrganizerTournamentsPage = computed(() => route.path.startsWith('/organizer/tournaments'))
-
-// Notification handlers
-const toggleNotifications = () => {
-  notificationDropdownOpen.value = !notificationDropdownOpen.value
-}
-
-const handleMarkAsRead = (id: string) => {
-  markAsRead(id)
-}
-
-const handleDismiss = (id: string) => {
-  dismiss(id)
-}
-
-const handleMarkAllRead = () => {
-  markAllRead()
-}
-
-// Close dropdown when route changes
-watch(() => route.path, () => {
-  notificationDropdownOpen.value = false
-})
 
 // Debug: Log organizer status in development
 if (process.dev) {
