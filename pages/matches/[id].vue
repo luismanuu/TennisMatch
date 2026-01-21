@@ -172,7 +172,7 @@
             </div>
 
             <!-- Match Details Grid -->
-            <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               <!-- Scheduled Time -->
               <div class="p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
                 <div class="flex items-center gap-3 mb-3">
@@ -201,6 +201,37 @@
                   <div>
                     <p class="text-size-4 font-semibold text-foreground-muted mb-1">Ubicación</p>
                     <p class="text-size-3 text-foreground font-semibold">{{ match.location }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Competitive Status -->
+              <div class="p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-lg flex items-center justify-center" :class="match.is_competitive !== false ? 'bg-green-500/20' : 'bg-gray-500/20'">
+                    <Icon 
+                      :name="match.is_competitive !== false ? 'heroicons:trophy' : 'heroicons:hand-raised'" 
+                      class="w-5 h-5" 
+                      :class="match.is_competitive !== false ? 'text-green-400' : 'text-gray-400'"
+                    />
+                  </div>
+                  <div>
+                    <p class="text-size-4 font-semibold text-foreground-muted mb-1">Tipo de Partido</p>
+                    <div class="flex items-center gap-2">
+                      <span 
+                        class="text-size-3 font-semibold px-3 py-1 rounded-full"
+                        :class="match.is_competitive !== false 
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'"
+                      >
+                        {{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}
+                      </span>
+                    </div>
+                    <p class="text-size-5 text-foreground-muted mt-2">
+                      {{ match.is_competitive !== false 
+                        ? 'Cuenta para rankings y placement' 
+                        : 'No cuenta para rankings' }}
+                    </p>
                   </div>
                 </div>
               </div>
