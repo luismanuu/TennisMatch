@@ -149,17 +149,18 @@
             <template v-else-if="authLoaded">
               <NuxtLink 
                 to="/sign-in" 
-                class="flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all hidden sm:flex group"
+                class="flex items-center gap-2 px-3 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group flex-shrink-0"
               >
                 <Icon name="heroicons:arrow-right-on-rectangle" class="w-4 h-4 group-hover:scale-110 transition-transform" />
-                <span>Iniciar Sesión</span>
+                <span class="hidden sm:inline">Iniciar Sesión</span>
               </NuxtLink>
               <NuxtLink 
                 to="/sign-up" 
-                class="btn-primary text-size-4 !py-2 !px-4 group"
+                class="btn-primary text-size-4 !py-2 !px-3 sm:!px-4 group flex-shrink-0"
               >
-                <Icon name="heroicons:sparkles" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                Comenzar Gratis
+                <Icon name="heroicons:sparkles" class="w-4 h-4 mr-1 sm:mr-2 group-hover:scale-110 transition-transform" />
+                <span class="hidden sm:inline">Comenzar Gratis</span>
+                <span class="sm:hidden">Comenzar</span>
               </NuxtLink>
             </template>
             <!-- Show minimal loading state only during initial auth load -->
