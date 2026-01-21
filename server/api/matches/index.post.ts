@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { validateAndSetMatchScheduling } from '~/server/utils/tournament-scheduling'
+import { createMatchNotification } from '~/server/utils/notifications'
 import type { CreateMatchPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -106,12 +107,21 @@ export default defineEventHandler(async (event) => {
     
     // Create the match with status 'scheduled'
     // is_competitive defaults to true if not specified
+    // match_proposed_by is set to player1 (the creator) UNLESS it's a tournament match
+    // Tournament matches don't require acceptance - they're assigned by admin/organizer
     const matchData: any = {
       player1_id,
       scheduled_at: new Date(scheduled_at).toISOString(),
       status: 'scheduled',
       location: location || null,
       is_competitive: is_competitive !== undefined ? is_competitive : true
+    }
+    
+    // Only set match_proposed_by for non-tournament matches
+    // Tournament matches are assigned by admin/organizer and don't need acceptance
+    const bodyWithTournament = body as CreateMatchPayload & { clerk_id: string; tournament_id?: string }
+    if (!bodyWithTournament.tournament_id) {
+      matchData.match_proposed_by = player1_id // The creator proposes the match
     }
     
     if (player2_id) {
@@ -142,6 +152,26 @@ export default defineEventHandler(async (event) => {
           category:categories(id, name, description, order),
           status
         ),
+        match_proposed_by_player:players!matches_match_proposed_by_fkey(
+          id,
+          name
+        ),
+        match_accepted_by_player:players!matches_match_accepted_by_fkey(
+          id,
+          name
+        ),
+        match_rejected_by_player:players!matches_match_rejected_by_fkey(
+          id,
+          name
+        ),
+        acceptance_change_approved_by_player:players!matches_acceptance_change_approved_by_fkey(
+          id,
+          name
+        ),
+        acceptance_change_rejected_by_player:players!matches_acceptance_change_rejected_by_fkey(
+          id,
+          name
+        ),
         score_proposed_by_player:players!matches_score_proposed_by_fkey(
           id,
           name
@@ -168,6 +198,77 @@ export default defineEventHandler(async (event) => {
     // If this is a tournament match, validate round deadline
     if (match.tournament_id) {
       await validateAndSetMatchScheduling(match.id, scheduled_at, supabase)
+    }
+    
+    // Create notifications for both players
+    // For non-tournament matches: player2 gets proposal notification, player1 gets created notification
+    // For tournament matches: both get created notification (no proposal needed)
+    if (player2_id) {
+      if (match.match_proposed_by) {
+        // Non-tournament match: notify player2 they have a proposal to accept
+        await createMatchNotification(
+          supabase,
+          player2_id,
+          match.id,
+          'match_proposal',
+          { 
+            proposed_by: match.player1?.name || 'Unknown',
+            scheduled_at: match.scheduled_at,
+            location: match.location
+          }
+        )
+        
+        // Notify player1 that match was created (informational)
+        await createMatchNotification(
+          supabase,
+          player1_id,
+          match.id,
+          'match_created',
+          { 
+            with_player: match.player2?.name || 'Unknown',
+            scheduled_at: match.scheduled_at
+          }
+        )
+      } else {
+        // Tournament match: notify both players that match is confirmed
+        await Promise.all([
+          createMatchNotification(
+            supabase,
+            player1_id,
+            match.id,
+            'match_created',
+            { 
+              with_player: match.player2?.name || 'Unknown',
+              scheduled_at: match.scheduled_at,
+              is_tournament: true
+            }
+          ),
+          createMatchNotification(
+            supabase,
+            player2_id,
+            match.id,
+            'match_created',
+            { 
+              with_player: match.player1?.name || 'Unknown',
+              scheduled_at: match.scheduled_at,
+              is_tournament: true
+            }
+          )
+        ])
+      }
+    } else if (pending_player2_id) {
+      // Match with pending player: notify player1 that match was created
+      await createMatchNotification(
+        supabase,
+        player1_id,
+        match.id,
+        'match_created',
+        { 
+          with_player: match.pending_player2?.name || 'Unknown',
+          is_pending_player: true,
+          scheduled_at: match.scheduled_at
+        }
+      )
     }
     
     return match

@@ -3,111 +3,165 @@
     <nav class="fixed top-0 left-0 right-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
       <div class="container-wide px-6">
         <div class="flex justify-between items-center h-16">
-          <!-- Logo -->
-          <NuxtLink to="/" class="flex items-center gap-3 group">
-            <div class="relative w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center hover-bounce overflow-hidden border-2 border-accent/30 shadow-lg shadow-accent/20">
-              <span class="text-lg relative z-10">🎾</span>
-              <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-            </div>
-            <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors">
-              Tenis Ecuador
-            </span>
-          </NuxtLink>
+          <!-- Mobile Menu Button (Left Side) -->
+          <div class="flex items-center gap-3">
+            <MobileNav 
+              v-if="isAuthenticated"
+              :is-open="mobileMenuOpen"
+              :current-path="route.path"
+              :is-organizer="isOrganizer"
+              :notification-count="unreadCount"
+              @toggle="mobileMenuOpen = !mobileMenuOpen"
+              @close="mobileMenuOpen = false"
+            />
+            
+            <!-- Logo -->
+            <NuxtLink to="/" class="flex items-center gap-3 group">
+              <div class="relative w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center hover-bounce overflow-hidden border-2 border-accent/30 shadow-lg shadow-accent/20">
+                <span class="text-lg relative z-10">🎾</span>
+                <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
+              </div>
+              <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors">
+                Tenis Ecuador
+              </span>
+            </NuxtLink>
+          </div>
 
           <!-- Nav Actions -->
           <div class="flex items-center gap-2 overflow-x-auto -mx-6 px-6 nav-scroll">
             <!-- Show authenticated navigation if signed in (stable once authenticated) -->
-            <template v-if="isAuthenticated">
+            <!-- Desktop Navigation (hidden on mobile) -->
+            <template v-if="isAuthenticated" class="desktop-nav">
               <NuxtLink 
                 to="/"
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isDashboard 
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30' 
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:squares-2x2" :class="['w-4 h-4 transition-transform', isDashboard ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Dashboard</span>
+                <span class="hidden lg:inline">Dashboard</span>
               </NuxtLink>
               <NuxtLink 
                 to="/matches" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isMatchesPage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:calendar" :class="['w-4 h-4 transition-transform', isMatchesPage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Partidos</span>
+                <span class="hidden lg:inline">Partidos</span>
               </NuxtLink>
               <NuxtLink 
                 to="/my-ranking" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isMyRankingPage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:chart-bar-square" :class="['w-4 h-4 transition-transform', isMyRankingPage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Mi Ranking</span>
+                <span class="hidden lg:inline">Mi Ranking</span>
               </NuxtLink>
               <NuxtLink 
                 to="/leaderboard" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isLeaderboardPage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isLeaderboardPage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Leaderboard</span>
+                <span class="hidden lg:inline">Leaderboard</span>
               </NuxtLink>
               <!-- Organizer Tournaments Link (only for organizers) -->
               <NuxtLink 
                 v-if="isOrganizer"
                 to="/organizer/tournaments" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isOrganizerTournamentsPage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isOrganizerTournamentsPage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Mis Torneos</span>
+                <span class="hidden lg:inline">Mis Torneos</span>
               </NuxtLink>
               <NuxtLink 
                 to="/profile" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isProfilePage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:user-circle" :class="['w-4 h-4 transition-transform', isProfilePage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Mi Perfil</span>
+                <span class="hidden lg:inline">Mi Perfil</span>
               </NuxtLink>
               <NuxtLink 
                 to="/tournaments" 
                 :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
+                  'hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group flex-shrink-0',
                   isTournamentsPage
                     ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
                 ]"
               >
                 <Icon name="heroicons:trophy" :class="['w-4 h-4 transition-transform', isTournamentsPage ? 'text-accent' : 'group-hover:scale-110']" />
-                <span class="hidden sm:inline">Torneos</span>
+                <span class="hidden lg:inline">Torneos</span>
               </NuxtLink>
+              
+              <!-- Notification Bell -->
+              <div class="relative notification-bell-container flex-shrink-0">
+                <button
+                  @click="toggleNotifications"
+                  :class="[
+                    'flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular transition-all group relative',
+                    notificationDropdownOpen
+                      ? 'bg-accent-subtle/30 text-foreground border border-accent/30'
+                      : 'text-foreground-muted hover:text-foreground hover:bg-surface-elevated'
+                  ]"
+                  :title="unreadCount > 0 ? `${unreadCount} notificaciones sin leer` : 'Notificaciones'"
+                >
+                  <Icon 
+                    :name="unreadCount > 0 ? 'heroicons:bell-alert' : 'heroicons:bell'" 
+                    :class="['w-4 h-4 transition-transform', notificationDropdownOpen ? 'text-accent' : 'group-hover:scale-110']" 
+                  />
+                  <span class="hidden sm:inline">Notificaciones</span>
+                  <!-- Badge for unread count -->
+                  <span 
+                    v-if="unreadCount > 0" 
+                    class="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 bg-accent text-white text-xs font-bold rounded-full border-2 border-background"
+                  >
+                    {{ unreadCount > 9 ? '9+' : unreadCount }}
+                  </span>
+                </button>
+                
+                <!-- Notification Dropdown -->
+                <NotificationDropdown
+                  :is-open="notificationDropdownOpen"
+                  :notifications="notifications"
+                  :unread-count="unreadCount"
+                  :loading="notificationsLoading"
+                  @close="notificationDropdownOpen = false"
+                  @mark-as-read="handleMarkAsRead"
+                  @dismiss="handleDismiss"
+                  @mark-all-read="handleMarkAllRead"
+                />
+              </div>
+              
               <SignOutButton>
-                <button class="flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group">
+                <button class="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group">
                   <Icon name="heroicons:arrow-right-on-rectangle" class="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  <span class="hidden sm:inline">Cerrar Sesión</span>
+                  <span class="hidden lg:inline">Cerrar Sesión</span>
                 </button>
               </SignOutButton>
             </template>
@@ -165,6 +219,20 @@ const { isAuthenticated, authLoaded, user } = useAuthState()
 const { isOrganizer } = useOrganizer()
 const route = useRoute()
 
+// Notifications
+const {
+  notifications,
+  count,
+  loading: notificationsLoading,
+  unreadCount,
+  markAsRead,
+  dismiss,
+  markAllRead
+} = useNotifications()
+
+const notificationDropdownOpen = ref(false)
+const mobileMenuOpen = ref(false)
+
 // Helpers to check current page
 const isDashboard = computed(() => route.path === '/')
 const isMatchesPage = computed(() => route.path.startsWith('/matches'))
@@ -173,6 +241,28 @@ const isMyRankingPage = computed(() => route.path.startsWith('/my-ranking'))
 const isLeaderboardPage = computed(() => route.path.startsWith('/leaderboard'))
 const isProfilePage = computed(() => route.path.startsWith('/profile'))
 const isOrganizerTournamentsPage = computed(() => route.path.startsWith('/organizer/tournaments'))
+
+// Notification handlers
+const toggleNotifications = () => {
+  notificationDropdownOpen.value = !notificationDropdownOpen.value
+}
+
+const handleMarkAsRead = (id: string) => {
+  markAsRead(id)
+}
+
+const handleDismiss = (id: string) => {
+  dismiss(id)
+}
+
+const handleMarkAllRead = () => {
+  markAllRead()
+}
+
+// Close dropdown when route changes
+watch(() => route.path, () => {
+  notificationDropdownOpen.value = false
+})
 
 // Debug: Log organizer status in development
 if (process.dev) {

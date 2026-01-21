@@ -437,6 +437,111 @@ export const useMatches = () => {
     }
   }
   
+  const acceptMatch = async (clerkId: string, matchId: string, payload?: { scheduled_at?: string, location?: string }) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'accept_match',
+          data: payload
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  const rejectMatch = async (clerkId: string, matchId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'reject_match'
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  const approveAcceptanceChange = async (clerkId: string, matchId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'approve_acceptance_change'
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  const rejectAcceptanceChange = async (clerkId: string, matchId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const data = await $fetch<Match>(`/api/matches/${matchId}`, {
+        method: 'PUT',
+        body: {
+          clerk_id: clerkId,
+          action: 'reject_acceptance_change'
+        }
+      })
+      // Update match in cache
+      const index = matches.value.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        matches.value[index] = data
+      }
+      return data
+    } catch (err: any) {
+      error.value = err
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+  
   return {
     matches: readonly(matches),
     pagination: readonly(pagination),
@@ -457,7 +562,11 @@ export const useMatches = () => {
     proposeReschedule,
     approveReschedule,
     rejectReschedule,
-    organizerSetResult
+    organizerSetResult,
+    acceptMatch,
+    rejectMatch,
+    approveAcceptanceChange,
+    rejectAcceptanceChange
   }
 }
 

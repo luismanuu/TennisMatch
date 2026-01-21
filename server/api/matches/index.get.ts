@@ -176,6 +176,11 @@ export default defineEventHandler(async (event) => {
     // Collect all player IDs from optional relationships for batch lookup
     const allPlayerIds = new Set<string>()
     filteredData.forEach((match: any) => {
+      if (match.match_proposed_by) allPlayerIds.add(match.match_proposed_by)
+      if (match.match_accepted_by) allPlayerIds.add(match.match_accepted_by)
+      if (match.match_rejected_by) allPlayerIds.add(match.match_rejected_by)
+      if (match.acceptance_change_approved_by) allPlayerIds.add(match.acceptance_change_approved_by)
+      if (match.acceptance_change_rejected_by) allPlayerIds.add(match.acceptance_change_rejected_by)
       if (match.score_proposed_by) allPlayerIds.add(match.score_proposed_by)
       if (match.score_approved_by) allPlayerIds.add(match.score_approved_by)
       if (match.reschedule_proposed_by) allPlayerIds.add(match.reschedule_proposed_by)
@@ -200,6 +205,21 @@ export default defineEventHandler(async (event) => {
     filteredData = filteredData.map((match: any) => {
       const enriched: any = { ...match }
       
+      enriched.match_proposed_by_player = match.match_proposed_by 
+        ? playerMap.get(match.match_proposed_by) || null 
+        : null
+      enriched.match_accepted_by_player = match.match_accepted_by 
+        ? playerMap.get(match.match_accepted_by) || null 
+        : null
+      enriched.match_rejected_by_player = match.match_rejected_by 
+        ? playerMap.get(match.match_rejected_by) || null 
+        : null
+      enriched.acceptance_change_approved_by_player = match.acceptance_change_approved_by 
+        ? playerMap.get(match.acceptance_change_approved_by) || null 
+        : null
+      enriched.acceptance_change_rejected_by_player = match.acceptance_change_rejected_by 
+        ? playerMap.get(match.acceptance_change_rejected_by) || null 
+        : null
       enriched.score_proposed_by_player = match.score_proposed_by 
         ? playerMap.get(match.score_proposed_by) || null 
         : null

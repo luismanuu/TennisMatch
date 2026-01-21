@@ -68,6 +68,26 @@ export default defineEventHandler(async (event) => {
           status,
           invited_by_player_id
         ),
+        match_proposed_by_player:players!matches_match_proposed_by_fkey(
+          id,
+          name
+        ),
+        match_accepted_by_player:players!matches_match_accepted_by_fkey(
+          id,
+          name
+        ),
+        match_rejected_by_player:players!matches_match_rejected_by_fkey(
+          id,
+          name
+        ),
+        acceptance_change_approved_by_player:players!matches_acceptance_change_approved_by_fkey(
+          id,
+          name
+        ),
+        acceptance_change_rejected_by_player:players!matches_acceptance_change_rejected_by_fkey(
+          id,
+          name
+        ),
         score_proposed_by_player:players!matches_score_proposed_by_fkey(
           id,
           name

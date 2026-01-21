@@ -29,6 +29,54 @@
             Gestiona tus partidos, torneos y sigue tu progreso en la comunidad de tenis
           </p>
         </div>
+        
+        <!-- Pending Actions Section -->
+        <div 
+          v-if="notificationsCount.total > 0" 
+          class="glass-card-elevated p-6 mb-8 border-l-4 border-accent animate-fade-in-scale"
+        >
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-xl bg-accent-subtle/30 border border-accent/30 flex items-center justify-center flex-shrink-0">
+              <Icon name="heroicons:bell-alert" class="w-6 h-6 text-accent" />
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h3 class="text-size-2 font-semibold text-foreground">Acciones Pendientes</h3>
+                <span class="px-2 py-1 rounded-full bg-accent text-white text-xs font-bold">
+                  {{ notificationsCount.total }}
+                </span>
+              </div>
+              <p class="text-size-4 font-regular text-foreground-muted mb-4">
+                Tienes {{ notificationsCount.total }} {{ notificationsCount.total === 1 ? 'partido que requiere' : 'partidos que requieren' }} tu atención
+              </p>
+              
+              <!-- Quick list of notifications -->
+              <div class="space-y-2 mb-4">
+                <div 
+                  v-for="notification in topNotifications" 
+                  :key="notification.id"
+                  class="flex items-center gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface transition-colors cursor-pointer"
+                  @click="navigateToMatch(notification.match_id)"
+                >
+                  <Icon 
+                    :name="getNotificationIcon(notification.type)" 
+                    class="w-5 h-5 text-accent flex-shrink-0" 
+                  />
+                  <p class="text-size-4 font-regular text-foreground flex-1" v-html="getNotificationText(notification)"></p>
+                  <Icon name="heroicons:arrow-right" class="w-4 h-4 text-foreground-muted" />
+                </div>
+              </div>
+              
+              <NuxtLink 
+                to="/matches?filter=pending" 
+                class="btn-primary inline-flex items-center gap-2"
+              >
+                <Icon name="heroicons:eye" class="w-4 h-4" />
+                Ver Todos los Partidos Pendientes
+              </NuxtLink>
+            </div>
+          </div>
+        </div>
 
         <!-- Dashboard Cards -->
         <div class="grid md:grid-cols-2 gap-6">
@@ -697,8 +745,76 @@ const { player, loading: playerLoading, fetchPlayer } = usePlayer()
 const { isOrganizer } = useOrganizer()
 const { isAdmin } = useAdmin()
 
+// Notifications for pending actions section
+const { notifications, count: notificationsCount } = useNotifications()
+
 // Determine if user is staff (admin or organizer)
 const isStaff = computed(() => isAdmin.value || isOrganizer.value)
+
+// Notification helpers for pending actions section
+const topNotifications = computed(() => {
+  return notifications.value.slice(0, 3)
+})
+
+const router = useRouter()
+
+const getNotificationIcon = (type: string) => {
+  switch (type) {
+    case 'match_proposal':
+      return 'heroicons:hand-raised'
+    case 'match_created':
+      return 'heroicons:check-circle'
+    case 'score_proposal':
+      return 'heroicons:trophy'
+    case 'schedule_proposal':
+      return 'heroicons:calendar'
+    case 'reschedule_proposal':
+      return 'heroicons:arrow-path'
+    case 'acceptance_change':
+      return 'heroicons:pencil-square'
+    default:
+      return 'heroicons:bell'
+  }
+}
+
+const getNotificationText = (notification: any) => {
+  const metadata = notification.metadata || {}
+  
+  switch (notification.type) {
+    case 'match_proposal':
+      return `<strong>${metadata.proposed_by || 'Un jugador'}</strong> te ha propuesto un partido`
+    case 'match_created':
+      if (metadata.is_tournament) {
+        return `Nuevo partido de torneo con <strong>${metadata.with_player || 'otro jugador'}</strong>`
+      } else if (metadata.accepted_by) {
+        return `<strong>${metadata.accepted_by}</strong> aceptó tu propuesta`
+      } else {
+        return `Partido confirmado con <strong>${metadata.with_player || 'otro jugador'}</strong>`
+      }
+    case 'score_proposal':
+      return `Se propuso un resultado - requiere tu aprobación`
+    case 'schedule_proposal':
+      return `Nueva fecha propuesta para el partido`
+    case 'reschedule_proposal':
+      return `Solicitud de reprogramación del partido`
+    case 'acceptance_change':
+      return `Aceptado con propuesta de cambio de fecha/ubicación`
+    default:
+      return 'Nueva notificación sobre tu partido'
+  }
+}
+
+const navigateToMatch = (matchId: string) => {
+  router.push(`/matches/${matchId}`)
+}
+
+const getPlayerInitials = (name: string) => {
+  if (!name) return '?'
+  const parts = name.trim().split(' ').filter(p => p.length > 0)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return (parts[0]?.[0] || '?').toUpperCase()
+  return ((parts[0]?.[0] || '') + (parts[parts.length - 1]?.[0] || '')).toUpperCase() || '?'
+}
 
 // Debug: Log auth state in development
 if (process.dev && process.client) {
@@ -749,6 +865,26 @@ onMounted(async () => {
     await loadPlayerProfile()
   }
 })
+
+// Watch for when player profile loading completes and redirect to onboarding if no profile exists
+const route = useRoute()
+watch([playerLoading, player, isAuthenticated], async ([loading, currentPlayer, authenticated]) => {
+  // Only redirect if:
+  // 1. User is authenticated
+  // 2. Profile loading is complete (not loading)
+  // 3. No player profile exists
+  // 4. We're on the home page (not already on onboarding)
+  if (authenticated && !loading && !currentPlayer && route.path === '/') {
+    // Small delay to avoid race conditions
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Double-check that player still doesn't exist after delay
+    if (!player.value && !playerLoading.value) {
+      console.log('🔄 No player profile found, redirecting to onboarding')
+      await navigateTo('/onboarding', { replace: true })
+    }
+  }
+}, { immediate: false })
 
 // Dashboard data - different features for players vs staff
 const dashboardFeatures = computed(() => {
@@ -817,19 +953,6 @@ watch(() => player.value?.id, (newId) => {
     loadRatingStats()
   }
 }, { immediate: true })
-
-const getPlayerInitials = (name: string) => {
-  if (!name) return '?'
-  const parts = name.trim().split(' ').filter(p => p.length > 0)
-  if (parts.length >= 2) {
-    const first = parts[0]?.[0]
-    const last = parts[parts.length - 1]?.[0]
-    if (first && last) {
-      return (first + last).toUpperCase()
-    }
-  }
-  return name.substring(0, 2).toUpperCase()
-}
 
 // Rating tiers for display
 const ratingTiers = [

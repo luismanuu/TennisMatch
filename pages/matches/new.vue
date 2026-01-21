@@ -12,8 +12,25 @@
           <h1 class="text-size-1 font-semibold text-foreground mb-4">
             Programar Partido
           </h1>
-          <p class="text-size-3 font-regular text-foreground-muted">
+          <p class="text-size-3 font-regular text-foreground-muted mb-4">
             Programa un nuevo partido con un oponente
+          </p>
+          <!-- Match Type Badge -->
+          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 mb-4" :class="
+            (isFromMatchmaking || isCompetitive) 
+              ? 'bg-accent-subtle/30 border-accent/50 text-accent' 
+              : 'bg-foreground-subtle/10 border-border-subtle text-foreground-muted'
+          ">
+            <Icon 
+              :name="(isFromMatchmaking || isCompetitive) ? 'heroicons:trophy' : 'heroicons:heart'" 
+              class="w-4 h-4" 
+            />
+            <span class="text-size-4 font-semibold">
+              {{ (isFromMatchmaking || isCompetitive) ? 'Partido Competitivo' : 'Partido Amistoso' }}
+            </span>
+          </div>
+          <p v-if="isFromMatchmaking" class="text-size-4 font-regular text-foreground-muted">
+            Los partidos desde matchmaking siempre son competitivos y afectan tu ELO
           </p>
         </div>
 
@@ -174,21 +191,65 @@
                 />
               </div>
 
-              <!-- Match Type (only show for non-matchmaking matches) -->
-              <div v-if="!isFromMatchmaking" class="pt-4 border-t border-border-subtle">
-                <label class="flex items-center gap-3 cursor-pointer group">
-                  <input
-                    v-model="isCompetitive"
-                    type="checkbox"
-                    class="w-5 h-5 rounded border-border-subtle bg-surface text-accent focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background cursor-pointer"
-                  />
-                  <div class="flex-1">
-                    <p class="text-size-4 font-semibold text-foreground">Partido Competitivo</p>
-                    <p class="text-size-5 text-foreground-muted">
-                      Si está marcado, este partido afectará tu ELO y contará para partidos de colocación. Desmarca para un partido amistoso.
-                    </p>
+              <!-- Match Type Selection -->
+              <div class="pt-4 border-t border-border-subtle">
+                <!-- Show info when from matchmaking -->
+                <div v-if="isFromMatchmaking" class="p-4 rounded-xl bg-accent-subtle/30 border border-accent/50">
+                  <div class="flex items-start gap-3">
+                    <Icon name="heroicons:information-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+                    <div class="flex-1">
+                      <p class="text-size-4 font-semibold text-foreground mb-1">Partido Competitivo</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        Este partido afectará tu ELO y contará para partidos de colocación. Los partidos desde matchmaking siempre son competitivos.
+                      </p>
+                    </div>
                   </div>
-                </label>
+                </div>
+                
+                <!-- Show toggle for manual matches -->
+                <div v-else class="space-y-3">
+                  <label class="block text-size-4 font-semibold text-foreground mb-3">
+                    Tipo de Partido
+                  </label>
+                  <div class="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      @click="isCompetitive = true"
+                      :class="[
+                        'p-4 rounded-xl border-2 transition-all text-left',
+                        isCompetitive
+                          ? 'border-accent bg-accent-subtle/50 text-foreground'
+                          : 'border-border-subtle bg-surface text-foreground-muted hover:border-accent/50'
+                      ]"
+                    >
+                      <div class="flex items-center gap-3 mb-2">
+                        <Icon name="heroicons:trophy" class="w-5 h-5" :class="isCompetitive ? 'text-accent' : 'text-foreground-muted'" />
+                        <p class="text-size-3 font-semibold">Competitivo</p>
+                      </div>
+                      <p class="text-size-5 text-foreground-muted">
+                        Afecta tu ELO y cuenta para colocación
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      @click="isCompetitive = false"
+                      :class="[
+                        'p-4 rounded-xl border-2 transition-all text-left',
+                        !isCompetitive
+                          ? 'border-accent bg-accent-subtle/50 text-foreground'
+                          : 'border-border-subtle bg-surface text-foreground-muted hover:border-accent/50'
+                      ]"
+                    >
+                      <div class="flex items-center gap-3 mb-2">
+                        <Icon name="heroicons:heart" class="w-5 h-5" :class="!isCompetitive ? 'text-accent' : 'text-foreground-muted'" />
+                        <p class="text-size-3 font-semibold">Amistoso</p>
+                      </div>
+                      <p class="text-size-5 text-foreground-muted">
+                        No afecta tu ELO ni ranking
+                      </p>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 

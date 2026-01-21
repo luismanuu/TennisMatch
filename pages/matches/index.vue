@@ -81,6 +81,18 @@
             Todos
           </button>
           <button
+            @click="statusFilter = 'pending'"
+            :class="[
+              'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
+              statusFilter === 'pending'
+                ? 'bg-orange-500/20 text-orange-400 border-2 border-orange-500/50 backdrop-blur-sm'
+                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-orange-500/50 hover:bg-surface-elevated'
+            ]"
+          >
+            <Icon name="heroicons:bell-alert" class="w-4 h-4" />
+            Pendientes
+          </button>
+          <button
             @click="statusFilter = 'scheduled'"
             :class="[
               'px-4 py-2 rounded-full text-size-4 font-semibold transition-all flex items-center gap-2',
@@ -355,15 +367,43 @@ const { player, fetchPlayer } = usePlayer()
 
 const { matches, pagination, loading, error, fetchMatches } = useMatches()
 
+const route = useRoute()
 const statusFilter = ref<string | null>(null)
 const currentPage = ref(1)
 const pageSize = 10
+
+// Check for query parameter to set initial filter
+onMounted(() => {
+  if (route.query.filter === 'pending') {
+    statusFilter.value = 'pending'
+  }
+})
 
 const filteredMatches = computed(() => {
   let filtered = matches.value
   
   // Apply status filter
-  if (statusFilter.value === 'cancelled') {
+  if (statusFilter.value === 'pending') {
+    // Show matches with any pending action
+    filtered = filtered.filter(m => {
+      // Match proposal pending acceptance
+      const hasPendingProposal = m.match_proposed_by && !m.match_accepted_by && !m.match_rejected_by
+      
+      // Score proposal pending approval
+      const hasPendingScore = m.score_proposed_by && !m.score_approved_by
+      
+      // Schedule proposal pending approval
+      const hasPendingSchedule = m.schedule_proposed_by && !m.schedule_approved_by && !m.schedule_rejected_by
+      
+      // Reschedule proposal pending approval
+      const hasPendingReschedule = m.reschedule_proposed_by && !m.reschedule_approved_by && !m.reschedule_rejected_by
+      
+      // Acceptance change pending approval
+      const hasPendingAcceptanceChange = m.acceptance_proposed_scheduled_at && !m.acceptance_change_approved_by && !m.acceptance_change_rejected_by
+      
+      return hasPendingProposal || hasPendingScore || hasPendingSchedule || hasPendingReschedule || hasPendingAcceptanceChange
+    })
+  } else if (statusFilter.value === 'cancelled') {
     filtered = filtered.filter(m => m.status === 'cancelled')
   } else if (!statusFilter.value) {
     filtered = filtered.filter(m => m.status !== 'cancelled')

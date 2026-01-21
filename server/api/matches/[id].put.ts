@@ -3,6 +3,7 @@ import { getClerkUser } from '~/server/utils/clerk'
 import { checkIsOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { updateBracketAfterMatch, recalculateGroupStandings } from '~/server/utils/tournament-brackets'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
+import { createMatchNotification, dismissExistingNotifications } from '~/server/utils/notifications'
 import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -18,8 +19,8 @@ export default defineEventHandler(async (event) => {
     
     const body = await readBody<{
       clerk_id: string
-      action: 'update_status' | 'propose_score' | 'approve_score' | 'reject_score' | 'cancel' | 'propose_schedule' | 'approve_schedule' | 'reject_schedule' | 'propose_reschedule' | 'approve_reschedule' | 'reject_reschedule' | 'organizer_set_result'
-      data?: UpdateMatchStatusPayload | ProposeScorePayload | ApproveScorePayload | ProposeReschedulePayload | { score?: string, winner_id: string, is_wo?: boolean }
+      action: 'update_status' | 'propose_score' | 'approve_score' | 'reject_score' | 'cancel' | 'accept_match' | 'reject_match' | 'propose_schedule' | 'approve_schedule' | 'reject_schedule' | 'propose_reschedule' | 'approve_reschedule' | 'reject_reschedule' | 'approve_acceptance_change' | 'reject_acceptance_change' | 'organizer_set_result'
+      data?: UpdateMatchStatusPayload | ProposeScorePayload | ApproveScorePayload | ProposeReschedulePayload | { score?: string, winner_id: string, is_wo?: boolean } | { scheduled_at?: string, location?: string }
     }>(event)
     
     const { clerk_id, action, data } = body
@@ -117,6 +118,19 @@ export default defineEventHandler(async (event) => {
     
     let updateData: any = {}
     
+    // Track notifications to create after match update
+    const pendingNotifications: Array<{
+      playerId: string
+      type: 'match_proposal' | 'match_created' | 'score_proposal' | 'schedule_proposal' | 'reschedule_proposal' | 'acceptance_change'
+      metadata?: Record<string, any>
+    }> = []
+    
+    // Track notifications to dismiss after match update
+    const dismissNotifications: Array<{
+      playerId: string
+      types: Array<'match_proposal' | 'match_created' | 'score_proposal' | 'schedule_proposal' | 'reschedule_proposal' | 'acceptance_change'>
+    }> = []
+    
     switch (action) {
       case 'update_status': {
         const statusData = data as UpdateMatchStatusPayload
@@ -141,6 +155,21 @@ export default defineEventHandler(async (event) => {
             throw createError({
               statusCode: 400,
               statusMessage: 'Cannot activate match: no opponent set'
+            })
+          }
+          // Cannot activate if match has not been accepted by player2
+          // Exception: Tournament matches don't require acceptance (they're assigned by admin/organizer)
+          if (match.match_proposed_by && !match.match_accepted_by && !match.tournament_id) {
+            throw createError({
+              statusCode: 400,
+              statusMessage: 'Cannot activate match: opponent has not accepted the match yet'
+            })
+          }
+          // Cannot activate if there are pending acceptance changes that haven't been approved
+          if ((match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by) {
+            throw createError({
+              statusCode: 400,
+              statusMessage: 'Cannot activate match: pending acceptance change proposal must be approved or rejected first'
             })
           }
         }
@@ -177,6 +206,21 @@ export default defineEventHandler(async (event) => {
         updateData.winner_id = scoreData.winner_id
         updateData.score_proposed_by = currentPlayer.id
         updateData.score_proposed_at = new Date().toISOString()
+        
+        // Notify opponent about score proposal (after update completes)
+        const opponentId = match.player1_id === currentPlayer.id ? match.player2_id : match.player1_id
+        if (opponentId) {
+          // Will create notification after match update
+          pendingNotifications.push({
+            playerId: opponentId,
+            type: 'score_proposal',
+            metadata: {
+              proposed_by: currentPlayer.id,
+              score: scoreData.score,
+              winner_id: scoreData.winner_id
+            }
+          })
+        }
         break
       }
       
@@ -206,6 +250,20 @@ export default defineEventHandler(async (event) => {
         updateData.score_approved_by = currentPlayer.id
         updateData.status = 'completed'
         updateData.played_at = new Date().toISOString()
+        
+        // Dismiss score proposal notifications for both players
+        if (match.player1_id) {
+          dismissNotifications.push({
+            playerId: match.player1_id,
+            types: ['score_proposal']
+          })
+        }
+        if (match.player2_id) {
+          dismissNotifications.push({
+            playerId: match.player2_id,
+            types: ['score_proposal']
+          })
+        }
         break
       }
       
@@ -256,6 +314,285 @@ export default defineEventHandler(async (event) => {
         }
         
         updateData.status = 'cancelled'
+        break
+      }
+      
+      case 'accept_match': {
+        // Only player2 can accept the match (player1 proposed it)
+        if (match.player1_id === currentPlayer.id) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'You cannot accept your own match proposal'
+          })
+        }
+        
+        // Must be player2
+        if (match.player2_id !== currentPlayer.id) {
+          throw createError({
+            statusCode: 403,
+            statusMessage: 'Only the opponent can accept the match'
+          })
+        }
+        
+        // Check if match was already accepted or rejected
+        if (match.match_accepted_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has already been accepted'
+          })
+        }
+        
+        if (match.match_rejected_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has already been rejected'
+          })
+        }
+        
+        // Check if match was proposed
+        if (!match.match_proposed_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has not been proposed yet'
+          })
+        }
+        
+        // Accept the match
+        updateData.match_accepted_by = currentPlayer.id
+        
+        // If player2 provided alternative schedule/location, store it as a proposal
+        const acceptanceData = data as { scheduled_at?: string, location?: string } | undefined
+        if (acceptanceData) {
+          if (acceptanceData.scheduled_at) {
+            // Validate date is in the future
+            const proposedDate = new Date(acceptanceData.scheduled_at)
+            if (proposedDate <= new Date()) {
+              throw createError({
+                statusCode: 400,
+                statusMessage: 'Proposed scheduled date must be in the future'
+              })
+            }
+            updateData.acceptance_proposed_scheduled_at = acceptanceData.scheduled_at
+          }
+          
+          if (acceptanceData.location !== undefined) {
+            updateData.acceptance_proposed_location = acceptanceData.location || null
+          }
+          
+          // Clear any previous approval/rejection of acceptance change
+          updateData.acceptance_change_approved_by = null
+          updateData.acceptance_change_rejected_by = null
+          
+          // Notify player1 about acceptance with proposed changes
+          if (match.player1_id) {
+            pendingNotifications.push({
+              playerId: match.player1_id,
+              type: 'acceptance_change',
+              metadata: {
+                accepted_by: currentPlayer.id,
+                proposed_scheduled_at: acceptanceData.scheduled_at,
+                proposed_location: acceptanceData.location
+              }
+            })
+          }
+        } else {
+          // Notify player1 that match was accepted without changes
+          if (match.player1_id) {
+            pendingNotifications.push({
+              playerId: match.player1_id,
+              type: 'match_created',
+              metadata: {
+                accepted_by: currentPlayer.id
+              }
+            })
+          }
+        }
+        
+        // Dismiss the match proposal notification for player2
+        dismissNotifications.push({
+          playerId: currentPlayer.id,
+          types: ['match_proposal']
+        })
+        
+        break
+      }
+      
+      case 'approve_acceptance_change': {
+        // Only player1 can approve the acceptance change (they proposed the original match)
+        if (match.player2_id === currentPlayer.id) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'You cannot approve your own acceptance change proposal'
+          })
+        }
+        
+        // Must be player1
+        if (match.player1_id !== currentPlayer.id) {
+          throw createError({
+            statusCode: 403,
+            statusMessage: 'Only the match proposer can approve acceptance changes'
+          })
+        }
+        
+        // Check if match was accepted
+        if (!match.match_accepted_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has not been accepted yet'
+          })
+        }
+        
+        // Check if there's a change proposal
+        if (!match.acceptance_proposed_scheduled_at && match.acceptance_proposed_location === null) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'No acceptance change has been proposed'
+          })
+        }
+        
+        // Check if already approved or rejected
+        if (match.acceptance_change_approved_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Acceptance change has already been approved'
+          })
+        }
+        
+        if (match.acceptance_change_rejected_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Acceptance change has already been rejected'
+          })
+        }
+        
+        // Apply the proposed changes
+        if (match.acceptance_proposed_scheduled_at) {
+          updateData.scheduled_at = match.acceptance_proposed_scheduled_at
+        }
+        
+        if (match.acceptance_proposed_location !== null) {
+          updateData.location = match.acceptance_proposed_location
+        }
+        
+        updateData.acceptance_change_approved_by = currentPlayer.id
+        // Clear proposal fields
+        updateData.acceptance_proposed_scheduled_at = null
+        updateData.acceptance_proposed_location = null
+        updateData.acceptance_change_rejected_by = null
+        
+        // Dismiss acceptance_change notifications for both players
+        if (match.player1_id) {
+          dismissNotifications.push({
+            playerId: match.player1_id,
+            types: ['acceptance_change']
+          })
+        }
+        if (match.player2_id) {
+          dismissNotifications.push({
+            playerId: match.player2_id,
+            types: ['acceptance_change']
+          })
+        }
+        break
+      }
+      
+      case 'reject_acceptance_change': {
+        // Only player1 can reject the acceptance change (they proposed the original match)
+        if (match.player2_id === currentPlayer.id) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'You cannot reject your own acceptance change proposal'
+          })
+        }
+        
+        // Must be player1
+        if (match.player1_id !== currentPlayer.id) {
+          throw createError({
+            statusCode: 403,
+            statusMessage: 'Only the match proposer can reject acceptance changes'
+          })
+        }
+        
+        // Check if match was accepted
+        if (!match.match_accepted_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has not been accepted yet'
+          })
+        }
+        
+        // Check if there's a change proposal
+        if (!match.acceptance_proposed_scheduled_at && match.acceptance_proposed_location === null) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'No acceptance change has been proposed'
+          })
+        }
+        
+        // Check if already approved or rejected
+        if (match.acceptance_change_approved_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Acceptance change has already been approved'
+          })
+        }
+        
+        if (match.acceptance_change_rejected_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Acceptance change has already been rejected'
+          })
+        }
+        
+        updateData.acceptance_change_rejected_by = currentPlayer.id
+        // Clear proposal fields
+        updateData.acceptance_proposed_scheduled_at = null
+        updateData.acceptance_proposed_location = null
+        break
+      }
+      
+      case 'reject_match': {
+        // Only player2 can reject the match (player1 proposed it)
+        if (match.player1_id === currentPlayer.id) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'You cannot reject your own match proposal'
+          })
+        }
+        
+        // Must be player2
+        if (match.player2_id !== currentPlayer.id) {
+          throw createError({
+            statusCode: 403,
+            statusMessage: 'Only the opponent can reject the match'
+          })
+        }
+        
+        // Check if match was already accepted or rejected
+        if (match.match_accepted_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has already been accepted'
+          })
+        }
+        
+        if (match.match_rejected_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has already been rejected'
+          })
+        }
+        
+        // Check if match was proposed
+        if (!match.match_proposed_by) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Match has not been proposed yet'
+          })
+        }
+        
+        updateData.match_rejected_by = currentPlayer.id
+        updateData.status = 'cancelled' // Rejecting cancels the match
         break
       }
       
@@ -325,6 +662,19 @@ export default defineEventHandler(async (event) => {
         // Clear any previous approval/rejection
         updateData.schedule_approved_by = null
         updateData.schedule_rejected_by = null
+        
+        // Notify opponent about schedule proposal
+        const opponentId = match.player1_id === currentPlayer.id ? match.player2_id : match.player1_id
+        if (opponentId) {
+          pendingNotifications.push({
+            playerId: opponentId,
+            type: 'schedule_proposal',
+            metadata: {
+              proposed_by: currentPlayer.id,
+              scheduled_at: scheduleData.scheduled_at
+            }
+          })
+        }
         break
       }
       
@@ -367,6 +717,20 @@ export default defineEventHandler(async (event) => {
         updateData.schedule_proposed_at = null
         updateData.schedule_proposed_scheduled_at = null
         updateData.schedule_rejected_by = null
+        
+        // Dismiss schedule proposal notifications for both players
+        if (match.player1_id) {
+          dismissNotifications.push({
+            playerId: match.player1_id,
+            types: ['schedule_proposal']
+          })
+        }
+        if (match.player2_id) {
+          dismissNotifications.push({
+            playerId: match.player2_id,
+            types: ['schedule_proposal']
+          })
+        }
         break
       }
       
@@ -468,6 +832,20 @@ export default defineEventHandler(async (event) => {
         // Clear any previous approval/rejection
         updateData.reschedule_approved_by = null
         updateData.reschedule_rejected_by = null
+        
+        // Notify opponent about reschedule proposal
+        const opponentId = match.player1_id === currentPlayer.id ? match.player2_id : match.player1_id
+        if (opponentId) {
+          pendingNotifications.push({
+            playerId: opponentId,
+            type: 'reschedule_proposal',
+            metadata: {
+              proposed_by: currentPlayer.id,
+              new_scheduled_at: rescheduleData.scheduled_at,
+              original_scheduled_at: match.scheduled_at
+            }
+          })
+        }
         break
       }
       
@@ -510,6 +888,20 @@ export default defineEventHandler(async (event) => {
         updateData.reschedule_proposed_at = null
         updateData.reschedule_proposed_scheduled_at = null
         updateData.reschedule_rejected_by = null
+        
+        // Dismiss reschedule proposal notifications for both players
+        if (match.player1_id) {
+          dismissNotifications.push({
+            playerId: match.player1_id,
+            types: ['reschedule_proposal']
+          })
+        }
+        if (match.player2_id) {
+          dismissNotifications.push({
+            playerId: match.player2_id,
+            types: ['reschedule_proposal']
+          })
+        }
         break
       }
       
@@ -638,6 +1030,26 @@ export default defineEventHandler(async (event) => {
           category:categories(id, name, description, order),
           status
         ),
+        match_proposed_by_player:players!matches_match_proposed_by_fkey(
+          id,
+          name
+        ),
+        match_accepted_by_player:players!matches_match_accepted_by_fkey(
+          id,
+          name
+        ),
+        match_rejected_by_player:players!matches_match_rejected_by_fkey(
+          id,
+          name
+        ),
+        acceptance_change_approved_by_player:players!matches_acceptance_change_approved_by_fkey(
+          id,
+          name
+        ),
+        acceptance_change_rejected_by_player:players!matches_acceptance_change_rejected_by_fkey(
+          id,
+          name
+        ),
         score_proposed_by_player:players!matches_score_proposed_by_fkey(
           id,
           name
@@ -681,6 +1093,27 @@ export default defineEventHandler(async (event) => {
         statusCode: 404,
         statusMessage: 'Match not found after update'
       })
+    }
+    
+    // Process pending notifications (create new ones)
+    for (const notification of pendingNotifications) {
+      await createMatchNotification(
+        supabase,
+        notification.playerId,
+        matchId,
+        notification.type,
+        notification.metadata
+      )
+    }
+    
+    // Process dismiss notifications (auto-dismiss when action is taken)
+    for (const dismiss of dismissNotifications) {
+      await dismissExistingNotifications(
+        supabase,
+        dismiss.playerId,
+        matchId,
+        dismiss.types
+      )
     }
     
     // Fetch schedule-related players separately if needed (in case FK constraints don't exist)

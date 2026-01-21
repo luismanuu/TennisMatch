@@ -257,16 +257,159 @@
 
             <!-- Actions Section -->
             <div class="pt-8 border-t border-border-subtle space-y-4">
-              <!-- Start Match Button - Only show if match is scheduled with a date (players only, not organizers) -->
+              <!-- Match Acceptance Section - Show when match is proposed but not accepted (only for non-tournament matches) -->
+              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_proposed_by && !match.match_accepted_by && !match.match_rejected_by && match.player2_id && isPlayerInMatch && currentPlayerId === match.player2_id && !isTournamentOrganizer" class="space-y-3 mb-4">
+                <div class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30">
+                  <div class="flex items-center gap-3 mb-3">
+                    <Icon name="heroicons:envelope" class="w-6 h-6 text-accent flex-shrink-0" />
+                    <div class="flex-1">
+                      <p class="text-size-4 font-semibold text-foreground mb-1">Partido Propuesto</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        <NuxtLink v-if="match.match_proposed_by_player" :to="`/players/${match.match_proposed_by_player.id}`" class="text-accent hover:underline font-semibold">
+                          {{ match.match_proposed_by_player.name }}
+                        </NuxtLink>
+                        <span v-else class="font-semibold">El otro jugador</span>
+                        <span> te ha propuesto este partido. ¿Aceptas?</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex gap-3">
+                    <button
+                      @click="openAcceptMatchForm"
+                      :disabled="actionLoading"
+                      class="btn-primary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2" />
+                      Aceptar Partido
+                    </button>
+                    <button
+                      @click="openRejectMatchForm"
+                      :disabled="actionLoading"
+                      class="btn-secondary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2" />
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Acceptance Change Proposal - Show when player2 accepted but proposed changes -->
+              <!-- Show to player1 (who proposed the match) when player2 has proposed changes -->
+              <!-- Condition: match accepted, has proposed changes, not yet approved/rejected, current user is player1 -->
+              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_accepted_by && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by && match.player1_id === currentPlayerId && match.match_accepted_by !== currentPlayerId && isPlayerInMatch && !isTournamentOrganizer" class="space-y-3 mb-4">
+                <div class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30">
+                  <div class="flex items-center gap-3 mb-3">
+                    <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
+                    <div class="flex-1">
+                      <p class="text-size-4 font-semibold text-foreground mb-1">Propuesta de Cambio</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        <NuxtLink v-if="match.player2" :to="`/players/${match.player2.id}`" class="text-accent hover:underline font-semibold">
+                          {{ match.player2.name }}
+                        </NuxtLink>
+                        <span v-else class="font-semibold">El otro jugador</span>
+                        <span> aceptó el partido pero propone cambios:</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="pl-9 space-y-3">
+                    <div v-if="match.acceptance_proposed_scheduled_at" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                      <p class="text-size-5 text-foreground-muted mb-1">Nueva Fecha y Hora:</p>
+                      <p class="text-size-4 font-semibold text-foreground">{{ formatDateTime(match.acceptance_proposed_scheduled_at) }}</p>
+                      <p class="text-size-5 text-foreground-muted mt-1">Fecha original: {{ formatDateTime(match.scheduled_at) }}</p>
+                    </div>
+                    <div v-if="match.acceptance_proposed_location !== null" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                      <p class="text-size-5 text-foreground-muted mb-1">Nueva Ubicación:</p>
+                      <p class="text-size-4 font-semibold text-foreground">{{ match.acceptance_proposed_location || 'Sin ubicación' }}</p>
+                      <p class="text-size-5 text-foreground-muted mt-1">Ubicación original: {{ match.location || 'Sin ubicación' }}</p>
+                    </div>
+                    <div class="flex gap-3">
+                      <button
+                        @click="handleApproveAcceptanceChange"
+                        :disabled="actionLoading"
+                        class="btn-primary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2" />
+                        Aceptar Cambios
+                      </button>
+                      <button
+                        @click="handleRejectAcceptanceChange"
+                        :disabled="actionLoading"
+                        class="btn-secondary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2" />
+                        Rechazar Cambios
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Waiting for Acceptance Change Approval - Show when player2 accepted with changes and waiting for player1 to approve -->
+              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_accepted_by === currentPlayerId && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30 mb-4">
+                <div class="flex items-center gap-3 mb-3">
+                  <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
+                  <div class="flex-1">
+                    <p class="text-size-4 font-semibold text-foreground mb-1">Esperando Aprobación de Cambios</p>
+                    <p class="text-size-5 text-foreground-muted">
+                      Has aceptado el partido y propuesto cambios. Esperando que 
+                      <NuxtLink v-if="match.match_proposed_by_player" :to="`/players/${match.match_proposed_by_player.id}`" class="text-accent hover:underline font-semibold">
+                        {{ match.match_proposed_by_player.name }}
+                      </NuxtLink>
+                      <span v-else class="font-semibold">el otro jugador</span>
+                      <span> apruebe o rechace tus propuestas...</span>
+                    </p>
+                  </div>
+                </div>
+                <div class="pl-9 space-y-3">
+                  <div v-if="match.acceptance_proposed_scheduled_at" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                    <p class="text-size-5 text-foreground-muted mb-1">Nueva Fecha y Hora Propuesta:</p>
+                    <p class="text-size-4 font-semibold text-foreground">{{ formatDateTime(match.acceptance_proposed_scheduled_at) }}</p>
+                  </div>
+                  <div v-if="match.acceptance_proposed_location !== null" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                    <p class="text-size-5 text-foreground-muted mb-1">Nueva Ubicación Propuesta:</p>
+                    <p class="text-size-4 font-semibold text-foreground">{{ match.acceptance_proposed_location || 'Sin ubicación' }}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Waiting for Acceptance - Show when you proposed and waiting for response (only for non-tournament matches) -->
+              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_proposed_by === currentPlayerId && !match.match_accepted_by && !match.match_rejected_by && match.player2_id && isPlayerInMatch && !isTournamentOrganizer" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30 mb-4">
+                <div class="flex items-center gap-3 mb-3">
+                  <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
+                  <div class="flex-1">
+                    <p class="text-size-4 font-semibold text-foreground mb-1">Esperando respuesta</p>
+                    <p class="text-size-5 text-foreground-muted">
+                      Has propuesto este partido. Esperando que 
+                      <NuxtLink v-if="match.player2" :to="`/players/${match.player2.id}`" class="text-accent hover:underline font-semibold">
+                        {{ match.player2.name }}
+                      </NuxtLink>
+                      <span v-else class="font-semibold">el otro jugador</span>
+                      <span> acepte o rechace tu propuesta...</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Start Match Button - Only show if match is scheduled, accepted (or tournament match), with a date (players only, not organizers) -->
+              <!-- Hide if there are pending acceptance changes that haven't been approved -->
               <button
-                v-if="match.status === 'scheduled' && match.scheduled_at && !match.pending_player2_id && isPlayerInMatch && !isTournamentOrganizer"
+                v-if="match.status === 'scheduled' && match.scheduled_at && !match.pending_player2_id && isPlayerInMatch && !isTournamentOrganizer && (!match.match_proposed_by || match.match_accepted_by || match.tournament_id) && !((match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by)"
                 @click="handleStartMatch"
-                :disabled="actionLoading"
+                :disabled="actionLoading || (match.match_proposed_by && !match.match_accepted_by && !match.tournament_id)"
                 class="btn-primary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
               >
                 <Icon name="heroicons:play" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
                 Iniciar Partido
               </button>
+              
+              <!-- Message when waiting for acceptance change approval -->
+              <div v-if="match.status === 'scheduled' && match.scheduled_at && !match.pending_player2_id && isPlayerInMatch && !isTournamentOrganizer && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by" class="p-4 rounded-xl bg-accent-subtle/20 border border-accent/30 text-center">
+                <p class="text-size-4 text-foreground-muted">
+                  <Icon name="heroicons:clock" class="w-5 h-5 inline mr-2 text-accent" />
+                  Esperando aprobación de los cambios propuestos para iniciar el partido
+                </p>
+              </div>
               
               <!-- Schedule Match Button - Show when match is scheduled but has no date and no pending proposal (players only, not organizers) -->
               <button
@@ -467,9 +610,10 @@
               </div>
 
               <!-- Cancel Match (players only, not organizers) -->
+              <!-- Only player1 can cancel before acceptance, both players can cancel after acceptance -->
               <button
-                v-if="match.status === 'scheduled' && isPlayerInMatch && !isTournamentOrganizer"
-                @click="handleCancelMatch"
+                v-if="match.status === 'scheduled' && isPlayerInMatch && !isTournamentOrganizer && (!match.match_proposed_by || match.match_proposed_by === currentPlayerId || match.match_accepted_by)"
+                @click="openCancelMatchForm"
                 :disabled="actionLoading"
                 class="btn-danger text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -687,6 +831,229 @@
             </Transition>
           </Teleport>
 
+          <!-- Accept Match Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showAcceptMatchForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showAcceptMatchForm = false">
+                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Aceptar Partido</h2>
+                    </div>
+                    <button
+                      @click="showAcceptMatchForm = false"
+                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div class="space-y-6">
+                    <div class="p-4 rounded-xl bg-accent-subtle/20 border border-accent/30">
+                      <p class="text-size-4 font-semibold text-foreground mb-2">Detalles del Partido</p>
+                      <div class="space-y-2 text-size-5 text-foreground-muted">
+                        <p><span class="font-semibold text-foreground">Fecha:</span> {{ match.scheduled_at ? formatDateTime(match.scheduled_at) : 'Sin agendar' }}</p>
+                        <p><span class="font-semibold text-foreground">Ubicación:</span> {{ match.location || 'Sin ubicación' }}</p>
+                      </div>
+                    </div>
+                    
+                    <!-- Change Proposal Form -->
+                    <form v-if="acceptMatchForm.proposeChanges" @submit.prevent="handleAcceptMatchWithChanges" class="space-y-4">
+                      <div>
+                        <label for="accept_scheduled_at" class="block text-size-4 font-semibold text-foreground mb-3">
+                          Nueva Fecha y Hora
+                        </label>
+                        <input
+                          id="accept_scheduled_at"
+                          v-model="acceptMatchForm.scheduled_at"
+                          type="datetime-local"
+                          :min="minDateTime"
+                          class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
+                        />
+                        <p class="text-size-5 text-foreground-muted mt-2">
+                          Deja vacío si solo quieres cambiar la ubicación
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <label for="accept_location" class="block text-size-4 font-semibold text-foreground mb-3">
+                          Nueva Ubicación
+                        </label>
+                        <input
+                          id="accept_location"
+                          v-model="acceptMatchForm.location"
+                          type="text"
+                          class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
+                          placeholder="Ej: Club de Tenis Quito"
+                        />
+                        <p class="text-size-5 text-foreground-muted mt-2">
+                          Deja vacío si solo quieres cambiar la fecha y hora
+                        </p>
+                      </div>
+
+                      <!-- Error Message -->
+                      <div v-if="acceptMatchFormError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
+                        <p class="text-size-4 font-regular text-red-400">{{ acceptMatchFormError }}</p>
+                      </div>
+
+                      <div class="flex gap-3 pt-2">
+                        <button
+                          type="submit"
+                          :disabled="actionLoading || (!acceptMatchForm.scheduled_at && !acceptMatchForm.location)"
+                          class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                          Aceptar y Enviar Propuesta
+                        </button>
+                        <button
+                          type="button"
+                          @click="acceptMatchForm.proposeChanges = false"
+                          class="btn-secondary text-size-3 flex-1 justify-center"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+
+                    <!-- Action buttons when not proposing changes -->
+                    <div v-else class="flex flex-col gap-3">
+                      <button
+                        type="button"
+                        @click="handleAcceptMatchDirectly"
+                        :disabled="actionLoading"
+                        class="btn-primary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                        Aceptar Partido
+                      </button>
+                      <button
+                        type="button"
+                        @click="acceptMatchForm.proposeChanges = true"
+                        :disabled="actionLoading"
+                        class="btn-secondary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:clock" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                        Proponer Cambios
+                      </button>
+                      <button
+                        type="button"
+                        @click="showAcceptMatchForm = false"
+                        class="btn-secondary text-size-3 w-full justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
+          <!-- Reject Match Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showRejectMatchForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showRejectMatchForm = false">
+                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                        <Icon name="heroicons:x-circle" class="w-5 h-5 text-red-400" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Rechazar Partido</h2>
+                    </div>
+                    <button
+                      @click="showRejectMatchForm = false"
+                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div class="space-y-6">
+                    <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+                      <p class="text-size-4 font-semibold text-foreground mb-2">¿Estás seguro?</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        Si rechazas este partido, se cancelará y no podrás jugarlo. Esta acción no se puede deshacer.
+                      </p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                      <button
+                        @click="handleRejectMatch"
+                        :disabled="actionLoading"
+                        class="btn-danger text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                        Sí, Rechazar
+                      </button>
+                      <button
+                        type="button"
+                        @click="showRejectMatchForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
+          <!-- Cancel Match Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showCancelMatchForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showCancelMatchForm = false">
+                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                        <Icon name="heroicons:x-mark" class="w-5 h-5 text-red-400" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Cancelar Partido</h2>
+                    </div>
+                    <button
+                      @click="showCancelMatchForm = false"
+                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div class="space-y-6">
+                    <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+                      <p class="text-size-4 font-semibold text-foreground mb-2">¿Estás seguro?</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        Si cancelas este partido, se cancelará permanentemente y no podrás jugarlo. Esta acción no se puede deshacer.
+                      </p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                      <button
+                        @click="handleCancelMatch"
+                        :disabled="actionLoading"
+                        class="btn-danger text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:x-mark" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                        Sí, Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        @click="showCancelMatchForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
           <!-- Organizer Result Form Modal -->
           <Teleport to="body">
             <Transition name="modal">
@@ -946,7 +1313,7 @@ const matchId = route.params.id as string
 
 const { isLoaded, userId, user } = useAuthState()
 const { player, fetchPlayer } = usePlayer()
-const { getMatch, updateMatchStatus, proposeScore, approveScore, rejectScore, cancelMatch, proposeSchedule, approveSchedule, rejectSchedule, proposeReschedule, approveReschedule, rejectReschedule, organizerSetResult, loading, error } = useMatches()
+const { getMatch, updateMatchStatus, proposeScore, approveScore, rejectScore, cancelMatch, acceptMatch, rejectMatch, approveAcceptanceChange, rejectAcceptanceChange, proposeSchedule, approveSchedule, rejectSchedule, proposeReschedule, approveReschedule, rejectReschedule, organizerSetResult, loading, error } = useMatches()
 const { fetchMessages, sendMessage, messages: chatMessages, loading: chatLoading, isPolling, setPolling, removeOptimisticMessage } = useMatchChat()
 const sendingMessage = ref(false)
 const initialLoading = ref(false)
@@ -959,6 +1326,9 @@ const showScoreForm = ref(false)
 const showOrganizerResultForm = ref(false)
 const showRescheduleForm = ref(false)
 const showScheduleForm = ref(false)
+const showAcceptMatchForm = ref(false)
+const showRejectMatchForm = ref(false)
+const showCancelMatchForm = ref(false)
 const isChatOpen = ref(false)
 const messageInput = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
@@ -980,6 +1350,12 @@ const scheduleForm = ref({
   scheduled_at: ''
 })
 const scheduleFormError = ref<string | null>(null)
+const acceptMatchForm = ref({
+  proposeChanges: false,
+  scheduled_at: '',
+  location: ''
+})
+const acceptMatchFormError = ref<string | null>(null)
 
 // Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm)
 const minDateTime = computed(() => {
@@ -1340,17 +1716,135 @@ const handleRejectScore = async () => {
   }
 }
 
+const openCancelMatchForm = () => {
+  showCancelMatchForm.value = true
+}
+
 const handleCancelMatch = async () => {
   if (!userId.value || !match.value) return
-  
-  if (!confirm('¿Estás seguro de que quieres cancelar este partido?')) return
   
   actionLoading.value = true
   try {
     await cancelMatch(userId.value, match.value.id)
+    showCancelMatchForm.value = false
     await loadMatch()
   } catch (err) {
     console.error('Error cancelling match:', err)
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const openAcceptMatchForm = () => {
+  acceptMatchFormError.value = null
+  acceptMatchForm.value = {
+    proposeChanges: false,
+    scheduled_at: '',
+    location: ''
+  }
+  showAcceptMatchForm.value = true
+}
+
+const handleAcceptMatchDirectly = async () => {
+  if (!userId.value || !match.value) return
+  
+  actionLoading.value = true
+  try {
+    // Accept without any changes
+    await acceptMatch(userId.value, match.value.id)
+    showAcceptMatchForm.value = false
+    acceptMatchForm.value = { proposeChanges: false, scheduled_at: '', location: '' }
+    await loadMatch()
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    acceptMatchFormError.value = err.data?.message || err.message || 'Error al aceptar el partido'
+    toast.error(err.data?.message || err.message || 'Error al aceptar el partido')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleAcceptMatchWithChanges = async () => {
+  if (!userId.value || !match.value) return
+  
+  acceptMatchFormError.value = null
+  
+  // Validate if proposing changes
+  if (acceptMatchForm.value.proposeChanges) {
+    if (acceptMatchForm.value.scheduled_at) {
+      const proposedDate = new Date(acceptMatchForm.value.scheduled_at)
+      if (proposedDate <= new Date()) {
+        acceptMatchFormError.value = 'La fecha propuesta debe ser en el futuro'
+        return
+      }
+    }
+  }
+  
+  actionLoading.value = true
+  try {
+    const payload = acceptMatchForm.value.proposeChanges ? {
+      scheduled_at: acceptMatchForm.value.scheduled_at || undefined,
+      location: acceptMatchForm.value.location || undefined
+    } : undefined
+    
+    await acceptMatch(userId.value, match.value.id, payload)
+    showAcceptMatchForm.value = false
+    acceptMatchForm.value = { proposeChanges: false, scheduled_at: '', location: '' }
+    await loadMatch()
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    acceptMatchFormError.value = err.data?.message || err.message || 'Error al aceptar el partido'
+    toast.error(err.data?.message || err.message || 'Error al aceptar el partido')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleApproveAcceptanceChange = async () => {
+  if (!userId.value || !match.value) return
+  
+  actionLoading.value = true
+  try {
+    await approveAcceptanceChange(userId.value, match.value.id)
+    await loadMatch()
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al aprobar los cambios')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleRejectAcceptanceChange = async () => {
+  if (!userId.value || !match.value) return
+  
+  actionLoading.value = true
+  try {
+    await rejectAcceptanceChange(userId.value, match.value.id)
+    await loadMatch()
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al rechazar los cambios')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const openRejectMatchForm = () => {
+  showRejectMatchForm.value = true
+}
+
+const handleRejectMatch = async () => {
+  if (!userId.value || !match.value) return
+  
+  actionLoading.value = true
+  try {
+    await rejectMatch(userId.value, match.value.id)
+    showRejectMatchForm.value = false
+    await loadMatch()
+  } catch (err: any) {
+    const toast = useToastNotifications()
+    toast.error(err.data?.message || err.message || 'Error al rechazar el partido')
   } finally {
     actionLoading.value = false
   }
