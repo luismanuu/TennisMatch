@@ -27,7 +27,7 @@ const UNCERTAINTY_DECREASE_UNRATED = 0.2
 
 // ELO bounds
 const ELO_MIN = 1
-const ELO_DECAY_FLOOR = 500
+export const ELO_DECAY_FLOOR = 500
 const ELO_HIGH_RATED_THRESHOLD = 3500
 
 // Win streak bonus
@@ -40,7 +40,7 @@ const MMR_ELO_CENTER = 2250
 const MMR_ELO_SCALE = 750
 
 // Monthly decay
-const MATCHES_REQUIRED_PER_MONTH = 2
+export const MATCHES_REQUIRED_PER_MONTH = 2
 const DECAY_PER_MISSED_MATCH = 25
 const MAX_DECAY_MONTHS = 4
 

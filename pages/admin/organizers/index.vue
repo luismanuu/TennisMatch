@@ -94,19 +94,19 @@
           <!-- Active Organizers -->
           <div v-if="organizers.length > 0">
             <h2 class="text-size-2 font-semibold text-foreground mb-4">Organizadores Activos</h2>
-            <div class="space-y-4">
+            <div class="space-y-4 mb-6">
               <div
                 v-for="organizer in organizers"
                 :key="organizer.id"
-                class="glass-card-elevated p-6 hover-lift transition-all"
+                class="glass-card-elevated p-4 sm:p-6 hover-lift transition-all"
               >
-                <div class="flex items-start justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div class="flex-1">
                     <h3 class="text-size-2 font-semibold text-foreground mb-2">{{ organizer.name }}</h3>
                     <p class="text-size-4 font-regular text-foreground-muted mb-3">
                       {{ organizer.email }}
                     </p>
-                    <div class="flex items-center gap-4 text-size-4 text-foreground-muted">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-size-4 text-foreground-muted">
                       <span class="flex items-center gap-1">
                         <Icon name="heroicons:calendar" class="w-4 h-4" />
                         Creado: {{ formatDate(organizer.created_at) }}
@@ -117,10 +117,10 @@
                     <button
                       @click="handleDeleteOrganizer(organizer.id, organizer.name)"
                       :disabled="deletingIds.has(organizer.id)"
-                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50"
+                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 w-full sm:w-auto"
                     >
                       <span v-if="!deletingIds.has(organizer.id)">Eliminar</span>
-                      <span v-else class="flex items-center gap-2">
+                      <span v-else class="flex items-center gap-2 justify-center">
                         <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
                         Eliminando...
                       </span>
@@ -129,25 +129,36 @@
                 </div>
               </div>
             </div>
+            
+            <!-- Pagination for Organizers -->
+            <PaginationControls
+              v-if="organizersTotal > organizersPageSize"
+              :current-page="organizersPage"
+              :total-pages="Math.ceil(organizersTotal / organizersPageSize)"
+              :total="organizersTotal"
+              :page-size="organizersPageSize"
+              :loading="loading"
+              @page-change="handleOrganizersPageChange"
+            />
           </div>
 
           <!-- Pending Invitations -->
           <div v-if="pendingInvitations.length > 0">
             <h2 class="text-size-2 font-semibold text-foreground mb-4">Invitaciones Pendientes</h2>
-            <div class="space-y-4">
+            <div class="space-y-4 mb-6">
               <div
                 v-for="invitation in pendingInvitations"
                 :key="invitation.id"
-                class="glass-card-elevated p-6 border-2 border-yellow-500/30"
+                class="glass-card-elevated p-4 sm:p-6 border-2 border-yellow-500/30"
               >
-                <div class="flex items-start justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div class="flex-1">
                     <h3 class="text-size-2 font-semibold text-foreground mb-2">{{ invitation.name }}</h3>
                     <p class="text-size-4 font-regular text-foreground-muted mb-3">
                       {{ invitation.email }}
                     </p>
-                    <div class="flex items-center gap-4 text-size-4 text-foreground-muted">
-                      <span class="px-3 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-size-4 font-semibold">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-size-4 text-foreground-muted">
+                      <span class="px-3 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-size-4 font-semibold w-fit">
                         {{ invitation.status === 'pending' ? 'Pendiente' : invitation.status }}
                       </span>
                       <span class="flex items-center gap-1">
@@ -156,14 +167,14 @@
                       </span>
                     </div>
                   </div>
-                  <div class="flex gap-2">
+                  <div class="flex flex-col sm:flex-row gap-2">
                     <button
                       @click="handleResendInvitation(invitation.id)"
                       :disabled="resendingIds.has(invitation.id)"
-                      class="px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50"
+                      class="px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 w-full sm:w-auto"
                     >
                       <span v-if="!resendingIds.has(invitation.id)">Reenviar</span>
-                      <span v-else class="flex items-center gap-2">
+                      <span v-else class="flex items-center gap-2 justify-center">
                         <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
                         Reenviando...
                       </span>
@@ -171,10 +182,10 @@
                     <button
                       @click="handleDeleteInvitation(invitation.id)"
                       :disabled="deletingInvitationIds.has(invitation.id)"
-                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50"
+                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 w-full sm:w-auto"
                     >
                       <span v-if="!deletingInvitationIds.has(invitation.id)">Eliminar</span>
-                      <span v-else class="flex items-center gap-2">
+                      <span v-else class="flex items-center gap-2 justify-center">
                         <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
                         Eliminando...
                       </span>
@@ -183,6 +194,17 @@
                 </div>
               </div>
             </div>
+            
+            <!-- Pagination for Pending Invitations -->
+            <PaginationControls
+              v-if="organizersPendingTotal > organizersPageSize"
+              :current-page="organizersPage"
+              :total-pages="Math.ceil(organizersPendingTotal / organizersPageSize)"
+              :total="organizersPendingTotal"
+              :page-size="organizersPageSize"
+              :loading="loading"
+              @page-change="handleOrganizersPageChange"
+            />
           </div>
 
           <!-- Empty State -->
@@ -206,16 +228,26 @@
 </template>
 
 <script setup lang="ts">
+import PaginationControls from '~/components/admin/PaginationControls.vue'
 definePageMeta({
   middleware: ['admin']
 })
 
 const { userId } = useAuthState()
 const toast = useToastNotifications()
+const { 
+  organizers: organizersList, 
+  pendingOrganizerInvitations,
+  organizersPage,
+  organizersPageSize,
+  organizersTotal,
+  organizersPendingTotal,
+  fetchOrganizers 
+} = useAdmin()
 
 const loading = ref(false)
-const organizers = ref<any[]>([])
-const pendingInvitations = ref<any[]>([])
+const organizers = computed(() => organizersList.value)
+const pendingInvitations = computed(() => pendingOrganizerInvitations.value)
 const showCreateForm = ref(false)
 const inviting = ref(false)
 const deletingIds = ref<Set<string>>(new Set())
@@ -242,21 +274,21 @@ const formatDate = (dateString: string) => {
   })
 }
 
-const loadOrganizers = async () => {
+const loadOrganizers = async (page?: number) => {
   if (!userId.value) return
 
   try {
     loading.value = true
-    const data = await $fetch<{ organizers: any[]; pendingInvitations: any[] }>(
-      `/api/admin/organizers?clerk_id=${userId.value}`
-    )
-    organizers.value = data.organizers || []
-    pendingInvitations.value = data.pendingInvitations || []
+    await fetchOrganizers(page)
   } catch (err: any) {
     toast.error(err.data?.message || err.message || 'Error al cargar organizadores')
   } finally {
     loading.value = false
   }
+}
+
+const handleOrganizersPageChange = (page: number) => {
+  loadOrganizers(page)
 }
 
 const handleInviteOrganizer = async () => {

@@ -57,12 +57,12 @@
 
         <template v-else>
           <!-- Create/Edit Segment Form -->
-          <div class="glass-card-elevated p-6 mb-8 animate-fade-up">
+          <div class="glass-card-elevated p-4 sm:p-6 mb-8 animate-fade-up">
             <h2 class="text-size-2 font-semibold text-foreground mb-4">
               {{ editingSegmentId ? 'Editar Región' : 'Crear Nueva Región' }}
             </h2>
             <form @submit.prevent="editingSegmentId ? handleUpdateSegment() : handleCreateSegment()" class="space-y-4">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-size-4 font-semibold text-foreground mb-2">
                     Nombre *
@@ -139,23 +139,23 @@
           </div>
 
           <!-- Segments List -->
-          <div v-if="segments.length > 0" class="space-y-6 animate-fade-up animate-delay-1">
+          <div v-if="segments.length > 0" class="space-y-6 animate-fade-up animate-delay-1 mb-6">
             <div 
               v-for="segment in segments" 
               :key="segment.id"
-              class="glass-card-elevated p-6 hover-lift"
+              class="glass-card-elevated p-4 sm:p-6 hover-lift"
             >
-              <div class="flex items-start justify-between mb-4">
-                <div>
+              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                <div class="flex-1">
                   <h3 class="text-size-2 font-semibold text-foreground mb-1">{{ segment.name }}</h3>
                   <p v-if="segment.description" class="text-size-4 text-foreground-muted">
                     {{ segment.description }}
                   </p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-col sm:flex-row gap-2">
                   <button
                     @click="handleEditSegment(segment)"
-                    class="btn-secondary text-size-4 !py-2 !px-4"
+                    class="btn-secondary text-size-4 !py-2 !px-4 w-full sm:w-auto"
                   >
                     <Icon name="heroicons:pencil" class="w-4 h-4 mr-1" />
                     Editar
@@ -163,7 +163,7 @@
                   <button
                     @click="handleDeleteSegment(segment.id, segment.name)"
                     :disabled="deletingIds.has(segment.id)"
-                    class="btn-danger text-size-4 !py-2 !px-4 disabled:opacity-50"
+                    class="btn-danger text-size-4 !py-2 !px-4 disabled:opacity-50 w-full sm:w-auto"
                   >
                     <Icon v-if="deletingIds.has(segment.id)" name="heroicons:arrow-path" class="w-4 h-4 mr-1 animate-spin" />
                     <Icon v-else name="heroicons:trash" class="w-4 h-4 mr-1" />
@@ -214,6 +214,17 @@
                 </p>
               </div>
             </div>
+            
+            <!-- Pagination -->
+            <PaginationControls
+              v-if="segmentsTotal > segmentsPageSize"
+              :current-page="segmentsPage"
+              :total-pages="Math.ceil(segmentsTotal / segmentsPageSize)"
+              :total="segmentsTotal"
+              :page-size="segmentsPageSize"
+              :loading="loading"
+              @page-change="(page) => loadData(page)"
+            />
           </div>
 
           <!-- Empty State -->
@@ -291,6 +302,7 @@
 
 <script setup lang="ts">
 import type { CitySegment, City } from '~/types'
+import PaginationControls from '~/components/admin/PaginationControls.vue'
 
 definePageMeta({
   middleware: ['admin']
@@ -308,6 +320,11 @@ const allCities = ref<City[]>([])
 const deletingIds = ref<Set<string>>(new Set())
 const removingCityIds = ref<Set<string>>(new Set())
 const addingCities = ref(false)
+
+// Pagination
+const segmentsPage = ref(1)
+const segmentsPageSize = ref(50)
+const segmentsTotal = ref(0)
 
 // Form state
 const editingSegmentId = ref<string | null>(null)
@@ -334,7 +351,8 @@ const availableCitiesForModal = computed(() => {
 })
 
 // Load data
-const loadData = async () => {
+const loadData = async (page?: number) => {
+  if (page !== undefined) segmentsPage.value = page
   try {
     loading.value = true
     error.value = null
@@ -346,10 +364,16 @@ const loadData = async () => {
     }
     
     // Load segments
+    const offset = (segmentsPage.value - 1) * segmentsPageSize.value
     const segmentsResponse = await $fetch('/api/admin/city-segments', {
-      query: { clerk_id: clerkId }
+      query: { 
+        clerk_id: clerkId,
+        limit: segmentsPageSize.value,
+        offset: offset
+      }
     })
     segments.value = (segmentsResponse as any).segments || []
+    segmentsTotal.value = (segmentsResponse as any).total || 0
     
     // Load cities
     const citiesResponse = await $fetch('/api/cities')

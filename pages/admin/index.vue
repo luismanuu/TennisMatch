@@ -153,6 +153,25 @@
                 <span>Organizadores</span>
               </button>
             </div>
+
+            <!-- Rankings Management Group -->
+            <div class="space-y-2">
+              <div class="px-2 py-1">
+                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Rankings</p>
+              </div>
+              <button
+                @click="activeTab = 'rankings'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'rankings'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:chart-bar" class="w-4 h-4 flex-shrink-0" />
+                <span>Rankings</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -362,6 +381,124 @@
                 </div>
               </div>
             </div>
+
+            <!-- Ranking Statistics -->
+            <div v-if="stats.rankings" class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-6">
+              <div class="flex items-center gap-3 mb-6">
+                <Icon name="heroicons:chart-bar" class="w-6 h-6 text-accent" />
+                <h2 class="text-size-2 font-semibold text-foreground">Estadísticas de Rankings</h2>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="p-4 rounded-xl bg-purple-500/10 border-2 border-purple-500/30 hover:bg-purple-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:users" class="w-5 h-5 text-purple-400" />
+                    <p class="text-size-4 text-foreground-muted">Jugadores Calificados</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-purple-400">{{ stats.rankings.total_rated_players }}</p>
+                </div>
+                <div class="p-4 rounded-xl bg-orange-500/10 border-2 border-orange-500/30 hover:bg-orange-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:clock" class="w-5 h-5 text-orange-400" />
+                    <p class="text-size-4 text-foreground-muted">En Placement</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-orange-400">{{ stats.rankings.players_in_placement }}</p>
+                </div>
+                <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30 hover:bg-blue-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:star" class="w-5 h-5 text-blue-400" />
+                    <p class="text-size-4 text-foreground-muted">ELO Promedio</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-blue-400">{{ stats.rankings.average_elo }}</p>
+                </div>
+                <div class="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30 hover:bg-green-500/15 transition-colors">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Icon name="heroicons:arrow-trending-up" class="w-5 h-5 text-green-400" />
+                    <p class="text-size-4 text-foreground-muted">Cambios (7 días)</p>
+                  </div>
+                  <p class="text-size-2 font-bold text-green-400">{{ stats.rankings.recent_changes_7_days }}</p>
+                </div>
+              </div>
+              <div v-if="stats.rankings.top_5_players && stats.rankings.top_5_players.length > 0" class="mt-6 pt-6 border-t border-border-subtle">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-size-3 font-semibold text-foreground">Top 5 Jugadores</h3>
+                  <NuxtLink to="/admin/rankings" class="text-size-4 text-accent hover:underline flex items-center gap-1">
+                    Ver todos
+                    <Icon name="heroicons:arrow-right" class="w-4 h-4" />
+                  </NuxtLink>
+                </div>
+                <div class="space-y-3">
+                  <div 
+                    v-for="(player, index) in stats.rankings.top_5_players" 
+                    :key="player.id"
+                    class="p-4 rounded-lg bg-surface border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated transition-all cursor-pointer"
+                    @click="navigateTo(`/admin/rankings/players/${player.id}`)"
+                  >
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-4 flex-1">
+                        <div class="flex flex-col items-center justify-center min-w-[60px]">
+                          <span class="text-size-2 font-bold text-accent">#{{ index + 1 }}</span>
+                          <span 
+                            class="px-2 py-1 rounded text-size-5 font-semibold mt-1"
+                            :style="{ 
+                              color: getTierColor(player.tier), 
+                              backgroundColor: getTierColor(player.tier) + '20' 
+                            }"
+                          >
+                            {{ player.tier }}
+                          </span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-3 mb-2">
+                            <h4 class="text-size-3 font-semibold text-foreground truncate">{{ player.name || 'Sin nombre' }}</h4>
+                            <span class="text-size-3 font-bold text-accent">{{ player.elo }} ELO</span>
+                          </div>
+                          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-size-4">
+                            <div class="flex items-center gap-2">
+                              <Icon name="heroicons:trophy" class="w-4 h-4 text-foreground-muted" />
+                              <span class="text-foreground-muted">Partidos:</span>
+                              <span class="font-semibold text-foreground">{{ player.total_matches_played || 0 }}</span>
+                            </div>
+                            <div v-if="player.win_streak > 0" class="flex items-center gap-2">
+                              <Icon name="heroicons:arrow-trending-up" class="w-4 h-4 text-green-400" />
+                              <span class="text-foreground-muted">Racha V:</span>
+                              <span class="font-semibold text-green-400">{{ player.win_streak }}</span>
+                            </div>
+                            <div v-if="player.loss_streak > 0" class="flex items-center gap-2">
+                              <Icon name="heroicons:arrow-trending-down" class="w-4 h-4 text-red-400" />
+                              <span class="text-foreground-muted">Racha D:</span>
+                              <span class="font-semibold text-red-400">{{ player.loss_streak }}</span>
+                            </div>
+                            <div v-if="player.city" class="flex items-center gap-2">
+                              <Icon name="heroicons:map-pin" class="w-4 h-4 text-foreground-muted" />
+                              <span class="text-foreground-muted truncate">{{ player.city.name }}</span>
+                            </div>
+                            <div v-if="player.category" class="flex items-center gap-2">
+                              <Icon name="heroicons:tag" class="w-4 h-4 text-foreground-muted" />
+                              <span class="text-foreground-muted truncate">{{ player.category.name }}</span>
+                            </div>
+                            <div v-if="(player.placement_matches_completed || 0) < 3" class="flex items-center gap-2">
+                              <Icon name="heroicons:clock" class="w-4 h-4 text-yellow-400" />
+                              <span class="text-foreground-muted">Placement:</span>
+                              <span class="font-semibold text-yellow-400">{{ player.placement_matches_completed || 0 }}/3</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <NuxtLink 
+                          :to="`/admin/rankings/players/${player.id}`"
+                          class="btn-secondary text-size-4 !py-2 !px-3"
+                          @click.stop
+                        >
+                          <Icon name="heroicons:eye" class="w-4 h-4 mr-1" />
+                          Ver
+                        </NuxtLink>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -474,16 +611,16 @@
         <!-- Pending Players Table -->
         <div v-else-if="filteredPendingPlayers.length > 0" class="glass-card-elevated overflow-hidden">
           <div class="overflow-x-auto">
-            <table class="w-full">
+            <table class="w-full min-w-[800px]">
               <thead class="bg-surface border-b border-border-subtle">
                 <tr>
-                  <th class="text-left p-4 text-size-4 font-semibold text-foreground">Name</th>
-                  <th class="text-left p-4 text-size-4 font-semibold text-foreground">Email</th>
-                  <th class="text-left p-4 text-size-4 font-semibold text-foreground">Category</th>
-                  <th class="text-left p-4 text-size-4 font-semibold text-foreground">Status</th>
-                  <th class="text-left p-4 text-size-4 font-semibold text-foreground">Invited By</th>
-                  <th class="text-left p-4 text-size-4 font-semibold text-foreground">Created</th>
-                  <th class="text-left p-4 text-size-4 font-semibold text-foreground">Actions</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Name</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Email</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell">Category</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Status</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden lg:table-cell">Invited By</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell">Created</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -492,12 +629,12 @@
                   :key="player.id"
                   class="border-b border-border-subtle hover:bg-surface/50 transition-colors"
                 >
-                  <td class="p-4 text-size-4 font-regular text-foreground">{{ player.name }}</td>
-                  <td class="p-4 text-size-4 font-regular text-foreground">{{ player.email }}</td>
-                  <td class="p-4 text-size-4 font-regular text-foreground">
+                  <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground">{{ player.name }}</td>
+                  <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground">{{ player.email }}</td>
+                  <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground hidden md:table-cell">
                     {{ player.category?.name || 'N/A' }}
                   </td>
-                  <td class="p-4">
+                  <td class="p-3 sm:p-4">
                     <span 
                       :class="[
                         'px-3 py-1 rounded-lg text-size-4 font-semibold',
@@ -509,14 +646,14 @@
                       {{ player.status }}
                     </span>
                   </td>
-                  <td class="p-4 text-size-4 font-regular text-foreground">
+                  <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground hidden lg:table-cell">
                     {{ player.invited_by_player?.name || 'N/A' }}
                   </td>
-                  <td class="p-4 text-size-4 font-regular text-foreground-muted">
+                  <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground-muted hidden md:table-cell">
                     {{ formatDate(player.created_at) }}
                   </td>
-                  <td class="p-4">
-                    <div class="flex gap-2">
+                  <td class="p-3 sm:p-4">
+                    <div class="flex flex-col sm:flex-row gap-2">
                       <button
                         v-if="player.status === 'pending' && !(player as any).revoked"
                         @click="handleResend(player.clerk_invitation_id || player.id)"
@@ -543,6 +680,17 @@
               </tbody>
             </table>
           </div>
+          
+          <!-- Pagination -->
+          <PaginationControls
+            v-if="pendingPlayersTotal > pendingPlayersPageSize"
+            :current-page="pendingPlayersPage"
+            :total-pages="Math.ceil(pendingPlayersTotal / pendingPlayersPageSize)"
+            :total="pendingPlayersTotal"
+            :page-size="pendingPlayersPageSize"
+            :loading="loading"
+            @page-change="handlePendingPlayersPageChange"
+          />
         </div>
 
         <!-- Empty State -->
@@ -565,7 +713,7 @@
         <div v-show="activeTab === 'players' && !loading">
           <!-- Show Deleted Players Toggle and Search -->
           <div class="glass-card-elevated p-4 mb-6">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <div>
                 <h3 class="text-size-3 font-semibold text-foreground mb-1">Player Management</h3>
                 <p class="text-size-4 text-foreground-muted">Manage all registered players</p>
@@ -580,7 +728,7 @@
                 <span class="text-size-4 font-regular text-foreground">Show deleted players</span>
               </label>
             </div>
-            <div class="flex gap-4">
+            <div class="flex flex-col sm:flex-row gap-4">
               <input
                 v-model="playerSearch"
                 type="text"
@@ -599,7 +747,7 @@
                 </option>
               </select>
               <button
-                v-if="playerSearch || playerCategoryFilter"
+                v-if="playerSearch || playerCategoryFilter || playerTierFilter"
                 @click="clearPlayerFilters"
                 class="btn-secondary text-size-4"
               >
@@ -708,13 +856,15 @@
           <!-- Players Table -->
           <div v-else-if="filteredPlayers.length > 0" class="glass-card-elevated overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full">
+              <table class="w-full min-w-[1000px]">
                 <thead class="bg-surface border-b border-border-subtle">
                   <tr>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Name</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Email (Clerk ID)</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Category</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">ELO</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">ELO / Tier</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Rank</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Placement</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Phone</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Created</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Actions</th>
@@ -795,15 +945,15 @@
               <Icon name="heroicons:user-group" class="w-12 h-12 text-accent" />
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-4">
-              {{ playerSearch || playerCategoryFilter ? 'No se encontraron jugadores' : 'No hay jugadores' }}
+              {{ playerSearch || playerCategoryFilter || playerTierFilter ? 'No se encontraron jugadores' : 'No hay jugadores' }}
             </h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 leading-relaxed">
-              {{ playerSearch || playerCategoryFilter 
+              {{ playerSearch || playerCategoryFilter || playerTierFilter
                 ? 'Intenta ajustar tu búsqueda o filtros.' 
                 : 'No hay jugadores registrados en el sistema.' }}
             </p>
             <button
-              v-if="playerSearch || playerCategoryFilter"
+              v-if="playerSearch || playerCategoryFilter || playerTierFilter"
               @click="clearPlayerFilters"
               class="btn-secondary text-size-4 group"
             >
@@ -919,14 +1069,14 @@
           <!-- Categories Table -->
           <div v-else-if="categories.length > 0" class="glass-card-elevated overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full">
+              <table class="w-full min-w-[600px]">
                 <thead class="bg-surface border-b border-border-subtle">
                   <tr>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Order</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Name</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Description</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">ELO Inicial</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Actions</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Order</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Name</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell">Description</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">ELO Inicial</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -935,18 +1085,18 @@
                     :key="category.id"
                     class="border-b border-border-subtle hover:bg-surface/50 transition-colors"
                   >
-                    <td class="p-4 text-size-4 font-regular text-foreground">{{ category.order }}</td>
-                    <td class="p-4 text-size-4 font-semibold text-foreground">{{ category.name }}</td>
-                    <td class="p-4 text-size-4 font-regular text-foreground-muted">
+                    <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground">{{ category.order }}</td>
+                    <td class="p-3 sm:p-4 text-size-4 font-semibold text-foreground">{{ category.name }}</td>
+                    <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground-muted hidden md:table-cell">
                       {{ category.description || 'N/A' }}
                     </td>
-                    <td class="p-4">
+                    <td class="p-3 sm:p-4">
                       <span class="px-2 py-1 rounded-lg bg-accent-subtle/30 text-accent font-semibold text-size-4">
                         {{ category.default_elo || 1000 }}
                       </span>
                     </td>
-                    <td class="p-4">
-                      <div class="flex gap-2">
+                    <td class="p-3 sm:p-4">
+                      <div class="flex flex-col sm:flex-row gap-2">
                         <button
                           @click="handleEditCategory(category)"
                           :disabled="loading || editingCategoryId === category.id"
@@ -987,7 +1137,7 @@
           <!-- Filters -->
           <div class="glass-card-elevated p-6 mb-8">
             <h2 class="text-size-2 font-semibold text-foreground mb-4">Filter Matches</h2>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label class="block text-size-4 font-semibold text-foreground mb-2">Status</label>
                 <select
@@ -1019,7 +1169,7 @@
               </div>
               <div class="flex items-end">
                 <button
-                  @click="loadMatches"
+                  @click="loadMatches(1)"
                   class="btn-primary text-size-4 w-full"
                 >
                   Apply Filters
@@ -1044,16 +1194,16 @@
           <!-- Matches Table -->
           <div v-else-if="allMatches.length > 0" class="glass-card-elevated overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full">
+              <table class="w-full min-w-[1000px]">
                 <thead class="bg-surface border-b border-border-subtle">
                   <tr>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Date</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Player 1</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Player 2</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Status</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Score</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Winner</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Actions</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Date</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Player 1</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Player 2</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Status</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell">Score</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden lg:table-cell">Winner</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1062,10 +1212,10 @@
                     :key="match.id"
                     class="border-b border-border-subtle hover:bg-surface/50 transition-colors"
                   >
-                    <td class="p-4 text-size-4 font-regular text-foreground-muted">
+                    <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground-muted">
                       {{ formatDate(match.scheduled_at || match.created_at) }}
                     </td>
-                    <td class="p-4">
+                    <td class="p-3 sm:p-4">
                       <div class="flex items-center gap-2">
                         <span class="text-size-4 font-regular text-foreground">{{ match.player1?.name || 'N/A' }}</span>
                         <span 
@@ -1076,7 +1226,7 @@
                         </span>
                       </div>
                     </td>
-                    <td class="p-4">
+                    <td class="p-3 sm:p-4">
                       <div class="flex items-center gap-2">
                         <span class="text-size-4 font-regular text-foreground">
                           {{ match.player2?.name || match.pending_player2?.name || 'N/A' }}
@@ -1089,7 +1239,7 @@
                         </span>
                       </div>
                     </td>
-                    <td class="p-4">
+                    <td class="p-3 sm:p-4">
                       <span 
                         :class="[
                           'px-3 py-1 rounded-lg text-size-4 font-semibold',
@@ -1102,10 +1252,10 @@
                         {{ match.status }}
                       </span>
                     </td>
-                    <td class="p-4 text-size-4 font-regular text-foreground">
+                    <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground hidden md:table-cell">
                       {{ match.score || 'N/A' }}
                     </td>
-                    <td class="p-4">
+                    <td class="p-3 sm:p-4 hidden lg:table-cell">
                       <div v-if="match.winner" class="flex items-center gap-2">
                         <span class="text-size-4 font-regular text-foreground">{{ match.winner.name }}</span>
                         <span 
@@ -1117,7 +1267,7 @@
                       </div>
                       <span v-else class="text-size-4 font-regular text-foreground-muted">N/A</span>
                     </td>
-                    <td class="p-4">
+                    <td class="p-3 sm:p-4">
                       <NuxtLink
                         :to="`/matches/${match.id}`"
                         class="btn-primary text-size-4 !py-2 !px-4"
@@ -1129,6 +1279,17 @@
                 </tbody>
               </table>
             </div>
+            
+            <!-- Pagination -->
+            <PaginationControls
+              v-if="matchesTotal > matchesPageSize"
+              :current-page="matchesPage"
+              :total-pages="Math.ceil(matchesTotal / matchesPageSize)"
+              :total="matchesTotal"
+              :page-size="matchesPageSize"
+              :loading="loading"
+              @page-change="handleMatchesPageChange"
+            />
           </div>
 
           <!-- Empty State -->
@@ -1181,6 +1342,19 @@
             </div>
           </NuxtLink>
         </div>
+
+        <!-- Rankings Tab -->
+        <div v-show="activeTab === 'rankings' && !loading">
+          <NuxtLink to="/admin/rankings" class="block">
+            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+              <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
+              <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Rankings y Leaderboards</h3>
+              <p class="text-size-4 font-regular text-foreground-muted">
+                Ver estadísticas, tendencias y gestionar el sistema de rankings
+              </p>
+            </div>
+          </NuxtLink>
+        </div>
       </div>
     </div>
   </div>
@@ -1189,6 +1363,7 @@
 <script setup lang="ts">
 import type { PendingPlayer } from '~/types'
 import { watch } from 'vue'
+import PaginationControls from '~/components/admin/PaginationControls.vue'
 
 definePageMeta({
   middleware: ['admin']
@@ -1200,6 +1375,15 @@ const {
   pendingPlayers,
   players,
   categories,
+  pendingPlayersPage,
+  pendingPlayersPageSize,
+  pendingPlayersTotal,
+  playersPage,
+  playersPageSize,
+  playersTotal,
+  matchesPage,
+  matchesPageSize,
+  matchesTotal,
   fetchPendingPlayers, 
   resendInvitation,
   invitePlayer,
@@ -1222,7 +1406,7 @@ const {
 
 
 // Tab management
-const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'tournaments' | 'organizers' | 'city-segments'>('overview')
+const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'tournaments' | 'organizers' | 'city-segments' | 'rankings'>('overview')
 
 const successMessage = ref<string | null>(null)
 const resendingIds = ref<Set<string>>(new Set())
@@ -1234,7 +1418,7 @@ const inviteError = ref<string | null>(null)
 const showDeletedPlayers = ref(false)
 const syncingInvitations = ref(false)
 
-// Pending players search
+// Pending players search (client-side filtering on current page)
 const pendingSearch = ref('')
 const filteredPendingPlayers = computed(() => {
   if (!pendingSearch.value) {
@@ -1258,9 +1442,10 @@ const playerForm = ref({
 const allCategories = ref<any[]>([])
 const allPlayersList = ref<any[]>([])
 
-// Player search and filters
+// Player search and filters (client-side filtering on current page)
 const playerSearch = ref('')
 const playerCategoryFilter = ref('')
+const playerTierFilter = ref('')
 const filteredPlayers = computed(() => {
   let result = allPlayersList.value
 
@@ -1274,6 +1459,13 @@ const filteredPlayers = computed(() => {
 
   if (playerCategoryFilter.value) {
     result = result.filter((p: any) => p.category_id === playerCategoryFilter.value)
+  }
+
+  if (playerTierFilter.value) {
+    result = result.filter((p: any) => {
+      const tier = getTierFromElo(p.elo || 0)
+      return tier === playerTierFilter.value
+    })
   }
 
   return result
@@ -1336,13 +1528,17 @@ const handleInvite = async () => {
   }
 }
 
-const loadPendingPlayers = async () => {
+const loadPendingPlayers = async (page?: number) => {
   try {
     successMessage.value = null
-    await fetchPendingPlayers()
+    await fetchPendingPlayers(page)
   } catch (err) {
     console.error('Error loading pending players:', err)
   }
+}
+
+const handlePendingPlayersPageChange = (page: number) => {
+  loadPendingPlayers(page)
 }
 
 const handleSyncInvitations = async () => {
@@ -1404,10 +1600,10 @@ const handleDeletePending = async (pendingPlayerId: string, playerName: string, 
   }
 }
 
-const loadPlayers = async () => {
+const loadPlayers = async (page?: number) => {
   try {
     successMessage.value = null
-    const data = await fetchPlayers(showDeletedPlayers.value)
+    const data = await fetchPlayers(showDeletedPlayers.value, page)
     allPlayersList.value = data
     // Load categories for filtering
     if (allCategories.value.length === 0) {
@@ -1418,6 +1614,10 @@ const loadPlayers = async () => {
   } catch (err) {
     console.error('Error loading players:', err)
   }
+}
+
+const handlePlayersPageChange = (page: number) => {
+  loadPlayers(page)
 }
 
 
@@ -1436,6 +1636,9 @@ const filterPlayers = () => {
 const clearPlayerFilters = () => {
   playerSearch.value = ''
   playerCategoryFilter.value = ''
+  playerTierFilter.value = ''
+  // Reset to page 1 when clearing filters
+  loadPlayers(1)
 }
 
 const handleDeletePlayer = async (playerId: string, playerName: string) => {
@@ -1544,6 +1747,29 @@ const formatDate = (dateString: string) => {
   })
 }
 
+const getTierColor = (tier: string) => {
+  const tierColors: Record<string, string> = {
+    'Bronze': '#CD7F32',
+    'Silver': '#C0C0C0',
+    'Gold': '#FFD700',
+    'Platinum': '#E5E4E2',
+    'Diamond': '#B9F2FF',
+    'Master': '#9932CC',
+    'Grandmaster': '#FF4500'
+  }
+  return tierColors[tier] || '#666'
+}
+
+const getTierFromElo = (elo: number) => {
+  if (elo >= 4000) return 'Grandmaster'
+  if (elo >= 3500) return 'Master'
+  if (elo >= 3000) return 'Diamond'
+  if (elo >= 2500) return 'Platinum'
+  if (elo >= 2000) return 'Gold'
+  if (elo >= 1500) return 'Silver'
+  return 'Bronze'
+}
+
 const resetCategoryForm = () => {
   categoryForm.value = {
     name: '',
@@ -1650,7 +1876,7 @@ const loadCategories = async () => {
   }
 }
 
-const loadMatches = async () => {
+const loadMatches = async (page?: number) => {
   try {
     successMessage.value = null
     await fetchAllMatches({
@@ -1658,11 +1884,22 @@ const loadMatches = async () => {
       player_id: matchFilters.value.player_id || undefined,
       start_date: matchFilters.value.start_date || undefined,
       end_date: matchFilters.value.end_date || undefined
-    })
+    }, page)
   } catch (err) {
     console.error('Error loading matches:', err)
   }
 }
+
+const handleMatchesPageChange = (page: number) => {
+  loadMatches(page)
+}
+
+// Reset pagination when filters change
+watch([() => matchFilters.value.status, () => matchFilters.value.start_date, () => matchFilters.value.end_date], () => {
+  if (activeTab.value === 'matches') {
+    loadMatches(1)
+  }
+}, { deep: true })
 
 const loadStats = async () => {
   try {
@@ -1701,6 +1938,9 @@ watch(activeTab, (newTab) => {
   } else if (newTab === 'city-segments') {
     // Navigate to city segments page
     navigateTo('/admin/city-segments')
+  } else if (newTab === 'rankings') {
+    // Navigate to rankings page
+    navigateTo('/admin/rankings')
   }
 })
 

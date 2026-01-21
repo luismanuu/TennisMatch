@@ -9,6 +9,10 @@ export default defineEventHandler(async (event) => {
     const playerId = query.player_id as string | undefined
     const startDate = query.start_date as string | undefined
     const endDate = query.end_date as string | undefined
+    
+    // Pagination parameters
+    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
+    const offset = query.offset ? parseInt(query.offset as string) : 0
 
     if (!clerkId) {
       throw createError({
@@ -69,9 +73,38 @@ export default defineEventHandler(async (event) => {
       queryBuilder = queryBuilder.lte('scheduled_at', endDate)
     }
 
+    // Get total count
+    let countQuery = supabase
+      .from('matches')
+      .select('id', { count: 'exact', head: true })
+    
+    if (status) {
+      countQuery = countQuery.eq('status', status)
+    }
+    if (playerId) {
+      countQuery = countQuery.or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+    }
+    if (startDate) {
+      countQuery = countQuery.gte('scheduled_at', startDate)
+    }
+    if (endDate) {
+      countQuery = countQuery.lte('scheduled_at', endDate)
+    }
+    
+    const { count, error: countError } = await countQuery
+    
+    if (countError) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to count matches',
+        data: countError
+      })
+    }
+
+    // Apply pagination
     const { data: matches, error: fetchError } = await queryBuilder
       .order('scheduled_at', { ascending: false })
-      .limit(1000) // Limit to prevent performance issues
+      .range(offset, offset + limit - 1)
 
     if (fetchError) {
       throw createError({
@@ -152,7 +185,12 @@ export default defineEventHandler(async (event) => {
         })
       : []
 
-    return enrichedMatches
+    return {
+      data: enrichedMatches,
+      total: count || 0,
+      page: Math.floor(offset / limit) + 1,
+      page_size: limit
+    }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,

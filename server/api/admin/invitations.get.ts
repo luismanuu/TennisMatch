@@ -5,6 +5,10 @@ export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
     const clerkId = query.clerk_id as string
+    
+    // Pagination parameters
+    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
+    const offset = query.offset ? parseInt(query.offset as string) : 0
 
     if (!clerkId) {
       throw createError({
@@ -81,10 +85,18 @@ export default defineEventHandler(async (event) => {
 
     console.log(`[invitations.get] Filtered to ${pendingInvitations.length} pending invitations out of ${formattedInvitations.length} total`)
 
+    // Apply pagination
+    const totalPending = pendingInvitations.length
+    const paginatedPending = pendingInvitations.slice(offset, offset + limit)
+    const paginatedAll = formattedInvitations.slice(offset, offset + limit)
+
     return {
-      invitations: pendingInvitations,
-      allInvitations: formattedInvitations,
-      total: clerkTotal
+      invitations: paginatedPending,
+      allInvitations: paginatedAll,
+      total: totalPending,
+      total_all: clerkTotal,
+      page: Math.floor(offset / limit) + 1,
+      page_size: limit
     }
   } catch (error: any) {
     throw createError({

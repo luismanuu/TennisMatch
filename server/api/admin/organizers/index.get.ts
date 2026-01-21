@@ -6,6 +6,10 @@ export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
     const clerkId = query.clerk_id as string
+    
+    // Pagination parameters
+    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
+    const offset = query.offset ? parseInt(query.offset as string) : 0
 
     if (!clerkId) {
       throw createError({
@@ -59,7 +63,7 @@ export default defineEventHandler(async (event) => {
 
     // Also get pending invitations for tournament organizers
     const { invitations: clerkInvitations } = await getAllClerkInvitations()
-    const pendingInvitations = clerkInvitations
+    const allPendingInvitations = clerkInvitations
       .filter((inv: any) => {
         const metadata = inv.publicMetadata as any
         return metadata?.role === 'tournament_organizer' && !inv.revoked
@@ -71,10 +75,22 @@ export default defineEventHandler(async (event) => {
         status: inv.status,
         created_at: inv.createdAt
       }))
+    
+    // Apply pagination to organizers
+    const totalOrganizers = organizers.length
+    const paginatedOrganizers = organizers.slice(offset, offset + limit)
+    
+    // Apply pagination to pending invitations
+    const totalPending = allPendingInvitations.length
+    const paginatedPending = allPendingInvitations.slice(offset, offset + limit)
 
     return {
-      organizers,
-      pendingInvitations
+      organizers: paginatedOrganizers,
+      pendingInvitations: paginatedPending,
+      total: totalOrganizers,
+      total_pending: totalPending,
+      page: Math.floor(offset / limit) + 1,
+      page_size: limit
     }
   } catch (error: any) {
     throw createError({

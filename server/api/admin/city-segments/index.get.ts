@@ -6,6 +6,10 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event)
     const clerkId = query.clerk_id as string
     
+    // Pagination parameters
+    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
+    const offset = query.offset ? parseInt(query.offset as string) : 0
+    
     if (!clerkId) {
       throw createError({
         statusCode: 400,
@@ -17,6 +21,19 @@ export default defineEventHandler(async (event) => {
     await checkIsAdmin(clerkId)
     
     const supabase = getSupabaseAdmin()
+    
+    // Get total count
+    const { count, error: countError } = await supabase
+      .from('city_segments')
+      .select('id', { count: 'exact', head: true })
+    
+    if (countError) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to count city segments',
+        data: countError
+      })
+    }
     
     // Fetch all city segments with their cities
     const { data: segments, error: segmentsError } = await supabase
@@ -38,6 +55,7 @@ export default defineEventHandler(async (event) => {
         )
       `)
       .order('name')
+      .range(offset, offset + limit - 1)
     
     if (segmentsError) {
       console.error('Error fetching city segments:', segmentsError)
@@ -63,6 +81,9 @@ export default defineEventHandler(async (event) => {
     return {
       success: true,
       segments: transformedSegments,
+      total: count || 0,
+      page: Math.floor(offset / limit) + 1,
+      page_size: limit
     }
   } catch (error: any) {
     throw createError({

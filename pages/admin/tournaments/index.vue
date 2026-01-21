@@ -218,7 +218,7 @@
 
         <!-- Filters -->
         <div class="glass-card-elevated p-6 mb-8 animate-fade-up animate-delay-1">
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label class="block text-size-4 font-semibold text-foreground mb-2">Buscar</label>
               <input
@@ -255,7 +255,7 @@
             </div>
             <div class="flex items-end">
               <button
-                @click="loadTournaments()"
+                @click="loadTournaments(1)"
                 class="w-full px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
               >
                 Filtrar
@@ -271,7 +271,7 @@
         </div>
 
         <!-- Tournaments List -->
-        <div v-else-if="tournaments.length > 0" class="space-y-4 animate-fade-up animate-delay-2">
+        <div v-else-if="tournaments.length > 0" class="space-y-4 animate-fade-up animate-delay-2 mb-6">
           <div
             v-for="tournament in tournaments"
             :key="tournament.id"
@@ -310,6 +310,17 @@
               <Icon name="heroicons:chevron-right" class="w-6 h-6 text-foreground-muted flex-shrink-0" />
             </div>
           </div>
+          
+          <!-- Pagination -->
+          <PaginationControls
+            v-if="adminTournamentsTotal > adminTournamentsPageSize"
+            :current-page="adminTournamentsPage"
+            :total-pages="Math.ceil(adminTournamentsTotal / adminTournamentsPageSize)"
+            :total="adminTournamentsTotal"
+            :page-size="adminTournamentsPageSize"
+            :loading="loading"
+            @page-change="handleTournamentsPageChange"
+          />
         </div>
 
         <!-- Empty State -->
@@ -333,12 +344,21 @@
 
 <script setup lang="ts">
 import type { Tournament, CreateTournamentPayload } from '~/types'
+import PaginationControls from '~/components/admin/PaginationControls.vue'
 
 definePageMeta({
   middleware: ['admin']
 })
 
-const { tournaments, loading, fetchAdminTournaments, createTournament } = useTournaments()
+const { 
+  tournaments, 
+  loading, 
+  fetchAdminTournaments, 
+  createTournament,
+  adminTournamentsPage,
+  adminTournamentsPageSize,
+  adminTournamentsTotal
+} = useTournaments()
 const { categories, fetchCategories } = useCategories()
 
 const showCreateForm = ref(false)
@@ -445,7 +465,7 @@ const handleCreateTournament = async () => {
   }
 }
 
-const loadTournaments = async () => {
+const loadTournaments = async (page?: number) => {
   try {
     // Handle "open" filter (tournaments without category)
     let categoryFilter = filters.value.category_id || undefined
@@ -457,11 +477,20 @@ const loadTournaments = async () => {
       search: filters.value.search || undefined,
       status: filters.value.status || undefined,
       category_id: categoryFilter
-    })
+    }, page)
   } catch (err) {
     console.error('Error loading tournaments:', err)
   }
 }
+
+const handleTournamentsPageChange = (page: number) => {
+  loadTournaments(page)
+}
+
+// Reset pagination when filters change
+watch([() => filters.value.search, () => filters.value.status, () => filters.value.category_id], () => {
+  loadTournaments(1)
+})
 
 onMounted(async () => {
   // Set default dates to today at 00:00

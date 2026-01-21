@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { getRatingTier, RATING_TIERS } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -141,6 +142,70 @@ export default defineEventHandler(async (event) => {
       ? Math.round((totalRegistrations || 0) / tournamentStats.total)
       : 0
 
+    // Get ranking statistics
+    const { data: allPlayers } = await supabase
+      .from('players')
+      .select('id, elo, total_matches_played, placement_matches_completed')
+      .eq('status', 'active')
+
+    const ratedPlayers = allPlayers?.filter(p => (p.total_matches_played || 0) > 0) || []
+    const playersInPlacement = allPlayers?.filter(p => 
+      (p.total_matches_played || 0) === 0 || ((p.placement_matches_completed || 0) < 3)
+    ) || []
+
+    const totalElo = allPlayers?.reduce((sum, p) => sum + (p.elo || 0), 0) || 0
+    const averageElo = allPlayers && allPlayers.length > 0 
+      ? Math.round(totalElo / allPlayers.length) 
+      : 0
+
+    // Top 5 players by ELO with full details
+    const { data: topPlayersData } = await supabase
+      .from('players')
+      .select(`
+        id,
+        name,
+        elo,
+        total_matches_played,
+        win_streak,
+        loss_streak,
+        placement_matches_completed,
+        city:cities(id, name),
+        category:categories(id, name)
+      `)
+      .eq('status', 'active')
+      .order('elo', { ascending: false })
+      .limit(5)
+
+    const topPlayers = topPlayersData?.map(p => ({
+      id: p.id,
+      name: p.name,
+      elo: p.elo || 0,
+      tier: getRatingTier(p.elo || 0).tier,
+      total_matches_played: p.total_matches_played || 0,
+      win_streak: p.win_streak || 0,
+      loss_streak: p.loss_streak || 0,
+      placement_matches_completed: p.placement_matches_completed || 0,
+      city: p.city as any,
+      category: p.category as any
+    })) || []
+
+    // Tier distribution summary
+    const tierDistribution: Record<string, number> = {}
+    RATING_TIERS.forEach(tier => {
+      tierDistribution[tier.tier] = 0
+    })
+
+    allPlayers?.forEach(player => {
+      const tierInfo = getRatingTier(player.elo || 0)
+      tierDistribution[tierInfo.tier] = (tierDistribution[tierInfo.tier] || 0) + 1
+    })
+
+    // Recent ranking changes (last 7 days)
+    const { count: recentRankingChanges } = await supabase
+      .from('rating_history')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', sevenDaysAgo.toISOString())
+
     return {
       players: {
         active: activePlayersCount || 0,
@@ -160,6 +225,14 @@ export default defineEventHandler(async (event) => {
         totalRegistrations: totalRegistrations || 0,
         organizers: uniqueOrganizers.size,
         avgRegistrations
+      },
+      rankings: {
+        total_rated_players: ratedPlayers.length,
+        players_in_placement: playersInPlacement.length,
+        average_elo: averageElo,
+        top_5_players: topPlayers,
+        tier_distribution: tierDistribution,
+        recent_changes_7_days: recentRankingChanges || 0
       }
     }
   } catch (error: any) {

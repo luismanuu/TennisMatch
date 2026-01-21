@@ -7,6 +7,11 @@ export const useTournaments = () => {
   const currentTournament = ref<Tournament | null>(null)
   const loading = ref(false)
   const error = ref<Error | null>(null)
+  
+  // Admin pagination
+  const adminTournamentsPage = ref(1)
+  const adminTournamentsPageSize = ref(50)
+  const adminTournamentsTotal = ref(0)
 
   // Fetch tournaments (public)
   const fetchTournaments = async (filters?: {
@@ -154,17 +159,23 @@ export const useTournaments = () => {
     start_date_from?: string
     start_date_to?: string
     search?: string
-  }) => {
+  }, page?: number, pageSize?: number) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
     }
+
+    if (page !== undefined) adminTournamentsPage.value = page
+    if (pageSize !== undefined) adminTournamentsPageSize.value = pageSize
 
     loading.value = true
     error.value = null
 
     try {
+      const offset = (adminTournamentsPage.value - 1) * adminTournamentsPageSize.value
       const queryParams = new URLSearchParams()
       queryParams.append('clerk_id', userId.value)
+      queryParams.append('limit', adminTournamentsPageSize.value.toString())
+      queryParams.append('offset', offset.toString())
       if (filters?.status) queryParams.append('status', filters.status)
       if (filters?.category_id) queryParams.append('category_id', filters.category_id)
       if (filters?.organizer_id) queryParams.append('organizer_id', filters.organizer_id)
@@ -172,9 +183,10 @@ export const useTournaments = () => {
       if (filters?.start_date_to) queryParams.append('start_date_to', filters.start_date_to)
       if (filters?.search) queryParams.append('search', filters.search)
 
-      const data = await $fetch<Tournament[]>(`/api/admin/tournaments?${queryParams.toString()}`)
-      tournaments.value = data
-      return data
+      const data = await $fetch<{ data: Tournament[], total: number, page: number, page_size: number }>(`/api/admin/tournaments?${queryParams.toString()}`)
+      tournaments.value = data.data
+      adminTournamentsTotal.value = data.total || 0
+      return data.data
     } catch (err: any) {
       error.value = err
       throw err
@@ -476,6 +488,9 @@ export const useTournaments = () => {
     getBracket,
     registerForTournament,
     fetchAdminTournaments,
+    adminTournamentsPage: readonly(adminTournamentsPage),
+    adminTournamentsPageSize: readonly(adminTournamentsPageSize),
+    adminTournamentsTotal: readonly(adminTournamentsTotal),
     createTournament,
     updateTournament,
     deleteTournament,
