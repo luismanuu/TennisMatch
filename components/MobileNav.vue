@@ -3,7 +3,7 @@
     <!-- Hamburger Menu Button (Mobile Only) -->
     <button
       @click="emit('toggle')"
-      class="md:hidden flex items-center justify-center w-10 h-10 rounded-lg text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all relative z-50"
+      class="md:hidden flex items-center justify-center w-10 h-10 rounded-lg text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all relative z-[100]"
       :aria-label="isOpen ? 'Cerrar menú' : 'Abrir menú'"
       :aria-expanded="isOpen"
     >
@@ -30,20 +30,21 @@
     </button>
 
     <!-- Mobile Menu Overlay -->
-    <Transition name="backdrop">
-      <div
-        v-if="isOpen"
-        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
-        @click="emit('close')"
-      ></div>
-    </Transition>
+    <Teleport to="body">
+      <Transition name="backdrop">
+        <div
+          v-if="isOpen"
+          class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] md:hidden"
+          @click="emit('close')"
+        ></div>
+      </Transition>
 
-    <!-- Mobile Menu Slide-in Panel -->
-    <Transition name="slide-in">
-      <div
-        v-if="isOpen"
-        class="fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] bg-background border-r border-border-subtle z-50 md:hidden overflow-y-auto"
-      >
+      <!-- Mobile Menu Slide-in Panel -->
+      <Transition name="slide-in">
+        <div
+          v-if="isOpen"
+          class="fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] bg-background border-r border-border-subtle z-[70] md:hidden overflow-y-auto shadow-2xl"
+        >
         <!-- Menu Header -->
         <div class="flex items-center justify-between p-6 border-b border-border-subtle">
           <div class="flex items-center gap-3">
@@ -103,11 +104,12 @@
         </div>
       </div>
     </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 const props = defineProps<{
   isOpen: boolean
