@@ -101,9 +101,11 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Apply pagination
+    // Apply pagination and ordering
+    // Order by scheduled_at descending (nulls last), then by created_at descending for matches without scheduled_at
     const { data: matches, error: fetchError } = await queryBuilder
-      .order('scheduled_at', { ascending: false })
+      .order('scheduled_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
     if (fetchError) {

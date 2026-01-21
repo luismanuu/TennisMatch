@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { validateAndSetMatchScheduling } from '~/server/utils/tournament-scheduling'
 import { createMatchNotification } from '~/server/utils/notifications'
+import { datetimeLocalToISO, isDateInPast } from '~/server/utils/timezone'
 import type { CreateMatchPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -16,11 +17,19 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Validate scheduled_at is not in the past
-    const scheduledDate = new Date(scheduled_at)
-    const now = new Date()
+    // Convert datetime-local to ISO (treating input as Ecuador time)
+    let scheduledAtISO: string
+    try {
+      scheduledAtISO = datetimeLocalToISO(scheduled_at)
+    } catch (error: any) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Invalid date format: ${error.message}`
+      })
+    }
     
-    if (scheduledDate < now) {
+    // Validate scheduled_at is not in the past
+    if (isDateInPast(scheduledAtISO)) {
       throw createError({
         statusCode: 400,
         statusMessage: 'Cannot schedule a match in the past'
@@ -110,19 +119,7 @@ export default defineEventHandler(async (event) => {
     // match_proposed_by is set to player1 (the creator) UNLESS it's a tournament match
     // Tournament matches don't require acceptance - they're assigned by admin/organizer
     
-    // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
-    // Treat it as local time and convert to ISO string for storage
-    let scheduledAtISO: string
-    if (scheduled_at.includes('T') && !scheduled_at.includes('Z') && !scheduled_at.includes('+') && !scheduled_at.includes('-', 10)) {
-      // This is a datetime-local format (no timezone), treat as local time
-      // The string is already in the correct format for PostgreSQL TIMESTAMP WITH TIME ZONE
-      // PostgreSQL will interpret it as local time if no timezone is specified
-      scheduledAtISO = scheduled_at
-    } else {
-      // Already has timezone info or is ISO format
-      scheduledAtISO = new Date(scheduled_at).toISOString()
-    }
-    
+    // scheduledAtISO is already converted above using datetimeLocalToISO
     const matchData: any = {
       player1_id,
       scheduled_at: scheduledAtISO,

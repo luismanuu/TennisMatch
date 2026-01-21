@@ -443,16 +443,12 @@ const handleSubmit = async () => {
     // If from matchmaking, always competitive. Otherwise use user's choice
     const matchIsCompetitive = isFromMatchmaking.value ? true : isCompetitive.value
     
-    // Convert datetime-local to ISO string (preserves local time as UTC)
-    const scheduledAtISO = formData.value.scheduled_at 
-      ? new Date(formData.value.scheduled_at).toISOString()
-      : null
-    
+    // Send datetime-local as-is - backend will convert it treating it as Ecuador time
     const match = await createMatch(userId.value, {
       player1_id: player.value.id,
       player2_id: player2Id,
       pending_player2_id: pendingPlayerId,
-      scheduled_at: scheduledAtISO || formData.value.scheduled_at,
+      scheduled_at: formData.value.scheduled_at,
       location: formData.value.location || undefined,
       is_competitive: matchIsCompetitive
     })

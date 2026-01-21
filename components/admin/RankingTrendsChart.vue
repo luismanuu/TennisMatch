@@ -195,7 +195,12 @@ const filteredXLabels = computed(() => {
 
 const formatDateLabel = (dateStr: string) => {
   const date = new Date(dateStr)
-  return date.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })
+  // Use Ecuador timezone for display
+  return date.toLocaleDateString('es-ES', { 
+    timeZone: 'America/Guayaquil',
+    month: 'short', 
+    day: 'numeric' 
+  })
 }
 
 const showTooltip = (index: number, event: MouseEvent) => {

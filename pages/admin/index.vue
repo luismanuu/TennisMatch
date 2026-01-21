@@ -1738,7 +1738,9 @@ const handleUpdatePlayer = async () => {
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString)
+  // Use Ecuador timezone for display
   return date.toLocaleDateString('en-US', {
+    timeZone: 'America/Guayaquil',
     year: 'numeric',
     month: 'short',
     day: 'numeric',

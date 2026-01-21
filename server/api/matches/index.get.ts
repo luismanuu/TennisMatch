@@ -297,7 +297,7 @@ export default defineEventHandler(async (event) => {
         filteredData.slice(0, 5).map((m: any) => ({
           id: m.id?.substring(0, 8),
           scheduled_at: m.scheduled_at,
-          date: m.scheduled_at ? new Date(m.scheduled_at).toLocaleString('es-ES') : 'null'
+          date: m.scheduled_at ? new Date(m.scheduled_at).toLocaleString('es-ES', { timeZone: 'America/Guayaquil' }) : 'null'
         }))
       )
     }

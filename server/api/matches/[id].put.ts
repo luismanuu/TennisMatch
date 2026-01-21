@@ -4,6 +4,7 @@ import { checkIsOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/
 import { updateBracketAfterMatch, recalculateGroupStandings } from '~/server/utils/tournament-brackets'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { createMatchNotification, dismissExistingNotifications } from '~/server/utils/notifications'
+import { datetimeLocalToISO, isDateInFuture } from '~/server/utils/timezone'
 import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -364,21 +365,19 @@ export default defineEventHandler(async (event) => {
         const acceptanceData = data as { scheduled_at?: string, location?: string } | undefined
         if (acceptanceData) {
           if (acceptanceData.scheduled_at) {
-            // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
-            // Treat it as local time
+            // Convert datetime-local to ISO (treating input as Ecuador time)
             let scheduledAtISO: string
-            if (acceptanceData.scheduled_at.includes('T') && !acceptanceData.scheduled_at.includes('Z') && !acceptanceData.scheduled_at.includes('+') && !acceptanceData.scheduled_at.includes('-', 10)) {
-              // This is a datetime-local format (no timezone), use as-is
-              // PostgreSQL will interpret it correctly
-              scheduledAtISO = acceptanceData.scheduled_at
-            } else {
-              // Already has timezone info or is ISO format
-              scheduledAtISO = new Date(acceptanceData.scheduled_at).toISOString()
+            try {
+              scheduledAtISO = datetimeLocalToISO(acceptanceData.scheduled_at)
+            } catch (error: any) {
+              throw createError({
+                statusCode: 400,
+                statusMessage: `Invalid date format: ${error.message}`
+              })
             }
             
             // Validate date is in the future
-            const proposedDate = new Date(scheduledAtISO)
-            if (proposedDate <= new Date()) {
+            if (!isDateInFuture(scheduledAtISO)) {
               throw createError({
                 statusCode: 400,
                 statusMessage: 'Proposed scheduled date must be in the future'
@@ -640,24 +639,26 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
+        // Convert datetime-local to ISO (treating input as Ecuador time)
         let scheduledAtISO: string
-        if (scheduleData.scheduled_at.includes('T') && !scheduleData.scheduled_at.includes('Z') && !scheduleData.scheduled_at.includes('+') && !scheduleData.scheduled_at.includes('-', 10)) {
-          // This is a datetime-local format (no timezone), use as-is
-          scheduledAtISO = scheduleData.scheduled_at
-        } else {
-          // Already has timezone info or is ISO format
-          scheduledAtISO = new Date(scheduleData.scheduled_at).toISOString()
+        try {
+          scheduledAtISO = datetimeLocalToISO(scheduleData.scheduled_at)
+        } catch (error: any) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: `Invalid date format: ${error.message}`
+          })
         }
         
         // Validate date is in the future
-        const scheduledDate = new Date(scheduledAtISO)
-        if (scheduledDate <= new Date()) {
+        if (!isDateInFuture(scheduledAtISO)) {
           throw createError({
             statusCode: 400,
             statusMessage: 'Scheduled date must be in the future'
           })
         }
+        
+        const scheduledDate = new Date(scheduledAtISO)
         
         // Check if this is a tournament match and validate round deadline
         if (match.tournament_id) {
@@ -820,24 +821,26 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        // Handle datetime-local format (YYYY-MM-DDTHH:mm without timezone)
+        // Convert datetime-local to ISO (treating input as Ecuador time)
         let rescheduledAtISO: string
-        if (rescheduleData.scheduled_at.includes('T') && !rescheduleData.scheduled_at.includes('Z') && !rescheduleData.scheduled_at.includes('+') && !rescheduleData.scheduled_at.includes('-', 10)) {
-          // This is a datetime-local format (no timezone), use as-is
-          rescheduledAtISO = rescheduleData.scheduled_at
-        } else {
-          // Already has timezone info or is ISO format
-          rescheduledAtISO = new Date(rescheduleData.scheduled_at).toISOString()
+        try {
+          rescheduledAtISO = datetimeLocalToISO(rescheduleData.scheduled_at)
+        } catch (error: any) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: `Invalid date format: ${error.message}`
+          })
         }
         
         // Validate new date is in the future
-        const newDate = new Date(rescheduledAtISO)
-        if (newDate <= new Date()) {
+        if (!isDateInFuture(rescheduledAtISO)) {
           throw createError({
             statusCode: 400,
             statusMessage: 'New scheduled date must be in the future'
           })
         }
+        
+        const newDate = new Date(rescheduledAtISO)
         
         // Check if this is a tournament match and validate round deadline
         if (match.tournament_id) {

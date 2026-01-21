@@ -598,7 +598,9 @@ const formatDate = (dateString: string | null | undefined) => {
   if (!dateString) return 'Sin agendar'
   const date = new Date(dateString)
   if (isNaN(date.getTime())) return 'Fecha inválida'
+  // Use Ecuador timezone for display
   return date.toLocaleDateString('es-ES', {
+    timeZone: 'America/Guayaquil',
     year: 'numeric',
     month: 'long',
     day: 'numeric',

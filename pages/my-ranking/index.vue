@@ -545,7 +545,13 @@ const formatMatchDate = (dateString: string) => {
     const months = Math.floor(diffDays / 30)
     return `Hace ${months} ${months === 1 ? 'mes' : 'meses'}`
   } else {
-    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+    // Use Ecuador timezone for display
+    return date.toLocaleDateString('es-ES', { 
+      timeZone: 'America/Guayaquil',
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric' 
+    })
   }
 }
 

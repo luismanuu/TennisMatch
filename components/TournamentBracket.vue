@@ -490,7 +490,9 @@ const parsePlayerScores = (score: string, playerNumber: number): Array<{ mainSco
 
 
 const formatDeadline = (deadline: string) => {
+  // Use Ecuador timezone for display
   return new Date(deadline).toLocaleDateString('es-ES', {
+    timeZone: 'America/Guayaquil',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -906,7 +908,9 @@ const getCurrentRoundDeadline = (matches: any[], roundsToCreate: number): { roun
   }
   
   const deadlineDate = new Date(deadline)
+  // Use Ecuador timezone for display
   const formattedDate = deadlineDate.toLocaleDateString('es-ES', {
+    timeZone: 'America/Guayaquil',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getClerkUser } from '~/server/utils/clerk'
+import { datetimeLocalToISO } from '~/server/utils/timezone'
 import type { CreateTournamentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -56,20 +57,40 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Convert datetime-local to ISO (treating input as Ecuador time)
+    let startDateISO: string
+    let endDateISO: string | null = null
+    let registrationDeadlineISO: string | null = null
+    
+    try {
+      startDateISO = datetimeLocalToISO(start_date)
+      if (end_date) {
+        endDateISO = datetimeLocalToISO(end_date)
+      }
+      if (registration_deadline) {
+        registrationDeadlineISO = datetimeLocalToISO(registration_deadline)
+      }
+    } catch (error: any) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Invalid date format: ${error.message}`
+      })
+    }
+
     // Create tournament
     const { data: tournament, error: insertError } = await supabase
       .from('tournaments')
       .insert({
         name: name.trim(),
         category_id: category_id || null, // Allow null for open tournaments
-        start_date,
-        end_date: end_date || null,
+        start_date: startDateISO,
+        end_date: endDateISO,
         tournament_type: body.tournament_type || 'groups_playoffs',
         current_phase: 'registration',
         group_size: group_size || 4,
         players_per_group_advance: players_per_group_advance || 2,
         registration_open: registration_open !== false,
-        registration_deadline: registration_deadline || null,
+        registration_deadline: registrationDeadlineISO,
         max_players: max_players || null,
         min_players: min_players || 4,
         created_by: player.id,

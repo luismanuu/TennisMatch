@@ -189,7 +189,9 @@ const areaPath = computed(() => {
 const formatDate = (dateStr: string | undefined) => {
   if (!dateStr) return ''
   const date = new Date(dateStr)
-  return `${date.getDate()}/${date.getMonth() + 1}`
+  // Format in Ecuador timezone
+  const ecuadorDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }))
+  return `${ecuadorDate.getDate()}/${ecuadorDate.getMonth() + 1}`
 }
 
 const showTooltip = (index: number, event: MouseEvent) => {

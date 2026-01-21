@@ -420,7 +420,9 @@ const isOnWaitlist = computed(() => {
 })
 
 const formatDate = (dateString: string) => {
+  // Use Ecuador timezone for display
   return new Date(dateString).toLocaleDateString('es-ES', {
+    timeZone: 'America/Guayaquil',
     year: 'numeric',
     month: 'long',
     day: 'numeric',

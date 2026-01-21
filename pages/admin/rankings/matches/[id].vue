@@ -204,7 +204,9 @@ const { loading, matchImpact, fetchMatchImpact } = useAdminRankings()
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString)
+  // Use Ecuador timezone for display
   return date.toLocaleDateString('es-ES', {
+    timeZone: 'America/Guayaquil',
     year: 'numeric',
     month: 'short',
     day: 'numeric',

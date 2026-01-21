@@ -179,7 +179,12 @@ const formatTime = (timestamp: string) => {
   if (diffHours < 24) return `Hace ${diffHours}h`
   if (diffDays < 7) return `Hace ${diffDays} días`
   
-  return time.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+  // Use Ecuador timezone for display
+  return time.toLocaleDateString('es-ES', { 
+    timeZone: 'America/Guayaquil',
+    day: 'numeric', 
+    month: 'short' 
+  })
 }
 
 /**
