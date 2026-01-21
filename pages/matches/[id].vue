@@ -1629,9 +1629,39 @@ const loadMatch = async () => {
     const data = await getMatch(matchId, userId.value)
     match.value = data
     
+    // Auto-start match if scheduled time has passed
+    if (data.status === 'scheduled' && data.scheduled_at) {
+      const scheduledTime = new Date(data.scheduled_at)
+      const now = new Date()
+      
+      // Check if scheduled time has passed (with 1 minute buffer to avoid timezone issues)
+      if (scheduledTime <= now) {
+        // Verify match can be started (same validations as manual start)
+        const canAutoStart = 
+          !data.pending_player2_id && // No pending player
+          (data.player2_id || data.pending_player2_id) && // Has opponent
+          (!data.match_proposed_by || data.match_accepted_by || data.tournament_id) && // Accepted or tournament match
+          !((data.acceptance_proposed_scheduled_at || data.acceptance_proposed_location !== null) && 
+            !data.acceptance_change_approved_by && !data.acceptance_change_rejected_by) // No pending acceptance changes
+        
+        if (canAutoStart) {
+          try {
+            // Auto-start the match
+            await updateMatchStatus(userId.value, data.id, 'active')
+            // Reload match to get updated status
+            const updatedData = await getMatch(matchId, userId.value)
+            match.value = updatedData
+          } catch (err: any) {
+            // Silently handle errors - match might not be startable for other reasons
+            console.log('Could not auto-start match:', err.message || err)
+          }
+        }
+      }
+    }
+    
     // Check if current player is part of the match
-    const isPartOfMatch = data.player1_id === player.value.id || 
-                         data.player2_id === player.value.id
+    const isPartOfMatch = match.value.player1_id === player.value.id || 
+                         match.value.player2_id === player.value.id
     
     // Load messages if user is part of the match
     if (isPartOfMatch && userId.value) {
