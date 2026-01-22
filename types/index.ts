@@ -391,9 +391,7 @@ export interface ProposeReschedulePayload {
   created_at: string
   updated_at: string
   cities?: City[]
-}
-
-export interface CitySegmentCity {
+}export interface CitySegmentCity {
   id: string
   city_segment_id: string
   city_id: string

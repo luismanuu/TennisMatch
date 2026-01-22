@@ -13,7 +13,7 @@
     <div class="h-16"></div>
 
     <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+      <div class="container-medium px-4">
         <!-- Header -->
         <div class="text-center mb-10 animate-fade-up">
           <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
@@ -67,54 +67,70 @@
         <!-- Main Content -->
         <template v-else>
           <!-- Section A: Current Rating Card -->
-          <div class="glass-card-elevated p-8 mb-6 animate-fade-up">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <!-- ELO and Tier -->
-              <div class="flex items-center gap-5">
-                <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center">
-                  <Icon name="heroicons:trophy" class="w-10 h-10 text-accent" />
-                </div>
-                <div>
-                  <div class="text-size-1 font-bold text-gradient-static mb-1">
-                    {{ player.elo }} ELO
+          <div class="glass-card-elevated px-4 pt-4 pb-2 mb-6 animate-fade-up relative overflow-hidden w-full">
+            <!-- Content -->
+            <div class="relative z-10">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+                <!-- Left: Large Rank Icon with Animation -->
+                <div class="flex justify-center lg:justify-start">
+                  <div class="relative w-full max-w-[400px] h-[400px] flex items-center justify-center overflow-hidden">
+                    <!-- Rank Icon - Large -->
+                    <img
+                      v-if="rankIconPath && tierInfo && !imageError"
+                      :src="rankIconPath"
+                      :alt="tierInfo ? `${tierInfo.tier} tier icon` : 'Rank icon'"
+                      class="w-full h-full max-w-[400px] max-h-[400px] object-contain z-10 relative"
+                      @error="handleImageError"
+                    >
+                    <Icon v-else name="heroicons:trophy" class="w-64 h-64 text-accent z-10 relative" />
                   </div>
-                  <RatingTierBadge 
-                    :elo="player.elo" 
-                    :total-matches-played="player.total_matches_played || 0"
-                    :placement-matches-completed="player.placement_matches_completed || 0"
-                  />
                 </div>
-              </div>
 
-              <!-- Percentile and Rank (only show if not in placement) -->
-              <div v-if="position && !isInPlacement" class="flex gap-6 text-center md:text-right">
-                <div>
-                  <p class="text-size-5 text-foreground-muted mb-1">Posición Global</p>
-                  <p class="text-size-2 font-bold text-foreground">#{{ position.global_rank }}</p>
-                  <p class="text-size-5 text-foreground-muted">de {{ position.total_players }}</p>
+                <!-- Right: ELO, Tier, and Stats -->
+                <div class="flex flex-col gap-3 items-center lg:items-start">
+                  <!-- ELO Display -->
+                  <div class="flex flex-col items-center lg:items-start gap-2">
+                    <div class="text-size-1 font-bold text-gradient-static text-center lg:text-left">
+                      {{ player.elo }} ELO
+                    </div>
+                    <RatingTierBadge 
+                      :elo="player.elo" 
+                      :total-matches-played="player.total_matches_played || 0"
+                      :placement-matches-completed="player.placement_matches_completed || 0"
+                    />
+                  </div>
+
+                  <!-- Percentile and Rank (only show if not in placement) -->
+                  <div v-if="position && !isInPlacement" class="grid grid-cols-2 gap-4">
+                    <div class="text-center lg:text-left">
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición Global</p>
+                      <p class="text-size-2 font-bold text-foreground">#{{ position.global_rank }}</p>
+                      <p class="text-size-5 text-foreground-muted">de {{ position.total_players }}</p>
+                    </div>
+                    <div class="text-center lg:text-left">
+                      <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
+                      <p class="text-size-2 font-bold text-accent">Top {{ position.percentile }}%</p>
+                      <p class="text-size-5 text-foreground-muted">de jugadores</p>
+                    </div>
+                  </div>
+                  
+                  <!-- Placement Message (only show if in placement) -->
+                  <div v-if="isInPlacement" class="text-center lg:text-left">
+                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <Icon name="heroicons:information-circle" class="w-5 h-5 text-amber-400" />
+                      <p class="text-size-4 text-amber-400 font-semibold">ELO Aproximado</p>
+                    </div>
+                    <p class="text-size-5 text-foreground-muted mt-1">
+                      Tu ranking final se establecerá después de 3 partidos
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
-                  <p class="text-size-2 font-bold text-accent">Top {{ position.percentile }}%</p>
-                  <p class="text-size-5 text-foreground-muted">de jugadores</p>
-                </div>
-              </div>
-              
-              <!-- Placement Message (only show if in placement) -->
-              <div v-if="isInPlacement" class="text-center md:text-right">
-                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <Icon name="heroicons:information-circle" class="w-5 h-5 text-amber-400" />
-                  <p class="text-size-4 text-amber-400 font-semibold">ELO Aproximado</p>
-                </div>
-                <p class="text-size-5 text-foreground-muted mt-2">
-                  Tu ranking final se establecerá después de 3 partidos
-                </p>
               </div>
             </div>
 
             <!-- Placement Progress (if in placement) -->
-            <div v-if="isInPlacement" class="mt-6 pt-6 border-t border-border-subtle">
-              <div class="flex items-center justify-between mb-3">
+            <div v-if="isInPlacement" class="mt-3 pt-3 border-t border-border-subtle">
+              <div class="flex items-center justify-between mb-2">
                 <span class="text-size-4 font-semibold text-foreground">Partidos de Colocación</span>
                 <span class="text-size-4 text-accent font-semibold">{{ player.placement_matches_completed || 0 }} / 3</span>
               </div>
@@ -124,7 +140,7 @@
                   :style="{ width: `${((player.placement_matches_completed || 0) / 3) * 100}%` }"
                 ></div>
               </div>
-              <p class="text-size-5 text-foreground-muted mt-2">
+              <p class="text-size-5 text-foreground-muted mt-1">
                 Completa 3 partidos para establecer tu ranking definitivo
               </p>
             </div>
@@ -478,7 +494,9 @@
 </template>
 
 <script setup lang="ts">
-import type { MonthlyDecayStatus } from '~/types'
+import { nextTick, onMounted, onUnmounted, watch } from 'vue'
+import type { MonthlyDecayStatus, RatingTierInfo, RatingTier } from '~/types'
+import { useRankIconAsset } from '~/composables/useRankIcon'
 
 definePageMeta({
   middleware: 'auth'
@@ -488,6 +506,7 @@ definePageMeta({
 const { isAuthenticated, userId } = useAuthState()
 const { player, loading: playerLoading, fetchPlayer } = usePlayer()
 const { fetchDecayStatus, status: decayStatus } = useMonthlyDecay()
+
 
 // State
 const loading = ref(true)
@@ -639,7 +658,7 @@ const loadAllData = async () => {
 }
 
 // Client-side tier progress calculation as fallback
-const RATING_TIERS = [
+const RATING_TIERS: RatingTierInfo[] = [
   { tier: 'Bronze', minElo: 1, maxElo: 1499, color: '#CD7F32' },
   { tier: 'Silver', minElo: 1500, maxElo: 1999, color: '#C0C0C0' },
   { tier: 'Gold', minElo: 2000, maxElo: 2499, color: '#FFD700' },
@@ -648,6 +667,30 @@ const RATING_TIERS = [
   { tier: 'Master', minElo: 3500, maxElo: 3999, color: '#9932CC' },
   { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity, color: '#FF4500' },
 ]
+
+// Get current tier info
+const tierInfo = computed<RatingTierInfo>(() => {
+  if (!player.value) {
+    return { tier: 'Unrated', minElo: 0, maxElo: 0, color: '#6B7280' }
+  }
+  
+  for (const tier of RATING_TIERS) {
+    if (player.value.elo >= tier.minElo && player.value.elo <= tier.maxElo) {
+      return tier
+    }
+  }
+  return RATING_TIERS[0]
+})
+
+// Get rank icon path
+const rankIconPath = computed(() => {
+  return useRankIconAsset(tierInfo.value.tier)
+})
+
+const imageError = ref(false)
+const handleImageError = () => {
+  imageError.value = true
+}
 
 const calculateTierProgress = (elo: number) => {
   const currentTierData = RATING_TIERS.find(t => elo >= t.minElo && elo <= t.maxElo) || RATING_TIERS[0]
@@ -727,4 +770,5 @@ watch([isAuthenticated, userId], async ([authenticated, uid]) => {
     loading.value = false
   }
 }, { immediate: true })
+
 </script>

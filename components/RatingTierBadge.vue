@@ -4,7 +4,15 @@
     :class="badgeClasses"
     :style="badgeStyle"
   >
+    <img
+      v-if="rankIconPath && !imageError"
+      :src="resolveAssetPath(rankIconPath)"
+      :alt="`${tierInfo.tier} tier icon`"
+      class="w-4 h-4 flex-shrink-0 object-contain"
+      @error="handleImageError"
+    >
     <div 
+      v-else
       class="w-4 h-4 rounded-full"
       :style="{ backgroundColor: tierInfo.color }"
     ></div>
@@ -22,6 +30,7 @@
 
 <script setup lang="ts">
 import type { RatingTier, RatingTierInfo } from '~/types'
+import { useRankIconAsset } from '~/composables/useRankIcon'
 
 const props = defineProps<{
   elo: number
@@ -105,4 +114,21 @@ const badgeStyle = computed(() => {
     borderColor: `${color}50`,
   }
 })
+
+const rankIconPath = computed(() => {
+  return useRankIconAsset(tierInfo.value.tier)
+})
+
+const imageError = ref(false)
+
+const resolveAssetPath = (path: string | null) => {
+  if (!path) return ''
+  // In Nuxt, files in public/ folder are served directly from root
+  // Paths like '/images/ranks/bronze.svg' map to public/images/ranks/bronze.svg
+  return path
+}
+
+const handleImageError = () => {
+  imageError.value = true
+}
 </script>
