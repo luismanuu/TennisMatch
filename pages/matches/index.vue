@@ -456,54 +456,29 @@ const filteredMatches = computed(() => {
   // Always re-sort to maintain order
   // This ensures consistent ordering regardless of filter
   // Sort BEFORE pagination to ensure correct order
-  filtered.sort((a, b) => {
-    // When "Todos" filter is active, prioritize scheduled/active matches over completed ones
-    if (!statusFilter.value) {
-      // Priority order: scheduled/active first, then completed
-      const statusPriority: Record<string, number> = {
-        scheduled: 1,
-        active: 1,
-        completed: 2,
-        cancelled: 3
-      }
-      
-      const priorityA = statusPriority[a.status] || 99
-      const priorityB = statusPriority[b.status] || 99
-      
-      // If different priorities, sort by priority
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB
-      }
-      
-      // For completed matches, use played_at if available, otherwise scheduled_at
-      // Sort completed matches with oldest first (so they appear at bottom)
-      if (a.status === 'completed' && b.status === 'completed') {
-        const dateA = new Date(a.played_at || a.scheduled_at || '').getTime()
-        const dateB = new Date(b.played_at || b.scheduled_at || '').getTime()
-        
-        if (isNaN(dateA) && isNaN(dateB)) return 0
-        if (isNaN(dateA)) return 1
-        if (isNaN(dateB)) return -1
-        
-        // Ascending order for completed matches (oldest first)
-        return dateA - dateB
-      }
-    }
-    
-    // For scheduled/active matches, use scheduled_at and sort newest first
-    // Get the appropriate date field
-    const getDate = (match: any) => {
+  // For completed matches, use played_at if available, otherwise scheduled_at
+  // For other matches, use scheduled_at
+  // Use toSorted() to avoid mutating the array
+  filtered = filtered.toSorted((a, b) => {
+    // Get the appropriate date for sorting
+    const getSortDate = (match: any) => {
+      // For completed matches, prefer played_at if available, otherwise scheduled_at
       if (match.status === 'completed' && match.played_at) {
         return match.played_at
       }
       return match.scheduled_at
     }
     
-    const dateAStr = getDate(a)
-    const dateBStr = getDate(b)
+    const dateAStr = getSortDate(a)
+    const dateBStr = getSortDate(b)
     
     // Only compare if both have dates
-    if (!dateAStr && !dateBStr) return 0
+    if (!dateAStr && !dateBStr) {
+      // Both have no date, use created_at as tiebreaker
+      const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
+      return createdB - createdA
+    }
     if (!dateAStr) return 1 // Put matches without date at the end
     if (!dateBStr) return -1 // Put matches without date at the end
     
@@ -511,13 +486,23 @@ const filteredMatches = computed(() => {
     const dateB = new Date(dateBStr).getTime()
     
     // Handle invalid dates
-    if (isNaN(dateA) && isNaN(dateB)) return 0
+    if (isNaN(dateA) && isNaN(dateB)) {
+      // Both have invalid dates, use created_at as tiebreaker
+      const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
+      return createdB - createdA
+    }
     if (isNaN(dateA)) return 1
     if (isNaN(dateB)) return -1
     
-    // For non-completed matches or when specific filter is active, descending order (newest first)
-    // For completed matches in "Todos" filter, this won't be reached due to the check above
-    return dateB - dateA
+    // Descending order (newest first) - most recent date first
+    const diff = dateB - dateA
+    if (diff !== 0) return diff
+    
+    // If dates are equal, use created_at as tiebreaker (newest first)
+    const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
+    const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
+    return createdB - createdA
   })
   
   // Return all filtered and sorted matches (pagination is handled by paginatedFilteredMatches)

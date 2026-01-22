@@ -230,22 +230,35 @@ export default defineEventHandler(async (event) => {
     
     // Sort by scheduled_at descending BEFORE enriching (to maintain order)
     // This ensures proper ordering even after merging results from different queries
+    // For completed matches, use played_at if available, otherwise scheduled_at
     filteredData.sort((a: any, b: any) => {
-      // Only compare if both have scheduled_at
-      if (!a.scheduled_at && !b.scheduled_at) return 0
-      if (!a.scheduled_at) return 1 // Put matches without scheduled_at at the end
-      if (!b.scheduled_at) return -1 // Put matches without scheduled_at at the end
+      // Get the appropriate date for sorting
+      const getSortDate = (match: any) => {
+        // For completed matches, prefer played_at if available, otherwise scheduled_at
+        if (match.status === 'completed' && match.played_at) {
+          return match.played_at
+        }
+        return match.scheduled_at
+      }
+      
+      const dateAStr = getSortDate(a)
+      const dateBStr = getSortDate(b)
+      
+      // Only compare if both have dates
+      if (!dateAStr && !dateBStr) return 0
+      if (!dateAStr) return 1 // Put matches without date at the end
+      if (!dateBStr) return -1 // Put matches without date at the end
       
       // Parse dates and handle invalid dates
-      const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
-      const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+      const dateA = dateAStr ? new Date(dateAStr).getTime() : 0
+      const dateB = dateBStr ? new Date(dateBStr).getTime() : 0
       
       // Handle invalid dates
       if (isNaN(dateA) && isNaN(dateB)) return 0
       if (isNaN(dateA)) return 1
       if (isNaN(dateB)) return -1
       
-      // Descending order (newest first) - most recent scheduled_at first
+      // Descending order (newest first) - most recent date first
       return dateB - dateA
     })
     
@@ -323,35 +336,38 @@ export default defineEventHandler(async (event) => {
     })
     
     // Re-sort after enriching to ensure correct order (in case enrichment changed anything)
+    // For completed matches, use played_at if available, otherwise scheduled_at
+    // For other matches, use scheduled_at
     filteredData.sort((a: any, b: any) => {
-      // Only compare if both have scheduled_at
-      if (!a.scheduled_at && !b.scheduled_at) return 0
-      if (!a.scheduled_at) return 1 // Put matches without scheduled_at at the end
-      if (!b.scheduled_at) return -1 // Put matches without scheduled_at at the end
+      // Get the appropriate date for sorting
+      const getSortDate = (match: any) => {
+        // For completed matches, prefer played_at if available, otherwise scheduled_at
+        if (match.status === 'completed' && match.played_at) {
+          return match.played_at
+        }
+        return match.scheduled_at
+      }
+      
+      const dateAStr = getSortDate(a)
+      const dateBStr = getSortDate(b)
+      
+      // Only compare if both have dates
+      if (!dateAStr && !dateBStr) return 0
+      if (!dateAStr) return 1 // Put matches without date at the end
+      if (!dateBStr) return -1 // Put matches without date at the end
       
       // Parse dates and handle invalid dates
-      const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
-      const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+      const dateA = dateAStr ? new Date(dateAStr).getTime() : 0
+      const dateB = dateBStr ? new Date(dateBStr).getTime() : 0
       
       // Handle invalid dates
       if (isNaN(dateA) && isNaN(dateB)) return 0
       if (isNaN(dateA)) return 1
       if (isNaN(dateB)) return -1
       
-      // Descending order (newest first)
+      // Descending order (newest first) - most recent date first
       return dateB - dateA
     })
-    
-    // Debug: Log first few matches to verify sorting
-    if (filteredData.length > 0) {
-      console.log('[Matches API] Sorted matches (first 5):', 
-        filteredData.slice(0, 5).map((m: any) => ({
-          id: m.id?.substring(0, 8),
-          scheduled_at: m.scheduled_at,
-          date: m.scheduled_at ? new Date(m.scheduled_at).toLocaleString('es-ES', { timeZone: 'America/Guayaquil' }) : 'null'
-        }))
-      )
-    }
     
     // Calculate pagination
     const total = filteredData.length

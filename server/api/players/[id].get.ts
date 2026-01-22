@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     const supabase = getSupabaseAdmin()
     
     // Fetch public player profile (no authentication required)
-    // Only return public information: name, category, elo
+    // Only return public information: name, category, elo, stats
     // Do NOT return: phone_number, clerk_id, email
     const { data: player, error: fetchError } = await supabase
       .from('players')
@@ -26,6 +26,9 @@ export default defineEventHandler(async (event) => {
         city_id,
         city:cities(*),
         elo,
+        total_matches_played,
+        win_streak,
+        placement_matches_completed,
         created_at
       `)
       .eq('id', playerId)

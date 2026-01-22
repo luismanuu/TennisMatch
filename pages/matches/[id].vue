@@ -244,7 +244,7 @@
                 <p class="text-size-3 font-semibold text-foreground">Resultado</p>
               </div>
               <p class="text-size-2 font-bold text-foreground mb-3">{{ match.score }}</p>
-              <div v-if="match.winner" class="flex items-center gap-2">
+              <div v-if="match.winner" class="flex items-center gap-2 mb-4">
                 <span class="text-size-4 text-foreground-muted">Ganador:</span>
                 <div class="flex items-center gap-2">
                   <NuxtLink
@@ -259,6 +259,54 @@
                   >
                     Eliminado
                   </span>
+                </div>
+              </div>
+              
+              <!-- ELO Changes - Only show for competitive matches -->
+              <div v-if="match.is_competitive && ratingHistory && (ratingHistory.player1 || ratingHistory.player2)" class="pt-4 border-t border-accent/20">
+                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de ELO</p>
+                <div class="grid grid-cols-2 gap-4">
+                  <!-- Player 1 ELO Change -->
+                  <div v-if="ratingHistory.player1 && match.player1" class="p-3 rounded-lg bg-surface/50 border border-border-subtle">
+                    <div class="flex items-center gap-2 mb-1">
+                      <NuxtLink
+                        :to="`/players/${match.player1.id}`"
+                        class="text-size-4 font-semibold text-foreground hover:text-accent transition-all"
+                      >
+                        {{ match.player1.name }}
+                      </NuxtLink>
+                    </div>
+                    <div 
+                      class="text-size-2 font-bold"
+                      :class="ratingHistory.player1.elo_change > 0 ? 'text-green-400' : ratingHistory.player1.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
+                    >
+                      {{ ratingHistory.player1.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player1.elo_change }} ELO
+                    </div>
+                    <div class="text-size-5 text-foreground-muted mt-1">
+                      {{ ratingHistory.player1.elo_before }} → {{ ratingHistory.player1.elo_after }}
+                    </div>
+                  </div>
+                  
+                  <!-- Player 2 ELO Change -->
+                  <div v-if="ratingHistory.player2 && match.player2" class="p-3 rounded-lg bg-surface/50 border border-border-subtle">
+                    <div class="flex items-center gap-2 mb-1">
+                      <NuxtLink
+                        :to="`/players/${match.player2.id}`"
+                        class="text-size-4 font-semibold text-foreground hover:text-accent transition-all"
+                      >
+                        {{ match.player2.name }}
+                      </NuxtLink>
+                    </div>
+                    <div 
+                      class="text-size-2 font-bold"
+                      :class="ratingHistory.player2.elo_change > 0 ? 'text-green-400' : ratingHistory.player2.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
+                    >
+                      {{ ratingHistory.player2.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player2.elo_change }} ELO
+                    </div>
+                    <div class="text-size-5 text-foreground-muted mt-1">
+                      {{ ratingHistory.player2.elo_before }} → {{ ratingHistory.player2.elo_after }}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1352,6 +1400,10 @@ const isPollingPaused = ref(false)
 const failedMessages = ref<Map<string, any>>(new Map())
 
 const match = ref<Match | null>(null)
+const ratingHistory = ref<{
+  player1?: { elo_change: number; elo_before: number; elo_after: number }
+  player2?: { elo_change: number; elo_before: number; elo_after: number }
+} | null>(null)
 const actionLoading = ref(false)
 const showScoreForm = ref(false)
 const showOrganizerResultForm = ref(false)
@@ -1630,6 +1682,35 @@ const loadMatch = async () => {
   try {
     const data = await getMatch(matchId, userId.value)
     match.value = data
+    
+    // Load rating history if match is competitive and completed
+    if (data.is_competitive && data.status === 'completed' && data.player1_id && data.player2_id) {
+      try {
+        const response = await $fetch<{
+          success: boolean
+          rating_history: {
+            player1: { elo_change: number; elo_before: number; elo_after: number } | null
+            player2: { elo_change: number; elo_before: number; elo_after: number } | null
+          } | null
+        }>(`/api/matches/${matchId}/rating-history`, {
+          query: { clerk_id: userId.value }
+        }).catch(() => ({ success: false, rating_history: null }))
+        
+        if (response.success && response.rating_history) {
+          ratingHistory.value = {
+            player1: response.rating_history.player1 || undefined,
+            player2: response.rating_history.player2 || undefined
+          }
+        } else {
+          ratingHistory.value = null
+        }
+      } catch (err) {
+        // Silently fail - rating history is optional
+        ratingHistory.value = null
+      }
+    } else {
+      ratingHistory.value = null
+    }
     
     // Auto-start match if scheduled time has passed
     if (data.status === 'scheduled' && data.scheduled_at) {

@@ -72,9 +72,33 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    // For competitive completed matches, get rating history
+    const matchesWithRating = await Promise.all((matches || []).map(async (match: any) => {
+      if (match.is_competitive && match.status === 'completed' && match.id) {
+        try {
+          // Get rating history for this match
+          const { data: ratingHistory } = await supabase
+            .from('rating_history')
+            .select('player_id, elo_change, was_winner')
+            .eq('match_id', match.id)
+            .eq('rating_reversed', false)
+            .eq('player_id', playerId)
+            .single()
+          
+          if (ratingHistory) {
+            match.elo_change = ratingHistory.elo_change
+            match.was_winner = ratingHistory.was_winner
+          }
+        } catch (err) {
+          // Silently fail - rating history is optional
+        }
+      }
+      return match
+    }))
+    
     return {
       success: true,
-      matches: matches || []
+      matches: matchesWithRating || []
     }
   } catch (error: any) {
     throw createError({

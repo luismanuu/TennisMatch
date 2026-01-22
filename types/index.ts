@@ -427,9 +427,7 @@ export interface RatingHistory {
   rating_reversed: boolean
   reversed_at?: string
   created_at: string
-}
-
-// Rating tiers based on ELO
+}// Rating tiers based on ELO
 export type RatingTier = 
   | 'Bronze'
   | 'Silver'

@@ -153,9 +153,9 @@
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
                 <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando ranking...</p>
               </div>
-              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position" class="space-y-6">
+              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position && rankingPosition.position.global_rank && rankingPosition.position.total_players > 0" class="space-y-6">
                 <!-- Global Ranking -->
-                <div class="p-6 rounded-xl bg-surface border border-border-subtle">
+                <div v-if="rankingPosition.position.total_players > 0" class="p-6 rounded-xl bg-surface border border-border-subtle">
                   <div class="flex items-center justify-between mb-4">
                     <h4 class="text-size-3 font-semibold text-foreground">Ranking Global</h4>
                     <RatingTierBadge 
@@ -174,13 +174,13 @@
                         </span>
                       </p>
                     </div>
-                    <div>
+                    <div v-if="rankingPosition.position.percentile >= 0">
                       <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
                       <p class="text-size-2 font-bold text-foreground">
                         Top {{ rankingPosition.position.percentile }}%
                       </p>
                     </div>
-                    <div>
+                    <div v-if="rankingPosition.position.players_below >= 0">
                       <p class="text-size-5 text-foreground-muted mb-1">Jugadores por debajo</p>
                       <p class="text-size-2 font-bold text-foreground">
                         {{ rankingPosition.position.players_below }}
@@ -190,7 +190,7 @@
                 </div>
 
                 <!-- Segment Ranking -->
-                <div v-if="rankingPosition.position.segment_rank" class="p-6 rounded-xl bg-surface border border-border-subtle">
+                <div v-if="rankingPosition.position.segment_rank && rankingPosition.position.segment_total && rankingPosition.position.segment_total > 0" class="p-6 rounded-xl bg-surface border border-border-subtle">
                   <h4 class="text-size-3 font-semibold text-foreground mb-4">
                     Ranking en {{ rankingPosition.position.segment_name || 'Tu Región' }}
                   </h4>
@@ -208,7 +208,7 @@
                 </div>
 
                 <!-- Tier Ranking -->
-                <div v-if="rankingPosition.position.tier_rank" class="p-6 rounded-xl bg-surface border border-border-subtle">
+                <div v-if="rankingPosition.position.tier_rank && rankingPosition.position.tier_total && rankingPosition.position.tier_total > 0 && rankingPosition.tier" class="p-6 rounded-xl bg-surface border border-border-subtle">
                   <h4 class="text-size-3 font-semibold text-foreground mb-4">
                     Ranking en {{ rankingPosition.tier }}
                   </h4>
@@ -228,6 +228,21 @@
               <div v-else-if="rankingPosition && rankingPosition.is_unrated" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
                 <p class="text-size-4 font-regular text-foreground-muted">
                   Este jugador aún no ha completado partidos de colocación
+                </p>
+              </div>
+              <div v-else-if="rankingPosition && rankingPosition.success && rankingPosition.position && (!rankingPosition.position.total_players || rankingPosition.position.total_players === 0)" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted">
+                  Aún no hay suficientes jugadores para calcular el ranking. Las estadísticas estarán disponibles cuando haya más jugadores en el sistema.
+                </p>
+              </div>
+              <div v-else-if="rankingPosition && !rankingPosition.success" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted">
+                  No se pudo cargar la información de ranking
+                </p>
+              </div>
+              <div v-else-if="!rankingPosition && !rankingLoading" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted">
+                  No hay información de ranking disponible
                 </p>
               </div>
             </div>
@@ -281,9 +296,18 @@
                     <!-- Result -->
                     <div v-if="match.status === 'completed' && match.score" class="text-center md:text-right">
                       <p class="text-size-2 font-bold text-foreground mb-1">{{ match.score }}</p>
-                      <p v-if="match.winner" class="text-size-5 text-foreground-muted">
+                      <p v-if="match.winner" class="text-size-5 text-foreground-muted mb-2">
                         Ganador: {{ match.winner.name }}
                       </p>
+                      <!-- ELO Change - Only show for competitive matches -->
+                      <div v-if="match.is_competitive && match.elo_change !== undefined && match.elo_change !== null" class="mt-2">
+                        <div 
+                          class="text-size-2 font-bold"
+                          :class="match.elo_change > 0 ? 'text-green-400' : match.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
+                        >
+                          {{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }} ELO
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

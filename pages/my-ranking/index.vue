@@ -262,24 +262,29 @@
             <EloHistoryChart :history-data="ratingHistory" />
           </div>
 
-          <!-- Section D.1: Recent Competitive Matches (hide during placement) -->
-          <div v-if="!isInPlacement" class="glass-card-elevated p-6 mb-6 animate-fade-up animate-delay-3">
+          <!-- Section D.1: Recent Matches (show always, including placement) -->
+          <div class="glass-card-elevated p-6 mb-6 animate-fade-up animate-delay-3">
             <div class="flex items-center gap-3 mb-6">
               <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
                 <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
               </div>
               <div>
-                <h3 class="text-size-3 font-semibold text-foreground">Últimas Partidas Competitivas</h3>
-                <p class="text-size-5 text-foreground-muted">Historial de tus últimos encuentros</p>
+                <h3 class="text-size-3 font-semibold text-foreground">
+                  {{ isInPlacement ? 'Historial de Partidos' : 'Últimas Partidas Competitivas' }}
+                </h3>
+                <p class="text-size-5 text-foreground-muted">
+                  {{ isInPlacement ? 'Historial de tus partidos de colocación y encuentros' : 'Historial de tus últimos encuentros' }}
+                </p>
               </div>
             </div>
             
             <!-- Matches List -->
             <div v-if="recentMatches.length > 0" class="space-y-3">
-              <div
+              <NuxtLink
                 v-for="(match, index) in recentMatches"
                 :key="match.id"
-                class="flex items-center gap-4 p-4 rounded-xl border transition-all hover:border-accent/50 hover:bg-surface-elevated"
+                :to="`/matches/${match.match_id || match.id}`"
+                class="flex items-center gap-4 p-4 rounded-xl border transition-all hover:border-accent/50 hover:bg-surface-elevated cursor-pointer"
                 :class="match.was_winner 
                   ? 'bg-green-500/5 border-green-500/20' 
                   : 'bg-red-500/5 border-red-500/20'"
@@ -328,7 +333,7 @@
                     ELO
                   </div>
                 </div>
-              </div>
+              </NuxtLink>
             </div>
 
             <!-- Empty State -->
@@ -338,7 +343,7 @@
               </div>
               <p class="text-size-3 font-semibold text-foreground mb-2">Sin partidas aún</p>
               <p class="text-size-4 text-foreground-muted mb-6">
-                Juega partidas competitivas para ver tu historial aquí
+                {{ isInPlacement ? 'Juega partidos para ver tu historial aquí' : 'Juega partidas competitivas para ver tu historial aquí' }}
               </p>
               <NuxtLink to="/matchmaking" class="btn-primary text-size-4 inline-flex items-center group">
                 <Icon name="heroicons:magnifying-glass" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
@@ -603,7 +608,7 @@ const loadAllData = async () => {
       ratingHistory.value = historyResponse.history.slice().reverse() // Oldest first for chart
       historyStats.value = historyResponse.stats
       
-      // Get last 10 competitive matches (rating_history only contains competitive matches)
+      // Get last 10 matches (includes both competitive and placement matches)
       recentMatches.value = historyResponse.history
         .slice(0, 10) // Already sorted by created_at DESC, so first 10 are most recent
         .map((h: any) => ({
