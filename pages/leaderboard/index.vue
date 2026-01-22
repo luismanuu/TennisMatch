@@ -22,57 +22,57 @@
 
     <template v-else>
       <!-- Top 3 Players Podium -->
-      <div v-if="topPlayers.length >= 3" class="mb-10 animate-fade-up animate-delay-1">
+      <div v-if="topPlayers.length >= 3" class="mb-8 md:mb-10 animate-fade-up animate-delay-1">
         <div v-if="isAuthenticated && player && showAroundMe" class="text-center mb-4">
           <p class="text-size-4 text-foreground-muted">
             Top 3 de tu ranking actual
           </p>
         </div>
-        <div class="flex items-end justify-center gap-4 md:gap-6">
+        <div class="flex flex-col sm:flex-row items-center sm:items-end justify-center gap-3 sm:gap-4 md:gap-6">
           <!-- 2nd Place -->
-          <div class="flex-1 max-w-[200px] order-1">
-            <div class="glass-card p-4 text-center hover-lift transition-all">
-              <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-gray-300/30 to-gray-400/10 border-2 border-gray-400/40 flex items-center justify-center mb-3">
-                <Icon name="heroicons:trophy" class="w-8 h-8 text-gray-300" />
+          <div class="w-full sm:flex-1 sm:max-w-[200px] order-2 sm:order-1">
+            <div class="glass-card p-3 sm:p-4 text-center hover-lift transition-all">
+              <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-gradient-to-br from-gray-300/30 to-gray-400/10 border-2 border-gray-400/40 flex items-center justify-center mb-2 sm:mb-3">
+                <Icon name="heroicons:trophy" class="w-6 h-6 sm:w-8 sm:h-8 text-gray-300" />
               </div>
-              <div class="text-3xl font-bold text-gray-300 mb-1">#2</div>
-              <NuxtLink :to="`/players/${topPlayers[1]?.id}`" class="text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate">
+              <div class="text-2xl sm:text-3xl font-bold text-gray-300 mb-1">#2</div>
+              <NuxtLink :to="`/players/${topPlayers[1]?.id}`" class="text-size-4 sm:text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
                 {{ topPlayers[1]?.name }}
               </NuxtLink>
-              <div class="text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[1]?.elo }} ELO</div>
+              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[1]?.elo }} ELO</div>
             </div>
           </div>
           
           <!-- 1st Place (Center, Taller) -->
-          <div class="flex-1 max-w-[220px] order-2">
-            <div class="glass-card-elevated p-5 text-center hover-lift transition-all relative overflow-hidden">
+          <div class="w-full sm:flex-1 sm:max-w-[220px] order-1 sm:order-2">
+            <div class="glass-card-elevated p-4 sm:p-5 text-center hover-lift transition-all relative overflow-hidden">
               <!-- Crown Glow Effect -->
-              <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-32 h-32 bg-yellow-400/20 rounded-full blur-3xl"></div>
+              <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-24 h-24 sm:w-32 sm:h-32 bg-yellow-400/20 rounded-full blur-3xl"></div>
               
               <div class="relative">
-                <div class="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-yellow-400/30 to-yellow-600/10 border-2 border-yellow-500/50 flex items-center justify-center mb-3 animate-pulse-slow">
-                  <Icon name="heroicons:trophy" class="w-10 h-10 text-yellow-400" />
+                <div class="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl bg-gradient-to-br from-yellow-400/30 to-yellow-600/10 border-2 border-yellow-500/50 flex items-center justify-center mb-2 sm:mb-3 animate-pulse-slow">
+                  <Icon name="heroicons:trophy" class="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400" />
                 </div>
-                <div class="text-4xl font-bold text-yellow-400 mb-1">#1</div>
-                <NuxtLink :to="`/players/${topPlayers[0]?.id}`" class="text-size-2 font-semibold text-foreground hover:text-accent transition-colors block truncate">
+                <div class="text-3xl sm:text-4xl font-bold text-yellow-400 mb-1">#1</div>
+                <NuxtLink :to="`/players/${topPlayers[0]?.id}`" class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
                   {{ topPlayers[0]?.name }}
                 </NuxtLink>
-                <div class="text-size-1 font-bold text-gradient-static mt-1">{{ topPlayers[0]?.elo }} ELO</div>
+                <div class="text-size-2 sm:text-size-1 font-bold text-gradient-static mt-1">{{ topPlayers[0]?.elo }} ELO</div>
               </div>
             </div>
           </div>
           
           <!-- 3rd Place -->
-          <div class="flex-1 max-w-[200px] order-3">
-            <div class="glass-card p-4 text-center hover-lift transition-all">
-              <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-600/30 to-amber-700/10 border-2 border-amber-600/40 flex items-center justify-center mb-3">
-                <Icon name="heroicons:trophy" class="w-8 h-8 text-amber-600" />
+          <div class="w-full sm:flex-1 sm:max-w-[200px] order-3">
+            <div class="glass-card p-3 sm:p-4 text-center hover-lift transition-all">
+              <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-600/30 to-amber-700/10 border-2 border-amber-600/40 flex items-center justify-center mb-2 sm:mb-3">
+                <Icon name="heroicons:trophy" class="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
               </div>
-              <div class="text-3xl font-bold text-amber-600 mb-1">#3</div>
-              <NuxtLink :to="`/players/${topPlayers[2]?.id}`" class="text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate">
+              <div class="text-2xl sm:text-3xl font-bold text-amber-600 mb-1">#3</div>
+              <NuxtLink :to="`/players/${topPlayers[2]?.id}`" class="text-size-4 sm:text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
                 {{ topPlayers[2]?.name }}
               </NuxtLink>
-              <div class="text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[2]?.elo }} ELO</div>
+              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[2]?.elo }} ELO</div>
             </div>
           </div>
         </div>
@@ -81,7 +81,7 @@
       <!-- Your Position Section (for authenticated users) -->
       <div 
         v-if="isAuthenticated && player && nearbyPlayers.current" 
-        class="glass-card-elevated p-6 mb-8 animate-fade-up animate-delay-2"
+        class="glass-card-elevated p-4 sm:p-6 mb-6 md:mb-8 animate-fade-up animate-delay-2"
       >
         <div class="flex items-center gap-3 mb-4">
           <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
@@ -117,7 +117,7 @@
         </div>
         
         <!-- Quick Stats -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-border-subtle">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-4 md:mt-6 pt-4 md:pt-6 border-t border-border-subtle">
           <div class="text-center">
             <p class="text-size-1 font-bold text-gradient-static">{{ nearbyPlayers.current?.rank }}</p>
             <p class="text-size-4 text-foreground-muted">Tu Posición</p>
@@ -190,7 +190,7 @@
       </div>
 
       <!-- Leaderboard List -->
-      <div class="glass-card-elevated p-6 animate-fade-up animate-delay-4">
+      <div class="glass-card-elevated p-4 sm:p-6 animate-fade-up animate-delay-4">
         <div class="flex items-center justify-between mb-6">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
@@ -229,7 +229,7 @@
         <div 
           v-else-if="rankings.length > 0"
           ref="scrollContainer"
-          class="relative max-h-[600px] overflow-y-auto scroll-smooth"
+          class="relative max-h-[400px] sm:max-h-[500px] md:max-h-[600px] overflow-y-auto scroll-smooth"
           @scroll="onScroll"
         >
           <!-- Load More Above Indicator -->
