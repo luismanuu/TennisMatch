@@ -9,10 +9,21 @@
       <h1 class="text-size-1 font-semibold text-foreground mb-3">
         Leaderboard
       </h1>
-      <p class="text-size-3 font-regular text-foreground-muted max-w-lg mx-auto">
+      <p class="text-size-3 font-regular text-foreground-muted max-w-lg mx-auto mb-4">
         Descubre los mejores jugadores, sube de ranking y compite por el top
       </p>
+      <!-- Info Button -->
+      <button
+        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-border hover:bg-surface-elevated transition-colors text-size-4 text-foreground-muted hover:text-foreground"
+        @click.stop="showRankingInfo = true"
+      >
+        <Icon name="heroicons:information-circle" class="w-5 h-5" />
+        <span>¿Cómo funciona el ranking?</span>
+      </button>
     </div>
+
+    <!-- Ranking System Info Modal -->
+    <RankingSystemInfo v-model="showRankingInfo" />
 
     <!-- Loading State -->
     <div v-if="initialLoading" class="loading-state">
@@ -324,6 +335,7 @@ const hasMoreAbove = ref(false)
 const hasMoreBelow = ref(false)
 const scrollContainer = ref<HTMLElement | null>(null)
 const userPlayerRef = ref<HTMLElement | null>(null)
+const showRankingInfo = ref(false)
 
 // Computed
 const hasActiveFilters = computed(() => {
