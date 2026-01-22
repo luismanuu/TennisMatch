@@ -22,7 +22,7 @@
       >
         <div 
           class="w-10 h-10 rounded-xl flex items-center justify-center transition-all border-2"
-          :class="getMatchClasses(match)"
+          :class="getMatchClasses(match, index)"
         >
           <!-- Checkmark for win -->
           <Icon 
@@ -34,6 +34,12 @@
           <Icon 
             v-else-if="match === 'loss'" 
             name="heroicons:x-mark" 
+            class="w-6 h-6 text-white" 
+          />
+          <!-- Checkmark for completed but unknown result -->
+          <Icon 
+            v-else-if="index < completed" 
+            name="heroicons:check-circle" 
             class="w-6 h-6 text-white" 
           />
           <!-- Number for pending -->
@@ -75,12 +81,29 @@ const matchResults = computed(() => {
   return filled
 })
 
-const getMatchClasses = (match: 'win' | 'loss' | null) => {
+// Determine if a match at index is completed (either has result or index < completed count)
+const isMatchCompleted = (index: number, match: 'win' | 'loss' | null) => {
+  // If we have a result (win/loss), it's completed
+  if (match === 'win' || match === 'loss') {
+    return true
+  }
+  // If no result but index is less than completed count, mark as completed (but unknown result)
+  if (index < props.completed) {
+    return true
+  }
+  return false
+}
+
+const getMatchClasses = (match: 'win' | 'loss' | null, index: number) => {
   if (match === 'win') {
     return 'bg-green-500 border-green-500/50'
   }
   if (match === 'loss') {
-    return 'bg-gray-500 border-gray-500/50'
+    return 'bg-red-500 border-red-500/50'
+  }
+  // If completed but no result data, show as completed with accent color
+  if (index < props.completed) {
+    return 'bg-accent border-accent/50'
   }
   return 'bg-surface-elevated border-border-subtle'
 }

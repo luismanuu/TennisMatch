@@ -353,27 +353,39 @@ const loadPlacementMatchResults = async (playerId: string) => {
       query: { limit: 100 }
     })
     
-    if (historyResponse?.history) {
-      // Filter placement matches and get results in order
-      // Only competitive matches appear in rating_history, so we don't need to filter by is_competitive
-      const placementMatches = historyResponse.history
-        .filter((h: any) => h.is_placement_match === true)
-        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) // Oldest first
+    // Initialize with all nulls
+    placementMatchResults.value = [null, null, null]
+    
+    if (historyResponse?.history && Array.isArray(historyResponse.history)) {
+      // Filter placement matches
+      const placementMatches = historyResponse.history.filter((h: any) => h.is_placement_match === true)
       
-      // Map to win/loss/null array
-      placementMatchResults.value = placementMatches.map((match: any) => {
-        if (match.was_winner === true) return 'win'
-        return 'loss'
-      })
-      
-      // Fill remaining slots with null
-      while (placementMatchResults.value.length < 3) {
-        placementMatchResults.value.push(null)
+      if (placementMatches.length > 0) {
+        // Sort by created_at ascending (oldest first) to get matches in chronological order
+        const sortedMatches = placementMatches.sort((a: any, b: any) => {
+          const dateA = new Date(a.created_at).getTime()
+          const dateB = new Date(b.created_at).getTime()
+          return dateA - dateB
+        })
+        
+        // Map to win/loss/null array - only take first 3
+        const results = sortedMatches.slice(0, 3).map((match: any) => {
+          if (match.was_winner === true) return 'win'
+          if (match.was_winner === false) return 'loss'
+          return null
+        })
+        
+        // Fill the array with results, keeping nulls for remaining slots
+        for (let i = 0; i < 3; i++) {
+          if (i < results.length) {
+            placementMatchResults.value[i] = results[i]
+          }
+        }
       }
     }
   } catch (err) {
     console.error('Failed to load placement match results:', err)
-    placementMatchResults.value = []
+    placementMatchResults.value = [null, null, null]
   }
 }
 
