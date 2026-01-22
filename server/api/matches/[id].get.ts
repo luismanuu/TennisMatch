@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { checkIsAdmin } from '~/server/utils/admin'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -166,7 +167,10 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Verify user is part of the match OR is organizer of the tournament
+    // Check if user is admin (admins can view any match)
+    const isAdmin = await checkIsAdmin(clerk_id)
+    
+    // Verify user is part of the match OR is organizer of the tournament OR is admin
     const isPlayer1 = match.player1_id === currentPlayer.id
     const isPlayer2 = match.player2_id === currentPlayer.id
     const isPendingPlayerInviter = match.pending_player2_id && 
@@ -187,7 +191,7 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter && !isTournamentOrganizer) {
+    if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter && !isTournamentOrganizer && !isAdmin) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Unauthorized: You are not part of this match or organizer of the tournament'

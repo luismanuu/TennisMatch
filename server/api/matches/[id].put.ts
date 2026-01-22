@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { checkIsOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { checkIsAdmin } from '~/server/utils/admin'
 import { updateBracketAfterMatch, recalculateGroupStandings } from '~/server/utils/tournament-brackets'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { createMatchNotification, dismissExistingNotifications } from '~/server/utils/notifications'
@@ -94,8 +95,11 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Verify user is part of the match (unless they're organizer and action is organizer-specific)
-    if (body.action !== 'organizer_set_result') {
+    // Check if user is admin
+    const isAdmin = await checkIsAdmin(clerk_id)
+    
+    // Verify user is part of the match (unless they're organizer and action is organizer-specific, or admin)
+    if (body.action !== 'organizer_set_result' && !isAdmin) {
       const isPlayer1 = match.player1_id === currentPlayer.id
       const isPlayer2 = match.player2_id === currentPlayer.id
       const isPendingPlayerInviter = match.pending_player2_id && 
@@ -107,14 +111,12 @@ export default defineEventHandler(async (event) => {
           statusMessage: 'Unauthorized: You are not part of this match'
         })
       }
-    } else {
-      // For organizer actions, verify they are organizer
-      if (!isTournamentOrganizer) {
-        throw createError({
-          statusCode: 403,
-          statusMessage: 'Unauthorized: Only tournament organizers can perform this action'
-        })
-      }
+    } else if (body.action === 'organizer_set_result' && !isTournamentOrganizer && !isAdmin) {
+      // For organizer actions, verify they are organizer or admin
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Unauthorized: Only tournament organizers or admins can perform this action'
+      })
     }
     
     let updateData: any = {}
@@ -300,6 +302,28 @@ export default defineEventHandler(async (event) => {
       }
       
       case 'cancel': {
+        // Admins can cancel any match (except completed), regular users have restrictions
+        if (!isAdmin) {
+          // Regular users: only player1 can cancel before acceptance, both players can cancel after acceptance
+          const isPlayer1 = match.player1_id === currentPlayer.id
+          const isPlayer2 = match.player2_id === currentPlayer.id
+          
+          if (!isPlayer1 && !isPlayer2) {
+            throw createError({
+              statusCode: 403,
+              statusMessage: 'Only players in the match can cancel it'
+            })
+          }
+          
+          // Only player1 can cancel before acceptance
+          if (!match.match_accepted_by && !isPlayer1) {
+            throw createError({
+              statusCode: 403,
+              statusMessage: 'Only the match proposer can cancel before acceptance'
+            })
+          }
+        }
+        
         if (match.status === 'completed') {
           throw createError({
             statusCode: 400,

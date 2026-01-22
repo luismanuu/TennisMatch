@@ -688,10 +688,10 @@
                 </div>
               </div>
 
-              <!-- Cancel Match (players only, not organizers) -->
-              <!-- Only player1 can cancel before acceptance, both players can cancel after acceptance -->
+              <!-- Cancel Match (players or admin) -->
+              <!-- Only player1 can cancel before acceptance, both players can cancel after acceptance, admins can always cancel -->
               <button
-                v-if="match.status === 'scheduled' && isPlayerInMatch && !isTournamentOrganizer && (!match.match_proposed_by || match.match_proposed_by === currentPlayerId || match.match_accepted_by)"
+                v-if="match.status === 'scheduled' && (isAdmin || (isPlayerInMatch && !isTournamentOrganizer && (!match.match_proposed_by || match.match_proposed_by === currentPlayerId || match.match_accepted_by)))"
                 @click="openCancelMatchForm"
                 :disabled="actionLoading"
                 class="btn-danger text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1241,7 +1241,7 @@
                 <h2 class="text-size-2 font-semibold text-foreground">Chat del Partido</h2>
               </div>
               <button
-                v-if="isPlayerInMatch || isTournamentOrganizer"
+                v-if="isPlayerInMatch || isTournamentOrganizer || isAdmin"
                 @click="toggleChat"
                 class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface border border-border-subtle text-foreground hover:border-accent/50 hover:bg-surface-elevated transition-all group"
               >
@@ -1342,7 +1342,7 @@
                     <input
                       v-model="messageInput"
                       type="text"
-                      :disabled="sendingMessage || (!isPlayerInMatch && !isTournamentOrganizer)"
+                      :disabled="sendingMessage || (!isPlayerInMatch && !isTournamentOrganizer && !isAdmin)"
                       @focus="pausePolling"
                       @blur="resumePolling"
                       @keydown.enter.exact.prevent="handleSendMessage"
@@ -1355,7 +1355,7 @@
                   </div>
                   <button
                     type="submit"
-                    :disabled="sendingMessage || !messageInput.trim() || (!isPlayerInMatch && !isTournamentOrganizer)"
+                    :disabled="sendingMessage || !messageInput.trim() || (!isPlayerInMatch && !isTournamentOrganizer && !isAdmin)"
                     class="btn-primary text-size-3 px-6 disabled:opacity-50 disabled:cursor-not-allowed group relative"
                   >
                     <Icon 
@@ -1392,6 +1392,7 @@ const matchId = route.params.id as string
 
 const { isLoaded, userId, user } = useAuthState()
 const { player, fetchPlayer } = usePlayer()
+const { isAdmin } = useAdmin()
 const { getMatch, updateMatchStatus, proposeScore, approveScore, rejectScore, cancelMatch, acceptMatch, rejectMatch, approveAcceptanceChange, rejectAcceptanceChange, proposeSchedule, approveSchedule, rejectSchedule, proposeReschedule, approveReschedule, rejectReschedule, organizerSetResult, loading, error } = useMatches()
 const { fetchMessages, sendMessage, messages: chatMessages, loading: chatLoading, isPolling, setPolling, removeOptimisticMessage } = useMatchChat()
 const sendingMessage = ref(false)
@@ -1487,9 +1488,9 @@ const isTournamentOrganizer = computed(() => {
          match.value.tournament?.created_by === currentPlayerId.value
 })
 
-// Check if user can view this match (player or organizer)
+// Check if user can view this match (player, organizer, or admin)
 const canViewMatch = computed(() => {
-  return isPlayerInMatch.value || isTournamentOrganizer.value
+  return isPlayerInMatch.value || isTournamentOrganizer.value || isAdmin.value
 })
 
 // Get back URL based on where user came from
@@ -2133,13 +2134,15 @@ const handleRejectSchedule = async () => {
 }
 
 const toggleChat = async () => {
-  if (!isPlayerInMatch.value && !isTournamentOrganizer.value) return
+  // Admins can view chat of any match
+  if (!isPlayerInMatch.value && !isTournamentOrganizer.value && !isAdmin.value) return
   
   isChatOpen.value = !isChatOpen.value
   
   if (isChatOpen.value) {
     // Open chat - load messages and start polling
-    if (userId.value && (isPlayerInMatch.value || isTournamentOrganizer.value)) {
+    // Admins can view chat of any match
+    if (userId.value && (isPlayerInMatch.value || isTournamentOrganizer.value || isAdmin.value)) {
       try {
         initialLoading.value = true
         await fetchMessages(matchId, userId.value, undefined, 3, false)
@@ -2261,9 +2264,9 @@ const startMessagesPolling = () => {
   const pollInterval = isPageVisible.value ? POLL_INTERVAL_ACTIVE : POLL_INTERVAL_INACTIVE
   
   messagesPollInterval = setInterval(async () => {
-    // Only poll if chat is open, user is part of the match, and polling is not paused
+    // Only poll if chat is open, user is part of the match (or admin), and polling is not paused
     // Also skip polling if we're currently sending a message to avoid race conditions
-    if (isChatOpen.value && !isPollingPaused.value && !sendingMessage.value && !chatLoading.value && userId.value && matchId && (isPlayerInMatch.value || isTournamentOrganizer.value) && match.value) {
+    if (isChatOpen.value && !isPollingPaused.value && !sendingMessage.value && !chatLoading.value && userId.value && matchId && (isPlayerInMatch.value || isTournamentOrganizer.value || isAdmin.value) && match.value) {
       try {
         setPolling(true)
         pollCount.value++
@@ -2339,8 +2342,9 @@ watch([isLoaded, userId], async () => {
 })
 
 // Watch for changes in match or player to reload messages if chat is open
-watch([match, currentPlayerId, isPlayerInMatch, isTournamentOrganizer], async () => {
-  if ((isPlayerInMatch.value || isTournamentOrganizer.value) && match.value && currentPlayerId.value && userId.value && isChatOpen.value) {
+watch([match, currentPlayerId, isPlayerInMatch, isTournamentOrganizer, isAdmin], async () => {
+  // Admins can view chat of any match
+  if ((isPlayerInMatch.value || isTournamentOrganizer.value || isAdmin.value) && match.value && currentPlayerId.value && userId.value && isChatOpen.value) {
     // Reload messages when match or player changes - always full refresh
     try {
       await fetchMessages(matchId, userId.value, undefined, 3, false) // No 'since' parameter = full refresh
@@ -2356,7 +2360,8 @@ watch([match, currentPlayerId, isPlayerInMatch, isTournamentOrganizer], async ()
     }
   } else {
     stopMessagesPolling()
-    if (!isPlayerInMatch.value && !isTournamentOrganizer.value) {
+    // Only close chat if user is not admin, not in match, and not organizer
+    if (!isPlayerInMatch.value && !isTournamentOrganizer.value && !isAdmin.value) {
       isChatOpen.value = false
     }
   }

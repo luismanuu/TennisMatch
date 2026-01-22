@@ -68,40 +68,72 @@ export default defineEventHandler(async (event) => {
       queryBuilder = queryBuilder.or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
     }
 
-    if (startDate) {
-      // If startDate is just a date (YYYY-MM-DD), ensure it starts at 00:00:00 in Ecuador timezone
-      let startDateValue = startDate
-      if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-        // Convert start of day in Ecuador (00:00:00) to UTC
-        // Ecuador is UTC-5, so 00:00:00 on day X in Ecuador = 05:00:00 on day X-1 in UTC
-        // Example: 2026-01-22 00:00:00 Ecuador = 2026-01-21 05:00:00 UTC
-        const [year, month, day] = startDate.split('-').map(Number)
-        // Create UTC date: day X at 05:00 UTC = day X at 00:00 Ecuador
-        // We need day X-1 at 05:00 UTC
-        const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
-        startDateValue = utcDate.toISOString()
+    // Handle date filters - for scheduled matches, include those without scheduled_at (NULL)
+    if (startDate || endDate) {
+      let startDateValue: string | undefined
+      let endDateValue: string | undefined
+      
+      if (startDate) {
+        // If startDate is just a date (YYYY-MM-DD), ensure it starts at 00:00:00 in Ecuador timezone
+        startDateValue = startDate
+        if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+          // Convert start of day in Ecuador (00:00:00) to UTC
+          // Ecuador is UTC-5, so 00:00:00 on day X in Ecuador = 05:00:00 on day X-1 in UTC
+          // Example: 2026-01-22 00:00:00 Ecuador = 2026-01-21 05:00:00 UTC
+          const [year, month, day] = startDate.split('-').map(Number)
+          // Create UTC date: day X at 05:00 UTC = day X at 00:00 Ecuador
+          // We need day X-1 at 05:00 UTC
+          const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
+          startDateValue = utcDate.toISOString()
+        }
       }
-      queryBuilder = queryBuilder.gte('scheduled_at', startDateValue)
+      
+      if (endDate) {
+        // If endDate is just a date (YYYY-MM-DD), include the entire day in Ecuador timezone
+        endDateValue = endDate
+        if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+          // Convert end of day in Ecuador (23:59:59.999) to UTC
+          // Ecuador is UTC-5, so 23:59:59.999 on day X in Ecuador = 04:59:59.999 on day X+1 in UTC
+          // To include the entire day, we use 05:00:00 on day X+1 in UTC
+          // Example: 2026-01-22 23:59:59.999 Ecuador = 2026-01-23 04:59:59.999 UTC
+          // We use 2026-01-23 05:00:00 UTC to include everything
+          const [year, month, day] = endDate.split('-').map(Number)
+          // Create UTC date: day X+1 at 05:00 UTC = day X+1 at 00:00 Ecuador (includes all of day X)
+          const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
+          endDateValue = utcDate.toISOString()
+        }
+      }
+      
+      // For scheduled matches, also include matches without scheduled_at (NULL)
+      // This ensures that "scheduled" matches without a date are still shown when filtering
+      if (status === 'scheduled') {
+        // For scheduled matches, we want to include:
+        // 1. Matches with scheduled_at in the date range (if dates are provided)
+        // 2. Matches without scheduled_at (NULL) - always include these
+        // We use a PostgREST OR syntax to combine conditions
+        if (startDateValue && endDateValue) {
+          // Both dates: include matches in range OR matches without scheduled_at
+          // PostgREST syntax: or=(condition1,condition2)
+          queryBuilder = queryBuilder.or(`and(scheduled_at.gte.${startDateValue},scheduled_at.lte.${endDateValue}),scheduled_at.is.null`)
+        } else if (startDateValue) {
+          // Only start date: scheduled_at >= start OR scheduled_at IS NULL
+          queryBuilder = queryBuilder.or(`scheduled_at.gte.${startDateValue},scheduled_at.is.null`)
+        } else if (endDateValue) {
+          // Only end date: scheduled_at <= end OR scheduled_at IS NULL
+          queryBuilder = queryBuilder.or(`scheduled_at.lte.${endDateValue},scheduled_at.is.null`)
+        }
+      } else {
+        // For other statuses, apply date filters normally
+        if (startDateValue) {
+          queryBuilder = queryBuilder.gte('scheduled_at', startDateValue)
+        }
+        if (endDateValue) {
+          queryBuilder = queryBuilder.lte('scheduled_at', endDateValue)
+        }
+      }
     }
 
-    if (endDate) {
-      // If endDate is just a date (YYYY-MM-DD), include the entire day in Ecuador timezone
-      let endDateValue = endDate
-      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-        // Convert end of day in Ecuador (23:59:59.999) to UTC
-        // Ecuador is UTC-5, so 23:59:59.999 on day X in Ecuador = 04:59:59.999 on day X+1 in UTC
-        // To include the entire day, we use 05:00:00 on day X+1 in UTC
-        // Example: 2026-01-22 23:59:59.999 Ecuador = 2026-01-23 04:59:59.999 UTC
-        // We use 2026-01-23 05:00:00 UTC to include everything
-        const [year, month, day] = endDate.split('-').map(Number)
-        // Create UTC date: day X+1 at 05:00 UTC = day X+1 at 00:00 Ecuador (includes all of day X)
-        const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
-        endDateValue = utcDate.toISOString()
-      }
-      queryBuilder = queryBuilder.lte('scheduled_at', endDateValue)
-    }
-
-    // Get total count
+    // Get total count - apply same date filter logic as main query
     let countQuery = supabase
       .from('matches')
       .select('id', { count: 'exact', head: true })
@@ -112,27 +144,47 @@ export default defineEventHandler(async (event) => {
     if (playerId) {
       countQuery = countQuery.or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
     }
-    if (startDate) {
-      // If startDate is just a date (YYYY-MM-DD), ensure it starts at 00:00:00 in Ecuador timezone
-      let startDateValue = startDate
-      if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-        // Convert start of day in Ecuador (00:00:00) to UTC
-        const [year, month, day] = startDate.split('-').map(Number)
-        const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
-        startDateValue = utcDate.toISOString()
+    
+    // Apply same date filter logic as main query
+    if (startDate || endDate) {
+      let startDateValue: string | undefined
+      let endDateValue: string | undefined
+      
+      if (startDate) {
+        startDateValue = startDate
+        if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+          const [year, month, day] = startDate.split('-').map(Number)
+          const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
+          startDateValue = utcDate.toISOString()
+        }
       }
-      countQuery = countQuery.gte('scheduled_at', startDateValue)
-    }
-    if (endDate) {
-      // If endDate is just a date (YYYY-MM-DD), include the entire day in Ecuador timezone
-      let endDateValue = endDate
-      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-        // Convert end of day in Ecuador (23:59:59.999) to UTC
-        const [year, month, day] = endDate.split('-').map(Number)
-        const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
-        endDateValue = utcDate.toISOString()
+      
+      if (endDate) {
+        endDateValue = endDate
+        if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+          const [year, month, day] = endDate.split('-').map(Number)
+          const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
+          endDateValue = utcDate.toISOString()
+        }
       }
-      countQuery = countQuery.lte('scheduled_at', endDateValue)
+      
+      // For scheduled matches, also include matches without scheduled_at (NULL)
+      if (status === 'scheduled') {
+        if (startDateValue && endDateValue) {
+          countQuery = countQuery.or(`and(scheduled_at.gte.${startDateValue},scheduled_at.lte.${endDateValue}),scheduled_at.is.null`)
+        } else if (startDateValue) {
+          countQuery = countQuery.or(`scheduled_at.gte.${startDateValue},scheduled_at.is.null`)
+        } else if (endDateValue) {
+          countQuery = countQuery.or(`scheduled_at.lte.${endDateValue},scheduled_at.is.null`)
+        }
+      } else {
+        if (startDateValue) {
+          countQuery = countQuery.gte('scheduled_at', startDateValue)
+        }
+        if (endDateValue) {
+          countQuery = countQuery.lte('scheduled_at', endDateValue)
+        }
+      }
     }
     
     const { count, error: countError } = await countQuery
