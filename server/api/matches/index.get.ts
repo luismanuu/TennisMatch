@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
     // Default: show matches from last 24 hours if no date filters are set
     const startDate = query.start_date as string | undefined
     const endDate = query.end_date as string | undefined
+    const skip24hFilter = query.skip_24h_filter === 'true'
     
     if (!clerk_id) {
       throw createError({
@@ -102,18 +103,27 @@ export default defineEventHandler(async (event) => {
     }
     
     // Apply date filters if provided
-    if (startDate) {
-      matchesQuery = matchesQuery.gte('scheduled_at', startDate)
-    }
-    if (endDate) {
-      matchesQuery = matchesQuery.lte('scheduled_at', endDate)
-    }
-    
-    // Default: show matches from last 24 hours if no date filters are set
-    if (!startDate && !endDate) {
+    // Include matches with scheduled_at in range OR matches without scheduled_at (for pending proposals)
+    if (startDate || endDate) {
+      let dateFilter = ''
+      if (startDate && endDate) {
+        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`
+      } else if (startDate) {
+        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.is.null`
+      } else if (endDate) {
+        dateFilter = `scheduled_at.lte.${endDate},scheduled_at.is.null`
+      }
+      if (dateFilter) {
+        matchesQuery = matchesQuery.or(dateFilter)
+      }
+    } else if (!status && !skip24hFilter) {
+      // Default: show matches from last 24 hours ONLY when no status filter is set (Todos)
+      // But also include matches without scheduled_at (pending proposals)
+      // Skip this filter if skip_24h_filter is true (e.g., when filtering for pending actions)
       const now = new Date()
       const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
-      matchesQuery = matchesQuery.gte('scheduled_at', twentyFourHoursAgo.toISOString())
+      // Include matches with scheduled_at >= 24 hours ago OR matches without scheduled_at
+      matchesQuery = matchesQuery.or(`scheduled_at.gte.${twentyFourHoursAgo.toISOString()},scheduled_at.is.null`)
     }
     
     const { data: allMatches, error: matchesError } = await matchesQuery
@@ -195,19 +205,23 @@ export default defineEventHandler(async (event) => {
       pendingMatchesQuery = pendingMatchesQuery.neq('status', 'cancelled')
     }
     
-    if (startDate) {
-      pendingMatchesQuery = pendingMatchesQuery.gte('scheduled_at', startDate)
-    }
-    if (endDate) {
-      pendingMatchesQuery = pendingMatchesQuery.lte('scheduled_at', endDate)
+    // Apply date filters if provided
+    // Include matches with scheduled_at in range OR matches without scheduled_at (for pending proposals)
+    if (startDate || endDate) {
+      let dateFilter = ''
+      if (startDate && endDate) {
+        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`
+      } else if (startDate) {
+        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.is.null`
+      } else if (endDate) {
+        dateFilter = `scheduled_at.lte.${endDate},scheduled_at.is.null`
+      }
+      if (dateFilter) {
+        pendingMatchesQuery = pendingMatchesQuery.or(dateFilter)
+      }
     }
     
-    // Default: show matches from last 24 hours if no date filters are set
-    if (!startDate && !endDate) {
-      const now = new Date()
-      const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
-      pendingMatchesQuery = pendingMatchesQuery.gte('scheduled_at', twentyFourHoursAgo.toISOString())
-    }
+    // Don't apply 24-hour filter to pending matches query - it should show all pending matches
     
     const { data: pendingMatches, error: pendingError } = await pendingMatchesQuery
       .order('scheduled_at', { ascending: false, nullsFirst: false })

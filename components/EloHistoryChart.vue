@@ -16,8 +16,10 @@
           :y1="padding.top + (i-1) * ((height - padding.top - padding.bottom) / 4)"
           :x2="width - padding.right"
           :y2="padding.top + (i-1) * ((height - padding.top - padding.bottom) / 4)"
-          class="stroke-border-subtle"
+          stroke="var(--border-subtle)"
+          stroke-width="1"
           stroke-dasharray="4,4"
+          opacity="0.5"
         />
       </g>
       
@@ -26,28 +28,37 @@
         <text 
           v-for="(label, i) in yLabels" 
           :key="'y-'+i"
-          :x="padding.left - 8"
+          :x="padding.left - 10"
           :y="padding.top + i * ((height - padding.top - padding.bottom) / 4) + 4"
           text-anchor="end"
-          class="fill-foreground-muted text-size-5"
-          font-size="10"
+          fill="var(--foreground-muted)"
+          font-size="11"
+          font-weight="500"
         >
           {{ label }}
         </text>
       </g>
       
+      <!-- Gradient definition -->
+      <defs>
+        <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color: var(--accent); stop-opacity: 0.3" />
+          <stop offset="100%" style="stop-color: var(--accent); stop-opacity: 0.05" />
+        </linearGradient>
+      </defs>
+      
       <!-- Area fill -->
       <path
         :d="areaPath"
-        class="fill-accent/10"
+        fill="url(#areaGradient)"
       />
       
       <!-- Line -->
       <path
         :d="linePath"
         fill="none"
-        class="stroke-accent"
-        stroke-width="2"
+        stroke="var(--accent)"
+        stroke-width="2.5"
         stroke-linecap="round"
         stroke-linejoin="round"
       />
@@ -59,9 +70,10 @@
           :key="'point-'+i"
           :cx="point.x"
           :cy="point.y"
-          r="4"
-          class="fill-accent stroke-background"
-          stroke-width="2"
+          r="4.5"
+          fill="var(--accent)"
+          stroke="var(--background)"
+          stroke-width="2.5"
           @mouseenter="showTooltip(i, $event)"
           @mouseleave="hideTooltip"
         />
@@ -73,10 +85,11 @@
           v-for="(point, i) in dataPoints.filter((_, idx) => idx % Math.ceil(dataPoints.length / 5) === 0 || idx === dataPoints.length - 1)" 
           :key="'x-'+i"
           :x="point.x"
-          :y="height - padding.bottom + 16"
+          :y="height - padding.bottom + 18"
           text-anchor="middle"
-          class="fill-foreground-muted"
-          font-size="10"
+          fill="var(--foreground-muted)"
+          font-size="11"
+          font-weight="500"
         >
           {{ formatDate(historyData[dataPoints.indexOf(point)]?.created_at) }}
         </text>
@@ -220,18 +233,22 @@ const hideTooltip = () => {
   position: relative;
   width: 100%;
   height: 200px;
+  min-height: 200px;
 }
 
 svg {
   overflow: visible;
+  display: block;
 }
 
-circle {
+.data-points circle {
   cursor: pointer;
-  transition: r 0.2s ease;
+  transition: r 0.2s ease, stroke-width 0.2s ease;
 }
 
-circle:hover {
+.data-points circle:hover {
   r: 6;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px var(--accent));
 }
 </style>

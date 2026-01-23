@@ -94,6 +94,23 @@
   
   /* Noise texture */
   --noise-opacity: 0.03;
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     COLOR ALIASES - For component compatibility
+     ───────────────────────────────────────────────────────────────────────── */
+  
+  /* Alias color variables for components that use --color-* naming */
+  --color-fg: var(--foreground);
+  --color-fg-secondary: var(--foreground-muted);
+  --color-fg-subtle: var(--foreground-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: oklch(0.72 0.24 150);
+  --color-accent-alpha: var(--accent-subtle);
+  --color-accent-rgb: 70, 200, 150; /* Approximate RGB for accent color */
+  --color-bg: var(--background);
+  --color-bg-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

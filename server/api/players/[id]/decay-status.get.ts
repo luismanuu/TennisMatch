@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
     // Fetch player data
     const { data: player, error: playerError } = await supabase
       .from('players')
-      .select('id, elo, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed')
+      .select('id, elo, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed, created_at')
       .eq('id', playerId)
       .single()
     
@@ -43,11 +43,12 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Get current status
+    // Get current status (with proportional requirement if registered mid-month)
     const status = getMonthlyDecayStatus(
       player.matches_this_month,
       player.last_decay_check,
-      player.placement_matches_completed ?? 0
+      player.placement_matches_completed ?? 0,
+      player.created_at
     )
     
     return {

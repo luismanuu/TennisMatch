@@ -23,6 +23,9 @@ export interface NotificationCounts {
   schedule_proposals: number
   reschedule_proposals: number
   acceptance_changes: number
+  hasMore?: boolean
+  displayed?: number
+  totalInSystem?: number
 }
 
 export interface NotificationResponse {
@@ -92,8 +95,10 @@ export const useNotifications = () => {
       const response = await $fetch<NotificationResponse>('/api/notifications/pending', {
         method: 'GET',
         params: {
-          clerk_id: authState.userId.value
-        }
+          clerk_id: authState.userId.value,
+          limit: 50 // Limit to 50 for faster loading
+        },
+        timeout: 10000 // 10 second timeout
       })
       
       if (response.success) {

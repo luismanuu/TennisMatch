@@ -10,7 +10,34 @@
     <!-- Navigation -->
     <AppNavigation />
 
+    <!-- Additional action button for this page -->
+    <div class="fixed top-16 left-0 right-0 z-40 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
+      <div class="container-wide px-4 sm:px-6 py-2 sm:py-3">
+        <div class="flex justify-end gap-2 sm:gap-3">
+          <NuxtLink 
+            v-if="isAuthenticated"
+            to="/matchmaking" 
+            class="btn-secondary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
+          >
+            <Icon name="heroicons:magnifying-glass" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
+            <span class="hidden sm:inline">Buscar Oponente</span>
+            <span class="sm:hidden">Buscar</span>
+          </NuxtLink>
+          <NuxtLink 
+            v-if="isAuthenticated"
+            to="/matches/new" 
+            class="btn-primary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
+          >
+            <Icon name="heroicons:plus" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
+            <span class="hidden sm:inline">Programar Partido</span>
+            <span class="sm:hidden">Nuevo</span>
+          </NuxtLink>
+        </div>
+      </div>
+    </div>
+
     <div class="h-16"></div>
+    <div v-if="isAuthenticated" class="h-12"></div>
 
     <div class="section-padding relative z-10">
       <div class="container-medium px-4">
@@ -100,8 +127,8 @@
                     />
                   </div>
 
-                  <!-- Percentile and Rank (only show if not in placement) -->
-                  <div v-if="position && !isInPlacement" class="grid grid-cols-2 gap-4">
+                  <!-- Percentile and Rank (only show if not in placement and has valid data) -->
+                  <div v-if="position && !isInPlacement && position.total_players > 0 && position.percentile >= 0" class="grid grid-cols-2 gap-4">
                     <div class="text-center lg:text-left">
                       <p class="text-size-5 text-foreground-muted mb-1">Posición Global</p>
                       <p class="text-size-2 font-bold text-foreground">#{{ position.global_rank }}</p>

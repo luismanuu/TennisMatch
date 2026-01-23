@@ -1247,19 +1247,22 @@ export default defineEventHandler(async (event) => {
     }
     
     // Update player ratings after match completion (for ALL matches - tournament and regular)
+    // Execute asynchronously in background to avoid blocking the response
     if (updatedMatch.status === 'completed' && updatedMatch.winner_id && updatedMatch.player1_id && updatedMatch.player2_id) {
-      console.log(`[PUT /api/matches/${matchId}] Match completed, updating player ratings...`)
-      try {
-        const ratingResult = await updateRatingsAfterMatch(matchId, supabase)
-        if (ratingResult) {
-          console.log(`[PUT /api/matches/${matchId}] Ratings updated - Player1: ${ratingResult.player1.eloChange > 0 ? '+' : ''}${ratingResult.player1.eloChange} ELO, Player2: ${ratingResult.player2.eloChange > 0 ? '+' : ''}${ratingResult.player2.eloChange} ELO`)
-        } else {
-          console.warn(`[PUT /api/matches/${matchId}] Rating update returned null - check logs for errors`)
-        }
-      } catch (ratingError) {
-        // Log error but don't fail the request - ratings are important but not critical to match flow
-        console.error('Error updating ratings after match:', ratingError)
-      }
+      console.log(`[PUT /api/matches/${matchId}] Match completed, updating player ratings asynchronously...`)
+      // Execute in background without blocking the response
+      updateRatingsAfterMatch(matchId, supabase)
+        .then((ratingResult) => {
+          if (ratingResult) {
+            console.log(`[PUT /api/matches/${matchId}] Ratings updated - Player1: ${ratingResult.player1.eloChange > 0 ? '+' : ''}${ratingResult.player1.eloChange} ELO, Player2: ${ratingResult.player2.eloChange > 0 ? '+' : ''}${ratingResult.player2.eloChange} ELO`)
+          } else {
+            console.warn(`[PUT /api/matches/${matchId}] Rating update returned null - check logs for errors`)
+          }
+        })
+        .catch((ratingError) => {
+          // Log error but don't fail the request - ratings are important but not critical to match flow
+          console.error('Error updating ratings after match:', ratingError)
+        })
     }
     
     return updatedMatch

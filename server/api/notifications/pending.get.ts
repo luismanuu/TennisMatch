@@ -38,7 +38,13 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Fetch all pending notifications (not read and not dismissed)
+    // Get limit from query (default 50, max 200 for performance)
+    // Reduced from 100 to improve load time
+    const limit = Math.min(parseInt(query.limit as string) || 50, 200)
+    
+    // Fetch pending notifications (not read and not dismissed)
+    // Limit to most recent to handle large volumes efficiently
+    // Only load essential match fields to improve performance
     const { data: notifications, error: notificationsError } = await supabase
       .from('notifications')
       .select(`
@@ -77,24 +83,18 @@ export default defineEventHandler(async (event) => {
           acceptance_change_rejected_by,
           player1:players!matches_player1_id_fkey(
             id,
-            name,
-            category:categories(id, name, description, order)
+            name
           ),
           player2:players!matches_player2_id_fkey(
             id,
-            name,
-            category:categories(id, name, description, order)
-          ),
-          tournament:tournaments(
-            id,
-            name,
-            status
+            name
           )
         )
       `)
       .eq('player_id', currentPlayer.id)
       .eq('is_dismissed', false)
       .order('created_at', { ascending: false })
+      .limit(limit)
     
     if (notificationsError) {
       throw createError({
@@ -109,9 +109,13 @@ export default defineEventHandler(async (event) => {
     
     // Filter notifications to only include those where current user has a pending action
     // This matches the logic from the "Acciones Pendientes" filter
+    // Filter cancelled matches first to reduce processing
     const actionableNotifications = notificationsList.filter((n: any) => {
       const match = n.match
       if (!match) return false
+      
+      // Exclude cancelled matches early
+      if (match.status === 'cancelled') return false
       
       const isPlayer1 = match.player1_id === currentPlayer.id
       const isPlayer2 = match.player2_id === currentPlayer.id
@@ -166,6 +170,9 @@ export default defineEventHandler(async (event) => {
     const totalCount = actionableNotifications.length
     const unreadCount = actionableNotifications.filter((n: any) => !n.is_read).length
     
+    // Check if there are more notifications beyond the limit
+    const hasMore = actionableNotifications.length >= limit
+    
     return {
       success: true,
       notifications: actionableNotifications, // Only return actionable notifications
@@ -178,7 +185,9 @@ export default defineEventHandler(async (event) => {
         score_proposals: categorized.score_proposals.length,
         schedule_proposals: categorized.schedule_proposals.length,
         reschedule_proposals: categorized.reschedule_proposals.length,
-        acceptance_changes: categorized.acceptance_changes.length
+        acceptance_changes: categorized.acceptance_changes.length,
+        hasMore,
+        displayed: actionableNotifications.length
       }
     }
   } catch (error: any) {

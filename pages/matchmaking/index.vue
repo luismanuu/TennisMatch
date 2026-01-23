@@ -99,10 +99,99 @@
             </NuxtLink>
           </div>
 
-          <!-- Recommendations List -->
-          <div v-if="recommendations.length > 0" class="space-y-4 animate-fade-up animate-delay-1">
+          <!-- Top Recommendations (Algorithm-based, max 5) -->
+          <div v-if="topRecommendations.length > 0" class="space-y-4 animate-fade-up animate-delay-1 mb-8">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-size-2 font-semibold text-foreground">
+                Top Recomendados
+              </h2>
+              <span class="px-3 py-1 rounded-full bg-accent-subtle/30 border border-accent/30 text-xs font-semibold text-accent">
+                Algoritmo
+              </span>
+            </div>
+            
+            <div 
+              v-for="(rec, index) in topRecommendations" 
+              :key="rec.player.id"
+              class="glass-card-elevated p-6 hover-lift transition-all border-2 border-accent/20"
+              :style="{ animationDelay: `${index * 0.1}s` }"
+            >
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <!-- Player Info Section -->
+                <div class="flex items-center gap-4 flex-1 min-w-0">
+                  <!-- Player Avatar -->
+                  <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border-2 border-border-subtle flex items-center justify-center flex-shrink-0">
+                    <span class="text-xl font-bold text-foreground-muted">
+                      {{ getInitials(rec.player.name) }}
+                    </span>
+                  </div>
+                  
+                  <!-- Player Details -->
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-2 flex-wrap">
+                      <h3 class="text-size-2 font-semibold text-foreground truncate">
+                        {{ rec.player.name }}
+                      </h3>
+                      <span 
+                        v-if="rec.is_unrated" 
+                        class="px-2 py-0.5 text-xs font-medium rounded bg-gray-500/20 text-gray-400 border border-gray-500/30 whitespace-nowrap"
+                      >
+                        Nuevo
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-3 flex-wrap text-size-4 text-foreground-muted">
+                      <RatingTierBadge 
+                        :elo="rec.player.elo" 
+                        :total-matches-played="rec.is_unrated ? 0 : 1"
+                        :show-elo="true"
+                      />
+                      <span v-if="rec.player.city" class="flex items-center gap-1 whitespace-nowrap">
+                        <Icon name="heroicons:map-pin" class="w-4 h-4 flex-shrink-0" />
+                        <span class="truncate">{{ rec.player.city.name }}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Actions Section -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:flex-shrink-0">
+                  <!-- Last Match Info -->
+                  <div class="text-center px-4 py-3 rounded-lg bg-surface border border-border-subtle min-w-[140px] sm:min-w-[160px]">
+                    <div class="text-size-5 text-foreground-muted mb-1">Último partido</div>
+                    <div class="text-size-4 font-semibold text-foreground whitespace-nowrap">
+                      {{ getLastMatchText(rec.player.last_match_at, rec.last_active_days_ago) }}
+                    </div>
+                  </div>
+                  
+                  <!-- Action Buttons -->
+                  <div class="flex flex-col sm:flex-row gap-3 sm:flex-shrink-0">
+                    <!-- View Profile Button -->
+                    <NuxtLink 
+                      :to="`/players/${rec.player.id}`"
+                      class="px-4 py-2.5 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
+                    >
+                      <Icon name="heroicons:user-circle" class="w-4 h-4 group-hover:scale-110 transition-transform flex-shrink-0" />
+                      <span class="text-size-4 font-semibold">Ver Perfil</span>
+                    </NuxtLink>
+                    
+                    <!-- Challenge Button -->
+                    <NuxtLink 
+                      :to="`/matches/new?opponent=${rec.player.id}`"
+                      class="btn-primary text-size-4 !py-2.5 !px-6 group whitespace-nowrap flex items-center justify-center"
+                    >
+                      <Icon name="heroicons:paper-airplane" class="w-4 h-4 mr-2 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+                      Desafiar
+                    </NuxtLink>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paginated Recommendations (Rest of opponents) -->
+          <div v-if="recommendations.length > 0 && currentPage > 1" class="space-y-4 animate-fade-up animate-delay-2 mb-8">
             <h2 class="text-size-2 font-semibold text-foreground mb-4">
-              Oponentes Recomendados
+              Más Oponentes (Página {{ currentPage }})
             </h2>
             
             <div 
@@ -183,9 +272,61 @@
             </div>
           </div>
 
+          <!-- Pagination Controls -->
+          <div v-if="pagination && pagination.total_pages > 1" class="flex flex-col items-center gap-4 mt-8 mb-8">
+            <div class="text-center">
+              <p class="text-size-4 text-foreground-muted">
+                Mostrando página <span class="font-semibold text-foreground">{{ currentPage }}</span> de <span class="font-semibold text-foreground">{{ pagination.total_pages }}</span>
+              </p>
+              <p class="text-size-5 text-foreground-muted mt-1">
+                {{ pagination.total }} oponentes disponibles
+              </p>
+            </div>
+            
+            <div class="flex items-center justify-center gap-2 flex-wrap">
+              <button
+                @click="handlePageChange(currentPage - 1)"
+                :disabled="currentPage === 1"
+                class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Icon name="heroicons:chevron-left" class="w-4 h-4" />
+                <span class="text-size-4 font-semibold">Anterior</span>
+              </button>
+              
+              <div class="flex items-center gap-2">
+                <template v-for="pageNum in getPageNumbers(pagination.total_pages)" :key="pageNum">
+                  <button
+                    v-if="pageNum !== -1"
+                    @click="handlePageChange(pageNum)"
+                    :class="[
+                      'px-4 py-2 rounded-xl border-2 transition-all text-size-4 font-semibold min-w-[44px]',
+                      currentPage === pageNum
+                        ? 'border-accent bg-accent-subtle/30 text-accent'
+                        : 'border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated'
+                    ]"
+                  >
+                    {{ pageNum }}
+                  </button>
+                  <span v-else class="px-2 text-foreground-muted text-size-4">
+                    ...
+                  </span>
+                </template>
+              </div>
+              
+              <button
+                @click="handlePageChange(currentPage + 1)"
+                :disabled="!pagination.has_more"
+                class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <span class="text-size-4 font-semibold">Siguiente</span>
+                <Icon name="heroicons:chevron-right" class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
           <!-- Empty State -->
           <div 
-            v-else-if="!message" 
+            v-else-if="!message && topRecommendations.length === 0 && recommendations.length === 0" 
             class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale"
           >
             <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
@@ -214,6 +355,8 @@ definePageMeta({
 const { user } = useUser()
 const { 
   recommendations, 
+  topRecommendations,
+  pagination,
   playerInfo, 
   searchInfo, 
   loading, 
@@ -222,10 +365,18 @@ const {
   fetchRecommendations 
 } = useMatchmaking()
 
-const loadRecommendations = async () => {
+const currentPage = ref(1)
+const pageSize = 20
+
+const loadRecommendations = async (page: number = 1) => {
   if (user.value?.id) {
-    await fetchRecommendations(user.value.id)
+    currentPage.value = page
+    await fetchRecommendations(user.value.id, page, pageSize)
   }
+}
+
+const handlePageChange = (page: number) => {
+  loadRecommendations(page)
 }
 
 onMounted(() => {
@@ -287,5 +438,54 @@ const getLastMatchText = (lastMatchAt: string | null | undefined, daysAgo: numbe
   }
   const months = Math.floor(daysAgo / 30)
   return `Hace ${months} ${months === 1 ? 'mes' : 'meses'}`
+}
+
+const getPageNumbers = (totalPages: number): number[] => {
+  const pages: number[] = []
+  const maxVisible = 7
+  
+  if (totalPages <= maxVisible) {
+    // Show all pages if total is less than max visible
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(i)
+    }
+  } else {
+    // Always show first page
+    pages.push(1)
+    
+    // Calculate start and end of visible range
+    let start = Math.max(2, currentPage.value - 2)
+    let end = Math.min(totalPages - 1, currentPage.value + 2)
+    
+    // Adjust if we're near the beginning
+    if (currentPage.value <= 3) {
+      end = Math.min(5, totalPages - 1)
+    }
+    
+    // Adjust if we're near the end
+    if (currentPage.value >= totalPages - 2) {
+      start = Math.max(2, totalPages - 4)
+    }
+    
+    // Add ellipsis before range if needed
+    if (start > 2) {
+      pages.push(-1) // -1 represents ellipsis
+    }
+    
+    // Add visible range
+    for (let i = start; i <= end; i++) {
+      pages.push(i)
+    }
+    
+    // Add ellipsis after range if needed
+    if (end < totalPages - 1) {
+      pages.push(-1) // -1 represents ellipsis
+    }
+    
+    // Always show last page
+    pages.push(totalPages)
+  }
+  
+  return pages
 }
 </script>

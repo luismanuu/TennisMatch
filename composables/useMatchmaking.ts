@@ -1,8 +1,19 @@
 import type { MatchmakingRecommendation, Player, RatingTier } from '~/types'
 
+interface MatchmakingPagination {
+  page: number
+  limit: number
+  total: number
+  total_pages: number
+  has_more: boolean
+  top_recommendations_count: number
+}
+
 interface MatchmakingResponse {
   success: boolean
   recommendations: MatchmakingRecommendation[]
+  top_recommendations?: MatchmakingRecommendation[]
+  pagination?: MatchmakingPagination
   player_info?: {
     id: string
     name: string
@@ -22,23 +33,27 @@ interface MatchmakingResponse {
 
 export function useMatchmaking() {
   const recommendations = ref<MatchmakingRecommendation[]>([])
+  const topRecommendations = ref<MatchmakingRecommendation[]>([])
+  const pagination = ref<MatchmakingPagination | null>(null)
   const playerInfo = ref<MatchmakingResponse['player_info'] | null>(null)
   const searchInfo = ref<MatchmakingResponse['search_info'] | null>(null)
   const loading = ref(false)
   const error = ref<Error | null>(null)
   const message = ref<string | null>(null)
 
-  const fetchRecommendations = async (clerkId: string, limit: number = 10) => {
+  const fetchRecommendations = async (clerkId: string, page: number = 1, limit: number = 20) => {
     try {
       loading.value = true
       error.value = null
       message.value = null
       
       const response = await $fetch<MatchmakingResponse>('/api/matchmaking/recommendations', {
-        query: { clerk_id: clerkId, limit }
+        query: { clerk_id: clerkId, page, limit }
       })
       
       recommendations.value = response.recommendations || []
+      topRecommendations.value = response.top_recommendations || []
+      pagination.value = response.pagination || null
       playerInfo.value = response.player_info || null
       searchInfo.value = response.search_info || null
       message.value = response.message || null
@@ -55,6 +70,8 @@ export function useMatchmaking() {
 
   const clearRecommendations = () => {
     recommendations.value = []
+    topRecommendations.value = []
+    pagination.value = null
     playerInfo.value = null
     searchInfo.value = null
     message.value = null
@@ -62,6 +79,8 @@ export function useMatchmaking() {
 
   return {
     recommendations,
+    topRecommendations,
+    pagination,
     playerInfo,
     searchInfo,
     loading,

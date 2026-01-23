@@ -1,14 +1,30 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayStatus } from '~/types'
+import { 
+  calculateEloWithLLM, 
+  getDefaultEloCalculation,
+  type LlmEloCalculationResult 
+} from './llm-score-resolver'
+import {
+  detectMatchFormatFromScore,
+  parseGamesFromScore,
+  calculateMatchRating,
+  calculateMatchWeight,
+  calculateUtrRating,
+  calculatePlayerReliability,
+  getFormatWeight,
+  getCompetitivenessWeight,
+  getReliabilityWeight
+} from './utr-rating-system'
 
 // ============================================
 // CONSTANTS
 // ============================================
 
 // K-factors for ELO calculation
-const K_FACTOR_STANDARD = 32
+const K_FACTOR_STANDARD = 40
 const K_FACTOR_PLACEMENT = 50
-const K_FACTOR_HIGH_RATED = 24
+const K_FACTOR_HIGH_RATED = 30
 const K_FACTOR_UNRATED = 60
 const K_FACTOR_RATED_VS_UNRATED = 24
 
@@ -31,9 +47,9 @@ export const ELO_DECAY_FLOOR = 500
 const ELO_HIGH_RATED_THRESHOLD = 3500
 
 // Win streak bonus
-const WIN_STREAK_BONUS_PER_WIN = 5
-const WIN_STREAK_BONUS_MAX_WINS = 5
-const WIN_STREAK_BONUS_MAX = WIN_STREAK_BONUS_PER_WIN * WIN_STREAK_BONUS_MAX_WINS // 25
+const WIN_STREAK_BONUS_PER_WIN = 6
+const WIN_STREAK_BONUS_MAX_WINS = 8
+const WIN_STREAK_BONUS_MAX = WIN_STREAK_BONUS_PER_WIN * WIN_STREAK_BONUS_MAX_WINS // 48
 
 // MMR to ELO conversion
 const MMR_ELO_CENTER = 2250
@@ -234,7 +250,7 @@ export function getMmrKFactor(
 
 /**
  * Calculate win streak bonus
- * +5 ELO per consecutive win, capped at 5 wins (max +25)
+ * +6 ELO per consecutive win, capped at 8 wins (max +48)
  */
 export function calculateWinStreakBonus(winStreak: number): number {
   const effectiveStreak = Math.min(winStreak, WIN_STREAK_BONUS_MAX_WINS)
@@ -468,11 +484,11 @@ export function getEffectiveRatings(
 /**
  * Calculate decay amount based on matches played
  */
-export function calculateDecayAmount(matchesPlayed: number): number {
-  if (matchesPlayed >= MATCHES_REQUIRED_PER_MONTH) {
+export function calculateDecayAmount(matchesPlayed: number, matchesRequired: number = MATCHES_REQUIRED_PER_MONTH): number {
+  if (matchesPlayed >= matchesRequired) {
     return 0
   }
-  return (MATCHES_REQUIRED_PER_MONTH - matchesPlayed) * DECAY_PER_MISSED_MATCH
+  return (matchesRequired - matchesPlayed) * DECAY_PER_MISSED_MATCH
 }
 
 /**
@@ -501,23 +517,61 @@ export function getDaysRemainingInMonth(): number {
 }
 
 /**
+ * Calculate required matches for current month based on when player registered
+ * If player registered mid-month, adjust requirement proportionally
+ */
+export function calculateRequiredMatchesForMonth(playerCreatedAt: string | null | Date): number {
+  if (!playerCreatedAt) {
+    return MATCHES_REQUIRED_PER_MONTH
+  }
+  
+  const createdDate = typeof playerCreatedAt === 'string' ? new Date(playerCreatedAt) : playerCreatedAt
+  const now = new Date()
+  
+  // If player was created in a different month/year, use full requirement
+  if (createdDate.getMonth() !== now.getMonth() || createdDate.getFullYear() !== now.getFullYear()) {
+    return MATCHES_REQUIRED_PER_MONTH
+  }
+  
+  // If created on day 1, use full requirement
+  if (createdDate.getDate() === 1) {
+    return MATCHES_REQUIRED_PER_MONTH
+  }
+  
+  // Calculate proportional requirement based on days remaining in month from registration date
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const daysInMonth = lastDayOfMonth.getDate()
+  const dayOfMonthCreated = createdDate.getDate()
+  const daysRemainingFromCreation = daysInMonth - dayOfMonthCreated + 1
+  
+  // Calculate proportional requirement (minimum 1 match)
+  const proportionalRequirement = Math.max(1, Math.round((MATCHES_REQUIRED_PER_MONTH * daysRemainingFromCreation) / daysInMonth))
+  
+  return proportionalRequirement
+}
+
+/**
  * Get monthly decay status for a player
  */
 export function getMonthlyDecayStatus(
   matchesThisMonth: number,
   lastDecayCheck: string | null,
-  placementMatchesCompleted?: number
+  placementMatchesCompleted?: number,
+  playerCreatedAt?: string | null | Date
 ): MonthlyDecayStatus {
   const daysRemaining = getDaysRemainingInMonth()
   
+  // Calculate required matches (proportional if registered mid-month)
+  const matchesRequired = calculateRequiredMatchesForMonth(playerCreatedAt ?? null)
+  
   // Players in placement matches are exempt from decay
   const isInPlacement = (placementMatchesCompleted ?? 0) < 3
-  const willDecay = !isInPlacement && matchesThisMonth < MATCHES_REQUIRED_PER_MONTH
-  const estimatedDecay = isInPlacement ? 0 : calculateDecayAmount(matchesThisMonth)
+  const willDecay = !isInPlacement && matchesThisMonth < matchesRequired
+  const estimatedDecay = isInPlacement ? 0 : calculateDecayAmount(matchesThisMonth, matchesRequired)
   
   return {
     matches_this_month: matchesThisMonth,
-    matches_required: MATCHES_REQUIRED_PER_MONTH,
+    matches_required: matchesRequired,
     days_remaining_in_month: daysRemaining,
     will_decay: willDecay,
     estimated_decay: estimatedDecay,
@@ -555,7 +609,7 @@ export async function updateRatingsAfterMatch(
   matchId: string,
   supabase: SupabaseClient
 ): Promise<RatingCalculationResult | null> {
-  // Fetch match data
+  // Fetch match data (including score for UTR/LLM calculations)
   const { data: match, error: matchError } = await supabase
     .from('matches')
     .select(`
@@ -565,7 +619,8 @@ export async function updateRatingsAfterMatch(
       winner_id,
       status,
       played_at,
-      tournament_id
+      tournament_id,
+      score
     `)
     .eq('id', matchId)
     .single()
@@ -613,6 +668,7 @@ export async function updateRatingsAfterMatch(
       loss_streak,
       total_matches_played,
       matches_this_month,
+      last_match_at,
       category_id,
       category:categories(id, order, default_elo)
     `)
@@ -655,20 +711,166 @@ export async function updateRatingsAfterMatch(
     player2DefaultElo
   )
   
-  // Calculate ELO changes
-  const eloResult = calculateELOChange(
-    player1Effective.elo,
-    player2Effective.elo,
-    winnerId,
-    isPlayer1PlacementMatch,
-    isPlayer2PlacementMatch,
-    player1.win_streak,
-    player2.win_streak,
-    player1IsUnrated,
-    player2IsUnrated,
-    player1Effective.mmr,
-    player2Effective.mmr
-  )
+  // Try LLM ELO calculation first (if API key available)
+  const config = useRuntimeConfig()
+  let llmResult: LlmEloCalculationResult | null = null
+  let llmUsed = false
+  let llmFailed = false
+  
+  if (config.openRouterApiKey && match.score) {
+    try {
+      llmResult = await calculateEloWithLLM(
+        {
+          matchId: match.id,
+          player1Id: match.player1_id,
+          player2Id: match.player2_id,
+          player1Elo: player1Effective.elo,
+          player2Elo: player2Effective.elo,
+          score: match.score,
+          winnerId: match.winner_id,
+          tournamentId: match.tournament_id || undefined
+        },
+        supabase,
+        { openRouterApiKey: config.openRouterApiKey }
+      )
+      
+      if (llmResult.success) {
+        llmUsed = true
+      } else {
+        llmFailed = true
+        console.warn('LLM calculation failed, using fallback:', llmResult.error)
+      }
+    } catch (error: any) {
+      llmFailed = true
+      // Check if it's a rate limiting error
+      if (error?.message?.includes('rate limited') || error?.message?.includes('429')) {
+        console.warn('LLM calculation rate limited, using fallback. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.')
+      } else {
+        console.error('LLM calculation error:', error)
+      }
+    }
+  }
+  
+  // Calculate ELO changes (use LLM result if available, otherwise fallback)
+  let eloResult: ReturnType<typeof calculateELOChange>
+  
+  if (llmUsed && llmResult) {
+    // Use LLM-calculated ELO changes
+    eloResult = {
+      player1Change: Math.round(llmResult.player1EloChange),
+      player2Change: Math.round(llmResult.player2EloChange),
+      player1WinStreakBonus: 0, // LLM doesn't calculate streak bonuses
+      player2WinStreakBonus: 0
+    }
+  } else {
+    // Use fallback ELO calculation
+    if (llmFailed && match.score) {
+      // Try simple fallback from LLM utility
+      const fallback = getDefaultEloCalculation(
+        player1Effective.elo,
+        player2Effective.elo,
+        match.winner_id,
+        match.player1_id
+      )
+      eloResult = {
+        player1Change: fallback.player1EloChange,
+        player2Change: fallback.player2EloChange,
+        player1WinStreakBonus: 0,
+        player2WinStreakBonus: 0
+      }
+    } else {
+      // Use existing comprehensive ELO calculation
+      eloResult = calculateELOChange(
+        player1Effective.elo,
+        player2Effective.elo,
+        winnerId,
+        isPlayer1PlacementMatch,
+        isPlayer2PlacementMatch,
+        player1.win_streak,
+        player2.win_streak,
+        player1IsUnrated,
+        player2IsUnrated,
+        player1Effective.mmr,
+        player2Effective.mmr
+      )
+    }
+  }
+  
+  // Calculate UTR match rating and weight (if score available)
+  let utrData: {
+    matchRatingP1: number
+    matchRatingP2: number
+    matchWeight: number
+    gamesWonP1: number
+    gamesLostP1: number
+    totalGames: number
+    format: string
+  } | null = null
+  
+  if (match.score) {
+    try {
+      const format = detectMatchFormatFromScore(match.score)
+      const gamesData = parseGamesFromScore(match.score, 1)
+      
+      // Calculate match rating for both players
+      const matchRatingP1 = calculateMatchRating(
+        player1Effective.elo,
+        player2Effective.elo,
+        gamesData.gamesWon,
+        gamesData.totalGames
+      )
+      const matchRatingP2 = calculateMatchRating(
+        player2Effective.elo,
+        player1Effective.elo,
+        gamesData.gamesLost,
+        gamesData.totalGames
+      )
+      
+      // Calculate match weight
+      const formatWeight = getFormatWeight(format)
+      const competitivenessWeight = getCompetitivenessWeight(Math.abs(player1Effective.elo - player2Effective.elo))
+      const reliabilityWeightP1 = getReliabilityWeight(
+        player2.total_matches_played,
+        player2.last_match_at
+      )
+      const reliabilityWeightP2 = getReliabilityWeight(
+        player1.total_matches_played,
+        player1.last_match_at
+      )
+      
+      // Use average reliability for match weight (or use LLM's match weight if available)
+      const avgReliability = (reliabilityWeightP1 + reliabilityWeightP2) / 2
+      const matchWeight = llmUsed && llmResult 
+        ? llmResult.matchWeight 
+        : formatWeight * competitivenessWeight * avgReliability
+      
+      utrData = {
+        matchRatingP1,
+        matchRatingP2,
+        matchWeight,
+        gamesWonP1: gamesData.gamesWon,
+        gamesLostP1: gamesData.gamesLost,
+        totalGames: gamesData.totalGames,
+        format
+      }
+    } catch (error) {
+      console.error('Error calculating UTR data:', error)
+    }
+  }
+  
+  // Update match with LLM calculation metadata
+  if (llmUsed || llmFailed) {
+    await supabase
+      .from('matches')
+      .update({
+        llm_elo_calculated: llmUsed,
+        llm_calculation_failed: llmFailed,
+        llm_calculation_reasoning: llmResult?.reasoning || null,
+        llm_calculation_model: llmUsed ? 'google/gemini-2.5-flash' : null,
+        llm_calculation_timestamp: llmUsed || llmFailed ? new Date().toISOString() : null
+      })
+      .eq('id', matchId)
+  }
   
   // Calculate MMR changes
   const mmrResult = calculateMMRChange(
@@ -754,6 +956,59 @@ export async function updateRatingsAfterMatch(
     return null
   }
   
+  // Generate brief reasoning preview from LLM reasoning (max 1500 chars)
+  // This creates a concise summary for quick display in rating history
+  // We use a larger limit to capture more of the reasoning while still being manageable
+  const generateReasoningPreview = (reasoning: string | null | undefined): string | null => {
+    if (!reasoning) return null
+    
+    // Remove extra whitespace and newlines, normalize spaces
+    const cleaned = reasoning.replace(/\s+/g, ' ').trim()
+    
+    // If already short enough, return as is
+    if (cleaned.length <= 1500) return cleaned
+    
+    // Try to find a good breaking point (sentence end, period, etc.)
+    const maxLength = 1500
+    let preview = cleaned.substring(0, maxLength)
+    
+    // Try to break at sentence boundary (preferred)
+    // Look for sentence endings within the last 200 chars to get a good break point
+    const searchStart = Math.max(0, maxLength - 200)
+    const searchEnd = maxLength
+    const searchText = cleaned.substring(searchStart, searchEnd)
+    
+    const lastPeriod = searchText.lastIndexOf('.')
+    const lastExclamation = searchText.lastIndexOf('!')
+    const lastQuestion = searchText.lastIndexOf('?')
+    const lastBreak = Math.max(lastPeriod, lastExclamation, lastQuestion)
+    
+    if (lastBreak > 50) {
+      // Found a sentence break within reasonable distance (at least 50 chars from end)
+      preview = cleaned.substring(0, searchStart + lastBreak + 1)
+    } else {
+      // Try to break at paragraph or section boundary (double newline or common patterns)
+      const paragraphBreak = cleaned.substring(0, maxLength).lastIndexOf('\n\n')
+      if (paragraphBreak > maxLength * 0.8) {
+        preview = cleaned.substring(0, paragraphBreak)
+      } else {
+        // Break at word boundary to avoid cutting words
+        const lastSpace = preview.lastIndexOf(' ')
+        if (lastSpace > maxLength * 0.9) {
+          // Good word boundary found (within last 10%)
+          preview = cleaned.substring(0, lastSpace) + '...'
+        } else {
+          // Fallback: just truncate and add ellipsis
+          preview = preview + '...'
+        }
+      }
+    }
+    
+    return preview
+  }
+  
+  const reasoningPreview = generateReasoningPreview(llmResult?.reasoning)
+  
   // Record rating history for player 1
   const player1Expected = calculateExpectedScore(player1Effective.elo, player2Effective.elo)
   await supabase.from('rating_history').insert({
@@ -777,6 +1032,14 @@ export async function updateRatingsAfterMatch(
     opponent_elo: player2Effective.elo,
     opponent_mmr: player2Effective.mmr,
     was_winner: winnerId === 1,
+    // UTR data
+    match_rating: utrData?.matchRatingP1 || null,
+    match_weight: utrData?.matchWeight || null,
+    games_won: utrData?.gamesWonP1 || null,
+    games_lost: utrData?.gamesLostP1 || null,
+    total_games: utrData?.totalGames || null,
+    // LLM reasoning preview
+    reasoning_preview: reasoningPreview,
   })
   
   // Record rating history for player 2
@@ -802,7 +1065,21 @@ export async function updateRatingsAfterMatch(
     opponent_elo: player1Effective.elo,
     opponent_mmr: player1Effective.mmr,
     was_winner: winnerId === 2,
+    // UTR data
+    match_rating: utrData?.matchRatingP2 || null,
+    match_weight: utrData?.matchWeight || null,
+    games_won: utrData?.gamesLostP1 || null, // Player 2's games won = Player 1's games lost
+    games_lost: utrData?.gamesWonP1 || null, // Player 2's games lost = Player 1's games won
+    total_games: utrData?.totalGames || null,
+    // LLM reasoning preview (same for both players)
+    reasoning_preview: reasoningPreview,
   })
+  
+  // Update player UTR ratings
+  if (utrData) {
+    await updatePlayerUtrRating(player1.id, supabase)
+    await updatePlayerUtrRating(player2.id, supabase)
+  }
   
   return {
     player1: {
@@ -821,6 +1098,119 @@ export async function updateRatingsAfterMatch(
       newUncertainty: mmrResult.player2NewUncertainty,
       winStreakBonus: eloResult.player2WinStreakBonus,
     },
+  }
+}
+
+/**
+ * Update player UTR rating based on match history
+ */
+async function updatePlayerUtrRating(playerId: string, supabase: SupabaseClient): Promise<void> {
+  try {
+    // Fetch match history with UTR data (last 30 matches within 12 months)
+    const twelveMonthsAgo = new Date()
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+    
+    // Fetch match history with UTR data (last 30 matches within 12 months)
+    // First get all rating history entries with UTR data
+    const { data: allHistory, error: historyError } = await supabase
+      .from('rating_history')
+      .select(`
+        match_rating,
+        match_weight,
+        created_at,
+        match_id
+      `)
+      .eq('player_id', playerId)
+      .not('match_rating', 'is', null)
+      .not('match_weight', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(50) // Get more to filter by date
+    
+    if (historyError) {
+      console.error('Error fetching match history for UTR:', historyError)
+      return
+    }
+    
+    if (!allHistory || allHistory.length === 0) {
+      // No matches with UTR data, calculate reliability only
+      const { data: player } = await supabase
+        .from('players')
+        .select('total_matches_played, last_match_at')
+        .eq('id', playerId)
+        .single()
+      
+      if (player) {
+        const reliability = calculatePlayerReliability(
+          player.total_matches_played,
+          player.last_match_at
+        )
+        
+        await supabase
+          .from('players')
+          .update({ utr_reliability: reliability })
+          .eq('id', playerId)
+      }
+      return
+    }
+    
+    // Get match dates for filtering
+    const matchIds = allHistory.map(h => h.match_id)
+    const { data: matches, error: matchesError } = await supabase
+      .from('matches')
+      .select('id, played_at')
+      .in('id', matchIds)
+    
+    if (matchesError) {
+      console.error('Error fetching matches for UTR:', matchesError)
+      return
+    }
+    
+    // Create a map of match_id -> played_at
+    const matchDates = new Map(matches?.map(m => [m.id, m.played_at]) || [])
+    
+    // Filter by date and limit to 30
+    const matchHistory = allHistory
+      .filter(h => {
+        const playedAt = matchDates.get(h.match_id)
+        if (!playedAt) return false
+        return new Date(playedAt) >= twelveMonthsAgo
+      })
+      .slice(0, 30)
+      .map(h => ({
+        ...h,
+        playedAt: matchDates.get(h.match_id) || h.created_at
+      }))
+    
+    // Calculate weighted average UTR rating
+    const utrRatings = matchHistory.map(m => ({
+      matchRating: Number(m.match_rating),
+      matchWeight: Number(m.match_weight),
+      playedAt: m.playedAt
+    }))
+    
+    const utrRating = calculateUtrRating(utrRatings)
+    
+    // Calculate reliability
+    const { data: player } = await supabase
+      .from('players')
+      .select('total_matches_played, last_match_at')
+      .eq('id', playerId)
+      .single()
+    
+    const reliability = player 
+      ? calculatePlayerReliability(player.total_matches_played, player.last_match_at)
+      : 0.3
+    
+    // Update player
+    await supabase
+      .from('players')
+      .update({
+        utr_rating: utrRating,
+        utr_reliability: reliability
+      })
+      .eq('id', playerId)
+  } catch (error) {
+    console.error('Error updating player UTR rating:', error)
   }
 }
 
@@ -853,7 +1243,7 @@ export async function checkAndApplyMonthlyDecay(
   // Fetch player data
   const { data: player, error } = await supabase
     .from('players')
-    .select('id, elo, mmr_uncertainty, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed')
+    .select('id, elo, mmr_uncertainty, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed, created_at')
     .eq('id', playerId)
     .single()
   
@@ -879,9 +1269,12 @@ export async function checkAndApplyMonthlyDecay(
     return { decayApplied: 0, uncertaintyIncrease: 0 }
   }
   
+  // Calculate required matches (proportional if registered mid-month)
+  const matchesRequired = calculateRequiredMatchesForMonth(player.created_at)
+  
   // Calculate decay
-  const decayAmount = calculateDecayAmount(player.matches_this_month)
-  const uncertaintyIncrease = (MATCHES_REQUIRED_PER_MONTH - Math.min(player.matches_this_month, MATCHES_REQUIRED_PER_MONTH)) * 0.1
+  const decayAmount = calculateDecayAmount(player.matches_this_month, matchesRequired)
+  const uncertaintyIncrease = (matchesRequired - Math.min(player.matches_this_month, matchesRequired)) * 0.1
   
   if (decayAmount === 0 && uncertaintyIncrease === 0) {
     // No decay needed, just update the check date

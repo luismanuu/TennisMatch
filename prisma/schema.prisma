@@ -55,6 +55,8 @@ model Player {
   matchesThisMonth           Int       @default(0) @map("matches_this_month")
   lastDecayCheck             DateTime? @map("last_decay_check") @db.Date
   totalMatchesPlayed         Int       @default(0) @map("total_matches_played")
+  utrRating                  Decimal?  @map("utr_rating") @db.Decimal(10, 2)
+  utrReliability             Decimal?  @map("utr_reliability") @db.Decimal(4, 3)
   status                     String    @default("active") @db.Text
   deletedAt                  DateTime? @map("deleted_at") @db.Timestamptz(6)
   createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -74,6 +76,7 @@ model Player {
   @@index([lastMatchAt(sort: Desc)], map: "idx_players_last_match_at")
   @@index([elo], map: "idx_players_elo")
   @@index([totalMatchesPlayed], map: "idx_players_total_matches")
+  @@index([utrRating], map: "idx_players_utr_rating")
   @@map("players")
 }
 
@@ -128,6 +131,11 @@ model RatingHistory {
   wasWinner          Boolean   @map("was_winner")
   ratingReversed     Boolean   @default(false) @map("rating_reversed")
   reversedAt         DateTime? @map("reversed_at") @db.Timestamptz(6)
+  matchRating        Decimal?  @map("match_rating") @db.Decimal(10, 2)
+  matchWeight        Decimal?  @map("match_weight") @db.Decimal(4, 3)
+  gamesWon           Int?      @map("games_won")
+  gamesLost           Int?      @map("games_lost")
+  totalGames          Int?      @map("total_games")
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   
   player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
@@ -135,5 +143,7 @@ model RatingHistory {
   @@index([playerId, createdAt(sort: Desc)], map: "idx_rating_history_player")
   @@index([matchId], map: "idx_rating_history_match")
   @@index([createdAt(sort: Desc)], map: "idx_rating_history_created")
+  @@index([matchRating], map: "idx_rating_history_match_rating")
+  @@index([matchWeight], map: "idx_rating_history_match_weight")
   @@map("rating_history")
 }

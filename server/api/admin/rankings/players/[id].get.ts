@@ -159,11 +159,12 @@ export default defineEventHandler(async (event) => {
     const tierInfo = getRatingTier(player.elo || 0)
     const tierProgress = getNextTierProgress(player.elo || 0)
 
-    // Get monthly decay status
+    // Get monthly decay status (with proportional requirement if registered mid-month)
     const decayStatus = getMonthlyDecayStatus(
       player.matches_this_month || 0,
       player.last_decay_check,
-      player.placement_matches_completed
+      player.placement_matches_completed,
+      player.created_at
     )
 
     // Get recent match impact (last 10 matches)

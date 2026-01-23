@@ -120,23 +120,39 @@
               </NuxtLink>
               
               <!-- Notification Bell -->
-              <NuxtLink
-                to="/matches?filter=pending"
-                class="relative flex items-center justify-center p-2 rounded-xl text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group flex-shrink-0"
-                :title="unreadCount > 0 ? `${unreadCount} notificaciones sin leer` : 'Notificaciones'"
-              >
-                <Icon 
-                  :name="unreadCount > 0 ? 'heroicons:bell-alert' : 'heroicons:bell'" 
-                  class="w-6 h-6 transition-transform group-hover:scale-110" 
-                />
-                <!-- Badge for unread count -->
-                <span 
-                  v-if="unreadCount > 0" 
-                  class="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 bg-accent text-white text-xs font-bold rounded-full border-2 border-background"
+              <div class="relative">
+                <button
+                  @click.stop="notificationDropdownOpen = !notificationDropdownOpen"
+                  type="button"
+                  class="relative flex items-center justify-center p-2 rounded-xl text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group flex-shrink-0"
+                  :title="unreadCount > 0 ? `${unreadCount} notificaciones sin leer` : 'Notificaciones'"
                 >
-                  {{ unreadCount > 9 ? '9+' : unreadCount }}
-                </span>
-              </NuxtLink>
+                  <Icon 
+                    :name="unreadCount > 0 ? 'heroicons:bell-alert' : 'heroicons:bell'" 
+                    class="w-6 h-6 transition-transform group-hover:scale-110" 
+                  />
+                  <!-- Badge for unread count -->
+                  <span 
+                    v-if="unreadCount > 0" 
+                    class="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 bg-accent text-white text-xs font-bold rounded-full border-2 border-background"
+                  >
+                    {{ unreadCount > 9 ? '9+' : unreadCount }}
+                  </span>
+                </button>
+              </div>
+              
+              <!-- Notification Dropdown (outside relative div to avoid positioning issues) -->
+              <NotificationDropdown
+                :is-open="notificationDropdownOpen"
+                :notifications="notifications || []"
+                :unread-count="unreadCount || 0"
+                :count="count"
+                :loading="loading"
+                @close="notificationDropdownOpen = false"
+                @mark-as-read="markAsRead"
+                @dismiss="dismiss"
+                @mark-all-read="markAllRead"
+              />
               
               <SignOutButton>
                 <button class="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group">
@@ -200,10 +216,39 @@ const { isAuthenticated, authLoaded, user } = useAuthState()
 const { isOrganizer } = useOrganizer()
 const route = useRoute()
 
-// Notifications - only need unreadCount for badge
-const { unreadCount } = useNotifications()
+// Notifications
+const { 
+  notifications, 
+  unreadCount, 
+  count,
+  loading, 
+  markAsRead, 
+  dismiss, 
+  markAllRead,
+  fetchNotifications
+} = useNotifications()
 
 const mobileMenuOpen = ref(false)
+const notificationDropdownOpen = ref(false)
+
+// Fetch notifications when dropdown opens
+watch(notificationDropdownOpen, (isOpen) => {
+  if (isOpen) {
+    console.log('[AppNavigation] Opening notification dropdown, fetching notifications...')
+    fetchNotifications()
+  }
+})
+
+// Debug: Log notification state
+if (process.dev) {
+  watch([notificationDropdownOpen, notifications, unreadCount], ([isOpen, notifs, count]) => {
+    console.log('[AppNavigation] Notification state:', {
+      isOpen,
+      notificationsCount: notifs?.length || 0,
+      unreadCount: count
+    })
+  })
+}
 
 // Helpers to check current page
 const isDashboard = computed(() => route.path === '/')

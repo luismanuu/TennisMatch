@@ -23,7 +23,9 @@ export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
     const clerkId = query.clerk_id as string
-    const limit = parseInt(query.limit as string) || 10
+    const limit = parseInt(query.limit as string) || 20 // Increased default for pagination
+    const page = parseInt(query.page as string) || 1
+    const offset = (page - 1) * limit
 
     if (!clerkId) {
       throw createError({
@@ -170,7 +172,7 @@ export default defineEventHandler(async (event) => {
       .gte('elo', minAllowedElo)  // ELO filter at DB level
       .lte('elo', maxAllowedElo)  // ELO filter at DB level
       .order('last_match_at', { ascending: false, nullsFirst: false })
-      .limit(limit * 3) // Fetch more to allow for filtering
+      .limit(500) // Fetch up to 500 for better pagination support
 
     if (playersError) {
       console.error('Error fetching players:', playersError)
@@ -332,12 +334,65 @@ export default defineEventHandler(async (event) => {
         return daysA - daysB
       })
 
-      // Limit results
-      recommendations = recommendations.slice(0, limit)
+      // Separate top 5 recommendations (algorithm-based) from the rest
+      const topRecommendations = recommendations.slice(0, 5)
+      const restRecommendations = recommendations.slice(5)
+      const totalCount = recommendations.length
+      
+      // Apply pagination
+      let paginatedRecommendations: MatchmakingRecommendation[] = []
+      if (page === 1) {
+        // First page: show top 5 only
+        paginatedRecommendations = topRecommendations
+      } else {
+        // Other pages: show paginated results from the rest (excluding top 5)
+        const startIndex = (page - 2) * limit // page 2 starts at index 0 of restRecommendations
+        paginatedRecommendations = restRecommendations.slice(startIndex, startIndex + limit)
+      }
+      
+      // Calculate pagination info
+      // Total pages = 1 (for top 5) + pages for the rest
+      const restCount = restRecommendations.length
+      const totalPages = restCount > 0 
+        ? Math.ceil(restCount / limit) + 1 // +1 for first page with top 5
+        : 1 // Only top 5, no additional pages
+      
+      // Calculate currentTier for player_info (needed before return)
+      const currentTier = currentIsUnrated 
+        ? 'Unrated' as RatingTier
+        : currentTierInfo.tier
+      
+      return {
+        success: true,
+        recommendations: paginatedRecommendations,
+        top_recommendations: page === 1 ? topRecommendations : [], // Only return on first page
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          total_pages: totalPages,
+          has_more: page < totalPages,
+          top_recommendations_count: topRecommendations.length
+        },
+        player_info: {
+          id: currentPlayer.id,
+          name: currentPlayer.name,
+          elo: currentPlayer.elo,
+          mmr: Number(currentPlayer.mmr),
+          rating_tier: currentTier,
+          is_unrated: currentIsUnrated,
+          city_id: currentPlayer.city_id,
+        },
+        search_info: {
+          city_segments_count: segmentIds.length,
+          matchable_cities_count: matchableCityIds.length,
+          recommendations_count: totalCount,
+        }
+      }
     }
 
     // ============================================
-    // STEP 9: Return response
+    // STEP 9: Return response (no recommendations found)
     // ============================================
     const currentTier = currentIsUnrated 
       ? 'Unrated' as RatingTier
@@ -345,7 +400,16 @@ export default defineEventHandler(async (event) => {
 
     return {
       success: true,
-      recommendations,
+      recommendations: [],
+      top_recommendations: [],
+      pagination: {
+        page: 1,
+        limit,
+        total: 0,
+        total_pages: 1,
+        has_more: false,
+        top_recommendations_count: 0
+      },
       player_info: {
         id: currentPlayer.id,
         name: currentPlayer.name,
@@ -358,7 +422,7 @@ export default defineEventHandler(async (event) => {
       search_info: {
         city_segments_count: segmentIds.length,
         matchable_cities_count: matchableCityIds.length,
-        recommendations_count: recommendations.length,
+        recommendations_count: 0,
       }
     }
   } catch (error: any) {

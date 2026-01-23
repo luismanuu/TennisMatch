@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
         matches_this_month,
         last_decay_check,
         last_match_at,
+        created_at,
         category:categories(id, name),
         city:cities(id, name)
       `)
@@ -71,11 +72,12 @@ export default defineEventHandler(async (event) => {
       const decayStatus = getMonthlyDecayStatus(
         player.matches_this_month || 0,
         player.last_decay_check,
-        player.placement_matches_completed
+        player.placement_matches_completed,
+        player.created_at
       )
 
-      const estimatedDecay = isInPlacement ? 0 : calculateDecayAmount(player.matches_this_month || 0)
-      const isAtRisk = !isInPlacement && (player.matches_this_month || 0) < MATCHES_REQUIRED_PER_MONTH
+      const estimatedDecay = isInPlacement ? 0 : calculateDecayAmount(player.matches_this_month || 0, decayStatus.matches_required)
+      const isAtRisk = !isInPlacement && (player.matches_this_month || 0) < decayStatus.matches_required
 
       return {
         id: player.id,

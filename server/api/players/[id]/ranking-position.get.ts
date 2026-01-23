@@ -58,6 +58,16 @@ export default defineEventHandler(async (event) => {
       .eq('deleted', false)
       .gte('total_matches_played', 1)
     
+    // Only calculate ranking if there are other players
+    if (!totalPlayers || totalPlayers === 0) {
+      return {
+        success: true,
+        is_unrated: false,
+        position: null, // Return null when there's no data to calculate
+        tier: getRatingTier(player.elo).tier
+      }
+    }
+    
     // Get global rank (players with higher ELO + 1)
     const { count: playersAbove } = await supabase
       .from('players')
@@ -67,14 +77,12 @@ export default defineEventHandler(async (event) => {
       .gt('elo', player.elo)
     
     const globalRank = (playersAbove || 0) + 1
-    const playersBelow = (totalPlayers || 0) - globalRank
-    const percentile = totalPlayers && totalPlayers > 0 
-      ? Math.round(((totalPlayers - globalRank) / totalPlayers) * 100)
-      : 0
+    const playersBelow = totalPlayers - globalRank
+    const percentile = Math.round(((totalPlayers - globalRank) / totalPlayers) * 100)
     
     const position: RankingPosition = {
       global_rank: globalRank,
-      total_players: totalPlayers || 0,
+      total_players: totalPlayers,
       players_above: playersAbove || 0,
       players_below: playersBelow,
       percentile

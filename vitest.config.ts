@@ -6,8 +6,8 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./tests/integration/setup.ts'],
-    // Include all integration tests
-    include: ['tests/integration/**/*.spec.ts'],
+    // Include all integration tests and UTR rating system tests
+    include: ['tests/integration/**/*.spec.ts', 'tests/**/*.test.ts'],
     exclude: [
       // Only exclude real API tests when running default integration tests
       // They can still be run explicitly via: npm run test:integration:real-api

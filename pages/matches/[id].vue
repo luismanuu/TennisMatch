@@ -263,7 +263,20 @@
               </div>
               
               <!-- ELO Changes - Only show for competitive matches -->
-              <div v-if="match.is_competitive && ratingHistory && (ratingHistory.player1 || ratingHistory.player2)" class="pt-4 border-t border-accent/20">
+              <!-- Show loading state when ELO is being calculated -->
+              <div v-if="match.is_competitive && isEloCalculating" class="pt-4 border-t border-accent/20">
+                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de ELO</p>
+                <div class="flex items-center gap-3 p-4 rounded-lg bg-surface/50 border border-border-subtle">
+                  <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" />
+                  <div class="flex-1">
+                    <p class="text-size-4 font-semibold text-foreground">Calculando ELO...</p>
+                    <p class="text-size-5 text-foreground-muted">La AI está procesando los cambios de rating</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Show ELO changes when ready -->
+              <div v-else-if="match.is_competitive && ratingHistory && (ratingHistory.player1 || ratingHistory.player2)" class="pt-4 border-t border-accent/20">
                 <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de ELO</p>
                 <div class="grid grid-cols-2 gap-4">
                   <!-- Player 1 ELO Change -->
@@ -1406,6 +1419,7 @@ const ratingHistory = ref<{
   player2?: { elo_change: number; elo_before: number; elo_after: number }
 } | null>(null)
 const actionLoading = ref(false)
+const eloPollingInterval = ref<NodeJS.Timeout | null>(null)
 const showScoreForm = ref(false)
 const showOrganizerResultForm = ref(false)
 const showRescheduleForm = ref(false)
@@ -1668,6 +1682,83 @@ const scrollToBottom = (force = false) => {
   })
 }
 
+// Load rating history separately
+const loadRatingHistory = async () => {
+  if (!match.value || !match.value.is_competitive || match.value.status !== 'completed' || !match.value.player1_id || !match.value.player2_id) {
+    ratingHistory.value = null
+    return
+  }
+  
+  try {
+    const response = await $fetch<{
+      success: boolean
+      rating_history: {
+        player1: { elo_change: number; elo_before: number; elo_after: number } | null
+        player2: { elo_change: number; elo_before: number; elo_after: number } | null
+      } | null
+    }>(`/api/matches/${matchId}/rating-history`, {
+      query: { clerk_id: userId.value }
+    }).catch(() => ({ success: false, rating_history: null }))
+    
+    if (response.success && response.rating_history) {
+      ratingHistory.value = {
+        player1: response.rating_history.player1 || undefined,
+        player2: response.rating_history.player2 || undefined
+      }
+      // Stop polling if ELO is ready
+      if (eloPollingInterval.value) {
+        clearInterval(eloPollingInterval.value)
+        eloPollingInterval.value = null
+      }
+    } else {
+      ratingHistory.value = null
+    }
+  } catch (err) {
+    // Silently fail - rating history is optional
+    ratingHistory.value = null
+  }
+}
+
+// Computed to check if ELO is being calculated
+const isEloCalculating = computed(() => {
+  if (!match.value) return false
+  return match.value.is_competitive && 
+         match.value.status === 'completed' && 
+         match.value.player1_id && 
+         match.value.player2_id &&
+         !ratingHistory.value
+})
+
+// Start polling for ELO calculation
+const startEloPolling = () => {
+  if (eloPollingInterval.value) {
+    clearInterval(eloPollingInterval.value)
+  }
+  
+  // Poll every 2 seconds to check if ELO is ready
+  eloPollingInterval.value = setInterval(async () => {
+    if (!isEloCalculating.value) {
+      // Stop polling if ELO is no longer calculating
+      if (eloPollingInterval.value) {
+        clearInterval(eloPollingInterval.value)
+        eloPollingInterval.value = null
+      }
+      return
+    }
+    
+    // Reload rating history to check if it's ready
+    await loadRatingHistory()
+  }, 2000) // Poll every 2 seconds
+}
+
+// Stop ELO polling
+const stopEloPolling = () => {
+  if (eloPollingInterval.value) {
+    clearInterval(eloPollingInterval.value)
+    eloPollingInterval.value = null
+  }
+}
+
 const loadMatch = async () => {
   if (!userId.value) return
   
@@ -1686,31 +1777,19 @@ const loadMatch = async () => {
     
     // Load rating history if match is competitive and completed
     if (data.is_competitive && data.status === 'completed' && data.player1_id && data.player2_id) {
-      try {
-        const response = await $fetch<{
-          success: boolean
-          rating_history: {
-            player1: { elo_change: number; elo_before: number; elo_after: number } | null
-            player2: { elo_change: number; elo_before: number; elo_after: number } | null
-          } | null
-        }>(`/api/matches/${matchId}/rating-history`, {
-          query: { clerk_id: userId.value }
-        }).catch(() => ({ success: false, rating_history: null }))
-        
-        if (response.success && response.rating_history) {
-          ratingHistory.value = {
-            player1: response.rating_history.player1 || undefined,
-            player2: response.rating_history.player2 || undefined
-          }
-        } else {
-          ratingHistory.value = null
-        }
-      } catch (err) {
-        // Silently fail - rating history is optional
-        ratingHistory.value = null
+      await loadRatingHistory()
+      
+      // Start polling if ELO is still calculating
+      if (isEloCalculating.value && !eloPollingInterval.value) {
+        startEloPolling()
       }
     } else {
       ratingHistory.value = null
+      // Stop polling if match is not completed
+      if (eloPollingInterval.value) {
+        clearInterval(eloPollingInterval.value)
+        eloPollingInterval.value = null
+      }
     }
     
     // Auto-start match if scheduled time has passed
@@ -2375,6 +2454,8 @@ watch(chatMessages, (newMessages, oldMessages) => {
 }, { deep: true })
 
 onUnmounted(() => {
+  // Clean up ELO polling
+  stopEloPolling()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   stopMessagesPolling()
 })

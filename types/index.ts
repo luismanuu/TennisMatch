@@ -43,6 +43,8 @@ export interface Player {
   matches_this_month: number
   last_decay_check?: string
   total_matches_played: number
+  utr_rating?: number
+  utr_reliability?: number
   status?: 'active' | 'deleted'
   deleted_at?: string
   created_at: string
@@ -123,6 +125,11 @@ export interface Match {
   reschedule_rejected_by?: string
   reschedule_rejected_by_player?: Player
   location?: string
+  llm_elo_calculated?: boolean
+  llm_calculation_reasoning?: string
+  llm_calculation_model?: string
+  llm_calculation_timestamp?: string
+  llm_calculation_failed?: boolean
   created_at: string
   updated_at: string
   messages?: MatchMessage[]
@@ -337,6 +344,7 @@ export interface CreateMatchPayload {
   pending_player2_id?: string
   scheduled_at: string
   location?: string
+  is_competitive?: boolean
 }
 
 export interface CreatePendingPlayerPayload {
@@ -384,14 +392,18 @@ export interface ProposeReschedulePayload {
 
 // ============================================
 // MATCHMAKING AND RANKING SYSTEM TYPES
-// ============================================export interface CitySegment {
+// ============================================
+
+export interface CitySegment {
   id: string
   name: string
   description?: string
   created_at: string
   updated_at: string
   cities?: City[]
-}export interface CitySegmentCity {
+}
+
+export interface CitySegmentCity {
   id: string
   city_segment_id: string
   city_id: string
@@ -424,8 +436,16 @@ export interface RatingHistory {
   was_winner: boolean
   rating_reversed: boolean
   reversed_at?: string
+  match_rating?: number
+  match_weight?: number
+  games_won?: number
+  games_lost?: number
+  total_games?: number
+  reasoning_preview?: string
   created_at: string
-}// Rating tiers based on ELO
+}
+
+// Rating tiers based on ELO
 export type RatingTier = 
   | 'Bronze'
   | 'Silver'
@@ -502,3 +522,49 @@ export interface AddCitiesToSegmentPayload {
 export interface RemoveCityFromSegmentPayload {
   city_id: string
 }
+
+// ============================================
+// UTR RATING SYSTEM TYPES
+// ============================================
+
+export type MatchFormat = 'best-of-3' | 'best-of-5' | 'pro-set-8' | 'pro-set-10' | 'super-tiebreak' | 'walkover' | 'unknown'
+
+export interface UtrRatingData {
+  utrRating: number
+  reliability: number
+}
+
+export interface MatchRatingData {
+  matchRating: number
+  matchWeight: number
+  gamesWon: number
+  gamesLost: number
+  totalGames: number
+  format: MatchFormat
+}
+
+// LlmEloCalculationRequest is exported from server/utils/llm-prompts.ts
+// Import it from there instead of from types
+
+export interface LlmEloCalculationResponse {
+  player1_elo_change: number
+  player2_elo_change: number
+  match_rating: number
+  match_weight: number
+  format_detected: MatchFormat
+  games_won_p1: number
+  games_lost_p1: number
+  total_games: number
+  reasoning: string
+}
+
+export interface LlmResolutionData {
+  llmEloCalculated: boolean
+  llmCalculationReasoning?: string
+  llmCalculationModel?: string
+  llmCalculationTimestamp?: string
+  llmCalculationFailed: boolean
+}
+
+
+

@@ -13,7 +13,16 @@
     <!-- Additional action button for this page -->
     <div class="fixed top-16 left-0 right-0 z-40 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
       <div class="container-wide px-4 sm:px-6 py-2 sm:py-3">
-        <div class="flex justify-end">
+        <div class="flex justify-end gap-2 sm:gap-3">
+          <NuxtLink 
+            v-if="isAuthenticated"
+            to="/matchmaking" 
+            class="btn-secondary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
+          >
+            <Icon name="heroicons:magnifying-glass" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
+            <span class="hidden sm:inline">Buscar Oponente</span>
+            <span class="sm:hidden">Buscar</span>
+          </NuxtLink>
           <NuxtLink 
             v-if="isAuthenticated"
             to="/matches/new" 
@@ -67,8 +76,49 @@
           </button>
         </div>
 
+        <!-- Date Range Filter -->
+        <div v-if="!loading && !error" class="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 items-center justify-center animate-fade-up">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <Icon name="heroicons:calendar-days" class="w-4 h-4 sm:w-5 sm:h-5 text-foreground-muted flex-shrink-0" />
+            <label class="text-xs sm:text-size-4 text-foreground-muted font-semibold whitespace-nowrap">Desde:</label>
+            <input
+              v-model="dateFilterStart"
+              type="date"
+              class="px-3 py-1.5 sm:py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground text-xs sm:text-size-4 focus:border-accent focus:outline-none transition-colors"
+              @change="handleDateInputChange"
+              @keyup.enter="applyDateFilter"
+            />
+          </div>
+          <div class="flex items-center gap-2 sm:gap-3">
+            <label class="text-xs sm:text-size-4 text-foreground-muted font-semibold whitespace-nowrap">Hasta:</label>
+            <input
+              v-model="dateFilterEnd"
+              type="date"
+              class="px-3 py-1.5 sm:py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground text-xs sm:text-size-4 focus:border-accent focus:outline-none transition-colors"
+              @change="handleDateInputChange"
+              @keyup.enter="applyDateFilter"
+            />
+          </div>
+          <button
+            v-if="(dateFilterStart || dateFilterEnd) && (dateFilterStart !== appliedDateFilterStart || dateFilterEnd !== appliedDateFilterEnd)"
+            @click="applyDateFilter"
+            class="px-3 py-1.5 sm:py-2 rounded-lg bg-accent border-2 border-accent text-white hover:opacity-90 transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-size-4 font-semibold"
+          >
+            <Icon name="heroicons:check" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Aplicar</span>
+          </button>
+          <button
+            v-if="dateFilterStart || dateFilterEnd"
+            @click="clearDateFilter"
+            class="px-3 py-1.5 sm:py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent hover:text-foreground transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-size-4"
+          >
+            <Icon name="heroicons:x-mark" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Limpiar</span>
+          </button>
+        </div>
+
         <!-- Status Filter -->
-        <div v-if="!loading && !error && matches.length > 0" class="mb-6 sm:mb-8 flex gap-2 sm:gap-3 flex-wrap justify-center animate-fade-up animate-delay-1">
+        <div v-if="!loading && !error" class="mb-6 sm:mb-8 flex gap-2 sm:gap-3 flex-wrap justify-center animate-fade-up animate-delay-1">
           <button
             @click="statusFilter = null"
             :class="[
@@ -377,6 +427,8 @@ const { matches, pagination, loading, error, fetchMatches } = useMatches()
 
 const route = useRoute()
 const statusFilter = ref<string | null>(null)
+const dateFilterStart = ref<string>('')
+const dateFilterEnd = ref<string>('')
 const currentPage = ref(1)
 const pageSize = 10
 
@@ -396,6 +448,9 @@ const filteredMatches = computed(() => {
     // Show matches where CURRENT USER has a pending action to take
     filtered = filtered.filter(m => {
       if (!player.value) return false
+      
+      // Exclude cancelled matches
+      if (m.status === 'cancelled') return false
       
       const isPlayer1 = m.player1_id === player.value.id
       const isPlayer2 = m.player2_id === player.value.id
@@ -526,17 +581,72 @@ const totalFilteredPages = computed(() => {
 const loadMatches = async (page: number = 1) => {
   if (isLoaded.value && userId.value) {
     // Use backend filtering instead of loading all matches
-    // Default: show matches from last 24 hours (handled by backend)
+    // Default: show matches from last 24 hours ONLY when statusFilter is null (Todos)
     // Status filter is handled by backend when statusFilter is set
-    const filters: { status?: string } = {}
+    const filters: { status?: string; start_date?: string; end_date?: string; skip_24h_filter?: boolean } = {}
     if (statusFilter.value && statusFilter.value !== 'pending') {
       filters.status = statusFilter.value
     }
+    
+    // For 'pending' filter, skip 24-hour filter to load all relevant matches
+    // because we need to filter client-side with complex logic
+    if (statusFilter.value === 'pending') {
+      filters.skip_24h_filter = true
+    }
+    
+    // Apply date filters if set by user (use applied values, not input values)
+    if (appliedDateFilterStart.value) {
+      filters.start_date = new Date(appliedDateFilterStart.value).toISOString()
+    }
+    if (appliedDateFilterEnd.value) {
+      // Set end date to end of day
+      const endDate = new Date(appliedDateFilterEnd.value)
+      endDate.setHours(23, 59, 59, 999)
+      filters.end_date = endDate.toISOString()
+    }
+    
     // For 'pending' filter, we still need to load and filter client-side
     // because it requires complex logic based on match state
-    const limit = statusFilter.value === 'pending' ? 1000 : 50 // Load more for pending filter
+    // Load more matches for pending filter to ensure we catch all pending actions
+    const limit = statusFilter.value === 'pending' ? 1000 : 50
     await fetchMatches(userId.value, 1, limit, filters)
     currentPage.value = page
+  }
+}
+
+// Track applied date filters (separate from input values)
+const appliedDateFilterStart = ref<string>('')
+const appliedDateFilterEnd = ref<string>('')
+
+// Handle date input changes (don't apply immediately)
+const handleDateInputChange = () => {
+  // Auto-apply only if both dates are selected
+  if (dateFilterStart.value && dateFilterEnd.value) {
+    applyDateFilter()
+  }
+  // Otherwise, just update the input values without applying
+}
+
+// Apply date filter explicitly
+const applyDateFilter = () => {
+  // Update applied filter values
+  appliedDateFilterStart.value = dateFilterStart.value
+  appliedDateFilterEnd.value = dateFilterEnd.value
+  
+  currentPage.value = 1
+  if (isLoaded.value && userId.value) {
+    loadMatches(1)
+  }
+}
+
+const clearDateFilter = () => {
+  dateFilterStart.value = ''
+  dateFilterEnd.value = ''
+  appliedDateFilterStart.value = ''
+  appliedDateFilterEnd.value = ''
+  currentPage.value = 1
+  if (isLoaded.value && userId.value) {
+    loadMatches(1)
   }
 }
 

@@ -184,71 +184,88 @@
               <NuxtLink 
                 v-if="isOrganizer"
                 to="/organizer/tournaments"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-purple-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
                 </div>
                 <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent-secondary transition-colors block">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-purple-400 transition-colors block">
                     Crear Torneo
                   </span>
                   <span class="text-size-4 font-regular text-foreground-muted">
                     Organiza un nuevo torneo
                   </span>
                 </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
               </NuxtLink>
               <NuxtLink 
                 to="/matchmaking"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-blue-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <Icon name="heroicons:magnifying-glass" class="w-6 h-6 text-background" />
                 </div>
                 <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors block">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-blue-400 transition-colors block">
                     Busca Partida Competitiva
                   </span>
                   <span class="text-size-4 font-regular text-foreground-muted">
                     Encuentra oponentes de tu nivel
                   </span>
                 </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
               </NuxtLink>
               <NuxtLink 
                 to="/matches/new"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-green-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <Icon name="heroicons:plus" class="w-6 h-6 text-background" />
                 </div>
                 <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent-secondary transition-colors block">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-green-400 transition-colors block">
                     Registrar Partido
                   </span>
                   <span class="text-size-4 font-regular text-foreground-muted">
                     Programa un nuevo encuentro
                   </span>
                 </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-green-400 group-hover:translate-x-1 transition-all" />
               </NuxtLink>
               <NuxtLink 
                 to="/matches"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-indigo-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
               >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                   <Icon name="heroicons:calendar" class="w-6 h-6 text-background" />
                 </div>
                 <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent-secondary transition-colors block">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-indigo-400 transition-colors block">
                     Ver Partidos
                   </span>
                   <span class="text-size-4 font-regular text-foreground-muted">
                     Historial y próximos encuentros
                   </span>
                 </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent-secondary group-hover:translate-x-1 transition-all" />
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+              </NuxtLink>
+              <NuxtLink 
+                to="/my-ranking"
+                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+              >
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <Icon name="heroicons:chart-bar-square" class="w-6 h-6 text-background" />
+                </div>
+                <div class="flex-1">
+                  <span class="text-size-3 font-semibold text-foreground group-hover:text-amber-400 transition-colors block">
+                    Ver tu Ranking
+                  </span>
+                  <span class="text-size-4 font-regular text-foreground-muted">
+                    Sigue tu progreso y estadísticas
+                  </span>
+                </div>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
               </NuxtLink>
               <li 
                 v-for="(feature, index) in dashboardFeatures" 
@@ -303,7 +320,7 @@
               </div>
             </div>
             <p class="text-size-4 text-foreground-muted">
-              Visualiza tu ELO, historial de partidas y estadísticas detalladas
+              Visualiza tu ranking, historial de partidas y estadísticas detalladas
             </p>
           </NuxtLink>
 
@@ -890,13 +907,11 @@ watch([playerLoading, player, isAuthenticated], async ([loading, currentPlayer, 
 const dashboardFeatures = computed(() => {
   if (isStaff.value) {
     return [
-      'Seguir tu calificación ELO',
       'Ver y crear torneos',
       'Gestionar tu perfil de jugador'
     ]
   } else {
     return [
-      'Seguir tu calificación ELO',
       'Gestionar tu perfil de jugador'
     ]
   }

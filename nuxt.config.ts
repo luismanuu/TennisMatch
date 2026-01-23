@@ -45,7 +45,8 @@ export default defineNuxtConfig({
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY
     },
     clerkSecretKey: process.env.NUXT_CLERK_SECRET_KEY || process.env.CLERK_SECRET_KEY,
-    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    openRouterApiKey: process.env.OPENROUTER_API_KEY
   },
 
   typescript: {
