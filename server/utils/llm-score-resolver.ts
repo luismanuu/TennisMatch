@@ -82,37 +82,47 @@ export async function calculateEloWithLLM(
     
     // Fetch recent matches and head-to-head in parallel for better performance
     // Reduced to 5 matches per player to improve API response time
+    // IMPORTANT: Exclude reversed ratings and the current match being processed
     const [player1MatchesResult, player2MatchesResult, headToHeadResult] = await Promise.all([
       supabase
         .from('rating_history')
         .select(`
+          match_id,
           score:matches(score),
           was_winner,
           opponent:players!rating_history_opponent_id_fkey(id, name),
           created_at
         `)
         .eq('player_id', request.player1Id)
+        .eq('rating_reversed', false)
+        .neq('match_id', request.matchId)
         .order('created_at', { ascending: false })
         .limit(5),
       supabase
         .from('rating_history')
         .select(`
+          match_id,
           score:matches(score),
           was_winner,
           opponent:players!rating_history_opponent_id_fkey(id, name),
           created_at
         `)
         .eq('player_id', request.player2Id)
+        .eq('rating_reversed', false)
+        .neq('match_id', request.matchId)
         .order('created_at', { ascending: false })
         .limit(5),
       supabase
         .from('rating_history')
         .select(`
+          match_id,
           score:matches(score),
           was_winner,
           created_at
         `)
         .or(`and(player_id.eq.${request.player1Id},opponent_id.eq.${request.player2Id}),and(player_id.eq.${request.player2Id},opponent_id.eq.${request.player1Id})`)
+        .eq('rating_reversed', false)
+        .neq('match_id', request.matchId)
         .order('created_at', { ascending: false })
         .limit(5)
     ])
@@ -135,8 +145,8 @@ export async function calculateEloWithLLM(
     // Build context
     const context = buildMatchContext(
       request,
-      { ...player1, recentMatches: player1Matches || [], headToHead: headToHead?.filter(h => h.was_winner !== undefined) || [] },
-      { ...player2, recentMatches: player2Matches || [], headToHead: [] },
+      { ...player1, recentMatches: player1Matches || [], headToHead: headToHead?.filter(h => h.was_winner !== undefined) || [] } as any,
+      { ...player2, recentMatches: player2Matches || [], headToHead: [] } as any,
       {
         formatWeight,
         competitivenessWeight,
@@ -291,6 +301,71 @@ async function callOpenRouterAPI(
 }
 
 /**
+ * Sanitize JSON string by removing/escaping control characters
+ */
+function sanitizeJsonString(jsonText: string): string {
+  // Process the JSON string character by character to properly escape control characters in string values
+  let result = ''
+  let inString = false
+  let escapeNext = false
+  
+  for (let i = 0; i < jsonText.length; i++) {
+    const char = jsonText[i]
+    if (!char) continue
+    const code = char.charCodeAt(0)
+    
+    if (escapeNext) {
+      // Previous character was a backslash, so this is an escaped character
+      result += char
+      escapeNext = false
+      continue
+    }
+    
+    if (char === '\\') {
+      escapeNext = true
+      result += char
+      continue
+    }
+    
+    if (char === '"' && (i === 0 || jsonText[i - 1] !== '\\')) {
+      // Toggle string state (handle escaped quotes)
+      inString = !inString
+      result += char
+      continue
+    }
+    
+    if (inString) {
+      // Inside a string value - escape control characters
+      if (code >= 0x00 && code <= 0x1F) {
+        // Control character - escape it
+        const escapes: Record<number, string> = {
+          0x08: '\\b',  // backspace
+          0x09: '\\t',  // tab
+          0x0A: '\\n',  // newline
+          0x0C: '\\f',  // form feed
+          0x0D: '\\r',  // carriage return
+        }
+        result += escapes[code] || `\\u${code.toString(16).padStart(4, '0')}`
+      } else if (code === 0x7F) {
+        // DEL character
+        result += '\\u007f'
+      } else {
+        result += char
+      }
+    } else {
+      // Outside string - keep as is (but remove control chars that shouldn't be there)
+      if (code >= 0x00 && code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) {
+        // Skip control characters outside strings (except whitespace)
+        continue
+      }
+      result += char
+    }
+  }
+  
+  return result
+}
+
+/**
  * Parse LLM JSON response
  */
 function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
@@ -298,11 +373,46 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
     // Try to extract JSON from markdown code blocks if present
     let jsonText = responseText.trim()
     const jsonMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/)
-    if (jsonMatch) {
+    if (jsonMatch && jsonMatch[1]) {
       jsonText = jsonMatch[1]
     }
     
-    const parsed = JSON.parse(jsonText)
+    // Try parsing directly first
+    let parsed: any
+    try {
+      parsed = JSON.parse(jsonText)
+    } catch (parseError: any) {
+      // If parsing fails, try sanitizing control characters
+      console.warn('[LLM] Initial JSON parse failed, attempting to sanitize control characters...')
+      const sanitized = sanitizeJsonString(jsonText)
+      try {
+        parsed = JSON.parse(sanitized)
+      } catch (sanitizeError: any) {
+        // If still fails, try to extract just the JSON object more aggressively
+        // Find the first { and last } to extract the JSON object
+        const firstBrace = jsonText.indexOf('{')
+        const lastBrace = jsonText.lastIndexOf('}')
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const extractedJson = jsonText.substring(firstBrace, lastBrace + 1)
+          const sanitizedExtracted = sanitizeJsonString(extractedJson)
+          try {
+            parsed = JSON.parse(sanitizedExtracted)
+          } catch (finalError: any) {
+            // Last resort: log the problematic section for debugging
+            const errorPos = parseError.message.match(/position (\d+)/)?.[1]
+            if (errorPos) {
+              const pos = parseInt(errorPos)
+              const start = Math.max(0, pos - 100)
+              const end = Math.min(jsonText.length, pos + 100)
+              console.error(`[LLM] JSON parse error at position ${pos}:`, jsonText.substring(start, end))
+            }
+            throw new Error(`Failed to parse LLM response after sanitization: ${finalError.message}. Original error: ${parseError.message}`)
+          }
+        } else {
+          throw new Error(`Failed to parse LLM response: ${parseError.message}`)
+        }
+      }
+    }
     
     return {
       player1_elo_change: parsed.player1_elo_change ?? 0,
@@ -315,8 +425,8 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
       total_games: parsed.total_games ?? 0,
       reasoning: parsed.reasoning ?? ''
     }
-  } catch (error) {
-    throw new Error(`Failed to parse LLM response: ${error}`)
+  } catch (error: any) {
+    throw new Error(`Failed to parse LLM response: ${error.message || error}`)
   }
 }
 

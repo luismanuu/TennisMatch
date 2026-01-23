@@ -299,6 +299,62 @@
 
             <!-- Match History Tab -->
             <div v-if="activeTab === 'matches'" class="animate-fade-in">
+              <!-- Filters -->
+              <div class="mb-6 p-6 rounded-xl bg-surface border border-border-subtle">
+                <h3 class="text-size-3 font-semibold text-foreground mb-4">Filtros</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <!-- Status Filter -->
+                  <div>
+                    <label class="block text-size-4 font-semibold text-foreground mb-2">Estado</label>
+                    <select
+                      v-model="matchHistoryStatusFilter"
+                      @change="applyFilters"
+                      class="w-full px-4 py-2 rounded-xl bg-surface-elevated border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none transition-all"
+                    >
+                      <option value="">Todos los estados</option>
+                      <option value="scheduled">Programado</option>
+                      <option value="active">En Curso</option>
+                      <option value="completed">Completado</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </div>
+                  
+                  <!-- Start Date Filter -->
+                  <div>
+                    <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha Inicio</label>
+                    <input
+                      v-model="matchHistoryStartDate"
+                      type="date"
+                      @change="applyFilters"
+                      class="w-full px-4 py-2 rounded-xl bg-surface-elevated border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none transition-all"
+                    />
+                  </div>
+                  
+                  <!-- End Date Filter -->
+                  <div>
+                    <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha Fin</label>
+                    <input
+                      v-model="matchHistoryEndDate"
+                      type="date"
+                      @change="applyFilters"
+                      class="w-full px-4 py-2 rounded-xl bg-surface-elevated border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none transition-all"
+                    />
+                  </div>
+                  
+                  <!-- Clear Filters Button -->
+                  <div class="flex items-end">
+                    <button
+                      @click="clearFilters"
+                      :disabled="!hasActiveFilters"
+                      class="w-full px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-4 h-4" />
+                      <span>Limpiar</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
               <div v-if="matchHistoryLoading" class="text-center py-12">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
                 <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando partidos...</p>
@@ -364,8 +420,20 @@
               </div>
               <div v-else class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
                 <p class="text-size-4 font-regular text-foreground-muted">
-                  No hay partidos registrados
+                  <span v-if="hasActiveFilters">
+                    No se encontraron partidos con los filtros seleccionados
+                  </span>
+                  <span v-else>
+                    No hay partidos registrados
+                  </span>
                 </p>
+                <button
+                  v-if="hasActiveFilters"
+                  @click="clearFilters"
+                  class="mt-4 px-4 py-2 rounded-xl border-2 border-accent bg-accent-subtle text-accent hover:bg-accent hover:text-white transition-all text-size-4 font-semibold"
+                >
+                  Limpiar filtros
+                </button>
               </div>
 
               <!-- Pagination -->
@@ -505,9 +573,19 @@ const matchHistory = ref<any[]>([])
 const matchHistoryLoading = ref(false)
 const activeTab = ref<'ranking' | 'matches'>('ranking')
 const matchHistoryPage = ref(1)
-const matchHistoryPageSize = ref(20)
+const matchHistoryPageSize = ref(10)
 const matchHistoryTotal = ref(0)
 const matchHistoryTotalPages = ref(0)
+
+// Match history filters
+const matchHistoryStatusFilter = ref<string>('')
+const matchHistoryStartDate = ref<string>('')
+const matchHistoryEndDate = ref<string>('')
+
+// Check if any filters are active
+const hasActiveFilters = computed(() => {
+  return !!matchHistoryStatusFilter.value || !!matchHistoryStartDate.value || !!matchHistoryEndDate.value
+})
 
 // Get the previous page from query parameter or use browser history
 const previousPage = computed(() => {
@@ -599,6 +677,24 @@ const loadMatchHistory = async (page: number = 1) => {
   const offset = (page - 1) * matchHistoryPageSize.value
   
   try {
+    // Build query parameters with filters
+    const queryParams: Record<string, string> = {
+      limit: matchHistoryPageSize.value.toString(),
+      offset: offset.toString()
+    }
+    
+    if (matchHistoryStatusFilter.value) {
+      queryParams.status = matchHistoryStatusFilter.value
+    }
+    
+    if (matchHistoryStartDate.value) {
+      queryParams.start_date = matchHistoryStartDate.value
+    }
+    
+    if (matchHistoryEndDate.value) {
+      queryParams.end_date = matchHistoryEndDate.value
+    }
+    
     const response = await $fetch<{
       success: boolean
       matches: any[]
@@ -612,10 +708,7 @@ const loadMatchHistory = async (page: number = 1) => {
         has_previous: boolean
       }
     }>(`/api/players/${playerId}/matches`, {
-      query: { 
-        limit: matchHistoryPageSize.value,
-        offset 
-      }
+      query: queryParams
     }).catch(() => ({ success: false, matches: [], pagination: undefined }))
     
     if (response.success) {
@@ -634,6 +727,19 @@ const loadMatchHistory = async (page: number = 1) => {
 
 const handleMatchHistoryPageChange = (page: number) => {
   loadMatchHistory(page)
+}
+
+const applyFilters = () => {
+  // Reset to first page when filters change
+  loadMatchHistory(1)
+}
+
+const clearFilters = () => {
+  matchHistoryStatusFilter.value = ''
+  matchHistoryStartDate.value = ''
+  matchHistoryEndDate.value = ''
+  // Reload with cleared filters
+  loadMatchHistory(1)
 }
 
 const getOpponentName = (match: any) => {
