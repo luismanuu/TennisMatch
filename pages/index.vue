@@ -302,68 +302,53 @@
           </div>
         </div>
 
-        <!-- Quick Links to Key Features -->
-        <div class="mt-12 grid md:grid-cols-3 gap-6 animate-fade-up animate-delay-4">
+        <!-- Estadísticas y Ranking Info -->
+        <div class="mt-12 grid md:grid-cols-2 gap-6 animate-fade-up animate-delay-4">
+          <!-- Estadísticas Card -->
           <NuxtLink 
             to="/my-ranking"
             class="glass-card-elevated p-6 hover-lift group transition-all"
           >
             <div class="flex items-center gap-4 mb-4">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                <Icon name="heroicons:chart-bar" class="w-6 h-6 text-background" />
+              </div>
+              <div>
+                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-blue-400 transition-colors">
+                  Estadísticas
+                </h3>
+                <p class="text-size-5 text-foreground-muted">Tu rendimiento</p>
+              </div>
+            </div>
+            <p class="text-size-4 text-foreground-muted">
+              Visualiza tus estadísticas detalladas, historial de partidas y progreso de ranking
+            </p>
+          </NuxtLink>
+
+          <!-- Ranking Info Card -->
+          <div 
+            @click="showRankingInfo = true"
+            class="glass-card-elevated p-6 hover-lift group transition-all cursor-pointer"
+          >
+            <div class="flex items-center gap-4 mb-4">
               <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:chart-bar-square" class="w-6 h-6 text-background" />
+                <Icon name="heroicons:information-circle" class="w-6 h-6 text-background" />
               </div>
               <div>
                 <h3 class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors">
-                  Mi Ranking
+                  Ranking Info
                 </h3>
-                <p class="text-size-5 text-foreground-muted">Sigue tu progreso</p>
+                <p class="text-size-5 text-foreground-muted">Sistema de ranking</p>
               </div>
             </div>
             <p class="text-size-4 text-foreground-muted">
-              Visualiza tu ranking, historial de partidas y estadísticas detalladas
+              Aprende cómo funciona el sistema de ranking, tiers y cálculo de ELO
             </p>
-          </NuxtLink>
-
-          <NuxtLink 
-            to="/leaderboard"
-            class="glass-card-elevated p-6 hover-lift group transition-all"
-          >
-            <div class="flex items-center gap-4 mb-4">
-              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
-              </div>
-              <div>
-                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-amber-400 transition-colors">
-                  Leaderboard
-                </h3>
-                <p class="text-size-5 text-foreground-muted">Rankings globales</p>
-              </div>
-            </div>
-            <p class="text-size-4 text-foreground-muted">
-              Descubre los mejores jugadores y compite por el top
-            </p>
-          </NuxtLink>
-
-          <NuxtLink 
-            to="/tournaments"
-            class="glass-card-elevated p-6 hover-lift group transition-all"
-          >
-            <div class="flex items-center gap-4 mb-4">
-              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:sparkles" class="w-6 h-6 text-background" />
-              </div>
-              <div>
-                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-purple-400 transition-colors">
-                  Torneos
-                </h3>
-                <p class="text-size-5 text-foreground-muted">Competencias</p>
-              </div>
-            </div>
-            <p class="text-size-4 text-foreground-muted">
-              Participa en torneos organizados y gana premios
-            </p>
-          </NuxtLink>
+          </div>
         </div>
+
+        <!-- Ranking System Info Modal -->
+        <RankingSystemInfo v-model="showRankingInfo" />
       </div>
     </div>
 
@@ -940,6 +925,9 @@ const stats = computed(() => {
 
 // Rating stats from history
 const ratingStats = ref<{ wins: number; losses: number; win_rate: number; peak_elo: number } | null>(null)
+
+// Ranking Info Modal
+const showRankingInfo = ref(false)
 
 // Load rating stats if player exists
 const loadRatingStats = async () => {
