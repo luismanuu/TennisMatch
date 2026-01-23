@@ -9,13 +9,13 @@
       <div class="container-medium px-6">
         <!-- Header -->
         <div class="text-center mb-12">
-          <NuxtLink 
+          <button 
             v-if="canGoBack"
-            to="/matches" 
-            class="text-size-3 text-foreground-muted hover:text-foreground mb-4 inline-block"
+            @click="goBack"
+            class="text-size-3 text-foreground-muted hover:text-foreground mb-4 inline-block transition-colors"
           >
             ← Volver
-          </NuxtLink>
+          </button>
           <h1 class="text-size-1 font-semibold text-foreground mb-4">
             Perfil del Jugador
           </h1>
@@ -62,15 +62,51 @@
 
         <!-- Profile Content - Regular Player -->
         <div v-else-if="publicPlayer" class="glass-card-elevated p-8">
-          <div class="flex items-start justify-between mb-8">
-            <div>
-              <h2 class="text-size-2 font-semibold text-foreground mb-2">{{ publicPlayer.name }}</h2>
-              <p class="text-size-4 font-regular text-foreground-muted">
-                Miembro desde {{ formatDate(publicPlayer.created_at) }}
-              </p>
-            </div>
-            <div class="w-16 h-16 rounded-2xl bg-accent-subtle flex items-center justify-center">
-              <span class="text-3xl">🎾</span>
+          <!-- Header with Large Rank Icon -->
+          <div class="mb-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+              <!-- Left: Large Rank Icon with Animation -->
+              <div class="flex justify-center lg:justify-start">
+                <div class="relative w-full max-w-[300px] h-[300px] flex items-center justify-center overflow-visible">
+                  <!-- Rank Icon - Animated (League of Legends Style) -->
+                  <RankIconAnimated
+                    v-if="publicPlayer && publicPlayer.elo !== undefined && (publicPlayer.total_matches_played || 0) > 0"
+                    :tier="getTop100TierForPlayer()"
+                    :elo="publicPlayer.elo"
+                    :total-matches-played="publicPlayer.total_matches_played || 0"
+                    size="300px"
+                    class="w-full h-full max-w-[300px] max-h-[300px]"
+                  />
+                  <!-- Unrated placeholder -->
+                  <div v-else class="w-full h-full max-w-[300px] max-h-[300px] flex items-center justify-center">
+                    <div class="w-48 h-48 rounded-2xl bg-surface-elevated border-2 border-border-subtle flex items-center justify-center">
+                      <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted opacity-50" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Player Info -->
+              <div class="flex flex-col gap-4">
+                <div>
+                  <h2 class="text-size-2 font-semibold text-foreground mb-2">{{ publicPlayer.name }}</h2>
+                  <p class="text-size-4 font-regular text-foreground-muted">
+                    Miembro desde {{ formatDate(publicPlayer.created_at) }}
+                  </p>
+                </div>
+
+                <!-- ELO Display -->
+                <div class="flex flex-col gap-2">
+                  <div class="text-size-1 font-bold text-gradient-static">
+                    {{ publicPlayer.elo }} ELO
+                  </div>
+                  <RatingTierBadge 
+                    :elo="publicPlayer.elo" 
+                    :total-matches-played="publicPlayer.total_matches_played || 0"
+                    :placement-matches-completed="publicPlayer.placement_matches_completed || 0"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -86,12 +122,11 @@
               </p>
             </div>
 
-            <!-- ELO Rating -->
-            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
-              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Puntuación ELO</p>
-              <p class="text-size-1 font-semibold text-gradient-static">{{ publicPlayer.elo }}</p>
-              <p class="text-size-4 font-regular text-foreground-muted mt-2">
-                Calificación actual
+            <!-- City -->
+            <div v-if="publicPlayer.city" class="p-6 rounded-xl bg-surface border border-border-subtle">
+              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Ciudad</p>
+              <p class="text-size-3 font-semibold text-foreground">
+                {{ publicPlayer.city.name }}
               </p>
             </div>
           </div>
@@ -457,6 +492,7 @@ definePageMeta({
 })
 
 const route = useRoute()
+const router = useRouter()
 const playerId = route.params.id as string
 
 const { publicPlayer, publicLoading, publicError, fetchPublicPlayer } = usePlayer()
@@ -473,10 +509,34 @@ const matchHistoryPageSize = ref(20)
 const matchHistoryTotal = ref(0)
 const matchHistoryTotalPages = ref(0)
 
+// Get the previous page from query parameter or use browser history
+const previousPage = computed(() => {
+  // Check if there's a 'from' query parameter
+  if (route.query.from && typeof route.query.from === 'string') {
+    return route.query.from
+  }
+  return null
+})
+
 const canGoBack = computed(() => {
-  // Check if we can go back (browser history)
+  // Can go back if we have a previous page or browser history
+  if (previousPage.value) return true
   return typeof window !== 'undefined' && window.history.length > 1
 })
+
+// Function to handle back navigation
+const goBack = () => {
+  if (previousPage.value) {
+    // Navigate to the previous page from query parameter
+    router.push(previousPage.value)
+  } else if (typeof window !== 'undefined' && window.history.length > 1) {
+    // Use browser history to go back
+    router.back()
+  } else {
+    // Fallback to matches page
+    router.push('/matches')
+  }
+}
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString)
@@ -622,6 +682,56 @@ const getMatchStatusClass = (status: string) => {
     cancelled: 'bg-red-500/20 text-red-400 border border-red-500/30'
   }
   return classes[status] || 'bg-surface border border-border-subtle text-foreground-muted'
+}
+
+// Get player tier from ELO (client-side calculation)
+const RATING_TIERS = [
+  { tier: 'Bronze', minElo: 1, maxElo: 1499, color: '#CD7F32' },
+  { tier: 'Silver', minElo: 1500, maxElo: 1999, color: '#C0C0C0' },
+  { tier: 'Gold', minElo: 2000, maxElo: 2499, color: '#FFD700' },
+  { tier: 'Platinum', minElo: 2500, maxElo: 2999, color: '#E5E4E2' },
+  { tier: 'Diamond', minElo: 3000, maxElo: 3499, color: '#B9F2FF' },
+  { tier: 'Master', minElo: 3500, maxElo: 3999, color: '#9932CC' },
+  { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity, color: '#FF4500' },
+]
+
+const getPlayerTier = (elo: number): string => {
+  for (const tier of RATING_TIERS) {
+    if (elo >= tier.minElo && elo <= tier.maxElo) {
+      return tier.tier
+    }
+  }
+  return 'Bronze'
+}
+
+// Get Top 100 tier - only applies when there are 100+ Grandmaster players and player is in top 100
+const getTop100TierForPlayer = () => {
+  const playerTier = getPlayerTier(publicPlayer.value?.elo || 0)
+  
+  if (playerTier !== 'Grandmaster') {
+    return undefined
+  }
+  
+  // If we have tier ranking data
+  if (rankingPosition.value?.position?.tier_rank && rankingPosition.value?.position?.tier_total) {
+    const tierTotal = rankingPosition.value.position.tier_total
+    const tierRank = rankingPosition.value.position.tier_rank
+    
+    // Top100 only applies when:
+    // 1. There are 100 or more Grandmaster players (tierTotal >= 100)
+    // 2. Player is in the top 100 by tier_rank (tierRank <= 100)
+    if (tierTotal >= 100 && tierRank <= 100) {
+      return 'Top100'
+    }
+  }
+  
+  // Fallback: if no tier data but player is Grandmaster and in top 100 globally
+  // Only if there are likely 100+ players total
+  if (rankingPosition.value?.position?.global_rank && rankingPosition.value.position.global_rank <= 100 && rankingPosition.value?.position?.total_players && rankingPosition.value.position.total_players >= 100) {
+    return 'Top100'
+  }
+  
+  return undefined
 }
 
 onMounted(async () => {

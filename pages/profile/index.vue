@@ -146,18 +146,24 @@
             <!-- ELO Rating with Tier -->
             <div class="p-8 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30 hover-lift">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <!-- Left: Rank Icon -->
+                <!-- Left: Rank Icon - Animated (League of Legends Style) -->
                 <div class="flex justify-center md:justify-start">
-                  <div class="relative w-full max-w-[300px] h-[300px] flex items-center justify-center overflow-hidden">
-                    <!-- Rank Icon - Large -->
-                    <img
-                      v-if="rankIconPath && tierInfo && !imageError"
-                      :src="rankIconPath"
-                      :alt="tierInfo ? `${tierInfo.tier} tier icon` : 'Rank icon'"
-                      class="w-full h-full max-w-[300px] max-h-[300px] object-contain z-10 relative"
-                      @error="handleImageError"
-                    >
-                    <Icon v-else name="heroicons:trophy" class="w-48 h-48 text-accent z-10 relative" />
+                  <div class="relative w-full max-w-[300px] h-[300px] flex items-center justify-center overflow-visible">
+                    <!-- Rank Icon - Animated -->
+                    <RankIconAnimated
+                      v-if="tierInfo && player && !isUnrated && (player.total_matches_played || 0) > 0"
+                      :tier="getTop100Tier()"
+                      :elo="player.elo"
+                      :total-matches-played="player.total_matches_played || 0"
+                      size="300px"
+                      class="w-full h-full max-w-[300px] max-h-[300px]"
+                    />
+                    <!-- Unrated/Placement placeholder -->
+                    <div v-else class="w-full h-full max-w-[300px] max-h-[300px] flex items-center justify-center">
+                      <div class="w-48 h-48 rounded-2xl bg-surface-elevated border-2 border-border-subtle flex items-center justify-center">
+                        <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted opacity-50" />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -452,7 +458,6 @@
 <script setup lang="ts">
 import { UserProfile } from '@clerk/vue'
 import { useRankIconAsset } from '~/composables/useRankIcon'
-import { getRatingTier } from '~/server/utils/rating-system'
 
 definePageMeta({
   middleware: 'auth'
@@ -484,10 +489,28 @@ const imageError = ref(false)
 // Check if player is unrated
 const isUnrated = computed(() => (player.value?.total_matches_played ?? 0) === 0)
 
+// Client-side tier calculation (same as other components)
+const RATING_TIERS = [
+  { tier: 'Bronze', minElo: 1, maxElo: 1499, color: '#CD7F32' },
+  { tier: 'Silver', minElo: 1500, maxElo: 1999, color: '#C0C0C0' },
+  { tier: 'Gold', minElo: 2000, maxElo: 2499, color: '#FFD700' },
+  { tier: 'Platinum', minElo: 2500, maxElo: 2999, color: '#E5E4E2' },
+  { tier: 'Diamond', minElo: 3000, maxElo: 3499, color: '#B9F2FF' },
+  { tier: 'Master', minElo: 3500, maxElo: 3999, color: '#9932CC' },
+  { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity, color: '#FF4500' },
+]
+
 // Get tier info and rank icon
 const tierInfo = computed(() => {
   if (!player.value?.elo) return null
-  return getRatingTier(player.value.elo)
+  
+  // Use client-side calculation
+  for (const tier of RATING_TIERS) {
+    if (player.value.elo >= tier.minElo && player.value.elo <= tier.maxElo) {
+      return tier
+    }
+  }
+  return RATING_TIERS[0] // Default to Bronze
 })
 
 const rankIconPath = computed(() => {
@@ -597,6 +620,34 @@ watch(shouldLoadProfile, async (shouldLoad) => {
     await loadProfile()
   }
 }, { immediate: false })
+
+// Get Top 100 tier - only applies when there are 100+ Grandmaster players and player is in top 100
+const getTop100Tier = () => {
+  if (!tierInfo.value || tierInfo.value.tier !== 'Grandmaster') {
+    return undefined
+  }
+  
+  // If we have tier ranking data
+  if (rankingPosition.value?.position?.tier_rank && rankingPosition.value?.position?.tier_total) {
+    const tierTotal = rankingPosition.value.position.tier_total
+    const tierRank = rankingPosition.value.position.tier_rank
+    
+    // Top100 only applies when:
+    // 1. There are 100 or more Grandmaster players (tierTotal >= 100)
+    // 2. Player is in the top 100 by tier_rank (tierRank <= 100)
+    if (tierTotal >= 100 && tierRank <= 100) {
+      return 'Top100'
+    }
+  }
+  
+  // Fallback: if no tier data but player is Grandmaster and in top 100 globally
+  // Only if there are likely 100+ players total
+  if (rankingPosition.value?.position?.global_rank && rankingPosition.value.position.global_rank <= 100 && rankingPosition.value?.position?.total_players && rankingPosition.value.position.total_players >= 100) {
+    return 'Top100'
+  }
+  
+  return undefined
+}
 
 const getPlayerInitials = (name: string) => {
   if (!name) return '?'

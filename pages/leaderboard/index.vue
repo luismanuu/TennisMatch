@@ -342,6 +342,11 @@ const onSearchInput = () => {
 }
 
 const onTierChange = async () => {
+  // If "Todos los tiers" is selected (undefined), automatically switch to "Ver Todos"
+  if (selectedTier.value === undefined) {
+    showAroundMe.value = false
+  }
+  
   if (showAroundMe.value && player.value?.id) {
     // If in "around me" mode, reload around user with new tier
     await loadPlayersAroundUser()
@@ -350,7 +355,7 @@ const onTierChange = async () => {
       topPlayers.value = rankings.value.slice(0, 3)
     }
   } else {
-    // Normal filter
+    // Normal filter (global view)
     await filterByTier(selectedTier.value)
     // Update top players from current ranking
     if (rankings.value.length >= 3) {

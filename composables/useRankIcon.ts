@@ -18,6 +18,8 @@ export function useRankIcon(tier: RatingTier | string | null | undefined): strin
     'Diamond': '/images/ranks/diamond.png',
     'Master': '/images/ranks/master.png',
     'Grandmaster': '/images/ranks/grandmaster.png',
+    'Top100': '/images/ranks/top100.png',
+    'Top 100': '/images/ranks/top100.png',
     'Unrated': '/images/ranks/unrated.png'
   }
 
@@ -42,6 +44,8 @@ export function useRankIconAsset(tier: RatingTier | string | null | undefined): 
     'Diamond': '/images/ranks/diamond.png',
     'Master': '/images/ranks/master.png',
     'Grandmaster': '/images/ranks/grandmaster.png',
+    'Top100': '/images/ranks/top100.png',
+    'Top 100': '/images/ranks/top100.png',
     'Unrated': '/images/ranks/unrated.png'
   }
 

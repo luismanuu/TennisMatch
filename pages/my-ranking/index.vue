@@ -100,16 +100,22 @@
               <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
                 <!-- Left: Large Rank Icon with Animation -->
                 <div class="flex justify-center lg:justify-start">
-                  <div class="relative w-full max-w-[400px] h-[400px] flex items-center justify-center overflow-hidden">
-                    <!-- Rank Icon - Large -->
-                    <img
-                      v-if="rankIconPath && tierInfo && !imageError"
-                      :src="rankIconPath"
-                      :alt="tierInfo ? `${tierInfo.tier} tier icon` : 'Rank icon'"
-                      class="w-full h-full max-w-[400px] max-h-[400px] object-contain z-10 relative"
-                      @error="handleImageError"
-                    >
-                    <Icon v-else name="heroicons:trophy" class="w-64 h-64 text-accent z-10 relative" />
+                  <div class="relative w-full max-w-[400px] h-[400px] flex items-center justify-center overflow-visible">
+                    <!-- Rank Icon - Animated (League of Legends Style) -->
+                    <RankIconAnimated
+                      v-if="tierInfo && player && !isInPlacement && (player.total_matches_played || 0) > 0"
+                      :tier="getTop100Tier()"
+                      :elo="player.elo"
+                      :total-matches-played="player.total_matches_played || 0"
+                      size="400px"
+                      class="w-full h-full max-w-[400px] max-h-[400px]"
+                    />
+                    <!-- Unrated/Placement placeholder -->
+                    <div v-else class="w-full h-full max-w-[400px] max-h-[400px] flex items-center justify-center">
+                      <div class="w-64 h-64 rounded-2xl bg-surface-elevated border-2 border-border-subtle flex items-center justify-center">
+                        <Icon name="heroicons:trophy" class="w-32 h-32 text-foreground-muted opacity-50" />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1177,6 +1183,34 @@ const getTierNameInSpanish = (tier: string | null): string => {
     'Unrated': 'Sin clasificar'
   }
   return tierNames[tier] || tier
+}
+
+// Get Top 100 tier - only applies when there are 100+ Grandmaster players and player is in top 100
+const getTop100Tier = () => {
+  if (!tierInfo.value || tierInfo.value.tier !== 'Grandmaster') {
+    return undefined
+  }
+  
+  // If we have tier ranking data
+  if (position.value?.tier_rank && position.value?.tier_total) {
+    const tierTotal = position.value.tier_total
+    const tierRank = position.value.tier_rank
+    
+    // Top100 only applies when:
+    // 1. There are 100 or more Grandmaster players (tierTotal >= 100)
+    // 2. Player is in the top 100 by tier_rank (tierRank <= 100)
+    if (tierTotal >= 100 && tierRank <= 100) {
+      return 'Top100'
+    }
+  }
+  
+  // Fallback: if no tier data but player is Grandmaster and in top 100 globally
+  // Only if there are likely 100+ players total
+  if (position.value?.global_rank && position.value.global_rank <= 100 && position.value?.total_players && position.value.total_players >= 100) {
+    return 'Top100'
+  }
+  
+  return undefined
 }
 
 // Watch for auth/user changes
