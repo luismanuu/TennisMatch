@@ -1689,6 +1689,11 @@ const loadRatingHistory = async () => {
     return
   }
   
+  if (!userId.value) {
+    ratingHistory.value = null
+    return
+  }
+  
   try {
     const response = await $fetch<{
       success: boolean
@@ -1698,23 +1703,36 @@ const loadRatingHistory = async () => {
       } | null
     }>(`/api/matches/${matchId}/rating-history`, {
       query: { clerk_id: userId.value }
-    }).catch(() => ({ success: false, rating_history: null }))
+    }).catch((err) => {
+      // Log error for debugging but don't throw
+      console.warn('Error loading rating history:', err)
+      return { success: false, rating_history: null }
+    })
     
     if (response.success && response.rating_history) {
-      ratingHistory.value = {
-        player1: response.rating_history.player1 || undefined,
-        player2: response.rating_history.player2 || undefined
-      }
-      // Stop polling if ELO is ready
-      if (eloPollingInterval.value) {
-        clearInterval(eloPollingInterval.value)
-        eloPollingInterval.value = null
+      // Check if we actually have data for at least one player
+      const hasData = response.rating_history.player1 || response.rating_history.player2
+      if (hasData) {
+        ratingHistory.value = {
+          player1: response.rating_history.player1 || undefined,
+          player2: response.rating_history.player2 || undefined
+        }
+        // Stop polling if ELO is ready
+        if (eloPollingInterval.value) {
+          clearInterval(eloPollingInterval.value)
+          eloPollingInterval.value = null
+        }
+      } else {
+        // No rating history exists yet (still calculating)
+        ratingHistory.value = null
       }
     } else {
+      // No rating history exists yet (still calculating)
       ratingHistory.value = null
     }
   } catch (err) {
-    // Silently fail - rating history is optional
+    // Log error for debugging
+    console.warn('Error loading rating history:', err)
     ratingHistory.value = null
   }
 }

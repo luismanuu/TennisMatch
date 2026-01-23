@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { checkIsAdmin } from '~/server/utils/admin'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -25,6 +26,9 @@ export default defineEventHandler(async (event) => {
     await getClerkUser(clerkId)
     
     const supabase = getSupabaseAdmin()
+    
+    // Check if user is admin
+    const isAdmin = await checkIsAdmin(clerkId)
     
     // Get current player
     const { data: currentPlayer, error: playerError } = await supabase
@@ -54,8 +58,8 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Verify user is involved in the match
-    if (match.player1_id !== currentPlayer.id && match.player2_id !== currentPlayer.id) {
+    // Verify user is involved in the match OR is admin
+    if (!isAdmin && match.player1_id !== currentPlayer.id && match.player2_id !== currentPlayer.id) {
       throw createError({
         statusCode: 403,
         statusMessage: 'You can only view rating history for matches you participated in'

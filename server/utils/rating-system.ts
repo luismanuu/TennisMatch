@@ -717,36 +717,73 @@ export async function updateRatingsAfterMatch(
   let llmUsed = false
   let llmFailed = false
   
+  // Retry configuration for LLM calls
+  const LLM_MAX_RETRIES = 2
+  const LLM_RETRY_DELAY_MS = 2000 // 2 seconds between retries
+  
   if (config.openRouterApiKey && match.score) {
-    try {
-      llmResult = await calculateEloWithLLM(
-        {
-          matchId: match.id,
-          player1Id: match.player1_id,
-          player2Id: match.player2_id,
-          player1Elo: player1Effective.elo,
-          player2Elo: player2Effective.elo,
-          score: match.score,
-          winnerId: match.winner_id,
-          tournamentId: match.tournament_id || undefined
-        },
-        supabase,
-        { openRouterApiKey: config.openRouterApiKey }
-      )
-      
-      if (llmResult.success) {
-        llmUsed = true
-      } else {
-        llmFailed = true
-        console.warn('LLM calculation failed, using fallback:', llmResult.error)
-      }
-    } catch (error: any) {
-      llmFailed = true
-      // Check if it's a rate limiting error
-      if (error?.message?.includes('rate limited') || error?.message?.includes('429')) {
-        console.warn('LLM calculation rate limited, using fallback. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.')
-      } else {
-        console.error('LLM calculation error:', error)
+    let retryCount = 0
+    
+    while (retryCount <= LLM_MAX_RETRIES) {
+      try {
+        llmResult = await calculateEloWithLLM(
+          {
+            matchId: match.id,
+            player1Id: match.player1_id,
+            player2Id: match.player2_id,
+            player1Elo: player1Effective.elo,
+            player2Elo: player2Effective.elo,
+            score: match.score,
+            winnerId: match.winner_id,
+            tournamentId: match.tournament_id || undefined
+          },
+          supabase,
+          { openRouterApiKey: config.openRouterApiKey }
+        )
+        
+        if (llmResult.success) {
+          llmUsed = true
+          break // Success, exit retry loop
+        } else {
+          // If validation or parsing failed, retry might help
+          if (retryCount < LLM_MAX_RETRIES) {
+            console.warn(`[LLM] Calculation failed (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, llmResult.error)
+            await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS))
+            retryCount++
+            continue
+          } else {
+            llmFailed = true
+            console.warn('LLM calculation failed after retries, using fallback:', llmResult.error)
+            break
+          }
+        }
+      } catch (error: any) {
+        // Check if it's a rate limiting error
+        if (error?.message?.includes('rate limited') || error?.message?.includes('429')) {
+          // Rate limiting already has retry logic in callOpenRouterAPI, but if it still fails, retry the whole call
+          if (retryCount < LLM_MAX_RETRIES) {
+            console.warn(`[LLM] Rate limited (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying entire call...`)
+            await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS * (retryCount + 1))) // Exponential backoff
+            retryCount++
+            continue
+          } else {
+            llmFailed = true
+            console.warn('LLM calculation rate limited after retries, using fallback. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.')
+            break
+          }
+        } else {
+          // Other errors - retry might help (network issues, timeouts, etc.)
+          if (retryCount < LLM_MAX_RETRIES) {
+            console.warn(`[LLM] Error (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, error.message)
+            await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS * (retryCount + 1))) // Exponential backoff
+            retryCount++
+            continue
+          } else {
+            llmFailed = true
+            console.error('LLM calculation error after retries:', error)
+            break
+          }
+        }
       }
     }
   }

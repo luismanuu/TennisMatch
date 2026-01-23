@@ -4,7 +4,7 @@
 
 -- Query 1: All matches with LLM calculation (successful)
 -- Shows matches where LLM was successfully used to calculate ELO
-SELECT 
+SELECT DISTINCT ON (m.id)
   m.id AS match_id,
   m.score,
   m.status,
@@ -17,7 +17,7 @@ SELECT
   m.llm_calculation_timestamp,
   m.llm_calculation_reasoning,
   m.llm_calculation_failed,
-  -- Get ELO changes from rating_history
+  -- Get ELO changes from rating_history (only non-reversed records, most recent)
   rh1.elo_change AS player1_elo_change,
   rh2.elo_change AS player2_elo_change,
   rh1.elo_before AS player1_elo_before,
@@ -28,10 +28,24 @@ FROM matches m
 LEFT JOIN players p1 ON m.player1_id = p1.id
 LEFT JOIN players p2 ON m.player2_id = p2.id
 LEFT JOIN players w ON m.winner_id = w.id
-LEFT JOIN rating_history rh1 ON m.id = rh1.match_id AND rh1.player_id = m.player1_id
-LEFT JOIN rating_history rh2 ON m.id = rh2.match_id AND rh2.player_id = m.player2_id
+LEFT JOIN LATERAL (
+  SELECT * FROM rating_history 
+  WHERE match_id = m.id 
+    AND player_id = m.player1_id 
+    AND rating_reversed = false
+  ORDER BY created_at DESC
+  LIMIT 1
+) rh1 ON true
+LEFT JOIN LATERAL (
+  SELECT * FROM rating_history 
+  WHERE match_id = m.id 
+    AND player_id = m.player2_id 
+    AND rating_reversed = false
+  ORDER BY created_at DESC
+  LIMIT 1
+) rh2 ON true
 WHERE m.llm_elo_calculated = true
-ORDER BY m.llm_calculation_timestamp DESC
+ORDER BY m.id, m.llm_calculation_timestamp DESC NULLS LAST
 LIMIT 50;
 
 -- Query 2: LLM calculation failures
@@ -76,11 +90,25 @@ SELECT
   rh2.match_rating AS player2_match_rating,
   rh2.match_weight AS player2_match_weight
 FROM matches m
-LEFT JOIN players p1 ON m.player1_id = p1.id
-LEFT JOIN players p2 ON m.player2_id = p2.id
+INNER JOIN players p1 ON m.player1_id = p1.id
+INNER JOIN players p2 ON m.player2_id = p2.id
 LEFT JOIN players w ON m.winner_id = w.id
-LEFT JOIN rating_history rh1 ON m.id = rh1.match_id AND rh1.player_id = m.player1_id
-LEFT JOIN rating_history rh2 ON m.id = rh2.match_id AND rh2.player_id = m.player2_id
+LEFT JOIN LATERAL (
+  SELECT * FROM rating_history 
+  WHERE match_id = m.id 
+    AND player_id = m.player1_id 
+    AND rating_reversed = false
+  ORDER BY created_at DESC
+  LIMIT 1
+) rh1 ON true
+LEFT JOIN LATERAL (
+  SELECT * FROM rating_history 
+  WHERE match_id = m.id 
+    AND player_id = m.player2_id 
+    AND rating_reversed = false
+  ORDER BY created_at DESC
+  LIMIT 1
+) rh2 ON true
 WHERE m.llm_elo_calculated = true OR m.llm_calculation_failed = true
 ORDER BY m.llm_calculation_timestamp DESC NULLS LAST
 LIMIT 20;
@@ -172,10 +200,55 @@ SELECT
   rh2.match_rating AS p2_match_rating,
   rh2.match_weight AS p2_match_weight
 FROM matches m
+INNER JOIN players p1 ON m.player1_id = p1.id
+INNER JOIN players p2 ON m.player2_id = p2.id
+LEFT JOIN LATERAL (
+  SELECT * FROM rating_history 
+  WHERE match_id = m.id 
+    AND player_id = m.player1_id 
+    AND rating_reversed = false
+  ORDER BY created_at DESC
+  LIMIT 1
+) rh1 ON true
+LEFT JOIN LATERAL (
+  SELECT * FROM rating_history 
+  WHERE match_id = m.id 
+    AND player_id = m.player2_id 
+    AND rating_reversed = false
+  ORDER BY created_at DESC
+  LIMIT 1
+) rh2 ON true
+WHERE m.llm_elo_calculated = true
+ORDER BY m.llm_calculation_timestamp DESC NULLS LAST
+LIMIT 10;
+
+-- Query 9: Diagnostic - Check matches with missing player data
+-- Helps identify why players might not be showing up
+SELECT 
+  m.id AS match_id,
+  m.score,
+  m.player1_id,
+  m.player2_id,
+  m.status,
+  p1.id AS p1_exists,
+  p1.name AS player1_name,
+  p1.deleted_at AS p1_deleted,
+  p2.id AS p2_exists,
+  p2.name AS player2_name,
+  p2.deleted_at AS p2_deleted,
+  m.llm_elo_calculated,
+  COUNT(rh1.id) AS rh1_count,
+  COUNT(rh2.id) AS rh2_count
+FROM matches m
 LEFT JOIN players p1 ON m.player1_id = p1.id
 LEFT JOIN players p2 ON m.player2_id = p2.id
-LEFT JOIN rating_history rh1 ON m.id = rh1.match_id AND rh1.player_id = m.player1_id
-LEFT JOIN rating_history rh2 ON m.id = rh2.match_id AND rh2.player_id = m.player2_id
+LEFT JOIN rating_history rh1 ON m.id = rh1.match_id 
+  AND rh1.player_id = m.player1_id 
+  AND rh1.rating_reversed = false
+LEFT JOIN rating_history rh2 ON m.id = rh2.match_id 
+  AND rh2.player_id = m.player2_id 
+  AND rh2.rating_reversed = false
 WHERE m.llm_elo_calculated = true
-ORDER BY m.llm_calculation_timestamp DESC
-LIMIT 10;
+GROUP BY m.id, m.score, m.player1_id, m.player2_id, m.status, p1.id, p1.name, p1.deleted_at, p2.id, p2.name, p2.deleted_at, m.llm_elo_calculated
+ORDER BY m.llm_calculation_timestamp DESC NULLS LAST
+LIMIT 20;
