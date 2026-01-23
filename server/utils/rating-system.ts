@@ -47,9 +47,10 @@ export const ELO_DECAY_FLOOR = 500
 const ELO_HIGH_RATED_THRESHOLD = 3500
 
 // Win streak bonus
-const WIN_STREAK_BONUS_PER_WIN = 6
-const WIN_STREAK_BONUS_MAX_WINS = 8
-const WIN_STREAK_BONUS_MAX = WIN_STREAK_BONUS_PER_WIN * WIN_STREAK_BONUS_MAX_WINS // 48
+// Bonus starts after 2 consecutive wins: 2 wins = +6, 3+ wins = +12 (capped)
+const WIN_STREAK_BONUS_MIN_WINS = 2 // Bonus only applies after this many wins
+const WIN_STREAK_BONUS_2_WINS = 6 // Bonus for exactly 2 consecutive wins
+const WIN_STREAK_BONUS_MAX = 12 // Maximum bonus for 3+ consecutive wins
 
 // MMR to ELO conversion
 const MMR_ELO_CENTER = 2250
@@ -250,11 +251,21 @@ export function getMmrKFactor(
 
 /**
  * Calculate win streak bonus
- * +6 ELO per consecutive win, capped at 8 wins (max +48)
+ * Bonus starts after 2 consecutive wins: 2 wins = +6, 3+ wins = +12 (capped)
+ * Examples:
+ * - 0-1 wins: 0 bonus
+ * - 2 wins: +6 bonus
+ * - 3 wins: +12 bonus
+ * - 4+ wins: +12 bonus (capped)
  */
 export function calculateWinStreakBonus(winStreak: number): number {
-  const effectiveStreak = Math.min(winStreak, WIN_STREAK_BONUS_MAX_WINS)
-  return effectiveStreak * WIN_STREAK_BONUS_PER_WIN
+  if (winStreak < WIN_STREAK_BONUS_MIN_WINS) {
+    return 0 // No bonus until 2 wins
+  }
+  if (winStreak === 2) {
+    return WIN_STREAK_BONUS_2_WINS // +6 for exactly 2 wins
+  }
+  return WIN_STREAK_BONUS_MAX // +12 for 3+ wins
 }
 
 /**
@@ -351,26 +362,25 @@ export function calculateELOChange(
   player1Change = applyConvergence(player1Elo, player1Mmr, player1Change, winnerId === 1)
   player2Change = applyConvergence(player2Elo, player2Mmr, player2Change, winnerId === 2)
   
-  // Calculate win streak bonuses (only for rated players on wins)
+  // Calculate win streak bonuses (only for rated players on wins, starts after 2 consecutive wins)
   let player1WinStreakBonus = 0
   let player2WinStreakBonus = 0
   
   if (winnerId === 1 && !player1IsUnrated) {
-    player1WinStreakBonus = calculateWinStreakBonus(player1WinStreak + 1) - calculateWinStreakBonus(player1WinStreak)
-    // Only apply bonus up to the cap
-    if (player1WinStreak < WIN_STREAK_BONUS_MAX_WINS) {
+    const newStreak = player1WinStreak + 1
+    // Bonus only applies if the new streak is at least 2 wins
+    if (newStreak >= WIN_STREAK_BONUS_MIN_WINS) {
+      player1WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player1WinStreak)
       player1Change += player1WinStreakBonus
-    } else {
-      player1WinStreakBonus = 0
     }
   }
   
   if (winnerId === 2 && !player2IsUnrated) {
-    player2WinStreakBonus = calculateWinStreakBonus(player2WinStreak + 1) - calculateWinStreakBonus(player2WinStreak)
-    if (player2WinStreak < WIN_STREAK_BONUS_MAX_WINS) {
+    const newStreak = player2WinStreak + 1
+    // Bonus only applies if the new streak is at least 2 wins
+    if (newStreak >= WIN_STREAK_BONUS_MIN_WINS) {
+      player2WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player2WinStreak)
       player2Change += player2WinStreakBonus
-    } else {
-      player2WinStreakBonus = 0
     }
   }
   
@@ -793,11 +803,30 @@ export async function updateRatingsAfterMatch(
   
   if (llmUsed && llmResult) {
     // Use LLM-calculated ELO changes
+    // The LLM should already include win streak bonuses in its calculation
+    // Calculate what the bonus would be for tracking purposes (only applies after 2 consecutive wins)
+    let player1WinStreakBonus = 0
+    let player2WinStreakBonus = 0
+    
+    if (winnerId === 1 && !player1IsUnrated) {
+      const newStreak = player1.win_streak + 1
+      if (newStreak >= WIN_STREAK_BONUS_MIN_WINS) {
+        player1WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player1.win_streak)
+      }
+    }
+    
+    if (winnerId === 2 && !player2IsUnrated) {
+      const newStreak = player2.win_streak + 1
+      if (newStreak >= WIN_STREAK_BONUS_MIN_WINS) {
+        player2WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player2.win_streak)
+      }
+    }
+    
     eloResult = {
       player1Change: Math.round(llmResult.player1EloChange),
       player2Change: Math.round(llmResult.player2EloChange),
-      player1WinStreakBonus: 0, // LLM doesn't calculate streak bonuses
-      player2WinStreakBonus: 0
+      player1WinStreakBonus, // Track for display, but LLM should have included it
+      player2WinStreakBonus  // Track for display, but LLM should have included it
     }
   } else {
     // Use fallback ELO calculation

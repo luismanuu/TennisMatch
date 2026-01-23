@@ -189,11 +189,23 @@ ${context.headToHead.length > 0
 1. **ELO Changes**: Calculate ELO changes for both players. The changes MUST sum to zero (zero-sum property):
    - If ${context.player1.name} gains +X ELO, ${context.player2.name} must lose -X ELO
    - Formula: player1_elo_change + player2_elo_change = 0
-   - **Typical ELO change ranges**: 
+   - **Typical ELO change ranges** (base calculation, before win streak bonus): 
      * Close match (similar ratings): 15-25 points for winner
      * Moderate difference (100-200 ELO): 20-35 points for winner
      * Large difference (>200 ELO): 10-20 points for higher rated winner, 30-50 points for upset
    - Higher match weight should result in higher ELO changes within these ranges
+   - **WIN STREAK BONUS**: If the winner has 2 or more consecutive wins, ADD bonus points to their ELO change:
+     * Bonus starts after 2 consecutive wins (no bonus for just 1 win)
+     * +6 ELO bonus for exactly 2 consecutive wins
+     * +12 ELO bonus for 3+ consecutive wins (capped at +12)
+     * Examples:
+       - 1 win streak: No bonus (0 ELO)
+       - 2 wins streak: +6 ELO bonus
+       - 3 wins streak: +12 ELO bonus
+       - 4+ wins streak: +12 ELO bonus (capped at maximum)
+     * Example: If base ELO change is +20 and winner has 2 consecutive wins, final change = +20 + 6 = +26 ELO
+     * Example: If base ELO change is +20 and winner has 3 consecutive wins, final change = +20 + 12 = +32 ELO
+     * The loser does NOT get a bonus (they lose the same amount the winner gains, maintaining zero-sum)
 
 2. **Match Weight Consideration**: The match weight (${context.matchWeightFactors.finalWeight}) should influence the magnitude of ELO changes:
    - Higher weight = more significant ELO changes (toward upper end of typical ranges)
@@ -241,7 +253,8 @@ Return a valid JSON object with the following structure:
    - Score margin (games won/lost)
    - Match weight factors
    - Recent form and head-to-head
-   - **Win/Loss streaks** (players on winning streaks may deserve slightly higher ELO gains; players on losing streaks may deserve slightly lower ELO losses)
+   - **Win Streak Bonus**: Explicitly state if you added win streak bonus points (+6 for 2 consecutive wins, +12 for 3+ consecutive wins, capped at +12) to the winner's ELO change. Remember: no bonus for just 1 win, bonus only starts after 2 consecutive wins.
+   - **Loss Streaks**: Players on losing streaks don't get bonus points, but you may consider their form when calculating base ELO changes
 
 Now calculate the ELO changes and return the JSON response.`
 }

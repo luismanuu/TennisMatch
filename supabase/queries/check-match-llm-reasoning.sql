@@ -27,14 +27,14 @@ SELECT
   m.llm_calculation_timestamp,
   m.llm_calculation_reasoning AS full_reasoning_from_matches,
   
-  -- Reasoning from rating_history (fallback - may contain preview even if matches table doesn't)
-  COALESCE(
-    m.llm_calculation_reasoning,
-    rh1.reasoning_preview,
-    rh2.reasoning_preview
-  ) AS reasoning_any_source,
-  rh1.reasoning_preview AS reasoning_preview_p1,
-  rh2.reasoning_preview AS reasoning_preview_p2,
+  -- Reasoning preview from rating_history (same for both players since reasoning is about the match)
+  -- Using COALESCE to get reasoning from either player's rating_history entry
+  CASE 
+    WHEN COALESCE(rh1.reasoning_preview, rh2.reasoning_preview) IS NOT NULL 
+         AND LENGTH(COALESCE(rh1.reasoning_preview, rh2.reasoning_preview)) > 500 THEN
+      LEFT(COALESCE(rh1.reasoning_preview, rh2.reasoning_preview), 500) || '...'
+    ELSE COALESCE(rh1.reasoning_preview, rh2.reasoning_preview)
+  END AS reasoning_preview,
   
   -- Diagnostic: Why might reasoning be missing?
   CASE 
@@ -60,8 +60,8 @@ SELECT
   rh2.match_weight AS player2_match_weight
 
 FROM matches m
-LEFT JOIN players p1 ON m.player1_id = p1.id
-LEFT JOIN players p2 ON m.player2_id = p2.id
+INNER JOIN players p1 ON m.player1_id = p1.id
+INNER JOIN players p2 ON m.player2_id = p2.id
 LEFT JOIN players w ON m.winner_id = w.id
 LEFT JOIN LATERAL (
   SELECT * FROM rating_history 
