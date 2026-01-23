@@ -655,7 +655,9 @@ const getOpponentInitials = (match: any) => {
 
 const formatMatchDate = (dateString: string) => {
   const date = new Date(dateString)
+  // Use Ecuador timezone for display
   return date.toLocaleDateString('es-ES', {
+    timeZone: 'America/Guayaquil',
     year: 'numeric',
     month: 'long',
     day: 'numeric',

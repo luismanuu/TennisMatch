@@ -1409,6 +1409,7 @@
 import type { Match, MatchMessage } from '~/types'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
+import { getCurrentEcuadorDatetimeLocal } from '~/composables/useTimezone'
 
 definePageMeta({
   middleware: 'auth'
@@ -1469,15 +1470,9 @@ const acceptMatchForm = ref({
 })
 const acceptMatchFormError = ref<string | null>(null)
 
-// Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm)
+// Get current date/time in datetime-local format (YYYY-MM-DDTHH:mm) using Ecuador timezone
 const minDateTime = computed(() => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hours}:${minutes}`
+  return getCurrentEcuadorDatetimeLocal()
 })
 
 // Check if selected reschedule date is in the past

@@ -484,7 +484,9 @@ const getBracketTypeLabel = (bracketType: string) => {
 }
 
 const formatDeadline = (deadline: string) => {
+  // Use Ecuador timezone for display
   return new Date(deadline).toLocaleDateString('es-ES', {
+    timeZone: 'America/Guayaquil',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
