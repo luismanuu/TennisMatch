@@ -339,7 +339,7 @@
             <InsufficientDataMessage v-else message="Juega al menos 1 partido para ver tus rachas" class="mb-6" />
 
             <!-- Day of Week Stats -->
-            <div v-if="advancedStats?.has_sufficient_data?.day_of_week" class="glass-card-elevated p-6 mb-6 animate-fade-up">
+            <div v-if="advancedStats?.has_sufficient_data?.day_of_week" class="glass-card-elevated p-4 sm:p-6 mb-6 animate-fade-up overflow-x-hidden">
               <div class="flex items-center gap-3 mb-4">
                 <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" />
                 <h3 class="text-size-3 font-semibold text-foreground">Rendimiento por Día de la Semana</h3>
@@ -349,7 +349,7 @@
             <InsufficientDataMessage v-else message="Necesitas partidos en al menos 3 días diferentes" class="mb-6" />
 
             <!-- Time of Day Stats -->
-            <div v-if="advancedStats?.has_sufficient_data?.time_of_day" class="glass-card-elevated p-6 mb-6 animate-fade-up">
+            <div v-if="advancedStats?.has_sufficient_data?.time_of_day" class="glass-card-elevated p-4 sm:p-6 mb-6 animate-fade-up overflow-x-hidden">
               <div class="flex items-center gap-3 mb-4">
                 <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
                 <h3 class="text-size-3 font-semibold text-foreground">Rendimiento por Hora del Día</h3>

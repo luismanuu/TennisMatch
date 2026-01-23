@@ -30,10 +30,10 @@
             v-for="(label, i) in xLabels" 
             :key="'x-'+i"
             :x="padding.left + i * ((width - padding.left - padding.right) / 4)"
-            :y="padding.top - 8"
+            :y="padding.top - (isMobile ? 10 : 8)"
             text-anchor="middle"
             fill="var(--foreground-muted)"
-            font-size="10"
+            class="chart-x-label"
             font-weight="500"
           >
             {{ label }}%
@@ -67,11 +67,11 @@
             />
             <!-- Time label on the left -->
             <text
-              :x="padding.left - 12"
+              :x="padding.left - (isMobile ? 10 : 12)"
               :y="bar.y + bar.height / 2 + 5"
               text-anchor="end"
               fill="var(--foreground)"
-              font-size="12"
+              class="chart-day-label"
               font-weight="600"
             >
               {{ bar.label }}
@@ -82,7 +82,7 @@
               :y="bar.y + bar.height / 2 + 5"
               text-anchor="start"
               :fill="bar.width > 40 ? 'var(--foreground)' : 'var(--foreground-muted)'"
-              font-size="11"
+              class="chart-value-label"
               font-weight="600"
             >
               {{ bar.winRate }}%
@@ -134,9 +134,29 @@ interface Props {
 const props = defineProps<Props>()
 
 const chartContainer = ref<HTMLElement | null>(null)
+const isMobile = ref(false)
+
+const checkMobile = () => {
+  isMobile.value = window.innerWidth < 768
+}
+
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
+
 const width = 600
 const height = 240
-const padding = { top: 30, right: 80, bottom: 20, left: 90 }
+const padding = computed(() => {
+  if (isMobile.value) {
+    return { top: 40, right: 50, bottom: 20, left: 105 }
+  }
+  return { top: 30, right: 80, bottom: 20, left: 90 }
+})
 
 const tooltip = ref({
   show: false,
@@ -174,14 +194,15 @@ const bars = computed(() => {
   
   if (orderedData.length === 0) return []
   
+  const pad = padding.value
   const numBars = orderedData.length
-  const availableHeight = height - padding.top - padding.bottom
+  const availableHeight = height - pad.top - pad.bottom
   const barHeight = Math.max(32, Math.min(40, (availableHeight / Math.max(numBars, 4)) * 0.85))
   const barSpacing = numBars > 1 ? (availableHeight - (numBars * barHeight)) / (numBars + 1) : (availableHeight - barHeight) / 2
-  const maxWidth = width - padding.left - padding.right
+  const maxWidth = width - pad.left - pad.right
   
   return orderedData.map((item, index) => {
-    const y = padding.top + barSpacing + index * (barHeight + barSpacing)
+    const y = pad.top + barSpacing + index * (barHeight + barSpacing)
     const winRate = item.win_rate || 0
     const barWidth = (winRate / 100) * maxWidth
     
@@ -236,11 +257,14 @@ const hideTooltip = () => {
   width: 100%;
   height: 240px;
   min-height: 220px;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 svg {
   overflow: visible;
   display: block;
+  max-width: 100%;
 }
 
 .bars rect {
@@ -250,5 +274,44 @@ svg {
 .bars rect:hover {
   opacity: 0.9;
   filter: brightness(1.1);
+}
+
+/* Default font sizes for desktop */
+.chart-x-label {
+  font-size: 10px;
+}
+
+.chart-day-label {
+  font-size: 12px;
+}
+
+.chart-value-label {
+  font-size: 11px;
+}
+
+/* Larger font sizes for mobile */
+@media (max-width: 767px) {
+  .time-of-day-chart-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  
+  .chart-x-label {
+    font-size: 16px;
+  }
+  
+  .chart-day-label {
+    font-size: 18px;
+  }
+  
+  .chart-value-label {
+    font-size: 17px;
+  }
+  
+  svg {
+    max-width: 100%;
+    overflow: hidden;
+  }
 }
 </style>
