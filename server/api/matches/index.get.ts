@@ -13,6 +13,7 @@ export default defineEventHandler(async (event) => {
     const startDate = query.start_date as string | undefined
     const endDate = query.end_date as string | undefined
     const skip24hFilter = query.skip_24h_filter === 'true'
+    const opponentId = query.opponent_id as string | undefined
     
     if (!clerk_id) {
       throw createError({
@@ -55,11 +56,17 @@ export default defineEventHandler(async (event) => {
         player1:players!player1_id(
           id,
           name,
+          elo,
+          total_matches_played,
+          placement_matches_completed,
           category:categories(id, name, description, order)
         ),
         player2:players!player2_id(
           id,
           name,
+          elo,
+          total_matches_played,
+          placement_matches_completed,
           category:categories(id, name, description, order)
         ),
         pending_player2:pending_players!pending_player2_id(
@@ -92,7 +99,221 @@ export default defineEventHandler(async (event) => {
           )
         )
       `)
-      .or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
+    
+    // Apply opponent filter if provided
+    // Filter matches where current player is one player and opponent is the other
+    if (opponentId) {
+      // Use two separate queries and combine results
+      // Match where current player is player1 and opponent is player2
+      let query1 = supabase
+        .from('matches')
+        .select(`
+          *,
+          player1:players!player1_id(
+            id,
+            name,
+            elo,
+            total_matches_played,
+            placement_matches_completed,
+            category:categories(id, name, description, order)
+          ),
+          player2:players!player2_id(
+            id,
+            name,
+            elo,
+            total_matches_played,
+            placement_matches_completed,
+            category:categories(id, name, description, order)
+          ),
+          pending_player2:pending_players!pending_player2_id(
+            id,
+            name,
+            email,
+            category:categories(id, name, description, order),
+            status,
+            invited_by_player_id
+          ),
+          winner:players!winner_id(
+            id,
+            name,
+            status
+          ),
+          tournament:tournaments(
+            id,
+            name,
+            category_id
+          ),
+          tournament_match:tournament_matches(
+            id,
+            bracket_type,
+            round_number,
+            group_id,
+            round_deadline,
+            group:tournament_groups(
+              id,
+              group_name
+            )
+          )
+        `)
+        .eq('player1_id', currentPlayer.id)
+        .eq('player2_id', opponentId)
+      
+      // Match where current player is player2 and opponent is player1
+      let query2 = supabase
+        .from('matches')
+        .select(`
+          *,
+          player1:players!player1_id(
+            id,
+            name,
+            elo,
+            total_matches_played,
+            placement_matches_completed,
+            category:categories(id, name, description, order)
+          ),
+          player2:players!player2_id(
+            id,
+            name,
+            elo,
+            total_matches_played,
+            placement_matches_completed,
+            category:categories(id, name, description, order)
+          ),
+          pending_player2:pending_players!pending_player2_id(
+            id,
+            name,
+            email,
+            category:categories(id, name, description, order),
+            status,
+            invited_by_player_id
+          ),
+          winner:players!winner_id(
+            id,
+            name,
+            status
+          ),
+          tournament:tournaments(
+            id,
+            name,
+            category_id
+          ),
+          tournament_match:tournament_matches(
+            id,
+            bracket_type,
+            round_number,
+            group_id,
+            round_deadline,
+            group:tournament_groups(
+              id,
+              group_name
+            )
+          )
+        `)
+        .eq('player1_id', opponentId)
+        .eq('player2_id', currentPlayer.id)
+      
+      // Apply status filter if provided
+      if (status) {
+        query1 = query1.eq('status', status)
+        query2 = query2.eq('status', status)
+      } else {
+        query1 = query1.neq('status', 'cancelled')
+        query2 = query2.neq('status', 'cancelled')
+      }
+      
+      // Apply date filters if provided
+      if (startDate || endDate) {
+        if (startDate && endDate) {
+          query1 = query1.or(`scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`)
+          query2 = query2.or(`scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`)
+        } else if (startDate) {
+          query1 = query1.or(`scheduled_at.gte.${startDate},scheduled_at.is.null`)
+          query2 = query2.or(`scheduled_at.gte.${startDate},scheduled_at.is.null`)
+        } else if (endDate) {
+          query1 = query1.or(`scheduled_at.lte.${endDate},scheduled_at.is.null`)
+          query2 = query2.or(`scheduled_at.lte.${endDate},scheduled_at.is.null`)
+        }
+      } else if (!status && !skip24hFilter) {
+        const now = new Date()
+        const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
+        query1 = query1.or(`scheduled_at.gte.${twentyFourHoursAgo.toISOString()},scheduled_at.is.null`)
+        query2 = query2.or(`scheduled_at.gte.${twentyFourHoursAgo.toISOString()},scheduled_at.is.null`)
+      }
+      
+      // Execute both queries
+      const [result1, result2] = await Promise.all([
+        query1.order('scheduled_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
+        query2.order('scheduled_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
+      ])
+      
+      if (result1.error || result2.error) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Failed to fetch matches',
+          data: {
+            error1: result1.error,
+            error2: result2.error
+          }
+        })
+      }
+      
+      // Combine results and remove duplicates
+      const allMatches = [...(result1.data || []), ...(result2.data || [])]
+      const uniqueMatches = Array.from(
+        new Map(allMatches.map((m: any) => [m.id, m])).values()
+      )
+      
+      // Sort combined results
+      uniqueMatches.sort((a: any, b: any) => {
+        const getSortDate = (match: any) => {
+          if (match.status === 'completed' && match.played_at) {
+            return match.played_at
+          }
+          return match.scheduled_at || match.created_at
+        }
+        
+        const dateAStr = getSortDate(a)
+        const dateBStr = getSortDate(b)
+        
+        if (!dateAStr && !dateBStr) return 0
+        if (!dateAStr) return 1
+        if (!dateBStr) return -1
+        
+        const dateA = new Date(dateAStr).getTime()
+        const dateB = new Date(dateBStr).getTime()
+        
+        if (isNaN(dateA) && isNaN(dateB)) return 0
+        if (isNaN(dateA)) return 1
+        if (isNaN(dateB)) return -1
+        
+        return dateB - dateA
+      })
+      
+      // Continue with the rest of the logic using uniqueMatches
+      let filteredData = uniqueMatches.map((match: any) => ({ ...match }))
+      
+      // Handle pending matches query separately if needed (only if not filtering by opponent)
+      // For opponent filter, we skip pending matches as they're not relevant
+      
+      // Calculate pagination
+      const total = filteredData.length
+      const totalPages = Math.ceil(total / limit)
+      const paginatedData = filteredData.slice(offset, offset + limit)
+      
+      return {
+        matches: paginatedData,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasMore: page < totalPages
+        }
+      }
+    } else {
+      // No opponent filter: show all matches where user is player1 or player2
+      matchesQuery = matchesQuery.or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
+    }
     
     // Apply status filter if provided
     if (status) {
@@ -159,11 +380,17 @@ export default defineEventHandler(async (event) => {
         player1:players!player1_id(
           id,
           name,
+          elo,
+          total_matches_played,
+          placement_matches_completed,
           category:categories(id, name, description, order)
         ),
         player2:players!player2_id(
           id,
           name,
+          elo,
+          total_matches_played,
+          placement_matches_completed,
           category:categories(id, name, description, order)
         ),
         pending_player2:pending_players!pending_player2_id(

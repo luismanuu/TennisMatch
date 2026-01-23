@@ -17,6 +17,7 @@ export const useMatches = () => {
     start_date?: string
     end_date?: string
     skip_24h_filter?: boolean
+    opponent_id?: string
   }
   
   const fetchMatches = async (clerkId?: string, page: number = 1, limit: number = 10, filters?: MatchFilters) => {
@@ -38,6 +39,7 @@ export const useMatches = () => {
       if (filters?.start_date) queryParams.start_date = filters.start_date
       if (filters?.end_date) queryParams.end_date = filters.end_date
       if (filters?.skip_24h_filter) queryParams.skip_24h_filter = 'true'
+      if (filters?.opponent_id) queryParams.opponent_id = filters.opponent_id
       
       const response = await $fetch<{
         matches: Match[]

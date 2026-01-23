@@ -267,21 +267,52 @@
                 </div>
                 <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
               </NuxtLink>
-              <li 
-                v-for="(feature, index) in dashboardFeatures" 
-                :key="index" 
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-              >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:check-circle" class="w-6 h-6 text-accent" />
-                </div>
-                <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors block">
-                    {{ feature }}
-                  </span>
-                </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
-              </li>
+              <template v-for="(feature, index) in dashboardFeatures" :key="index">
+                <NuxtLink
+                  v-if="feature === 'Gestionar tu perfil de jugador'"
+                  to="/profile"
+                  class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-green-500/30 hover:border-green-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+                >
+                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <Icon name="heroicons:user-circle" class="w-6 h-6 text-background" />
+                  </div>
+                  <div class="flex-1">
+                    <span class="text-size-3 font-semibold text-foreground group-hover:text-green-400 transition-colors block">
+                      {{ feature }}
+                    </span>
+                  </div>
+                  <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-green-400 group-hover:translate-x-1 transition-all" />
+                </NuxtLink>
+                <NuxtLink
+                  v-else-if="feature === 'Ver y crear torneos'"
+                  to="/organizer/tournaments"
+                  class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-purple-500/30 hover:border-purple-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+                >
+                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
+                  </div>
+                  <div class="flex-1">
+                    <span class="text-size-3 font-semibold text-foreground group-hover:text-purple-400 transition-colors block">
+                      {{ feature }}
+                    </span>
+                  </div>
+                  <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+                </NuxtLink>
+                <li 
+                  v-else
+                  class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
+                >
+                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <Icon name="heroicons:check-circle" class="w-6 h-6 text-accent" />
+                  </div>
+                  <div class="flex-1">
+                    <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors block">
+                      {{ feature }}
+                    </span>
+                  </div>
+                  <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
+                </li>
+              </template>
             </ul>
           </div>
         </div>
@@ -906,19 +937,20 @@ const dashboardFeatures = computed(() => {
 const stats = computed(() => {
   const totalMatches = player.value?.total_matches_played || 0
   const elo = player.value?.elo || 1000
-  const winStreak = player.value?.win_streak || 0
   const placementMatches = player.value?.placement_matches_completed || 0
   
-  // Calculate win rate if we have rating history
+  // Calculate win rate and total wins if we have rating history
   let winRate = '-'
+  let totalWins = 0
   if (ratingStats.value && ratingStats.value.wins + ratingStats.value.losses > 0) {
     winRate = `${Math.round(ratingStats.value.win_rate)}%`
+    totalWins = ratingStats.value.wins || 0
   }
   
   return [
     { value: elo.toLocaleString(), label: 'Puntos ELO', icon: 'heroicons:trophy' },
     { value: totalMatches.toString(), label: 'Partidos', icon: 'heroicons:calendar' },
-    { value: winStreak > 0 ? `${winStreak} 🔥` : '0', label: 'Racha', icon: 'heroicons:fire' },
+    { value: totalWins.toString(), label: 'Victorias', icon: 'heroicons:trophy' },
     { value: winRate, label: 'Win Rate', icon: 'heroicons:chart-bar' }
   ]
 })

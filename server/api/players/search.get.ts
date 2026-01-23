@@ -18,6 +18,9 @@ export default defineEventHandler(async (event) => {
       .select(`
         id,
         name,
+        elo,
+        total_matches_played,
+        placement_matches_completed,
         category:categories(id, name, description, order)
       `)
       .ilike('name', `%${searchTerm.trim()}%`)

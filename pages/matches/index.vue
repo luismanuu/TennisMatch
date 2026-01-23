@@ -117,6 +117,67 @@
           </button>
         </div>
 
+        <!-- Opponent Filter -->
+        <div v-if="!loading && !error" class="mb-4 sm:mb-6 animate-fade-up animate-delay-1 relative z-10">
+          <label class="block text-size-4 font-semibold text-foreground mb-2 text-center sm:text-left">Filtrar por Oponente</label>
+          <div class="relative max-w-md mx-auto sm:mx-0" style="z-index: 100;">
+            <input
+              v-model="opponentSearchQuery"
+              type="text"
+              @input="handleOpponentSearch"
+              @focus="showOpponentSearchResults = true"
+              @blur="handleInputBlur"
+              class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              placeholder="Buscar oponente por nombre..."
+            />
+            <!-- Search Results -->
+            <div 
+              v-if="showOpponentSearchResults && opponentSearchResults.length > 0" 
+              class="absolute z-[100] w-full mt-2 border border-border-subtle rounded-xl bg-surface shadow-2xl max-h-60 overflow-y-auto"
+              style="position: absolute; z-index: 100;"
+              @mousedown.prevent
+            >
+              <button
+                v-for="result in opponentSearchResults"
+                :key="result.id"
+                type="button"
+                @click.stop="selectOpponent(result)"
+                @mousedown.stop
+                class="w-full px-4 py-3 text-left hover:bg-accent-subtle/50 active:bg-accent-subtle transition-colors border-b border-border-subtle last:border-b-0 cursor-pointer"
+              >
+                <div class="flex items-center gap-2">
+                  <p class="text-size-3 font-semibold text-foreground">{{ result.name }}</p>
+                  <div v-if="getPlayerTier(result)" class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-border-subtle">
+                    <img
+                      v-if="getPlayerRankIcon(result)"
+                      :src="getPlayerRankIcon(result)"
+                      :alt="`${getPlayerTier(result)} tier icon`"
+                      class="w-4 h-4 object-contain"
+                    >
+                    <p class="text-size-4 font-regular text-foreground-muted">
+                      {{ getTierNameInSpanish(getPlayerTier(result)) }}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+          <div v-if="opponentFilter" class="mt-2 p-3 rounded-xl bg-accent-subtle/50 border border-accent/30 max-w-md mx-auto sm:mx-0">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-size-4 text-foreground-muted mb-1">Oponente seleccionado:</p>
+                <p class="text-size-3 font-semibold text-foreground">{{ selectedOpponentName }}</p>
+              </div>
+              <button
+                @click="clearOpponentFilter"
+                class="p-1 rounded-lg hover:bg-accent/20 transition-colors"
+              >
+                <Icon name="heroicons:x-mark" class="w-5 h-5 text-foreground-muted" />
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Status Filter -->
         <div v-if="!loading && !error" class="mb-6 sm:mb-8 flex gap-2 sm:gap-3 flex-wrap justify-center animate-fade-up animate-delay-1">
           <button
@@ -239,9 +300,15 @@
                       <p v-else class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-1 truncate">
                         Jugador 1
                       </p>
-                      <div v-if="match.player1?.category" class="px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block">
+                      <div v-if="getPlayerTier(match.player1)" class="flex items-center gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block">
+                        <img
+                          v-if="getPlayerRankIcon(match.player1)"
+                          :src="getPlayerRankIcon(match.player1)"
+                          :alt="`${getPlayerTier(match.player1)} tier icon`"
+                          class="w-4 h-4 sm:w-5 sm:h-5 object-contain"
+                        >
                         <p class="text-xs sm:text-size-4 font-regular text-foreground-muted">
-                          {{ match.player1.category.name }}
+                          {{ getTierNameInSpanish(getPlayerTier(match.player1)) }}
                         </p>
                       </div>
                     </div>
@@ -288,9 +355,15 @@
                       <p v-else class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-1 truncate">
                         Jugador 2
                       </p>
-                      <div v-if="match.player2?.category || match.pending_player2?.category" class="px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block mb-1">
+                      <div v-if="getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)" class="flex items-center gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block mb-1">
+                        <img
+                          v-if="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
+                          :src="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
+                          :alt="`${getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)} tier icon`"
+                          class="w-4 h-4 sm:w-5 sm:h-5 object-contain"
+                        >
                         <p class="text-xs sm:text-size-4 font-regular text-foreground-muted">
-                          {{ match.player2?.category?.name || match.pending_player2?.category?.name }}
+                          {{ getTierNameInSpanish(getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)) }}
                         </p>
                       </div>
                       <div v-if="match.pending_player2" class="px-2 py-0.5 sm:py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30 inline-block">
@@ -415,6 +488,10 @@
 </template>
 
 <script setup lang="ts">
+import { useRankIconAsset } from '~/composables/useRankIcon'
+import { getRatingTier } from '~/server/utils/rating-system'
+import { usePlayerSearch } from '~/composables/usePlayerSearch'
+
 definePageMeta({
   middleware: []
 })
@@ -424,6 +501,7 @@ const { isAuthenticated, isLoaded, userId } = useAuthState()
 const { player, fetchPlayer } = usePlayer()
 
 const { matches, pagination, loading, error, fetchMatches } = useMatches()
+const { searchPlayers: searchOpponents, results: opponentSearchResultsData, clearResults: clearOpponentResults } = usePlayerSearch()
 
 const route = useRoute()
 const statusFilter = ref<string | null>(null)
@@ -431,6 +509,103 @@ const dateFilterStart = ref<string>('')
 const dateFilterEnd = ref<string>('')
 const currentPage = ref(1)
 const pageSize = 10
+const opponentFilter = ref<string | null>(null)
+const opponentSearchQuery = ref('')
+const showOpponentSearchResults = ref(false)
+const opponentSearchResults = ref<any[]>([])
+
+// Opponent filter functions
+const selectedOpponentName = ref<string>('')
+
+const loadOpponentName = async (opponentId: string) => {
+  try {
+    console.log('[Matches] Loading opponent name for ID:', opponentId)
+    const player = await $fetch(`/api/players/${opponentId}`)
+    if (player && player.name) {
+      console.log('[Matches] Opponent loaded:', player.name)
+      selectedOpponentName.value = player.name || 'Oponente'
+      opponentSearchQuery.value = player.name || ''
+    } else {
+      console.warn('[Matches] No data returned for opponent:', opponentId, player)
+    }
+  } catch (err) {
+    console.error('[Matches] Error loading opponent name:', err)
+    // Set a fallback name if the player can't be loaded
+    selectedOpponentName.value = 'Oponente'
+    opponentSearchQuery.value = ''
+  }
+}
+
+// Watch for opponent search results
+watch(() => opponentSearchResultsData.value, (newResults) => {
+  opponentSearchResults.value = [...newResults]
+})
+
+// Watch for route query changes to handle opponent_id from URL
+watch(() => route.query.opponent_id, async (opponentId, oldOpponentId) => {
+  console.log('[Matches] Route opponent_id changed:', { opponentId, oldOpponentId, isLoaded: isLoaded.value, userId: userId.value })
+  if (opponentId && typeof opponentId === 'string') {
+    console.log('[Matches] Setting opponent filter:', opponentId)
+    opponentFilter.value = opponentId
+    await loadOpponentName(opponentId)
+    // Reload matches if auth is already loaded
+    if (isLoaded.value && userId.value) {
+      console.log('[Matches] Reloading matches with opponent filter')
+      currentPage.value = 1
+      await loadMatches(1)
+    } else {
+      console.log('[Matches] Auth not loaded yet, will load matches when auth is ready')
+    }
+  } else if (opponentId === null || opponentId === undefined) {
+    // Clear filter if opponent_id is removed from URL
+    if (opponentFilter.value) {
+      console.log('[Matches] Clearing opponent filter')
+      opponentFilter.value = null
+      selectedOpponentName.value = ''
+      opponentSearchQuery.value = ''
+      if (isLoaded.value && userId.value) {
+        currentPage.value = 1
+        await loadMatches(1)
+      }
+    }
+  }
+}, { immediate: true })
+
+// Watch for opponent filter changes to reload matches
+watch(opponentFilter, async (newFilter, oldFilter) => {
+  console.log('[Matches] opponentFilter changed:', { newFilter, oldFilter, isLoaded: isLoaded.value, userId: userId.value })
+  // Only reload if auth is loaded and filter actually changed
+  // Skip if this is the initial set from URL (handled by route watch)
+  if (isLoaded.value && userId.value && newFilter !== oldFilter && oldFilter !== undefined) {
+    console.log('[Matches] Reloading matches due to opponent filter change')
+    currentPage.value = 1
+    await loadMatches(1)
+  }
+})
+
+// Watch for when auth loads after opponent_id is already in URL
+watch(isLoaded, async (loaded) => {
+  console.log('[Matches] isLoaded changed:', { loaded, userId: userId.value, opponentId: route.query.opponent_id, opponentFilter: opponentFilter.value })
+  if (loaded && userId.value) {
+    const opponentId = route.query.opponent_id
+    if (opponentId && typeof opponentId === 'string') {
+      // If opponent_id is in URL but filter not set yet, set it
+      if (!opponentFilter.value || opponentFilter.value !== opponentId) {
+        console.log('[Matches] Setting opponent filter from isLoaded watch:', opponentId)
+        opponentFilter.value = opponentId
+        await loadOpponentName(opponentId)
+      }
+      // Load matches with opponent filter
+      console.log('[Matches] Loading matches with opponent filter from isLoaded watch')
+      currentPage.value = 1
+      await loadMatches(1)
+    } else if (!opponentId && matches.value.length === 0) {
+      // Only load matches if no opponent_id and no matches loaded yet
+      console.log('[Matches] Loading matches without opponent filter')
+      await loadMatches(1)
+    }
+  }
+})
 
 // Check for query parameter to set initial filter
 onMounted(() => {
@@ -578,12 +753,48 @@ const totalFilteredPages = computed(() => {
   return pagination.value?.totalPages || 1
 })
 
+const handleOpponentSearch = async () => {
+  if (opponentSearchQuery.value.trim().length >= 2) {
+    await searchOpponents(opponentSearchQuery.value, player.value?.id)
+    showOpponentSearchResults.value = true
+  } else {
+    clearOpponentResults()
+    showOpponentSearchResults.value = false
+  }
+}
+
+const handleInputBlur = () => {
+  // Delay closing to allow click on results to register
+  setTimeout(() => {
+    showOpponentSearchResults.value = false
+  }, 200)
+}
+
+const selectOpponent = (opponent: any) => {
+  opponentFilter.value = opponent.id
+  selectedOpponentName.value = opponent.name
+  opponentSearchQuery.value = opponent.name
+  showOpponentSearchResults.value = false
+  currentPage.value = 1
+  loadMatches(1)
+}
+
+const clearOpponentFilter = () => {
+  opponentFilter.value = null
+  selectedOpponentName.value = ''
+  opponentSearchQuery.value = ''
+  showOpponentSearchResults.value = false
+  clearOpponentResults()
+  currentPage.value = 1
+  loadMatches(1)
+}
+
 const loadMatches = async (page: number = 1) => {
   if (isLoaded.value && userId.value) {
     // Use backend filtering instead of loading all matches
     // Default: show matches from last 24 hours ONLY when statusFilter is null (Todos)
     // Status filter is handled by backend when statusFilter is set
-    const filters: { status?: string; start_date?: string; end_date?: string; skip_24h_filter?: boolean } = {}
+    const filters: { status?: string; start_date?: string; end_date?: string; skip_24h_filter?: boolean; opponent_id?: string } = {}
     if (statusFilter.value && statusFilter.value !== 'pending') {
       filters.status = statusFilter.value
     }
@@ -605,11 +816,23 @@ const loadMatches = async (page: number = 1) => {
       filters.end_date = endDate.toISOString()
     }
     
+    // Apply opponent filter if set
+    if (opponentFilter.value) {
+      filters.opponent_id = opponentFilter.value
+      // When filtering by opponent, skip 24-hour filter to show all matches
+      filters.skip_24h_filter = true
+      console.log('[Matches] loadMatches: Applying opponent filter:', opponentFilter.value)
+    } else {
+      console.log('[Matches] loadMatches: No opponent filter')
+    }
+    
     // For 'pending' filter, we still need to load and filter client-side
     // because it requires complex logic based on match state
     // Load more matches for pending filter to ensure we catch all pending actions
     const limit = statusFilter.value === 'pending' ? 1000 : 50
+    console.log('[Matches] loadMatches: Calling fetchMatches with filters:', filters, 'limit:', limit)
     await fetchMatches(userId.value, 1, limit, filters)
+    console.log('[Matches] loadMatches: Matches loaded:', matches.value.length)
     currentPage.value = page
   }
 }
@@ -772,19 +995,82 @@ const getPlayerInitials = (name: string) => {
   return name.substring(0, 2).toUpperCase()
 }
 
+// Get player tier from ELO
+const getPlayerTier = (player: any): string | null => {
+  if (!player || player.elo === undefined || player.elo === null) return null
+  const tierInfo = getRatingTier(player.elo)
+  return tierInfo.tier
+}
+
+// Get player rank icon path
+const getPlayerRankIcon = (player: any): string | null => {
+  const tier = getPlayerTier(player)
+  if (!tier) return null
+  return useRankIconAsset(tier)
+}
+
+// Get tier name in Spanish
+const getTierNameInSpanish = (tier: string | null): string => {
+  if (!tier) return ''
+  const tierNames: Record<string, string> = {
+    'Bronze': 'Bronce',
+    'Silver': 'Plata',
+    'Gold': 'Oro',
+    'Platinum': 'Platino',
+    'Diamond': 'Diamante',
+    'Master': 'Maestro',
+    'Grandmaster': 'Gran Maestro',
+    'Unrated': 'Sin clasificar'
+  }
+  return tierNames[tier] || tier
+}
+
 onMounted(async () => {
+  console.log('[Matches] onMounted:', { isLoaded: isLoaded.value, userId: userId.value, opponentId: route.query.opponent_id })
   if (isLoaded.value && userId.value) {
     // Load player data to determine match results
     if (!player.value?.id) {
       await fetchPlayer(userId.value)
     }
-    await loadMatches(1)
+    // Check if opponent_id is in URL
+    const opponentId = route.query.opponent_id
+    if (opponentId && typeof opponentId === 'string') {
+      console.log('[Matches] onMounted: Setting opponent filter:', opponentId)
+      // Set opponent filter and load name
+      opponentFilter.value = opponentId
+      await loadOpponentName(opponentId)
+      // Load matches with opponent filter
+      currentPage.value = 1
+      await loadMatches(1)
+    } else {
+      // Load matches normally if no opponent_id
+      console.log('[Matches] onMounted: Loading matches without opponent filter')
+      await loadMatches(1)
+    }
+  } else {
+    console.log('[Matches] onMounted: Auth not loaded yet, waiting for isLoaded watch')
   }
 })
 
-watch([isLoaded, userId], async () => {
-  if (isLoaded.value && userId.value) {
-    await loadMatches(1)
+watch([isLoaded, userId], async ([loaded, currentUserId]) => {
+  console.log('[Matches] [isLoaded, userId] changed:', { loaded, currentUserId, matchesCount: matches.value.length, loading: loading.value, opponentFilter: opponentFilter.value })
+  if (loaded && currentUserId) {
+    // Load player data if needed
+    if (!player.value?.id) {
+      await fetchPlayer(currentUserId)
+    }
+    // Only load matches if we haven't already loaded them with a filter
+    // This prevents double loading when opponent_id is in URL
+    if (matches.value.length === 0 && !loading.value && !opponentFilter.value) {
+      console.log('[Matches] Loading matches from [isLoaded, userId] watch (no opponent filter)')
+      await loadMatches(1)
+    } else {
+      console.log('[Matches] Skipping match load from [isLoaded, userId] watch:', { 
+        matchesCount: matches.value.length, 
+        loading: loading.value, 
+        opponentFilter: opponentFilter.value 
+      })
+    }
   }
 })
 

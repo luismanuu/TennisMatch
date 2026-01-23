@@ -357,6 +357,9 @@ export interface CreatePendingPlayerPayload {
 export interface PlayerSearchResult {
   id: string
   name: string
+  elo?: number
+  total_matches_played?: number
+  placement_matches_completed?: number
   category?: Category
 }
 
@@ -481,6 +484,82 @@ export interface MonthlyDecayStatus {
   will_decay: boolean
   estimated_decay: number
   last_decay_check?: string
+}
+
+// Advanced statistics
+export interface DayOfWeekStats {
+  wins: number
+  losses: number
+  win_rate: number
+}
+
+export interface TimeOfDayStats {
+  wins: number
+  losses: number
+  win_rate: number
+}
+
+export interface BestMonth {
+  month: string
+  win_rate: number
+  matches: number
+}
+
+export interface AdvancedStats {
+  current_win_streak: number
+  best_win_streak: number
+  current_losing_streak: number
+  win_rate_by_day_of_week: { [day: string]: DayOfWeekStats }
+  win_rate_by_time_of_day: {
+    morning?: TimeOfDayStats
+    afternoon?: TimeOfDayStats
+    evening?: TimeOfDayStats
+    night?: TimeOfDayStats
+  }
+  best_month: BestMonth | null
+  days_since_last_match: number
+  period: 'month' | 'year' | 'all'
+  has_sufficient_data: {
+    streaks: boolean
+    day_of_week: boolean
+    time_of_day: boolean
+    best_month: boolean
+    last_match: boolean
+  }
+}
+
+// Head to Head statistics
+export interface HeadToHeadMatch {
+  id: string
+  match_id: string
+  elo_before: number
+  elo_after: number
+  elo_change: number
+  was_winner: boolean
+  created_at: string
+  match?: {
+    played_at?: string
+    scheduled_at?: string
+  }
+}
+
+export interface HeadToHeadStats {
+  total_matches: number
+  wins: number
+  losses: number
+  win_rate: number
+  current_streak: number
+  is_win_streak: boolean
+  last_match_date: string | null
+  matches: HeadToHeadMatch[]
+  max_elo_gain: number
+  max_elo_loss: number
+  avg_elo_gain: number
+  avg_elo_loss: number
+  best_match: HeadToHeadMatch | null
+  worst_match: HeadToHeadMatch | null
+  trend: 'improving' | 'declining' | 'stable' | null
+  period: 'month' | 'year' | 'all'
 }
 
 // Rating calculation result

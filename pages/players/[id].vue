@@ -153,9 +153,9 @@
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
                 <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando ranking...</p>
               </div>
-              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position && rankingPosition.position.global_rank && rankingPosition.position.total_players > 0" class="space-y-6">
+              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position" class="space-y-6">
                 <!-- Global Ranking -->
-                <div v-if="rankingPosition.position.total_players > 0" class="p-6 rounded-xl bg-surface border border-border-subtle">
+                <div v-if="rankingPosition.position.global_rank && rankingPosition.position.total_players > 0" class="p-6 rounded-xl bg-surface border border-border-subtle">
                   <div class="flex items-center justify-between mb-4">
                     <h4 class="text-size-3 font-semibold text-foreground">Ranking Global</h4>
                     <RatingTierBadge 
@@ -174,16 +174,34 @@
                         </span>
                       </p>
                     </div>
-                    <div v-if="rankingPosition.position.percentile >= 0">
+                    <div v-if="rankingPosition.position.percentile !== undefined && rankingPosition.position.percentile >= 0">
                       <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
                       <p class="text-size-2 font-bold text-foreground">
                         Top {{ rankingPosition.position.percentile }}%
                       </p>
                     </div>
-                    <div v-if="rankingPosition.position.players_below >= 0">
+                    <div v-if="rankingPosition.position.players_below !== undefined && rankingPosition.position.players_below >= 0">
                       <p class="text-size-5 text-foreground-muted mb-1">Jugadores por debajo</p>
                       <p class="text-size-2 font-bold text-foreground">
                         {{ rankingPosition.position.players_below }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Tier Ranking -->
+                <div v-if="rankingPosition.position.tier_rank && rankingPosition.position.tier_total && rankingPosition.position.tier_total > 0 && rankingPosition.tier" class="p-6 rounded-xl bg-surface border border-border-subtle">
+                  <h4 class="text-size-3 font-semibold text-foreground mb-4">
+                    Ranking en {{ rankingPosition.tier }}
+                  </h4>
+                  <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        #{{ rankingPosition.position.tier_rank }}
+                        <span class="text-size-4 font-regular text-foreground-muted">
+                          de {{ rankingPosition.position.tier_total }}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -207,22 +225,15 @@
                   </div>
                 </div>
 
-                <!-- Tier Ranking -->
-                <div v-if="rankingPosition.position.tier_rank && rankingPosition.position.tier_total && rankingPosition.position.tier_total > 0 && rankingPosition.tier" class="p-6 rounded-xl bg-surface border border-border-subtle">
-                  <h4 class="text-size-3 font-semibold text-foreground mb-4">
-                    Ranking en {{ rankingPosition.tier }}
-                  </h4>
-                  <div class="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        #{{ rankingPosition.position.tier_rank }}
-                        <span class="text-size-4 font-regular text-foreground-muted">
-                          de {{ rankingPosition.position.tier_total }}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
+                <!-- No ranking data message -->
+                <div v-if="!rankingPosition.position.global_rank && !rankingPosition.position.tier_rank && !rankingPosition.position.segment_rank" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
+                  <p class="text-size-4 font-regular text-foreground-muted mb-2">
+                    Aún no hay suficientes jugadores para calcular el ranking.
+                  </p>
+                  <p class="text-size-5 font-regular text-foreground-muted">
+                    Se necesitan al menos {{ rankingPosition.min_players_required || 2 }} jugadores con partidos jugados. 
+                    Actualmente hay {{ rankingPosition.current_players || 0 }} jugador{{ rankingPosition.current_players !== 1 ? 'es' : '' }} en el sistema.
+                  </p>
                 </div>
               </div>
               <div v-else-if="rankingPosition && rankingPosition.is_unrated" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
@@ -230,9 +241,13 @@
                   Este jugador aún no ha completado partidos de colocación
                 </p>
               </div>
-              <div v-else-if="rankingPosition && rankingPosition.success && rankingPosition.position && (!rankingPosition.position.total_players || rankingPosition.position.total_players === 0)" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted">
-                  Aún no hay suficientes jugadores para calcular el ranking. Las estadísticas estarán disponibles cuando haya más jugadores en el sistema.
+              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.position && rankingPosition.current_players === 0" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted mb-2">
+                  Aún no hay suficientes jugadores para calcular el ranking.
+                </p>
+                <p class="text-size-5 font-regular text-foreground-muted">
+                  Se necesitan al menos {{ rankingPosition.min_players_required || 2 }} jugadores con partidos jugados. 
+                  Actualmente hay {{ rankingPosition.current_players || 0 }} jugador{{ rankingPosition.current_players !== 1 ? 'es' : '' }} en el sistema.
                 </p>
               </div>
               <div v-else-if="rankingPosition && !rankingPosition.success" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
@@ -316,6 +331,43 @@
                 <p class="text-size-4 font-regular text-foreground-muted">
                   No hay partidos registrados
                 </p>
+              </div>
+
+              <!-- Pagination -->
+              <div v-if="matchHistoryTotalPages > 1" class="mt-6 pt-6 border-t border-border-subtle">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div class="text-size-4 text-foreground-muted">
+                    Mostrando {{ (matchHistoryPage - 1) * matchHistoryPageSize + 1 }} - 
+                    {{ Math.min(matchHistoryPage * matchHistoryPageSize, matchHistoryTotal) }} 
+                    de {{ matchHistoryTotal }} partidos
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      @click="handleMatchHistoryPageChange(matchHistoryPage - 1)"
+                      :disabled="matchHistoryPage === 1 || matchHistoryLoading"
+                      class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                    >
+                      <Icon name="heroicons:chevron-left" class="w-4 h-4" />
+                      <span class="hidden sm:inline">Anterior</span>
+                    </button>
+                    
+                    <div class="flex items-center gap-2">
+                      <span class="text-size-4 text-foreground-muted">Página</span>
+                      <span class="text-size-3 font-semibold text-foreground">{{ matchHistoryPage }}</span>
+                      <span class="text-size-4 text-foreground-muted">de</span>
+                      <span class="text-size-3 font-semibold text-foreground">{{ matchHistoryTotalPages }}</span>
+                    </div>
+                    
+                    <button
+                      @click="handleMatchHistoryPageChange(matchHistoryPage + 1)"
+                      :disabled="matchHistoryPage >= matchHistoryTotalPages || matchHistoryLoading"
+                      class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                    >
+                      <span class="hidden sm:inline">Siguiente</span>
+                      <Icon name="heroicons:chevron-right" class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -416,6 +468,10 @@ const rankingLoading = ref(false)
 const matchHistory = ref<any[]>([])
 const matchHistoryLoading = ref(false)
 const activeTab = ref<'ranking' | 'matches'>('ranking')
+const matchHistoryPage = ref(1)
+const matchHistoryPageSize = ref(20)
+const matchHistoryTotal = ref(0)
+const matchHistoryTotalPages = ref(0)
 
 const canGoBack = computed(() => {
   // Check if we can go back (browser history)
@@ -471,24 +527,53 @@ const loadRankingAndMatches = async () => {
     rankingLoading.value = false
   }
 
-  // Load match history (only last 20 matches for other players' profiles)
+  // Load match history with pagination
+  await loadMatchHistory(1)
+}
+
+const loadMatchHistory = async (page: number = 1) => {
+  if (!playerId) return
+  
   matchHistoryLoading.value = true
+  matchHistoryPage.value = page
+  const offset = (page - 1) * matchHistoryPageSize.value
+  
   try {
     const response = await $fetch<{
       success: boolean
       matches: any[]
+      pagination?: {
+        total: number
+        limit: number
+        offset: number
+        total_pages: number
+        current_page: number
+        has_next: boolean
+        has_previous: boolean
+      }
     }>(`/api/players/${playerId}/matches`, {
-      query: { limit: 20 }
-    }).catch(() => ({ success: false, matches: [] }))
+      query: { 
+        limit: matchHistoryPageSize.value,
+        offset 
+      }
+    }).catch(() => ({ success: false, matches: [], pagination: undefined }))
     
     if (response.success) {
       matchHistory.value = response.matches
+      if (response.pagination) {
+        matchHistoryTotal.value = response.pagination.total
+        matchHistoryTotalPages.value = response.pagination.total_pages
+      }
     }
   } catch (err) {
     console.error('Error loading match history:', err)
   } finally {
     matchHistoryLoading.value = false
   }
+}
+
+const handleMatchHistoryPageChange = (page: number) => {
+  loadMatchHistory(page)
 }
 
 const getOpponentName = (match: any) => {

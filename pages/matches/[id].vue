@@ -105,9 +105,15 @@
                       <p v-else class="text-size-2 font-semibold text-foreground mb-2">
                         Jugador 1
                       </p>
-                      <div v-if="match.player1?.category" class="px-3 py-1 rounded-full bg-surface border border-border-subtle">
+                      <div v-if="getPlayerTier(match.player1)" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border-subtle">
+                        <img
+                          v-if="getPlayerRankIcon(match.player1)"
+                          :src="getPlayerRankIcon(match.player1)"
+                          :alt="`${getPlayerTier(match.player1)} tier icon`"
+                          class="w-5 h-5 object-contain"
+                        >
                         <p class="text-size-4 text-foreground-muted">
-                          {{ match.player1.category.name }}
+                          {{ getTierNameInSpanish(getPlayerTier(match.player1)) }}
                         </p>
                       </div>
                     </div>
@@ -155,9 +161,15 @@
                       <p v-else class="text-size-2 font-semibold text-foreground mb-2">
                         Oponente
                       </p>
-                      <div v-if="match.player2?.category || match.pending_player2?.category" class="px-3 py-1 rounded-full bg-surface border border-border-subtle mb-2">
+                      <div v-if="getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border-subtle mb-2">
+                        <img
+                          v-if="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
+                          :src="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
+                          :alt="`${getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)} tier icon`"
+                          class="w-5 h-5 object-contain"
+                        >
                         <p class="text-size-4 text-foreground-muted">
-                          {{ match.player2?.category?.name || match.pending_player2?.category?.name }}
+                          {{ getTierNameInSpanish(getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)) }}
                         </p>
                       </div>
                       <div v-if="match.pending_player2" class="px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30">
@@ -1395,6 +1407,8 @@
 
 <script setup lang="ts">
 import type { Match, MatchMessage } from '~/types'
+import { useRankIconAsset } from '~/composables/useRankIcon'
+import { getRatingTier } from '~/server/utils/rating-system'
 
 definePageMeta({
   middleware: 'auth'
@@ -1576,6 +1590,39 @@ const getPlayerInitials = (name: string) => {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
   return name.substring(0, 2).toUpperCase()
+}
+
+// Get player tier from ELO
+const getPlayerTier = (player: any): string | null => {
+  if (!player) return null
+  if (player.elo !== undefined && player.elo !== null) {
+    const tierInfo = getRatingTier(player.elo)
+    return tierInfo.tier
+  }
+  return null
+}
+
+// Get player rank icon path
+const getPlayerRankIcon = (player: any): string | null => {
+  const tier = getPlayerTier(player)
+  if (!tier) return null
+  return useRankIconAsset(tier)
+}
+
+// Get tier name in Spanish
+const getTierNameInSpanish = (tier: string | null): string => {
+  if (!tier) return ''
+  const tierNames: Record<string, string> = {
+    'Bronze': 'Bronce',
+    'Silver': 'Plata',
+    'Gold': 'Oro',
+    'Platinum': 'Platino',
+    'Diamond': 'Diamante',
+    'Master': 'Maestro',
+    'Grandmaster': 'Gran Maestro',
+    'Unrated': 'Sin clasificar'
+  }
+  return tierNames[tier] || tier
 }
 
 const openRescheduleForm = () => {

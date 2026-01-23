@@ -145,44 +145,174 @@
           <div class="mb-8">
             <!-- ELO Rating with Tier -->
             <div class="p-8 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30 hover-lift">
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-3">
-                  <div class="w-12 h-12 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center">
-                    <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <p class="text-size-3 font-semibold text-foreground">Puntuación ELO</p>
-                    <p class="text-size-4 text-foreground-muted">Clasificación Actual</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <!-- Left: Rank Icon -->
+                <div class="flex justify-center md:justify-start">
+                  <div class="relative w-full max-w-[300px] h-[300px] flex items-center justify-center overflow-hidden">
+                    <!-- Rank Icon - Large -->
+                    <img
+                      v-if="rankIconPath && tierInfo && !imageError"
+                      :src="rankIconPath"
+                      :alt="tierInfo ? `${tierInfo.tier} tier icon` : 'Rank icon'"
+                      class="w-full h-full max-w-[300px] max-h-[300px] object-contain z-10 relative"
+                      @error="handleImageError"
+                    >
+                    <Icon v-else name="heroicons:trophy" class="w-48 h-48 text-accent z-10 relative" />
                   </div>
                 </div>
-                <RatingTierBadge 
-                  :elo="player.elo" 
-                  :total-matches-played="player.total_matches_played || 0"
-                  :placement-matches-completed="player.placement_matches_completed || 0"
-                  :show-provisional="true"
-                />
-              </div>
-              <div class="flex items-baseline gap-3">
-                <p class="text-size-1 font-bold text-gradient-static">{{ player.elo }}</p>
-                <NuxtLink 
-                  v-if="!isUnrated"
-                  to="/my-ranking" 
-                  class="btn-secondary text-size-4 !py-2 !px-4 group"
-                >
-                  <Icon name="heroicons:chart-bar-square" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                  Ver Mi Ranking
-                </NuxtLink>
-              </div>
-              <p class="text-size-4 font-regular text-foreground-muted mt-2">
-                {{ isUnrated ? '¡Juega tu primer partido para obtener tu clasificación!' : 'Tu calificación actual en el sistema' }}
-              </p>
 
-              <!-- Placement Progress (only show if rated and not completed) -->
-              <PlacementProgress 
-                v-if="!isUnrated && (player.placement_matches_completed || 0) < 3"
-                :completed="player.placement_matches_completed || 0"
-                :match-results="placementMatchResults"
-              />
+                <!-- Right: ELO, Tier, and Info -->
+                <div class="flex flex-col gap-4">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="w-12 h-12 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center">
+                        <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
+                      </div>
+                      <div>
+                        <p class="text-size-3 font-semibold text-foreground">Puntuación ELO</p>
+                        <p class="text-size-4 text-foreground-muted">Clasificación Actual</p>
+                      </div>
+                    </div>
+                    <RatingTierBadge 
+                      :elo="player.elo" 
+                      :total-matches-played="player.total_matches_played || 0"
+                      :placement-matches-completed="player.placement_matches_completed || 0"
+                      :show-provisional="true"
+                    />
+                  </div>
+                  <div class="flex items-baseline gap-3">
+                    <p class="text-size-1 font-bold text-gradient-static">{{ player.elo }}</p>
+                    <NuxtLink 
+                      v-if="!isUnrated"
+                      to="/my-ranking" 
+                      class="btn-secondary text-size-4 !py-2 !px-4 group"
+                    >
+                      <Icon name="heroicons:chart-bar-square" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                      Ver Mi Ranking
+                    </NuxtLink>
+                  </div>
+                  <p class="text-size-4 font-regular text-foreground-muted">
+                    {{ isUnrated ? '¡Juega tu primer partido para obtener tu clasificación!' : 'Tu calificación actual en el sistema' }}
+                  </p>
+
+                  <!-- Placement Progress (only show if rated and not completed) -->
+                  <PlacementProgress 
+                    v-if="!isUnrated && (player.placement_matches_completed || 0) < 3"
+                    :completed="player.placement_matches_completed || 0"
+                    :match-results="placementMatchResults"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Ranking Section -->
+            <div v-if="!isUnrated" class="mt-6 p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                  <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" />
+                </div>
+                <h3 class="text-size-3 font-semibold text-foreground">Mi Ranking</h3>
+              </div>
+              
+              <div v-if="rankingLoading" class="text-center py-8">
+                <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
+                <p class="text-size-4 font-regular text-foreground-muted mt-3">Cargando ranking...</p>
+              </div>
+              
+              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position" class="space-y-4">
+                <!-- Global Ranking -->
+                <div v-if="rankingPosition.position.global_rank && rankingPosition.position.total_players > 0" class="p-4 rounded-xl bg-surface border border-border-subtle">
+                  <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-size-3 font-semibold text-foreground">Ranking Global</h4>
+                    <RatingTierBadge 
+                      :elo="player.elo" 
+                      :total-matches-played="player.total_matches_played || 0"
+                      :show-elo="false"
+                    />
+                  </div>
+                  <div class="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        #{{ rankingPosition.position.global_rank }}
+                        <span class="text-size-4 font-regular text-foreground-muted">
+                          de {{ rankingPosition.position.total_players }}
+                        </span>
+                      </p>
+                    </div>
+                    <div v-if="rankingPosition.position.percentile !== undefined && rankingPosition.position.percentile >= 0">
+                      <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        Top {{ rankingPosition.position.percentile }}%
+                      </p>
+                    </div>
+                    <div v-if="rankingPosition.position.players_below !== undefined && rankingPosition.position.players_below >= 0">
+                      <p class="text-size-5 text-foreground-muted mb-1">Jugadores por debajo</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        {{ rankingPosition.position.players_below }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Tier Ranking -->
+                <div v-if="rankingPosition.position.tier_rank && rankingPosition.position.tier_total && rankingPosition.position.tier_total > 0 && rankingPosition.tier" class="p-4 rounded-xl bg-surface border border-border-subtle">
+                  <h4 class="text-size-3 font-semibold text-foreground mb-3">
+                    Ranking en {{ rankingPosition.tier }}
+                  </h4>
+                  <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        #{{ rankingPosition.position.tier_rank }}
+                        <span class="text-size-4 font-regular text-foreground-muted">
+                          de {{ rankingPosition.position.tier_total }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Segment Ranking -->
+                <div v-if="rankingPosition.position.segment_rank && rankingPosition.position.segment_total && rankingPosition.position.segment_total > 0" class="p-4 rounded-xl bg-surface border border-border-subtle">
+                  <h4 class="text-size-3 font-semibold text-foreground mb-3">
+                    Ranking en {{ rankingPosition.position.segment_name || 'Tu Región' }}
+                  </h4>
+                  <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
+                      <p class="text-size-2 font-bold text-foreground">
+                        #{{ rankingPosition.position.segment_rank }}
+                        <span class="text-size-4 font-regular text-foreground-muted">
+                          de {{ rankingPosition.position.segment_total }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div v-else-if="rankingPosition && rankingPosition.is_unrated" class="p-4 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted">
+                  Aún no has completado partidos de colocación
+                </p>
+              </div>
+              
+              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.position && rankingPosition.current_players === 0" class="p-4 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted mb-2">
+                  Aún no hay suficientes jugadores para calcular el ranking.
+                </p>
+                <p class="text-size-5 font-regular text-foreground-muted">
+                  Se necesitan al menos {{ rankingPosition.min_players_required || 2 }} jugadores con partidos jugados. 
+                  Actualmente hay {{ rankingPosition.current_players || 0 }} jugador{{ rankingPosition.current_players !== 1 ? 'es' : '' }} en el sistema.
+                </p>
+              </div>
+              
+              <div v-else-if="!rankingPosition && !rankingLoading" class="p-4 rounded-xl bg-surface border border-border-subtle text-center">
+                <p class="text-size-4 font-regular text-foreground-muted">
+                  No hay información de ranking disponible
+                </p>
+              </div>
             </div>
 
             <!-- Monthly Decay Warning -->
@@ -321,6 +451,8 @@
 
 <script setup lang="ts">
 import { UserProfile } from '@clerk/vue'
+import { useRankIconAsset } from '~/composables/useRankIcon'
+import { getRatingTier } from '~/server/utils/rating-system'
 
 definePageMeta({
   middleware: 'auth'
@@ -342,8 +474,30 @@ const ratingStats = ref<{ wins: number; losses: number; win_rate: number; peak_e
 // Placement match results
 const placementMatchResults = ref<Array<'win' | 'loss' | null>>([])
 
+// Ranking position
+const rankingPosition = ref<any>(null)
+const rankingLoading = ref(false)
+
+// Rank icon
+const imageError = ref(false)
+
 // Check if player is unrated
 const isUnrated = computed(() => (player.value?.total_matches_played ?? 0) === 0)
+
+// Get tier info and rank icon
+const tierInfo = computed(() => {
+  if (!player.value?.elo) return null
+  return getRatingTier(player.value.elo)
+})
+
+const rankIconPath = computed(() => {
+  if (!tierInfo.value) return null
+  return useRankIconAsset(tierInfo.value.tier)
+})
+
+const handleImageError = () => {
+  imageError.value = true
+}
 
 const loadPlacementMatchResults = async (playerId: string) => {
   try {
@@ -405,6 +559,17 @@ const loadProfile = async () => {
         ratingStats.value = historyResponse.stats
       } catch (err) {
         console.error('Failed to load rating stats:', err)
+      }
+      
+      // Load ranking position
+      rankingLoading.value = true
+      try {
+        const rankingData = await $fetch(`/api/players/${player.value.id}/ranking-position`).catch(() => null)
+        rankingPosition.value = rankingData
+      } catch (err) {
+        console.error('Error loading ranking:', err)
+      } finally {
+        rankingLoading.value = false
       }
       
       // Load placement match results if in placement

@@ -51,38 +51,38 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Get total number of rated players
-    const { count: totalPlayers } = await supabase
+    // Get total number of rated players (including the current player)
+    // Use status = 'active' instead of deleted = false
+    const { count: totalPlayers, error: countError } = await supabase
       .from('players')
       .select('id', { count: 'exact', head: true })
-      .eq('deleted', false)
+      .eq('status', 'active')
       .gte('total_matches_played', 1)
     
-    // Only calculate ranking if there are other players
-    if (!totalPlayers || totalPlayers === 0) {
-      return {
-        success: true,
-        is_unrated: false,
-        position: null, // Return null when there's no data to calculate
-        tier: getRatingTier(player.elo).tier
-      }
+    if (countError) {
+      console.error('Error counting players:', countError)
     }
+    
+    // If count fails or returns 0, but player has matches, assume at least 1 (the player themselves)
+    // Always show ranking if player has matches, even if count is 0
+    const actualTotalPlayers = (totalPlayers && totalPlayers > 0) ? totalPlayers : 1
     
     // Get global rank (players with higher ELO + 1)
     const { count: playersAbove } = await supabase
       .from('players')
       .select('id', { count: 'exact', head: true })
-      .eq('deleted', false)
+      .eq('status', 'active')
       .gte('total_matches_played', 1)
       .gt('elo', player.elo)
     
     const globalRank = (playersAbove || 0) + 1
-    const playersBelow = totalPlayers - globalRank
-    const percentile = Math.round(((totalPlayers - globalRank) / totalPlayers) * 100)
+    const playersBelow = Math.max(0, actualTotalPlayers - globalRank)
+    // Calculate percentile: if only 1 player, they're in top 100%, otherwise calculate normally
+    const percentile = actualTotalPlayers === 1 ? 100 : Math.round(((actualTotalPlayers - globalRank) / actualTotalPlayers) * 100)
     
     const position: RankingPosition = {
       global_rank: globalRank,
-      total_players: totalPlayers,
+      total_players: actualTotalPlayers,
       players_above: playersAbove || 0,
       players_below: playersBelow,
       percentile
@@ -114,7 +114,7 @@ export default defineEventHandler(async (event) => {
           const { count: segmentTotal } = await supabase
             .from('players')
             .select('id', { count: 'exact', head: true })
-            .eq('deleted', false)
+            .eq('status', 'active')
             .in('city_id', cityIds)
             .gte('total_matches_played', 1)
           
@@ -122,7 +122,7 @@ export default defineEventHandler(async (event) => {
           const { count: segmentPlayersAbove } = await supabase
             .from('players')
             .select('id', { count: 'exact', head: true })
-            .eq('deleted', false)
+            .eq('status', 'active')
             .in('city_id', cityIds)
             .gte('total_matches_played', 1)
             .gt('elo', player.elo)
@@ -142,7 +142,7 @@ export default defineEventHandler(async (event) => {
     const { data: allPlayers } = await supabase
       .from('players')
       .select('id, elo')
-      .eq('deleted', false)
+      .eq('status', 'active')
       .gte('total_matches_played', 1)
       .order('elo', { ascending: false })
     
@@ -162,7 +162,8 @@ export default defineEventHandler(async (event) => {
       success: true,
       is_unrated: false,
       position,
-      tier
+      tier,
+      current_players: actualTotalPlayers
     }
   } catch (error: any) {
     throw createError({

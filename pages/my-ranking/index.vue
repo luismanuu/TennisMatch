@@ -69,7 +69,7 @@
             <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
           </div>
           <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
-          <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
+          <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Error al cargar estadísticas. Por favor intenta de nuevo.' }}</p>
           <button @click="loadAllData" class="btn-primary text-size-3 w-full justify-center group">
             <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
             Reintentar
@@ -255,36 +255,15 @@
               <p class="text-size-5 text-foreground-muted">Peak ELO</p>
             </div>
 
-            <!-- Current Streak -->
+            <!-- Total Victories -->
             <div class="glass-card p-5 text-center hover-lift">
-              <div 
-                class="w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-3"
-                :class="player.win_streak > 0 
-                  ? 'bg-orange-500/10 border border-orange-500/20' 
-                  : player.loss_streak > 0 
-                    ? 'bg-cyan-500/10 border border-cyan-500/20'
-                    : 'bg-surface-elevated border border-border-subtle'"
-              >
-                <Icon 
-                  :name="player.win_streak > 0 ? 'heroicons:fire' : player.loss_streak > 0 ? 'heroicons:bolt-slash' : 'heroicons:minus'" 
-                  class="w-5 h-5"
-                  :class="player.win_streak > 0 ? 'text-orange-400' : player.loss_streak > 0 ? 'text-cyan-400' : 'text-foreground-muted'"
-                />
+              <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
+                <Icon name="heroicons:trophy" class="w-5 h-5 text-orange-400" />
               </div>
               <p class="text-size-2 font-bold text-foreground">
-                <template v-if="player.win_streak > 0">
-                  {{ player.win_streak }} <span class="text-orange-400">🔥</span>
-                </template>
-                <template v-else-if="player.loss_streak > 0">
-                  {{ player.loss_streak }} <span class="text-cyan-400">❄️</span>
-                </template>
-                <template v-else>
-                  0
-                </template>
+                {{ historyStats?.wins || 0 }}
               </p>
-              <p class="text-size-5 text-foreground-muted">
-                {{ player.win_streak > 0 ? 'Victorias' : player.loss_streak > 0 ? 'Derrotas' : 'Racha' }}
-              </p>
+              <p class="text-size-5 text-foreground-muted">Victorias</p>
             </div>
           </div>
 
@@ -303,6 +282,273 @@
             </div>
             
             <EloHistoryChart :history-data="ratingHistory" />
+          </div>
+
+          <!-- Section C.1: Period Selector and Advanced Stats (hide during placement) -->
+          <div v-if="!isInPlacement" class="mb-6">
+            <!-- Period Selector -->
+            <div class="glass-card-elevated p-4 mb-6 animate-fade-up">
+              <div class="flex items-center gap-3 mb-4">
+                <Icon name="heroicons:calendar" class="w-5 h-5 text-accent" />
+                <h3 class="text-size-3 font-semibold text-foreground">Período de Análisis</h3>
+              </div>
+              <div class="flex gap-2 flex-wrap sm:flex-nowrap">
+                <button
+                  v-for="period in [
+                    { value: 'month', label: 'Último Mes' },
+                    { value: 'year', label: 'Último Año' },
+                    { value: 'all', label: 'Todo el Tiempo' }
+                  ]"
+                  :key="period.value"
+                  @click="selectedPeriod = period.value as any"
+                  class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-size-4 sm:text-size-4 font-semibold transition-all"
+                  :class="selectedPeriod === period.value
+                    ? 'bg-accent text-white'
+                    : 'bg-surface-elevated text-foreground hover:bg-surface hover:border-accent/30 border border-border-subtle'"
+                >
+                  <span class="hidden sm:inline">{{ period.label }}</span>
+                  <span class="sm:hidden">{{ period.value === 'month' ? 'Mes' : period.value === 'year' ? 'Año' : 'Todo' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Streaks Card -->
+            <div v-if="advancedStats?.has_sufficient_data?.streaks" class="glass-card-elevated p-6 mb-6 animate-fade-up">
+              <div class="flex items-center gap-3 mb-4">
+                <Icon name="heroicons:bolt" class="w-5 h-5 text-accent" />
+                <h3 class="text-size-3 font-semibold text-foreground">Rachas</h3>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="text-center p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <p class="text-size-5 text-foreground-muted mb-1">Racha Actual</p>
+                  <p class="text-size-1 font-bold text-green-400">{{ advancedStats.current_win_streak }}</p>
+                  <p class="text-size-5 text-foreground-muted">victorias</p>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <p class="text-size-5 text-foreground-muted mb-1">Mejor Racha</p>
+                  <p class="text-size-1 font-bold text-amber-400">{{ advancedStats.best_win_streak }}</p>
+                  <p class="text-size-5 text-foreground-muted">victorias</p>
+                </div>
+                <div v-if="advancedStats.current_losing_streak > 0" class="text-center p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <p class="text-size-5 text-foreground-muted mb-1">Racha de Derrotas</p>
+                  <p class="text-size-1 font-bold text-red-400">{{ advancedStats.current_losing_streak }}</p>
+                  <p class="text-size-5 text-foreground-muted">derrotas</p>
+                </div>
+              </div>
+            </div>
+            <InsufficientDataMessage v-else message="Juega al menos 1 partido para ver tus rachas" class="mb-6" />
+
+            <!-- Day of Week Stats -->
+            <div v-if="advancedStats?.has_sufficient_data?.day_of_week" class="glass-card-elevated p-6 mb-6 animate-fade-up">
+              <div class="flex items-center gap-3 mb-4">
+                <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" />
+                <h3 class="text-size-3 font-semibold text-foreground">Rendimiento por Día de la Semana</h3>
+              </div>
+              <DayOfWeekChart :data="advancedStats.win_rate_by_day_of_week" />
+            </div>
+            <InsufficientDataMessage v-else message="Necesitas partidos en al menos 3 días diferentes" class="mb-6" />
+
+            <!-- Time of Day Stats -->
+            <div v-if="advancedStats?.has_sufficient_data?.time_of_day" class="glass-card-elevated p-6 mb-6 animate-fade-up">
+              <div class="flex items-center gap-3 mb-4">
+                <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
+                <h3 class="text-size-3 font-semibold text-foreground">Rendimiento por Hora del Día</h3>
+              </div>
+              <TimeOfDayChart :data="advancedStats.win_rate_by_time_of_day" />
+            </div>
+            <InsufficientDataMessage v-else message="Necesitas partidos en diferentes horarios" class="mb-6" />
+
+            <!-- Best Month -->
+            <div v-if="advancedStats?.has_sufficient_data?.best_month && advancedStats.best_month" class="glass-card-elevated p-6 mb-6 animate-fade-up">
+              <div class="flex items-center gap-3 mb-4">
+                <Icon name="heroicons:star" class="w-5 h-5 text-accent" />
+                <h3 class="text-size-3 font-semibold text-foreground">Mejor Mes</h3>
+              </div>
+              <div class="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-accent-subtle/50 to-accent-subtle/20 border border-accent/30">
+                <div>
+                  <p class="text-size-2 font-bold text-foreground">{{ advancedStats.best_month.month }}</p>
+                  <p class="text-size-4 text-foreground-muted">{{ advancedStats.best_month.matches }} partidos</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-size-1 font-bold text-accent">{{ Math.round(advancedStats.best_month.win_rate) }}%</p>
+                  <p class="text-size-5 text-foreground-muted">Win Rate</p>
+                </div>
+              </div>
+            </div>
+            <InsufficientDataMessage v-else message="Necesitas partidos en al menos 2 meses diferentes" class="mb-6" />
+
+            <!-- Last Match Time -->
+            <div v-if="advancedStats?.has_sufficient_data?.last_match" class="glass-card-elevated p-6 mb-6 animate-fade-up">
+              <div class="flex items-center gap-3 mb-4">
+                <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
+                <h3 class="text-size-3 font-semibold text-foreground">Última Actividad</h3>
+              </div>
+              <div class="flex items-center gap-4 p-4 rounded-xl bg-surface-elevated border border-border-subtle">
+                <div class="w-12 h-12 rounded-lg bg-accent-subtle flex items-center justify-center">
+                  <Icon name="heroicons:calendar" class="w-6 h-6 text-accent" />
+                </div>
+                <div>
+                  <p class="text-size-2 font-bold text-foreground">{{ formatTimeSince(advancedStats.days_since_last_match) }}</p>
+                  <p class="text-size-5 text-foreground-muted">desde tu último partido</p>
+                </div>
+              </div>
+            </div>
+            <InsufficientDataMessage v-else message="Juega al menos 1 partido para ver tu última actividad" class="mb-6" />
+
+            <!-- Head to Head Section -->
+            <div class="glass-card-elevated p-6 mb-6 animate-fade-up">
+              <div class="flex items-center gap-3 mb-6">
+                <Icon name="heroicons:user-group" class="w-5 h-5 text-accent" />
+                <h3 class="text-size-3 font-semibold text-foreground">Head to Head</h3>
+              </div>
+              
+              <!-- Opponent Selector -->
+              <div class="mb-6">
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Buscar Oponente</label>
+                <div class="relative">
+                  <input
+                    v-model="searchQuery"
+                    type="text"
+                    @input="handleH2HSearch"
+                    @focus="showSearchResults = true"
+                    class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                    placeholder="Buscar por nombre..."
+                  />
+                  <!-- Search Results -->
+                  <div v-if="showSearchResults && searchResults.length > 0" class="absolute z-10 w-full mt-2 border border-border-subtle rounded-xl bg-surface max-h-60 overflow-y-auto">
+                    <button
+                      v-for="result in searchResults"
+                      :key="result.id"
+                      type="button"
+                      @click="selectH2HOpponent(result)"
+                      class="w-full px-4 py-3 text-left hover:bg-accent-subtle/50 transition-colors border-b border-border-subtle last:border-b-0"
+                    >
+                      <div class="flex items-center gap-2">
+                        <p class="text-size-3 font-semibold text-foreground">{{ result.name }}</p>
+                        <div v-if="getPlayerTier(result)" class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-border-subtle">
+                          <img
+                            v-if="getPlayerRankIcon(result)"
+                            :src="getPlayerRankIcon(result)"
+                            :alt="`${getPlayerTier(result)} tier icon`"
+                            class="w-4 h-4 object-contain"
+                          >
+                          <p class="text-size-4 font-regular text-foreground-muted">
+                            {{ getTierNameInSpanish(getPlayerTier(result)) }}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="h2hOpponent" class="mt-2 p-3 rounded-xl bg-accent-subtle/50 border border-accent/30">
+                  <p class="text-size-4 text-foreground-muted mb-1">Oponente seleccionado:</p>
+                  <p class="text-size-3 font-semibold text-foreground">{{ h2hOpponent.name }}</p>
+                </div>
+              </div>
+
+              <!-- Period Selector for H2H -->
+              <div v-if="h2hOpponent" class="mb-6">
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Período</label>
+                <div class="flex gap-2 flex-wrap sm:flex-nowrap">
+                  <button
+                    v-for="period in [
+                      { value: 'month', label: 'Último Mes' },
+                      { value: 'year', label: 'Último Año' },
+                      { value: 'all', label: 'Todo el Tiempo' }
+                    ]"
+                    :key="period.value"
+                    @click="h2hPeriod = period.value as any"
+                    class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-size-4 sm:text-size-4 font-semibold transition-all"
+                    :class="h2hPeriod === period.value
+                      ? 'bg-accent text-white'
+                      : 'bg-surface-elevated text-foreground hover:bg-surface hover:border-accent/30 border border-border-subtle'"
+                  >
+                    <span class="hidden sm:inline">{{ period.label }}</span>
+                    <span class="sm:hidden">{{ period.value === 'month' ? 'Mes' : period.value === 'year' ? 'Año' : 'Todo' }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- H2H Stats -->
+              <div v-if="h2hLoading" class="text-center py-12">
+                <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
+                <p class="text-size-4 text-foreground-muted">Cargando estadísticas...</p>
+              </div>
+              <div v-else-if="h2hOpponent && h2hStats">
+                <!-- Main Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle">
+                    <p class="text-size-5 text-foreground-muted mb-1">Record</p>
+                    <p class="text-size-2 font-bold text-foreground">{{ h2hStats.wins }}W - {{ h2hStats.losses }}L</p>
+                  </div>
+                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle">
+                    <p class="text-size-5 text-foreground-muted mb-1">Win Rate</p>
+                    <p class="text-size-2 font-bold text-accent">{{ Math.round(h2hStats.win_rate) }}%</p>
+                  </div>
+                </div>
+
+                <!-- Advanced Stats Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
+                    <p class="text-size-5 text-foreground-muted mb-1">Racha Actual</p>
+                    <p class="text-size-2 font-bold" :class="h2hStats.is_win_streak ? 'text-green-400' : 'text-red-400'">
+                      {{ h2hStats.current_streak }}
+                    </p>
+                  </div>
+                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
+                    <p class="text-size-5 text-foreground-muted mb-1">Avg ELO Ganado</p>
+                    <p class="text-size-2 font-bold text-green-400">+{{ Math.round(h2hStats.avg_elo_gain) }}</p>
+                  </div>
+                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
+                    <p class="text-size-5 text-foreground-muted mb-1">Avg ELO Perdido</p>
+                    <p class="text-size-2 font-bold text-red-400">-{{ Math.round(h2hStats.avg_elo_loss) }}</p>
+                  </div>
+                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
+                    <p class="text-size-5 text-foreground-muted mb-1">Tendencia</p>
+                    <p class="text-size-2 font-bold">
+                      <span v-if="h2hStats.trend === 'improving'" class="text-green-400">↑</span>
+                      <span v-else-if="h2hStats.trend === 'declining'" class="text-red-400">↓</span>
+                      <span v-else-if="h2hStats.trend === 'stable'" class="text-foreground-muted">→</span>
+                      <span v-else class="text-foreground-muted">-</span>
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Best/Worst Match -->
+                <div v-if="h2hStats.best_match || h2hStats.worst_match" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div v-if="h2hStats.best_match" class="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                    <p class="text-size-5 text-foreground-muted mb-1">Mejor Partido</p>
+                    <p class="text-size-2 font-bold text-green-400">+{{ h2hStats.best_match.elo_change }} ELO</p>
+                    <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.best_match.created_at) }}</p>
+                  </div>
+                  <div v-if="h2hStats.worst_match" class="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <p class="text-size-5 text-foreground-muted mb-1">Peor Partido</p>
+                    <p class="text-size-2 font-bold text-red-400">{{ h2hStats.worst_match.elo_change }} ELO</p>
+                    <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.worst_match.created_at) }}</p>
+                  </div>
+                </div>
+
+                <!-- View All Matches Button -->
+                <div v-if="h2hStats.matches && h2hStats.matches.length > 0" class="mt-6">
+                  <NuxtLink
+                    :to="`/matches?opponent_id=${h2hOpponent?.id}`"
+                    class="btn-secondary w-full justify-center group"
+                  >
+                    <Icon name="heroicons:list-bullet" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                    Ver Todos los Partidos ({{ h2hStats.total_matches }})
+                  </NuxtLink>
+                </div>
+              </div>
+              <div v-else-if="h2hOpponent && !h2hLoading" class="text-center py-12">
+                <Icon name="heroicons:information-circle" class="w-12 h-12 text-foreground-muted mx-auto mb-4" />
+                <p class="text-size-3 font-semibold text-foreground mb-2">No hay partidos</p>
+                <p class="text-size-4 text-foreground-muted">No has jugado contra este oponente en el período seleccionado</p>
+              </div>
+              <div v-else class="text-center py-12">
+                <Icon name="heroicons:user-group" class="w-12 h-12 text-foreground-muted mx-auto mb-4" />
+                <p class="text-size-4 text-foreground-muted">Selecciona un oponente para ver estadísticas head-to-head</p>
+              </div>
+            </div>
           </div>
 
           <!-- Section D.1: Recent Matches (show always, including placement) -->
@@ -522,8 +768,10 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, watch } from 'vue'
-import type { MonthlyDecayStatus, RatingTierInfo, RatingTier } from '~/types'
+import type { MonthlyDecayStatus, RatingTierInfo, RatingTier, AdvancedStats, HeadToHeadStats, PlayerSearchResult } from '~/types'
 import { useRankIconAsset } from '~/composables/useRankIcon'
+import { usePlayerSearch } from '~/composables/usePlayerSearch'
+import { getRatingTier } from '~/server/utils/rating-system'
 
 definePageMeta({
   middleware: 'auth'
@@ -533,6 +781,7 @@ definePageMeta({
 const { isAuthenticated, userId } = useAuthState()
 const { player, loading: playerLoading, fetchPlayer } = usePlayer()
 const { fetchDecayStatus, status: decayStatus } = useMonthlyDecay()
+const { searchPlayers, results: searchResults, loading: searchLoading, clearResults } = usePlayerSearch()
 
 
 // State
@@ -559,6 +808,14 @@ const historyStats = ref<{
   total_elo_change: number
   peak_elo: number
 } | null>(null)
+const advancedStats = ref<AdvancedStats | null>(null)
+const selectedPeriod = ref<'month' | 'year' | 'all'>('year')
+const h2hOpponent = ref<PlayerSearchResult | null>(null)
+const h2hStats = ref<HeadToHeadStats | null>(null)
+const h2hLoading = ref(false)
+const h2hPeriod = ref<'month' | 'year' | 'all'>('all')
+const searchQuery = ref('')
+const showSearchResults = ref(false)
 const nextTierProgress = ref<{
   currentTier: { tier: string; minElo: number; maxElo: number; color: string }
   nextTier: { tier: string; minElo: number; maxElo: number; color: string } | null
@@ -628,9 +885,9 @@ const loadAllData = async () => {
       $fetch<{
         success: boolean
         history: any[]
-        stats: typeof historyStats.value
+        stats: typeof historyStats.value & AdvancedStats
       }>(`/api/players/${player.value.id}/rating-history`, {
-        query: { limit: 20 }
+        query: { limit: 20, period: selectedPeriod.value }
       }).catch(() => null),
       
       // Next tier progress (custom endpoint or calculate client-side)
@@ -652,7 +909,24 @@ const loadAllData = async () => {
 
     if (historyResponse?.success) {
       ratingHistory.value = historyResponse.history.slice().reverse() // Oldest first for chart
-      historyStats.value = historyResponse.stats
+      historyStats.value = {
+        wins: historyResponse.stats.wins,
+        losses: historyResponse.stats.losses,
+        win_rate: historyResponse.stats.win_rate,
+        total_elo_change: historyResponse.stats.total_elo_change,
+        peak_elo: historyResponse.stats.peak_elo
+      }
+      advancedStats.value = {
+        current_win_streak: historyResponse.stats.current_win_streak,
+        best_win_streak: historyResponse.stats.best_win_streak,
+        current_losing_streak: historyResponse.stats.current_losing_streak,
+        win_rate_by_day_of_week: historyResponse.stats.win_rate_by_day_of_week,
+        win_rate_by_time_of_day: historyResponse.stats.win_rate_by_time_of_day,
+        best_month: historyResponse.stats.best_month,
+        days_since_last_match: historyResponse.stats.days_since_last_match,
+        period: historyResponse.stats.period,
+        has_sufficient_data: historyResponse.stats.has_sufficient_data
+      }
       
       // Get last 10 matches (includes both competitive and placement matches)
       recentMatches.value = historyResponse.history
@@ -679,7 +953,7 @@ const loadAllData = async () => {
 
   } catch (err: any) {
     console.error('Error loading ranking data:', err)
-    error.value = err
+    error.value = new Error('Error al cargar estadísticas. Por favor intenta de nuevo.')
     throw err // Re-throw so initialize can handle it
   }
 }
@@ -779,6 +1053,16 @@ const initialize = async () => {
   }
 }
 
+// Watch for period changes
+watch(selectedPeriod, () => {
+  if (player.value?.id && !loading.value) {
+    loadAllData().catch(err => {
+      console.error('Error loading ranking data:', err)
+      error.value = err
+    })
+  }
+})
+
 // Watch for player changes (in case player is loaded elsewhere)
 watch(() => player.value?.id, (newId, oldId) => {
   if (newId && newId !== oldId && !loading.value) {
@@ -788,6 +1072,112 @@ watch(() => player.value?.id, (newId, oldId) => {
     })
   }
 })
+
+// Head to Head functions
+const handleH2HSearch = async () => {
+  if (searchQuery.value.trim().length >= 2) {
+    await searchPlayers(searchQuery.value, player.value?.id)
+    showSearchResults.value = true
+  } else {
+    clearResults()
+    showSearchResults.value = false
+  }
+}
+
+const selectH2HOpponent = (opponent: PlayerSearchResult) => {
+  if (opponent.id === player.value?.id) {
+    return
+  }
+  h2hOpponent.value = opponent
+  searchQuery.value = opponent.name
+  showSearchResults.value = false
+  loadH2HStats()
+}
+
+const loadH2HStats = async () => {
+  if (!player.value?.id || !h2hOpponent.value?.id) {
+    return
+  }
+  
+  try {
+    h2hLoading.value = true
+    const response = await $fetch<{
+      success: boolean
+      stats: HeadToHeadStats | null
+      message?: string
+    }>(`/api/players/${player.value.id}/head-to-head/${h2hOpponent.value.id}`, {
+      query: { period: h2hPeriod.value }
+    }).catch((err: any) => {
+      console.error('Error loading head-to-head stats:', err)
+      throw new Error('Error al cargar estadísticas head-to-head. Por favor intenta de nuevo.')
+    })
+    
+    if (response.success) {
+      h2hStats.value = response.stats
+    }
+  } catch (err: any) {
+    console.error('Error loading head-to-head stats:', err)
+    h2hStats.value = null
+    // Show error message to user
+    if (err.message) {
+      // Could add a toast notification here if needed
+    }
+  } finally {
+    h2hLoading.value = false
+  }
+}
+
+watch(h2hPeriod, () => {
+  if (h2hOpponent.value) {
+    loadH2HStats()
+  }
+})
+
+const formatTimeSince = (days: number) => {
+  if (days === 0) return 'Hoy'
+  if (days === 1) return 'Ayer'
+  if (days < 7) return `Hace ${days} días`
+  if (days < 30) {
+    const weeks = Math.floor(days / 7)
+    return `Hace ${weeks} ${weeks === 1 ? 'semana' : 'semanas'}`
+  }
+  if (days < 365) {
+    const months = Math.floor(days / 30)
+    return `Hace ${months} ${months === 1 ? 'mes' : 'meses'}`
+  }
+  const years = Math.floor(days / 365)
+  return `Hace ${years} ${years === 1 ? 'año' : 'años'}`
+}
+
+// Get player tier from ELO
+const getPlayerTier = (player: PlayerSearchResult | null | undefined): string | null => {
+  if (!player || player.elo === undefined || player.elo === null) return null
+  const tierInfo = getRatingTier(player.elo)
+  return tierInfo.tier
+}
+
+// Get player rank icon path
+const getPlayerRankIcon = (player: PlayerSearchResult | null | undefined): string | null => {
+  const tier = getPlayerTier(player)
+  if (!tier) return null
+  return useRankIconAsset(tier)
+}
+
+// Get tier name in Spanish
+const getTierNameInSpanish = (tier: string | null): string => {
+  if (!tier) return ''
+  const tierNames: Record<string, string> = {
+    'Bronze': 'Bronce',
+    'Silver': 'Plata',
+    'Gold': 'Oro',
+    'Platinum': 'Platino',
+    'Diamond': 'Diamante',
+    'Master': 'Maestro',
+    'Grandmaster': 'Gran Maestro',
+    'Unrated': 'Sin clasificar'
+  }
+  return tierNames[tier] || tier
+}
 
 // Watch for auth/user changes
 watch([isAuthenticated, userId], async ([authenticated, uid]) => {

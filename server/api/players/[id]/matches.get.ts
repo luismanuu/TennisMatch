@@ -3,7 +3,8 @@ import { getSupabaseAdmin } from '~/server/utils/supabase'
 export default defineEventHandler(async (event) => {
   try {
     const playerId = getRouterParam(event, 'id')
-    const limit = parseInt(getQuery(event).limit as string) || 50
+    const limit = parseInt(getQuery(event).limit as string) || 20
+    const offset = parseInt(getQuery(event).offset as string) || 0
     
     if (!playerId) {
       throw createError({
@@ -27,6 +28,12 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Player not found'
       })
     }
+    
+    // Get total count of matches
+    const { count: totalMatches } = await supabase
+      .from('matches')
+      .select('id', { count: 'exact', head: true })
+      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
     
     // Fetch matches where player is player1 or player2
     const { data: matches, error: matchesError } = await supabase
@@ -60,10 +67,10 @@ export default defineEventHandler(async (event) => {
           name,
           category_id
         )
-      `)
+      `, { count: 'exact' })
       .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
       .order('created_at', { ascending: false })
-      .limit(limit)
+      .range(offset, offset + limit - 1)
     
     if (matchesError) {
       throw createError({
@@ -96,9 +103,20 @@ export default defineEventHandler(async (event) => {
       return match
     }))
     
+    const totalPages = Math.ceil((totalMatches || 0) / limit)
+    
     return {
       success: true,
-      matches: matchesWithRating || []
+      matches: matchesWithRating || [],
+      pagination: {
+        total: totalMatches || 0,
+        limit,
+        offset,
+        total_pages: totalPages,
+        current_page: Math.floor(offset / limit) + 1,
+        has_next: offset + limit < (totalMatches || 0),
+        has_previous: offset > 0
+      }
     }
   } catch (error: any) {
     throw createError({

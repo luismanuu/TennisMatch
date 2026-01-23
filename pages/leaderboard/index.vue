@@ -89,67 +89,6 @@
         </div>
       </div>
 
-      <!-- Your Position Section (for authenticated users) -->
-      <div 
-        v-if="isAuthenticated && player && nearbyPlayers.current" 
-        class="glass-card-elevated p-4 sm:p-6 mb-6 md:mb-8 animate-fade-up animate-delay-2"
-      >
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-            <Icon name="heroicons:user" class="w-5 h-5 text-accent" />
-          </div>
-          <div>
-            <h2 class="text-size-3 font-semibold text-foreground">Tu Posición</h2>
-            <p class="text-size-4 text-foreground-muted">Jugadores cercanos a tu ranking</p>
-          </div>
-        </div>
-        
-        <!-- Nearby Players List -->
-        <div class="space-y-2">
-          <!-- Players Above -->
-          <LeaderboardPlayerCard 
-            v-for="p in nearbyPlayers.above" 
-            :key="p.id" 
-            :player="p"
-          />
-          
-          <!-- Current User (Highlighted) -->
-          <LeaderboardPlayerCard 
-            v-if="nearbyPlayers.current"
-            :player="nearbyPlayers.current"
-          />
-          
-          <!-- Players Below -->
-          <LeaderboardPlayerCard 
-            v-for="p in nearbyPlayers.below" 
-            :key="p.id" 
-            :player="p"
-          />
-        </div>
-        
-        <!-- Quick Stats -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-4 md:mt-6 pt-4 md:pt-6 border-t border-border-subtle">
-          <div class="text-center">
-            <p class="text-size-1 font-bold text-gradient-static">{{ nearbyPlayers.current?.rank }}</p>
-            <p class="text-size-4 text-foreground-muted">Tu Posición</p>
-          </div>
-          <div class="text-center">
-            <p class="text-size-1 font-bold text-foreground">{{ nearbyPlayers.current?.elo }}</p>
-            <p class="text-size-4 text-foreground-muted">ELO Actual</p>
-          </div>
-          <div class="text-center">
-            <p class="text-size-1 font-bold text-foreground">{{ nearbyPlayers.current?.total_matches_played }}</p>
-            <p class="text-size-4 text-foreground-muted">Partidos</p>
-          </div>
-          <div class="text-center">
-            <p class="text-size-1 font-bold text-foreground">
-              {{ nearbyPlayers.above[0] ? nearbyPlayers.above[0].elo - (nearbyPlayers.current?.elo || 0) : 0 }}
-            </p>
-            <p class="text-size-4 text-foreground-muted">ELO para subir</p>
-          </div>
-        </div>
-      </div>
-
       <!-- Filters Section -->
       <div class="glass-card p-4 mb-6 animate-fade-up animate-delay-3">
         <div class="flex flex-col md:flex-row gap-4">
@@ -563,11 +502,11 @@ const initializeAroundUser = async () => {
   // Fetch players around user (by tier if rated, by ELO range if in placement)
   await loadPlayersAroundUser()
   
-  // Scroll to user after a short delay to ensure DOM is ready
+  // Scroll to user after DOM is ready
   await nextTick()
   setTimeout(() => {
     scrollToUser()
-  }, 100)
+  }, 300)
 }
 
 // Load players around user
@@ -694,16 +633,48 @@ const loadMoreBelow = async () => {
 
 // Scroll to user's position
 const scrollToUser = () => {
-  nextTick(() => {
-    if (scrollContainer.value) {
-      // Find the user's card element
-      const userCard = scrollContainer.value.querySelector('[data-user-card="true"]') as HTMLElement
-      if (userCard) {
-        // Scroll to top of container, then adjust to show user at top
-        scrollContainer.value.scrollTop = userCard.offsetTop - scrollContainer.value.offsetTop
+  // Use multiple attempts with delays to ensure DOM is ready
+  const attemptScroll = (attempt: number = 0) => {
+    if (attempt > 5) return // Max 5 attempts
+    
+    nextTick(() => {
+      if (scrollContainer.value) {
+        // Find the user's card element
+        const userCard = scrollContainer.value.querySelector('[data-user-card="true"]') as HTMLElement
+        if (userCard) {
+          // Calculate position relative to scroll container
+          const containerRect = scrollContainer.value.getBoundingClientRect()
+          const cardRect = userCard.getBoundingClientRect()
+          
+          // Calculate scroll position: position of card relative to container top
+          const scrollPosition = userCard.offsetTop - scrollContainer.value.offsetTop
+          
+          // Scroll with smooth behavior
+          scrollContainer.value.scrollTo({
+            top: scrollPosition - 20, // Add small offset for better visibility
+            behavior: 'smooth'
+          })
+          
+          // Also try scrollIntoView as fallback
+          setTimeout(() => {
+            userCard.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center',
+              inline: 'nearest'
+            })
+          }, 100)
+        } else if (attempt < 5) {
+          // Retry if element not found yet
+          setTimeout(() => attemptScroll(attempt + 1), 100)
+        }
+      } else if (attempt < 5) {
+        // Retry if container not ready yet
+        setTimeout(() => attemptScroll(attempt + 1), 100)
       }
-    }
-  })
+    })
+  }
+  
+  attemptScroll()
 }
 
 // Handle scroll events for infinite scroll
@@ -784,6 +755,24 @@ watch([isAuthenticated, userId], async ([auth, uid]) => {
     }
   }
 })
+
+// Watch rankings to scroll to user when they appear in the list
+// Only scroll if we're showing "around me" view and user is authenticated
+let scrollTimeout: ReturnType<typeof setTimeout> | null = null
+watch([rankings, showAroundMe], () => {
+  if (showAroundMe.value && isAuthenticated.value && player.value?.id) {
+    // Clear any pending scroll
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout)
+    }
+    // Wait a bit for DOM to update, then scroll
+    scrollTimeout = setTimeout(() => {
+      nextTick(() => {
+        scrollToUser()
+      })
+    }, 300)
+  }
+}, { deep: true })
 
 // Initialize on mount
 onMounted(() => {

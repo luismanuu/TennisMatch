@@ -99,12 +99,18 @@
     <!-- Tooltip -->
     <div 
       v-if="tooltip.show"
-      class="absolute px-3 py-2 rounded-lg bg-surface-elevated border border-border shadow-lg text-size-4 pointer-events-none z-10"
-      :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px', transform: 'translate(-50%, -100%)' }"
+      class="absolute px-3 py-2 rounded-lg bg-surface-elevated border border-border shadow-lg text-size-4 pointer-events-none z-50 whitespace-nowrap"
+      :style="{ 
+        left: tooltip.x + 'px', 
+        top: tooltip.y + 'px', 
+        transform: 'translate(-50%, -100%)',
+        marginTop: '-8px'
+      }"
+      style="background-color: var(--surface-elevated, oklch(0.22 0.01 250)); border-color: var(--border, oklch(0.25 0.01 250)); color: var(--foreground, oklch(0.95 0 0)); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);"
     >
-      <div class="font-semibold text-foreground">{{ tooltip.elo }} ELO</div>
-      <div class="text-foreground-muted text-size-5">
-        <span :class="tooltip.change >= 0 ? 'text-green-400' : 'text-red-400'">
+      <div class="font-semibold mb-1" style="color: var(--foreground, oklch(0.95 0 0));">{{ tooltip.elo }} ELO</div>
+      <div class="text-size-5">
+        <span :style="{ color: tooltip.change >= 0 ? '#10b981' : '#ef4444' }">
           {{ tooltip.change >= 0 ? '+' : '' }}{{ tooltip.change }}
         </span>
       </div>
