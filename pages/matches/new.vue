@@ -255,7 +255,7 @@
 
             <!-- Error Message -->
             <div v-if="error || formError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
-              <p class="text-size-4 font-regular text-red-400">{{ error?.message || formError }}</p>
+              <p class="text-size-4 font-regular text-red-400">{{ formError || error?.message || 'Error al procesar la solicitud' }}</p>
             </div>
 
             <!-- Success Message -->
@@ -463,8 +463,22 @@ const handleSubmit = async () => {
     }, 1500)
   } catch (err: any) {
     console.error('Error creating match:', err)
-    // Show error to user
-    const errorMessage = err?.message || err?.statusMessage || 'Error al registrar el partido. Por favor intenta de nuevo.'
+    // Show error to user - extract message from various possible locations
+    let errorMessage = 'Error al registrar el partido. Por favor intenta de nuevo.'
+    
+    // Try to extract error message from different possible locations
+    if (err?.data?.message) {
+      errorMessage = err.data.message
+    } else if (err?.data?.statusMessage) {
+      errorMessage = err.data.statusMessage
+    } else if (err?.statusMessage) {
+      errorMessage = err.statusMessage
+    } else if (err?.message) {
+      errorMessage = err.message
+    } else if (typeof err?.data === 'string') {
+      errorMessage = err.data
+    }
+    
     formError.value = errorMessage
   } finally {
     submitting.value = false

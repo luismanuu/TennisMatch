@@ -88,6 +88,62 @@ export default defineEventHandler(async (event) => {
           statusMessage: 'Invalid player2_id'
         })
       }
+      
+      // Validate: if competitive match, check if players already played 4+ times this month
+      // Only apply this restriction to competitive matches, friendly matches are allowed
+      const isCompetitive = is_competitive !== undefined ? is_competitive : true
+      if (isCompetitive) {
+        // Calculate date boundaries for current month
+        const now = new Date()
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+        const firstDayOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        
+        // Fetch all competitive completed matches between these two players this month
+        const [matchesAsPlayer1, matchesAsPlayer2] = await Promise.all([
+          supabase
+            .from('matches')
+            .select('id')
+            .eq('status', 'completed')
+            .eq('is_competitive', true)
+            .eq('player1_id', player1_id)
+            .eq('player2_id', player2_id)
+            .gte('played_at', firstDayOfMonth.toISOString())
+            .lt('played_at', firstDayOfNextMonth.toISOString()),
+          supabase
+            .from('matches')
+            .select('id')
+            .eq('status', 'completed')
+            .eq('is_competitive', true)
+            .eq('player1_id', player2_id)
+            .eq('player2_id', player1_id)
+            .gte('played_at', firstDayOfMonth.toISOString())
+            .lt('played_at', firstDayOfNextMonth.toISOString())
+        ])
+        
+        // Check for errors in queries
+        if (matchesAsPlayer1.error) {
+          console.error('Error fetching matches as player1:', matchesAsPlayer1.error)
+        }
+        if (matchesAsPlayer2.error) {
+          console.error('Error fetching matches as player2:', matchesAsPlayer2.error)
+        }
+        
+        // If there are errors, don't block match creation but log them
+        // Only validate if queries succeeded
+        if (!matchesAsPlayer1.error && !matchesAsPlayer2.error) {
+          const monthlyMatches = [
+            ...(matchesAsPlayer1.data || []),
+            ...(matchesAsPlayer2.data || [])
+          ]
+          
+          if (monthlyMatches.length >= 4) {
+            throw createError({
+              statusCode: 400,
+              statusMessage: 'No puedes programar más de 4 partidos competitivos con el mismo jugador en un mes. Puedes programar un partido amistoso en su lugar.'
+            })
+          }
+        }
+      }
     }
     
     // If pending_player2_id is provided, verify it exists
@@ -141,7 +197,7 @@ export default defineEventHandler(async (event) => {
       matchData.pending_player2_id = pending_player2_id
     }
     
-    const { data: match, error: createError } = await supabase
+    const { data: match, error: matchInsertError } = await supabase
       .from('matches')
       .insert(matchData)
       .select(`
@@ -198,11 +254,11 @@ export default defineEventHandler(async (event) => {
       `)
       .single()
     
-    if (createError) {
+    if (matchInsertError) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create match',
-        data: createError
+        data: matchInsertError
       })
     }
     
@@ -284,9 +340,11 @@ export default defineEventHandler(async (event) => {
     
     return match
   } catch (error: any) {
+    console.error('Error in matches POST endpoint:', error)
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || error.message || 'Internal server error',
+      data: error.data || error
     })
   }
 })

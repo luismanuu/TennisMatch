@@ -51,7 +51,7 @@
         <!-- Match Content -->
         <div v-else-if="match" class="max-w-5xl mx-auto space-y-8 animate-fade-up">
           <!-- Header with Back Button and Status -->
-          <div class="flex items-center justify-between animate-fade-up animate-delay-1">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 animate-fade-up animate-delay-1">
             <NuxtLink 
               :to="getBackUrl()" 
               class="group flex items-center gap-2 text-size-3 text-foreground-muted hover:text-foreground transition-all"
@@ -59,11 +59,11 @@
               <Icon name="heroicons:arrow-left" class="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <span>{{ getBackLabel() }}</span>
             </NuxtLink>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
               <MatchTournamentBadge :match="match" />
-              <div class="flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm" :class="statusBadgeClass">
-                <Icon :name="statusIcon" class="w-4 h-4" />
-                <span class="text-size-4 font-semibold">{{ statusLabel }}</span>
+              <div class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full border backdrop-blur-sm" :class="statusBadgeClass">
+                <Icon :name="statusIcon" class="w-4 h-4 flex-shrink-0" />
+                <span class="text-size-4 font-semibold whitespace-nowrap">{{ statusLabel }}</span>
               </div>
             </div>
           </div>
@@ -78,9 +78,9 @@
             
             <!-- Players Section -->
             <div class="mb-10">
-              <div class="flex items-center justify-center gap-6 md:gap-12 mb-8">
+              <div class="flex flex-col sm:flex-row items-center sm:items-center justify-center gap-4 sm:gap-6 md:gap-12 mb-8">
                 <!-- Player 1 -->
-                <div class="flex-1 max-w-xs">
+                <div class="w-full sm:flex-1 sm:max-w-xs">
                   <div class="group relative p-6 rounded-2xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 transition-all hover-lift">
                     <div class="flex flex-col items-center text-center">
                       <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -121,15 +121,15 @@
                 </div>
 
                 <!-- VS Divider -->
-                <div class="flex flex-col items-center">
-                  <div class="w-16 h-16 rounded-full bg-surface border-2 border-border-subtle flex items-center justify-center">
-                    <span class="text-size-3 font-bold text-foreground-muted">VS</span>
+                <div class="flex flex-row sm:flex-col items-center justify-center gap-2 sm:gap-0">
+                  <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-surface border-2 border-border-subtle flex items-center justify-center flex-shrink-0">
+                    <span class="text-size-4 sm:text-size-3 font-bold text-foreground-muted">VS</span>
                   </div>
-                  <div class="h-24 w-px bg-gradient-to-b from-border-subtle via-accent/50 to-border-subtle mt-4"></div>
+                  <div class="hidden sm:block w-px h-24 bg-gradient-to-b from-border-subtle via-accent/50 to-border-subtle mt-4"></div>
                 </div>
 
                 <!-- Player 2 -->
-                <div class="flex-1 max-w-xs">
+                <div class="w-full sm:flex-1 sm:max-w-xs">
                   <div class="group relative p-6 rounded-2xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 transition-all hover-lift">
                     <div class="flex flex-col items-center text-center">
                       <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent-secondary/20 to-accent-secondary/5 border-2 border-accent-secondary/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -184,54 +184,54 @@
             </div>
 
             <!-- Match Details Grid -->
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
               <!-- Scheduled Time -->
-              <div class="p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-center gap-3 mb-3">
-                  <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+              <div class="p-4 sm:p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-start sm:items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center flex-shrink-0">
                     <Icon name="heroicons:calendar" class="w-5 h-5 text-accent" />
                   </div>
-                  <div>
+                  <div class="flex-1 min-w-0">
                     <p class="text-size-4 font-semibold text-foreground-muted mb-1">Fecha y Hora</p>
-                    <p v-if="match.scheduled_at" class="text-size-3 text-foreground font-semibold">
+                    <p v-if="match.scheduled_at" class="text-size-3 text-foreground font-semibold break-words">
                       {{ formatDateTime(match.scheduled_at) }}
                     </p>
-                    <p v-else class="text-size-3 text-yellow-400 font-semibold flex items-center gap-2">
-                      <Icon name="heroicons:clock" class="w-5 h-5" />
-                      Sin agendar - Los jugadores deben programar este partido
+                    <p v-else class="text-size-4 sm:text-size-3 text-yellow-400 font-semibold flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                      <Icon name="heroicons:clock" class="w-5 h-5 flex-shrink-0" />
+                      <span class="break-words">Sin agendar - Los jugadores deben programar este partido</span>
                     </p>
                   </div>
                 </div>
               </div>
 
               <!-- Location -->
-              <div v-if="match.location" class="p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-center gap-3 mb-3">
-                  <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
+              <div v-if="match.location" class="p-4 sm:p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-start sm:items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center flex-shrink-0">
                     <Icon name="heroicons:map-pin" class="w-5 h-5 text-accent-secondary" />
                   </div>
-                  <div>
+                  <div class="flex-1 min-w-0">
                     <p class="text-size-4 font-semibold text-foreground-muted mb-1">Ubicación</p>
-                    <p class="text-size-3 text-foreground font-semibold">{{ match.location }}</p>
+                    <p class="text-size-3 text-foreground font-semibold break-words">{{ match.location }}</p>
                   </div>
                 </div>
               </div>
 
               <!-- Competitive Status -->
-              <div class="p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-center gap-3 mb-3">
-                  <div class="w-10 h-10 rounded-lg flex items-center justify-center" :class="match.is_competitive !== false ? 'bg-green-500/20' : 'bg-gray-500/20'">
+              <div class="p-4 sm:p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
+                <div class="flex items-start sm:items-center gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" :class="match.is_competitive !== false ? 'bg-green-500/20' : 'bg-gray-500/20'">
                     <Icon 
                       :name="match.is_competitive !== false ? 'heroicons:trophy' : 'heroicons:hand-raised'" 
                       class="w-5 h-5" 
                       :class="match.is_competitive !== false ? 'text-green-400' : 'text-gray-400'"
                     />
                   </div>
-                  <div>
+                  <div class="flex-1 min-w-0">
                     <p class="text-size-4 font-semibold text-foreground-muted mb-1">Tipo de Partido</p>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 mb-2">
                       <span 
-                        class="text-size-3 font-semibold px-3 py-1 rounded-full"
+                        class="text-size-3 font-semibold px-3 py-1 rounded-full whitespace-nowrap"
                         :class="match.is_competitive !== false 
                           ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
                           : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'"
@@ -239,7 +239,7 @@
                         {{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}
                       </span>
                     </div>
-                    <p class="text-size-5 text-foreground-muted mt-2">
+                    <p class="text-size-5 text-foreground-muted break-words">
                       {{ match.is_competitive !== false 
                         ? 'Cuenta para rankings y placement' 
                         : 'No cuenta para rankings' }}
@@ -290,7 +290,7 @@
               <!-- Show ELO changes when ready -->
               <div v-else-if="match.is_competitive && ratingHistory && (ratingHistory.player1 || ratingHistory.player2)" class="pt-4 border-t border-accent/20">
                 <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de ELO</p>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <!-- Player 1 ELO Change -->
                   <div v-if="ratingHistory.player1 && match.player1" class="p-3 rounded-lg bg-surface/50 border border-border-subtle">
                     <div class="flex items-center gap-2 mb-1">
@@ -377,7 +377,7 @@
                       </p>
                     </div>
                   </div>
-                  <div class="flex gap-3">
+                  <div class="flex flex-col sm:flex-row gap-3">
                     <button
                       @click="openAcceptMatchForm"
                       :disabled="actionLoading"
@@ -427,7 +427,7 @@
                       <p class="text-size-4 font-semibold text-foreground">{{ match.acceptance_proposed_location || 'Sin ubicación' }}</p>
                       <p class="text-size-5 text-foreground-muted mt-1">Ubicación original: {{ match.location || 'Sin ubicación' }}</p>
                     </div>
-                    <div class="flex gap-3">
+                    <div class="flex flex-col sm:flex-row gap-3">
                       <button
                         @click="handleApproveAcceptanceChange"
                         :disabled="actionLoading"
@@ -562,7 +562,7 @@
                     <p class="text-size-4 font-semibold text-foreground mb-4">
                       {{ formatDateTime(match.schedule_proposed_scheduled_at) }}
                     </p>
-                    <div class="flex gap-3">
+                    <div class="flex flex-col sm:flex-row gap-3">
                       <button
                         @click="handleApproveSchedule"
                         :disabled="actionLoading"
@@ -604,7 +604,7 @@
 
               <!-- Score Approval/Rejection (players only) -->
               <div v-if="match.status === 'active' && match.score_proposed_by && match.score_proposed_by !== currentPlayerId && isPlayerInMatch && !isTournamentOrganizer">
-                <div class="flex gap-3">
+                <div class="flex flex-col sm:flex-row gap-3">
                   <button
                     @click="handleApproveScore"
                     :disabled="actionLoading"
@@ -692,7 +692,7 @@
                     <span class="font-semibold text-foreground">{{ match.reschedule_proposed_by_player?.name }}</span> propone cambiar la fecha a: 
                     <span class="font-semibold text-foreground">{{ formatDateTime(match.reschedule_proposed_scheduled_at!) }}</span>
                   </p>
-                  <div class="flex gap-3">
+                  <div class="flex flex-col sm:flex-row gap-3">
                     <button
                       @click="handleApproveReschedule"
                       :disabled="actionLoading"
@@ -771,7 +771,7 @@
                       <p class="text-size-4 font-regular text-red-400">{{ rescheduleFormError }}</p>
                     </div>
 
-                    <div class="flex gap-3 pt-2">
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
                       <button
                         type="submit"
                         :disabled="actionLoading"
@@ -838,7 +838,7 @@
                       <p class="text-size-4 font-regular text-red-400">{{ scheduleFormError }}</p>
                     </div>
 
-                    <div class="flex gap-3 pt-2">
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
                       <button
                         type="submit"
                         :disabled="actionLoading"
@@ -912,7 +912,7 @@
                       </select>
                     </div>
 
-                    <div class="flex gap-3 pt-2">
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
                       <button
                         type="submit"
                         :disabled="actionLoading"

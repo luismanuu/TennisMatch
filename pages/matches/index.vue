@@ -260,6 +260,23 @@
           </button>
         </div>
 
+        <!-- 24 Hour Filter Info -->
+        <div 
+          v-if="!loading && !error && isShowingDefault24HourFilter" 
+          class="mb-4 sm:mb-6 animate-fade-up"
+        >
+          <div class="glass-card-elevated p-3 sm:p-4 rounded-xl border border-accent/30 bg-accent-subtle/20 backdrop-blur-sm">
+            <div class="flex items-center gap-2 sm:gap-3">
+              <Icon name="heroicons:information-circle" class="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
+              <p class="text-xs sm:text-size-4 text-foreground-muted">
+                <span class="font-semibold text-foreground">Mostrando partidos de las últimas 24 horas</span>
+                <span class="hidden sm:inline"> por defecto. Usa los filtros de fecha para ver más partidos.</span>
+                <span class="sm:hidden"> por defecto.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
         <!-- Matches List -->
         <div v-if="!loading && !error && paginatedFilteredMatches.length > 0" class="space-y-3 sm:space-y-4">
           <div 
@@ -436,7 +453,7 @@
         </div>
 
         <!-- Pagination -->
-        <div v-if="!loading && !error && totalFilteredPages > 1" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
+        <div v-if="!loading && !error && (totalFilteredPages > 1 || (matches.value && matches.value.length >= pageSize && (pagination.value?.hasMore || pagination.value?.totalPages > 1)))" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
           <button
             @click="handlePreviousPage"
             :disabled="currentPage === 1"
@@ -616,11 +633,16 @@ onMounted(() => {
 
 const filteredMatches = computed(() => {
   // Start with a copy to avoid mutating the original array
+  // Handle case when matches.value is undefined
+  if (!matches.value || !Array.isArray(matches.value)) {
+    return []
+  }
   let filtered = [...matches.value]
   
   // Apply status filter
   if (statusFilter.value === 'pending') {
     // Show matches where CURRENT USER has a pending action to take
+    // This requires complex client-side filtering
     filtered = filtered.filter(m => {
       if (!player.value) return false
       
@@ -675,12 +697,17 @@ const filteredMatches = computed(() => {
       
       return false
     })
-  } else if (statusFilter.value === 'cancelled') {
-    filtered = filtered.filter(m => m.status === 'cancelled')
-  } else if (!statusFilter.value) {
-    filtered = filtered.filter(m => m.status !== 'cancelled')
   } else {
-    filtered = filtered.filter(m => m.status === statusFilter.value)
+    // For non-pending filters, backend already filters by status
+    // But we still apply client-side filtering for consistency and to handle edge cases
+    // (e.g., if backend filtering isn't perfect, or for cancelled filter)
+    if (statusFilter.value === 'cancelled') {
+      filtered = filtered.filter(m => m.status === 'cancelled')
+    } else if (!statusFilter.value) {
+      filtered = filtered.filter(m => m.status !== 'cancelled')
+    } else {
+      filtered = filtered.filter(m => m.status === statusFilter.value)
+    }
   }
   
   // Always re-sort to maintain order
@@ -740,17 +767,64 @@ const filteredMatches = computed(() => {
 })
 
 const paginatedFilteredMatches = computed(() => {
-  // Always apply pagination to maintain consistent display
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredMatches.value.slice(start, end)
+  // For 'pending' filter, apply client-side pagination
+  if (statusFilter.value === 'pending') {
+    const start = (currentPage.value - 1) * pageSize
+    const end = start + pageSize
+    return filteredMatches.value.slice(start, end)
+  }
+  // For all other filters, backend already returns paginated results
+  // Just return the filtered matches (which are already paginated by backend)
+  return filteredMatches.value
 })
 
 const totalFilteredPages = computed(() => {
-  if (statusFilter.value) {
-    return Math.ceil(filteredMatches.value.length / pageSize)
+  // For 'pending' filter, use client-side pagination
+  if (statusFilter.value === 'pending') {
+    const pages = Math.ceil(filteredMatches.value.length / pageSize)
+    return pages > 0 ? pages : 1
   }
-  return pagination.value?.totalPages || 1
+  // For all other filters, use backend pagination
+  // First, try to use totalPages from backend
+  if (pagination.value?.totalPages !== undefined && pagination.value.totalPages > 0) {
+    console.log('[Matches] totalFilteredPages: Using backend totalPages:', pagination.value.totalPages)
+    return pagination.value.totalPages
+  }
+  // Fallback: calculate from total if available
+  if (pagination.value?.total !== undefined && pagination.value.total > 0) {
+    const calculated = Math.ceil(pagination.value.total / pageSize)
+    console.log('[Matches] totalFilteredPages: Calculated from total:', calculated, 'total:', pagination.value.total)
+    return calculated
+  }
+  // If we have exactly pageSize matches, check hasMore
+  if (matches.value && matches.value.length === pageSize) {
+    // If hasMore is explicitly false, we know this is the last page
+    if (pagination.value?.hasMore === false) {
+      console.log('[Matches] totalFilteredPages: hasMore is false, returning 1')
+      return 1
+    }
+    // If hasMore is true or undefined, assume there might be more pages
+    const estimated = Math.max(2, currentPage.value + 1)
+    console.log('[Matches] totalFilteredPages: Estimated pages from hasMore:', estimated, 'hasMore:', pagination.value?.hasMore)
+    return estimated
+  }
+  // Default: only one page
+  console.log('[Matches] totalFilteredPages: Default to 1, matches.length:', matches.value?.length || 0)
+  return 1
+})
+
+// Determine if we're showing the default 24-hour filter
+const isShowingDefault24HourFilter = computed(() => {
+  // Show message when:
+  // 1. No status filter is applied (showing "Todos")
+  // 2. No date filters are applied
+  // 3. No opponent filter is applied
+  return (
+    statusFilter.value === null &&
+    !appliedDateFilterStart.value &&
+    !appliedDateFilterEnd.value &&
+    !opponentFilter.value
+  )
 })
 
 const handleOpponentSearch = async () => {
@@ -791,18 +865,26 @@ const clearOpponentFilter = () => {
 
 const loadMatches = async (page: number = 1) => {
   if (isLoaded.value && userId.value) {
-    // Use backend filtering instead of loading all matches
+    // Use backend filtering with pagination for all filters
     // Default: show matches from last 24 hours ONLY when statusFilter is null (Todos)
     // Status filter is handled by backend when statusFilter is set
     const filters: { status?: string; start_date?: string; end_date?: string; skip_24h_filter?: boolean; opponent_id?: string } = {}
-    if (statusFilter.value && statusFilter.value !== 'pending') {
-      filters.status = statusFilter.value
-    }
     
-    // For 'pending' filter, skip 24-hour filter to load all relevant matches
-    // because we need to filter client-side with complex logic
+    // For 'pending' filter, we need to load all matches and filter client-side
+    // because it requires complex logic based on match state
     if (statusFilter.value === 'pending') {
       filters.skip_24h_filter = true
+      // Load a large number to ensure we catch all pending actions, then paginate client-side
+      const limit = 1000
+      console.log('[Matches] loadMatches: Loading all matches for pending filter, limit:', limit)
+      await fetchMatches(userId.value, 1, limit, filters)
+      currentPage.value = page
+      return
+    }
+    
+    // For all other filters, use backend pagination with page size 10
+    if (statusFilter.value) {
+      filters.status = statusFilter.value
     }
     
     // Apply date filters if set by user (use applied values, not input values)
@@ -826,12 +908,10 @@ const loadMatches = async (page: number = 1) => {
       console.log('[Matches] loadMatches: No opponent filter')
     }
     
-    // For 'pending' filter, we still need to load and filter client-side
-    // because it requires complex logic based on match state
-    // Load more matches for pending filter to ensure we catch all pending actions
-    const limit = statusFilter.value === 'pending' ? 1000 : 50
-    console.log('[Matches] loadMatches: Calling fetchMatches with filters:', filters, 'limit:', limit)
-    await fetchMatches(userId.value, 1, limit, filters)
+    // Use page size 10 for all filters (backend pagination)
+    const limit = pageSize
+    console.log('[Matches] loadMatches: Calling fetchMatches with filters:', filters, 'page:', page, 'limit:', limit)
+    await fetchMatches(userId.value, page, limit, filters)
     console.log('[Matches] loadMatches: Matches loaded:', matches.value.length)
     currentPage.value = page
   }
@@ -875,14 +955,18 @@ const clearDateFilter = () => {
 
 const handlePreviousPage = () => {
   currentPage.value = Math.max(1, currentPage.value - 1)
-  if (!statusFilter.value) {
+  // For 'pending' filter, pagination is client-side, no need to reload
+  // For all other filters, reload from backend
+  if (statusFilter.value !== 'pending') {
     loadMatches(currentPage.value)
   }
 }
 
 const handleNextPage = () => {
   currentPage.value = Math.min(totalFilteredPages.value, currentPage.value + 1)
-  if (!statusFilter.value) {
+  // For 'pending' filter, pagination is client-side, no need to reload
+  // For all other filters, reload from backend
+  if (statusFilter.value !== 'pending') {
     loadMatches(currentPage.value)
   }
 }
