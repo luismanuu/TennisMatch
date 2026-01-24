@@ -14,7 +14,7 @@
     <div class="h-16"></div>
 
     <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+      <div :class="['px-6', activeTab === 'fallback-matches' ? 'max-w-[1800px] mx-auto' : 'container-medium']">
         <!-- Header -->
         <div class="text-center mb-12 animate-fade-up">
           <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
@@ -1388,16 +1388,16 @@
           <div v-if="fallbackMatches.length > 0" class="space-y-6 animate-fade-up">
             <div class="glass-card-elevated overflow-hidden">
               <div class="overflow-x-auto">
-                <table class="w-full">
+                <table class="w-full min-w-[1400px]">
                   <thead>
                     <tr class="border-b border-border-subtle bg-surface/50">
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Date</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Player 1</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Player 2</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell">Score</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Status</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Fallback Reason</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Actions</th>
+                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-32">Date</th>
+                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-40">Player 1</th>
+                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-40">Player 2</th>
+                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell w-24">Score</th>
+                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-32">Status</th>
+                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground min-w-[400px]">Fallback Reason</th>
+                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-32">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1459,13 +1459,15 @@
                         <td class="p-3 sm:p-4">
                           <button
                             @click="toggleExpandedMatch(match.id)"
-                            class="flex items-center gap-2 text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
+                            class="flex items-start gap-2 text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors w-full text-left"
                           >
                             <Icon 
                               :name="expandedMatches.has(match.id) ? 'heroicons:chevron-up' : 'heroicons:chevron-down'" 
-                              class="w-4 h-4"
+                              class="w-4 h-4 flex-shrink-0 mt-0.5"
                             />
-                            <span class="max-w-xs truncate">{{ match.fallback_reason || 'No reason provided' }}</span>
+                            <span class="flex-1 min-w-0" :class="expandedMatches.has(match.id) ? '' : 'line-clamp-2'">
+                              {{ match.fallback_reason || 'No reason provided' }}
+                            </span>
                           </button>
                         </td>
                         <td class="p-3 sm:p-4">
@@ -1488,20 +1490,36 @@
                         </td>
                       </tr>
                       <tr v-if="expandedMatches.has(match.id)" class="bg-surface/30">
-                        <td colspan="7" class="p-4">
-                          <div class="space-y-2">
-                            <h4 class="text-size-3 font-semibold text-foreground mb-2">Fallback Reason Details:</h4>
-                            <p class="text-size-4 font-regular text-foreground-muted whitespace-pre-wrap">{{ match.fallback_reason || 'No reason provided' }}</p>
-                            <div class="mt-3 pt-3 border-t border-border-subtle">
-                              <p class="text-size-5 font-semibold text-foreground-muted mb-1">Match Details:</p>
-                              <ul class="text-size-4 font-regular text-foreground-muted space-y-1">
-                                <li>Match ID: {{ match.id }}</li>
-                                <li>Played at: {{ formatDate(match.played_at || match.created_at) }}</li>
-                                <li>Score: {{ match.score || 'N/A' }}</li>
-                                <li>LLM Calculated: {{ match.llm_elo_calculated ? 'Yes' : 'No' }}</li>
-                                <li>LLM Failed: {{ match.llm_calculation_failed ? 'Yes' : 'No' }}</li>
-                                <li v-if="match.llm_calculation_timestamp">Calculation Timestamp: {{ formatDate(match.llm_calculation_timestamp) }}</li>
-                              </ul>
+                        <td colspan="7" class="p-6">
+                          <div class="space-y-4 max-w-none">
+                            <div>
+                              <h4 class="text-size-3 font-semibold text-foreground mb-3">Fallback Reason Details:</h4>
+                              <div class="bg-surface-elevated p-4 rounded-lg border border-border-subtle">
+                                <p class="text-size-4 font-regular text-foreground-muted whitespace-pre-wrap break-words">{{ match.fallback_reason || 'No reason provided' }}</p>
+                              </div>
+                            </div>
+                            <div class="pt-3 border-t border-border-subtle">
+                              <p class="text-size-5 font-semibold text-foreground-muted mb-2">Match Details:</p>
+                              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="text-size-4 font-regular text-foreground-muted">
+                                  <span class="font-semibold">Match ID:</span> {{ match.id }}
+                                </div>
+                                <div class="text-size-4 font-regular text-foreground-muted">
+                                  <span class="font-semibold">Played at:</span> {{ formatDate(match.played_at || match.created_at) }}
+                                </div>
+                                <div class="text-size-4 font-regular text-foreground-muted">
+                                  <span class="font-semibold">Score:</span> {{ match.score || 'N/A' }}
+                                </div>
+                                <div class="text-size-4 font-regular text-foreground-muted">
+                                  <span class="font-semibold">LLM Calculated:</span> {{ match.llm_elo_calculated ? 'Yes' : 'No' }}
+                                </div>
+                                <div class="text-size-4 font-regular text-foreground-muted">
+                                  <span class="font-semibold">LLM Failed:</span> {{ match.llm_calculation_failed ? 'Yes' : 'No' }}
+                                </div>
+                                <div v-if="match.llm_calculation_timestamp" class="text-size-4 font-regular text-foreground-muted">
+                                  <span class="font-semibold">Calculation Timestamp:</span> {{ formatDate(match.llm_calculation_timestamp) }}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </td>

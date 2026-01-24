@@ -210,10 +210,18 @@ export default defineEventHandler(async (event) => {
         const ratingResult = await updateRatingsAfterMatch(match.id, supabase)
 
         if (ratingResult) {
+          const llmStatus = ratingResult.llmUsed 
+            ? 'LLM calculation used' 
+            : ratingResult.llmFailed 
+              ? 'LLM calculation failed, used fallback' 
+              : 'Fallback calculation used (no API key or other reason)'
+          
           results.push({
             match_id: match.id,
             status: 'success',
-            message: `Successfully reprocessed. Player1: ${ratingResult.player1.eloChange > 0 ? '+' : ''}${ratingResult.player1.eloChange} ELO, Player2: ${ratingResult.player2.eloChange > 0 ? '+' : ''}${ratingResult.player2.eloChange} ELO`
+            message: `Successfully reprocessed. ${llmStatus}. Player1: ${ratingResult.player1.eloChange > 0 ? '+' : ''}${ratingResult.player1.eloChange} ELO, Player2: ${ratingResult.player2.eloChange > 0 ? '+' : ''}${ratingResult.player2.eloChange} ELO`,
+            llm_used: ratingResult.llmUsed || false,
+            llm_failed: ratingResult.llmFailed || false
           })
         } else {
           results.push({

@@ -125,13 +125,26 @@ export default defineEventHandler(async (event) => {
       const isReprocessed = reprocessedMatchIds.has(match.id)
       
       // Determine fallback reason
-      let fallbackReason = match.llm_calculation_reasoning || 'Unknown reason'
+      let fallbackReason = match.llm_calculation_reasoning || null
       
-      if (!fallbackReason || fallbackReason === 'Unknown reason') {
+      // If no reasoning stored, determine based on match state
+      if (!fallbackReason) {
         if (match.llm_calculation_failed === true) {
           fallbackReason = 'LLM calculation failed (error details not available)'
         } else if (match.llm_elo_calculated === false && match.llm_calculation_failed === false) {
-          fallbackReason = 'LLM calculation was not attempted (no API key or missing score)'
+          // Check if it's a walkover
+          const isWalkover = match.score?.trim().toUpperCase() === 'WO'
+          if (isWalkover) {
+            fallbackReason = 'Walkover (WO) match - using standard ELO calculation (no LLM needed)'
+          } else if (!match.score) {
+            fallbackReason = 'Match score not available. LLM calculation requires a score to analyze.'
+          } else {
+            fallbackReason = 'LLM calculation was not attempted - likely no API key configured (check OPENROUTER_API_KEY environment variable)'
+          }
+        } else if (match.llm_elo_calculated === true) {
+          fallbackReason = 'LLM calculation succeeded (this should not appear in fallback list)'
+        } else {
+          fallbackReason = 'Unknown reason - match may not have been processed yet'
         }
       }
 

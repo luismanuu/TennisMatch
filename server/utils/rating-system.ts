@@ -732,7 +732,10 @@ export async function updateRatingsAfterMatch(
   const LLM_MAX_RETRIES = 2
   const LLM_RETRY_DELAY_MS = 2000 // 2 seconds between retries
   
-  if (config.openRouterApiKey && match.score) {
+  // Check if score is a walkover (WO) - walkovers don't need LLM calculation
+  const isWalkover = match.score?.trim().toUpperCase() === 'WO'
+  
+  if (config.openRouterApiKey && match.score && !isWalkover) {
     let retryCount = 0
     
     while (retryCount <= LLM_MAX_RETRIES) {
@@ -800,9 +803,18 @@ export async function updateRatingsAfterMatch(
         }
       }
     }
+  } else if (isWalkover) {
+    // Walkover matches don't use LLM - they use standard ELO calculation
+    fallbackReason = 'Walkover (WO) match - using standard ELO calculation (no LLM needed).'
   } else if (!config.openRouterApiKey) {
     // No API key configured
     fallbackReason = 'No OpenRouter API key configured. LLM calculation was not attempted.'
+    console.warn('[LLM] No API key found. Check OPENROUTER_API_KEY environment variable.')
+    console.warn('[LLM] Config check:', {
+      hasApiKey: !!config.openRouterApiKey,
+      apiKeyType: typeof config.openRouterApiKey,
+      apiKeyLength: config.openRouterApiKey?.length || 0
+    })
   } else if (!match.score) {
     // No score available
     fallbackReason = 'Match score not available. LLM calculation requires a score to analyze.'
@@ -1184,6 +1196,8 @@ export async function updateRatingsAfterMatch(
       newUncertainty: mmrResult.player2NewUncertainty,
       winStreakBonus: eloResult.player2WinStreakBonus,
     },
+    llmUsed,
+    llmFailed
   }
 }
 

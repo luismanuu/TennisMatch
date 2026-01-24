@@ -580,6 +580,8 @@ export interface RatingCalculationResult {
     newUncertainty: number
     winStreakBonus: number
   }
+  llmUsed?: boolean
+  llmFailed?: boolean
 }
 
 // City segment management payloads
