@@ -973,6 +973,33 @@ export async function updateRatingsAfterMatch(
     isPlayer2PlacementMatch
   )
   
+  // Check if rating history already exists for this match (prevent duplicates)
+  // This prevents double-counting if updateRatingsAfterMatch is called multiple times
+  const { data: existingHistory, error: historyCheckError } = await supabase
+    .from('rating_history')
+    .select('id, player_id, rating_reversed')
+    .eq('match_id', matchId)
+    .eq('rating_reversed', false)
+    .limit(2) // We expect 2 entries (one per player) if they exist
+  
+  if (historyCheckError) {
+    console.error('Error checking existing rating history:', historyCheckError)
+    // Continue anyway - this is just a safety check
+  }
+  
+  // If rating history already exists and hasn't been reversed, skip calculation
+  // This prevents duplicate calculations if updateRatingsAfterMatch is called multiple times
+  if (existingHistory && existingHistory.length >= 2) {
+    const player1HistoryExists = existingHistory.some(h => h.player_id === player1.id)
+    const player2HistoryExists = existingHistory.some(h => h.player_id === player2.id)
+    
+    if (player1HistoryExists && player2HistoryExists) {
+      console.warn(`[updateRatingsAfterMatch] Rating history already exists for match ${matchId}. Skipping duplicate calculation.`)
+      // Return null to indicate no calculation was performed (match already processed)
+      return null
+    }
+  }
+  
   // Calculate new values
   const now = new Date()
   const currentMonth = now.getMonth()

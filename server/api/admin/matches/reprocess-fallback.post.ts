@@ -105,11 +105,43 @@ export default defineEventHandler(async (event) => {
         }
 
         if (!ratingHistory || ratingHistory.length === 0) {
-          results.push({
-            match_id: match.id,
-            status: 'skipped',
-            message: 'No rating history found for this match'
-          })
+          // No rating history - this match was never calculated, so just calculate it directly
+          // Clear LLM-related fields first
+          await supabase
+            .from('matches')
+            .update({
+              llm_elo_calculated: null,
+              llm_calculation_failed: null,
+              llm_calculation_reasoning: null,
+              llm_calculation_model: null,
+              llm_calculation_timestamp: null
+            })
+            .eq('id', match.id)
+
+          // Calculate directly (no reversal needed)
+          const ratingResult = await updateRatingsAfterMatch(match.id, supabase)
+
+          if (ratingResult) {
+            const llmStatus = ratingResult.llmUsed 
+              ? 'LLM calculation used' 
+              : ratingResult.llmFailed 
+                ? 'LLM calculation failed, used fallback' 
+                : 'Fallback calculation used (no API key or other reason)'
+            
+            results.push({
+              match_id: match.id,
+              status: 'success',
+              message: `Match had no previous calculation. ${llmStatus}. Player1: ${ratingResult.player1.eloChange > 0 ? '+' : ''}${ratingResult.player1.eloChange} ELO, Player2: ${ratingResult.player2.eloChange > 0 ? '+' : ''}${ratingResult.player2.eloChange} ELO`,
+              llm_used: ratingResult.llmUsed || false,
+              llm_failed: ratingResult.llmFailed || false
+            })
+          } else {
+            results.push({
+              match_id: match.id,
+              status: 'error',
+              message: 'Calculation returned null (check logs for details)'
+            })
+          }
           continue
         }
 
