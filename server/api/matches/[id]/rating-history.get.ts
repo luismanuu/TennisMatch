@@ -74,7 +74,7 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Get rating history for both players for this match
+    // Get rating history for both players for this match (only non-reversed entries)
     const { data: ratingHistory, error: historyError } = await supabase
       .from('rating_history')
       .select(`
@@ -98,16 +98,39 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    // Check if we have rating history entries (even if reversed) to detect if match was reprocessed
+    const { data: allHistoryEntries } = await supabase
+      .from('rating_history')
+      .select('id, rating_reversed')
+      .eq('match_id', matchId)
+      .limit(1)
+    
+    // If no rating history exists at all, return null (ELO not calculated yet)
     if (!ratingHistory || ratingHistory.length === 0) {
+      // If there are reversed entries but no non-reversed ones, it means recalculation is in progress
+      // or failed - we should still return null so frontend shows "Calculando ELO..."
+      const hasReversedEntries = allHistoryEntries && allHistoryEntries.some((h: any) => h.rating_reversed)
+      if (hasReversedEntries) {
+        // Match was reprocessed but new entries not created yet - return null to show calculating state
+        // The frontend will continue polling until new entries are created
+        return {
+          success: true,
+          rating_history: null
+        }
+      }
+      
       return {
         success: true,
         rating_history: null
       }
     }
     
-    // Get player data
+    // Get player data - ensure we have entries for both players
     const player1History = ratingHistory.find(h => h.player_id === match.player1_id)
     const player2History = ratingHistory.find(h => h.player_id === match.player2_id)
+    
+    // If we only have one player's history, it might be incomplete - return what we have
+    // This can happen if rating history creation was interrupted, but we'll return partial data
     
     return {
       success: true,

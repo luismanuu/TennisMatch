@@ -1077,7 +1077,7 @@ export async function updateRatingsAfterMatch(
   
   // Record rating history for player 1
   const player1Expected = calculateExpectedScore(player1Effective.elo, player2Effective.elo)
-  await supabase.from('rating_history').insert({
+  const { error: player1HistoryError } = await supabase.from('rating_history').insert({
     player_id: player1.id,
     match_id: matchId,
     elo_before: player1IsUnrated ? player1DefaultElo : player1.elo,
@@ -1108,9 +1108,14 @@ export async function updateRatingsAfterMatch(
     reasoning_preview: reasoningPreview,
   })
   
+  if (player1HistoryError) {
+    console.error('Failed to insert rating history for player 1:', player1HistoryError)
+    // Continue anyway - rating history is important but not critical
+  }
+  
   // Record rating history for player 2
   const player2Expected = 1 - player1Expected
-  await supabase.from('rating_history').insert({
+  const { error: player2HistoryError } = await supabase.from('rating_history').insert({
     player_id: player2.id,
     match_id: matchId,
     elo_before: player2IsUnrated ? player2DefaultElo : player2.elo,
@@ -1140,6 +1145,11 @@ export async function updateRatingsAfterMatch(
     // LLM reasoning preview (same for both players)
     reasoning_preview: reasoningPreview,
   })
+  
+  if (player2HistoryError) {
+    console.error('Failed to insert rating history for player 2:', player2HistoryError)
+    // Continue anyway - rating history is important but not critical
+  }
   
   // Update player UTR ratings
   if (utrData) {
