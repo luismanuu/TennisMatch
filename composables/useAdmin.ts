@@ -603,7 +603,10 @@ export const useAdmin = () => {
           error?: string
         }>
       }>(
-        `/api/admin/matches/reprocess-fallback?clerk_id=${userId.value}&match_id=${matchId}`
+        `/api/admin/matches/reprocess-fallback?clerk_id=${userId.value}&match_id=${matchId}`,
+        {
+          method: 'POST'
+        }
       )
       
       // Refresh fallback matches list after reprocessing
