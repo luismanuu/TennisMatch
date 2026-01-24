@@ -225,7 +225,7 @@ async function callOpenRouterAPI(
         messages: [
           {
             role: 'system',
-            content: 'You are an expert tennis rating system analyst. Always return valid JSON responses.'
+            content: 'You are an expert tennis rating system analyst. Always return valid JSON responses. Keep reasoning concise (max 500 words).'
           },
           {
             role: 'user',
@@ -233,7 +233,8 @@ async function callOpenRouterAPI(
           }
         ],
         temperature: 0.3, // Lower temperature for more deterministic results
-        response_format: { type: 'json_object' } // Request JSON response
+        response_format: { type: 'json_object' }, // Request JSON response
+        max_tokens: 2000 // Limit response tokens to prevent excessive reasoning length
       }),
       signal: controller.signal
     })

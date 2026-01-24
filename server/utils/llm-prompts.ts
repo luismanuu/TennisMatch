@@ -212,7 +212,7 @@ Return a valid JSON object with the following structure:
   "games_won_p1": <number>,
   "games_lost_p1": <number>,
   "total_games": <number>,
-  "reasoning": "<detailed explanation of your calculation>"
+  "reasoning": "<concise explanation of your calculation, max 500 words>"
 }
 \`\`\`
 
@@ -222,7 +222,7 @@ Return a valid JSON object with the following structure:
 2. Match weight: Scale ELO changes by ${context.matchWeightFactors.finalWeight}
 3. Format: format_detected must be "${context.formatDetected}"
 4. Games: games_won_p1 + games_lost_p1 = total_games
-5. Reasoning: Explain calculation considering rating diff, competitiveness, score margin, match weight, recent form, head-to-head, and win streak bonus (if applied).
+5. Reasoning: Provide a concise explanation (max 500 words) covering: rating diff, competitiveness, score margin, match weight, recent form, head-to-head, and win streak bonus (if applied).
 
 Return JSON response.`
 }

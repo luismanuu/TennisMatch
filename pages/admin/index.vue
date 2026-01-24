@@ -2333,14 +2333,25 @@ const loadStats = async () => {
   }
 }
 
+// Track if fallback matches are being loaded to prevent duplicate calls
+const isLoadingFallbackMatches = ref(false)
+
 const loadFallbackMatches = async () => {
+  // Prevent duplicate calls
+  if (isLoadingFallbackMatches.value || loading.value) {
+    return
+  }
+  
   try {
+    isLoadingFallbackMatches.value = true
     successMessage.value = null
     await fetchFallbackMatches()
   } catch (err) {
     console.error('Error loading fallback matches:', err)
     const toastErr = useToastNotifications()
     toastErr.error('Failed to load fallback matches')
+  } finally {
+    isLoadingFallbackMatches.value = false
   }
 }
 
@@ -2390,7 +2401,12 @@ const handleFallbackMatchesPageChange = (page: number) => {
 }
 
 // Watch for tab changes to load data
-watch(activeTab, (newTab) => {
+watch(activeTab, (newTab, oldTab) => {
+  // Only load if tab actually changed (prevents duplicate calls on initial mount)
+  if (newTab === oldTab) {
+    return
+  }
+  
   if (newTab === 'overview') {
     loadStats()
   } else if (newTab === 'players') {
