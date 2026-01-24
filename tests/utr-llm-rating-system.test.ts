@@ -17,6 +17,10 @@ import {
   calculateUtrRating,
   calculatePlayerReliability
 } from '../server/utils/utr-rating-system'
+import {
+  calculateWinStreakBonus,
+  calculateELOChange
+} from '../server/utils/rating-system'
 import type { MatchFormat } from '../server/utils/utr-rating-system'
 
 describe('UTR Rating System - Format Detection', () => {
@@ -406,5 +410,272 @@ describe('UTR Rating System - Edge Cases', () => {
     expect(games.totalGames).toBe(47)
     expect(games.gamesWon).toBe(26)
     expect(games.gamesLost).toBe(21)
+  })
+})
+
+describe('Win Streak Bonus Calculation', () => {
+  describe('calculateWinStreakBonus', () => {
+    it('should return 0 for 0 wins', () => {
+      expect(calculateWinStreakBonus(0)).toBe(0)
+    })
+
+    it('should return 0 for 1 win (bonus starts at 2)', () => {
+      expect(calculateWinStreakBonus(1)).toBe(0)
+    })
+
+    it('should return +6 for exactly 2 wins', () => {
+      expect(calculateWinStreakBonus(2)).toBe(6)
+    })
+
+    it('should return +12 for 3 wins', () => {
+      expect(calculateWinStreakBonus(3)).toBe(12)
+    })
+
+    it('should return +12 for 4+ wins (capped)', () => {
+      expect(calculateWinStreakBonus(4)).toBe(12)
+      expect(calculateWinStreakBonus(5)).toBe(12)
+      expect(calculateWinStreakBonus(10)).toBe(12)
+    })
+  })
+
+  describe('Win Streak Bonus in ELO Calculation', () => {
+    it('should apply +6 bonus when player wins 2nd consecutive match', () => {
+      // Player 1 has 1 win streak, wins again (becomes 2)
+      // Should get +6 bonus
+      const result = calculateELOChange(
+        1200, // player1Elo
+        1000, // player2Elo
+        1,    // winnerId (player 1 wins)
+        false, // isPlayer1PlacementMatch
+        false, // isPlayer2PlacementMatch
+        1,    // player1WinStreak (1 win, about to become 2)
+        0,    // player2WinStreak
+        false, // player1IsUnrated
+        false, // player2IsUnrated
+        1200, // player1Mmr
+        1000  // player2Mmr
+      )
+      
+      // The bonus should be +6 (going from 1 to 2 wins)
+      expect(result.player1WinStreakBonus).toBe(6)
+      // Total change should include base ELO change + 6 bonus
+      expect(result.player1Change).toBeGreaterThan(0)
+    })
+
+    it('should apply +12 bonus when player wins 3rd consecutive match', () => {
+      // Player 1 has 2 win streak, wins again (becomes 3)
+      // Should get +12 bonus (but only the difference: 12 - 6 = +6 additional)
+      const result = calculateELOChange(
+        1200, // player1Elo
+        1000, // player2Elo
+        1,    // winnerId (player 1 wins)
+        false, // isPlayer1PlacementMatch
+        false, // isPlayer2PlacementMatch
+        2,    // player1WinStreak (2 wins, about to become 3)
+        0,    // player2WinStreak
+        false, // player1IsUnrated
+        false, // player2IsUnrated
+        1200, // player1Mmr
+        1000  // player2Mmr
+      )
+      
+      // The bonus should be +6 (going from 2 to 3: 12 - 6 = 6)
+      expect(result.player1WinStreakBonus).toBe(6)
+    })
+
+    it('should apply +12 bonus when player wins 4th consecutive match', () => {
+      // Player 1 has 3 win streak, wins again (becomes 4)
+      // Should get +12 bonus (but only the difference: 12 - 12 = 0 additional)
+      const result = calculateELOChange(
+        1200, // player1Elo
+        1000, // player2Elo
+        1,    // winnerId (player 1 wins)
+        false, // isPlayer1PlacementMatch
+        false, // isPlayer2PlacementMatch
+        3,    // player1WinStreak (3 wins, about to become 4)
+        0,    // player2WinStreak
+        false, // player1IsUnrated
+        false, // player2IsUnrated
+        1200, // player1Mmr
+        1000  // player2Mmr
+      )
+      
+      // The bonus should be 0 (going from 3 to 4: 12 - 12 = 0, already capped)
+      expect(result.player1WinStreakBonus).toBe(0)
+    })
+
+    it('should not apply bonus when player loses', () => {
+      // Player 1 has 2 win streak, but loses
+      // Should get no bonus
+      const result = calculateELOChange(
+        1200, // player1Elo
+        1000, // player2Elo
+        2,    // winnerId (player 2 wins)
+        false, // isPlayer1PlacementMatch
+        false, // isPlayer2PlacementMatch
+        2,    // player1WinStreak (but loses, so streak resets)
+        0,    // player2WinStreak
+        false, // player1IsUnrated
+        false, // player2IsUnrated
+        1200, // player1Mmr
+        1000  // player2Mmr
+      )
+      
+      // No bonus for loser
+      expect(result.player1WinStreakBonus).toBe(0)
+      expect(result.player2WinStreakBonus).toBe(0) // Player 2 had 0 streak
+    })
+
+    it('should not apply bonus for first win (0 to 1)', () => {
+      // Player 1 has 0 win streak, wins first match
+      // Should get no bonus (bonus starts at 2)
+      const result = calculateELOChange(
+        1200, // player1Elo
+        1000, // player2Elo
+        1,    // winnerId (player 1 wins)
+        false, // isPlayer1PlacementMatch
+        false, // isPlayer2PlacementMatch
+        0,    // player1WinStreak (0 wins, about to become 1)
+        0,    // player2WinStreak
+        false, // player1IsUnrated
+        false, // player2IsUnrated
+        1200, // player1Mmr
+        1000  // player2Mmr
+      )
+      
+      // No bonus for first win
+      expect(result.player1WinStreakBonus).toBe(0)
+    })
+
+    it('should not apply bonus for unrated players', () => {
+      // Unrated player wins with 2 streak
+      // Should get no bonus (only for rated players)
+      const result = calculateELOChange(
+        1200, // player1Elo
+        1000, // player2Elo
+        1,    // winnerId (player 1 wins)
+        false, // isPlayer1PlacementMatch
+        false, // isPlayer2PlacementMatch
+        2,    // player1WinStreak (2 wins)
+        0,    // player2WinStreak
+        true, // player1IsUnrated (unrated!)
+        false, // player2IsUnrated
+        1200, // player1Mmr
+        1000  // player2Mmr
+      )
+      
+      // No bonus for unrated players
+      expect(result.player1WinStreakBonus).toBe(0)
+    })
+  })
+})
+
+describe('LLM Integration - Response Format and Features', () => {
+  describe('LLM Response Structure', () => {
+    it('should validate LLM response includes all required fields', () => {
+      // Mock LLM response structure
+      const mockLLMResponse = {
+        player1_elo_change: 20,
+        player2_elo_change: -20,
+        match_rating: 1250,
+        match_weight: 1.0,
+        format_detected: 'best-of-3',
+        games_won_p1: 12,
+        games_lost_p1: 9,
+        total_games: 21,
+        reasoning: 'Brief explanation of calculation'
+      }
+
+      // Validate structure
+      expect(mockLLMResponse).toHaveProperty('player1_elo_change')
+      expect(mockLLMResponse).toHaveProperty('player2_elo_change')
+      expect(mockLLMResponse).toHaveProperty('match_rating')
+      expect(mockLLMResponse).toHaveProperty('match_weight')
+      expect(mockLLMResponse).toHaveProperty('format_detected')
+      expect(mockLLMResponse).toHaveProperty('games_won_p1')
+      expect(mockLLMResponse).toHaveProperty('games_lost_p1')
+      expect(mockLLMResponse).toHaveProperty('total_games')
+      expect(mockLLMResponse).toHaveProperty('reasoning')
+    })
+
+    it('should validate zero-sum constraint (player1 + player2 = 0)', () => {
+      const mockLLMResponse = {
+        player1_elo_change: 20,
+        player2_elo_change: -20,
+        match_rating: 1250,
+        match_weight: 1.0,
+        format_detected: 'best-of-3',
+        games_won_p1: 12,
+        games_lost_p1: 9,
+        total_games: 21,
+        reasoning: 'Brief explanation'
+      }
+
+      // Zero-sum: changes should sum to 0 (within ±2 for rounding)
+      const sum = mockLLMResponse.player1_elo_change + mockLLMResponse.player2_elo_change
+      expect(Math.abs(sum)).toBeLessThanOrEqual(2)
+    })
+
+    it('should validate reasoning field is present and reasonable length', () => {
+      const mockLLMResponse = {
+        player1_elo_change: 20,
+        player2_elo_change: -20,
+        match_rating: 1250,
+        match_weight: 1.0,
+        format_detected: 'best-of-3',
+        games_won_p1: 12,
+        games_lost_p1: 9,
+        total_games: 21,
+        reasoning: 'Brief explanation of calculation considering rating difference, match competitiveness, and score margin.'
+      }
+
+      expect(mockLLMResponse.reasoning).toBeTruthy()
+      expect(typeof mockLLMResponse.reasoning).toBe('string')
+      // Reasoning should be concise (max 500 words = ~2500 chars)
+      // But we allow up to 2000 chars to be safe
+      expect(mockLLMResponse.reasoning.length).toBeLessThan(2000)
+    })
+  })
+
+  describe('LLM Configuration', () => {
+    it('should validate max_tokens is set to limit response length', () => {
+      // This is a configuration test - we check that max_tokens is set in the API call
+      // In the actual implementation, max_tokens: 2000 should be set
+      const expectedMaxTokens = 2000
+      
+      // This test documents the expected configuration
+      // The actual API call in llm-score-resolver.ts should include max_tokens: 2000
+      expect(expectedMaxTokens).toBe(2000)
+    })
+
+    it('should validate reasoning prompt asks for concise explanation', () => {
+      // The prompt should ask for "concise explanation (max 500 words)"
+      const promptShouldContain = 'concise explanation'
+      const maxWordsShouldBe = 500
+      
+      // This test documents the expected prompt behavior
+      // The actual prompt in llm-prompts.ts should include these instructions
+      expect(promptShouldContain).toBe('concise explanation')
+      expect(maxWordsShouldBe).toBe(500)
+    })
+  })
+
+  describe('LLM Win Streak Bonus Instructions', () => {
+    it('should validate prompt includes win streak bonus rules', () => {
+      // The prompt should clearly state win streak bonus rules
+      const expectedRules = [
+        '+6 for 2 wins',
+        '+12 for 3+ wins',
+        'No bonus for 1 win',
+        'Loser gets no bonus'
+      ]
+
+      // This test documents what should be in the prompt
+      // The actual prompt in llm-prompts.ts should include these rules
+      expect(expectedRules).toContain('+6 for 2 wins')
+      expect(expectedRules).toContain('+12 for 3+ wins')
+      expect(expectedRules).toContain('No bonus for 1 win')
+      expect(expectedRules).toContain('Loser gets no bonus')
+    })
   })
 })

@@ -975,6 +975,7 @@ export async function updateRatingsAfterMatch(
   
   // Check if rating history already exists for this match (prevent duplicates)
   // This prevents double-counting if updateRatingsAfterMatch is called multiple times
+  // IMPORTANT: Check BEFORE calculating any new values to prevent incorrect updates
   const { data: existingHistory, error: historyCheckError } = await supabase
     .from('rating_history')
     .select('id, player_id, rating_reversed')
@@ -1016,10 +1017,26 @@ export async function updateRatingsAfterMatch(
   const player2NewMmr = (player2IsUnrated ? player2Effective.mmr : Number(player2.mmr)) + mmrResult.player2MmrChange
   
   // Update streaks
-  const player1NewWinStreak = winnerId === 1 ? player1.win_streak + 1 : 0
-  const player1NewLossStreak = winnerId === 1 ? 0 : player1.loss_streak + 1
-  const player2NewWinStreak = winnerId === 2 ? player2.win_streak + 1 : 0
-  const player2NewLossStreak = winnerId === 2 ? 0 : player2.loss_streak + 1
+  // IMPORTANT: win_streak should be the number of consecutive wins, not total wins
+  // If player wins: increment by 1 (max should be total_matches_played if all wins)
+  // If player loses: reset to 0
+  // Safety check: win_streak should never exceed total_matches_played + 1 (for this new match)
+  const currentPlayer1Matches = player1.total_matches_played || 0
+  const currentPlayer2Matches = player2.total_matches_played || 0
+  
+  const player1NewWinStreak = winnerId === 1 
+    ? Math.min((player1.win_streak || 0) + 1, currentPlayer1Matches + 1) // Cap at total matches + 1
+    : 0
+  const player1NewLossStreak = winnerId === 1 ? 0 : (player1.loss_streak || 0) + 1
+  const player2NewWinStreak = winnerId === 2 
+    ? Math.min((player2.win_streak || 0) + 1, currentPlayer2Matches + 1) // Cap at total matches + 1
+    : 0
+  const player2NewLossStreak = winnerId === 2 ? 0 : (player2.loss_streak || 0) + 1
+  
+  // Debug logging for win streak calculation
+  console.log(`[Win Streak Debug] Match ${matchId}:`)
+  console.log(`  Player1: ${player1.name} - Current matches: ${currentPlayer1Matches}, Old streak: ${player1.win_streak || 0}, New streak: ${player1NewWinStreak}, Winner: ${winnerId === 1 ? 'YES' : 'NO'}`)
+  console.log(`  Player2: ${player2.name} - Current matches: ${currentPlayer2Matches}, Old streak: ${player2.win_streak || 0}, New streak: ${player2NewWinStreak}, Winner: ${winnerId === 2 ? 'YES' : 'NO'}`)
   
   // Update placement matches count (only increment if was in placement)
   const player1NewPlacementCount = isPlayer1PlacementMatch 
