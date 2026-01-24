@@ -27,12 +27,14 @@ export default defineEventHandler(async (event) => {
     const supabase = getSupabaseAdmin()
 
     // Find matches that used fallback calculation
+    // Fallback matches are:
+    // 1. llm_calculation_failed = true (LLM attempted but failed)
+    // 2. OR (llm_elo_calculated = false AND llm_calculation_failed = false) (no API key/not attempted)
     let matchesQuery = supabase
       .from('matches')
       .select('id, player1_id, player2_id, status, score, played_at, created_at')
       .eq('status', 'completed')
-      .eq('llm_elo_calculated', false)
-      .eq('llm_calculation_failed', false)
+      .or('llm_calculation_failed.eq.true,and(llm_elo_calculated.eq.false,llm_calculation_failed.eq.false)')
       .not('score', 'is', null)
       .order('created_at', { ascending: true }) // Process in chronological order
 

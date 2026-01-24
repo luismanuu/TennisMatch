@@ -726,6 +726,7 @@ export async function updateRatingsAfterMatch(
   let llmResult: LlmEloCalculationResult | null = null
   let llmUsed = false
   let llmFailed = false
+  let fallbackReason: string | null = null
   
   // Retry configuration for LLM calls
   const LLM_MAX_RETRIES = 2
@@ -763,6 +764,7 @@ export async function updateRatingsAfterMatch(
             continue
           } else {
             llmFailed = true
+            fallbackReason = `LLM calculation failed after ${LLM_MAX_RETRIES + 1} attempts: ${llmResult.error || 'Unknown error'}`
             console.warn('LLM calculation failed after retries, using fallback:', llmResult.error)
             break
           }
@@ -778,6 +780,7 @@ export async function updateRatingsAfterMatch(
             continue
           } else {
             llmFailed = true
+            fallbackReason = 'LLM calculation rate limited after retries. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.'
             console.warn('LLM calculation rate limited after retries, using fallback. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.')
             break
           }
@@ -790,12 +793,19 @@ export async function updateRatingsAfterMatch(
             continue
           } else {
             llmFailed = true
+            fallbackReason = `LLM calculation error after ${LLM_MAX_RETRIES + 1} attempts: ${error?.message || 'Unknown error'}`
             console.error('LLM calculation error after retries:', error)
             break
           }
         }
       }
     }
+  } else if (!config.openRouterApiKey) {
+    // No API key configured
+    fallbackReason = 'No OpenRouter API key configured. LLM calculation was not attempted.'
+  } else if (!match.score) {
+    // No score available
+    fallbackReason = 'Match score not available. LLM calculation requires a score to analyze.'
   }
   
   // Calculate ELO changes (use LLM result if available, otherwise fallback)
@@ -925,15 +935,15 @@ export async function updateRatingsAfterMatch(
   }
   
   // Update match with LLM calculation metadata
-  if (llmUsed || llmFailed) {
+  if (llmUsed || llmFailed || fallbackReason) {
     await supabase
       .from('matches')
       .update({
         llm_elo_calculated: llmUsed,
         llm_calculation_failed: llmFailed,
-        llm_calculation_reasoning: llmResult?.reasoning || null,
+        llm_calculation_reasoning: llmUsed ? (llmResult?.reasoning || null) : fallbackReason,
         llm_calculation_model: llmUsed ? 'google/gemini-2.5-flash' : null,
-        llm_calculation_timestamp: llmUsed || llmFailed ? new Date().toISOString() : null
+        llm_calculation_timestamp: llmUsed || llmFailed || fallbackReason ? new Date().toISOString() : null
       })
       .eq('id', matchId)
   }
