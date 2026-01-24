@@ -111,7 +111,7 @@ export function buildMatchContext(
         playedAt: m.created_at || ''
       }))
     },
-    headToHead: (player1.headToHead || []).map(m => ({
+    headToHead: (player1.headToHead || []).slice(0, 5).map(m => ({
       score: m.score || '',
       winner: m.was_winner ? player1.name : player2.name,
       playedAt: m.created_at || ''
@@ -186,42 +186,17 @@ ${context.headToHead.length > 0
 
 ## CALCULATION REQUIREMENTS
 
-1. **ELO Changes**: Calculate ELO changes for both players. The changes MUST sum to zero (zero-sum property):
-   - If ${context.player1.name} gains +X ELO, ${context.player2.name} must lose -X ELO
-   - Formula: player1_elo_change + player2_elo_change = 0
-   - **Typical ELO change ranges** (base calculation, before win streak bonus): 
-     * Close match (similar ratings): 15-25 points for winner
-     * Moderate difference (100-200 ELO): 20-35 points for winner
-     * Large difference (>200 ELO): 10-20 points for higher rated winner, 30-50 points for upset
-   - Higher match weight should result in higher ELO changes within these ranges
-   - **WIN STREAK BONUS**: If the winner has 2 or more consecutive wins, ADD bonus points to their ELO change:
-     * Bonus starts after 2 consecutive wins (no bonus for just 1 win)
-     * +6 ELO bonus for exactly 2 consecutive wins
-     * +12 ELO bonus for 3+ consecutive wins (capped at +12)
-     * Examples:
-       - 1 win streak: No bonus (0 ELO)
-       - 2 wins streak: +6 ELO bonus
-       - 3 wins streak: +12 ELO bonus
-       - 4+ wins streak: +12 ELO bonus (capped at maximum)
-     * Example: If base ELO change is +20 and winner has 2 consecutive wins, final change = +20 + 6 = +26 ELO
-     * Example: If base ELO change is +20 and winner has 3 consecutive wins, final change = +20 + 12 = +32 ELO
-     * The loser does NOT get a bonus (they lose the same amount the winner gains, maintaining zero-sum)
+1. **ELO Changes** (zero-sum: player1_change + player2_change = 0):
+   - Base ranges: Close match 15-25, Moderate diff 20-35, Large diff 10-20 (upset 30-50)
+   - Scale by match weight (${context.matchWeightFactors.finalWeight}): higher weight = higher changes
+   - **Win Streak Bonus**: +6 for 2 wins, +12 for 3+ wins (capped). No bonus for 1 win. Loser gets no bonus.
 
-2. **Match Weight Consideration**: The match weight (${context.matchWeightFactors.finalWeight}) should influence the magnitude of ELO changes:
-   - Higher weight = more significant ELO changes (toward upper end of typical ranges)
-   - Lower weight = less significant ELO changes (toward lower end of typical ranges)
-   - Incorporate match weight into your calculation to scale within the typical ranges above
+2. **Match Rating** for ${context.player1.name}:
+   - Expected % = 1 / (1 + 10^((opponent_elo - player_elo) / 400))
+   - Performance = (games_won / total_games) - expected %
+   - Match rating = current_ELO + (performance * 400)
 
-3. **Match Rating**: Calculate the match rating for ${context.player1.name} based on:
-   - Expected games won % = 1 / (1 + 10^((opponent_elo - player_elo) / 400))
-   - Actual games won % = games_won / total_games
-   - Performance factor = actual % - expected %
-   - Match rating = player's current ELO + (performance factor * 400)
-
-4. **Games Analysis**: Parse the score "${context.match.score}" to extract:
-   - Games won by ${context.player1.name}
-   - Games lost by ${context.player1.name}
-   - Total games in the match
+3. **Games**: Parse "${context.match.score}" → games_won_p1, games_lost_p1, total_games
 
 ## RESPONSE FORMAT
 
@@ -243,20 +218,13 @@ Return a valid JSON object with the following structure:
 
 ## CRITICAL RULES
 
-1. **Zero-Sum Validation**: player1_elo_change + player2_elo_change MUST equal 0 (within ±2 for rounding)
-2. **Match Weight**: Consider the final match weight (${context.matchWeightFactors.finalWeight}) when determining ELO change magnitude
-3. **Format**: Ensure format_detected matches "${context.formatDetected}"
-4. **Games Count**: Verify games_won_p1 + games_lost_p1 = total_games
-5. **Reasoning**: Provide clear explanation of how you calculated the ELO changes, considering:
-   - Player ratings difference
-   - Match competitiveness
-   - Score margin (games won/lost)
-   - Match weight factors
-   - Recent form and head-to-head
-   - **Win Streak Bonus**: Explicitly state if you added win streak bonus points (+6 for 2 consecutive wins, +12 for 3+ consecutive wins, capped at +12) to the winner's ELO change. Remember: no bonus for just 1 win, bonus only starts after 2 consecutive wins.
-   - **Loss Streaks**: Players on losing streaks don't get bonus points, but you may consider their form when calculating base ELO changes
+1. Zero-sum: player1_elo_change + player2_elo_change = 0 (±2 rounding)
+2. Match weight: Scale ELO changes by ${context.matchWeightFactors.finalWeight}
+3. Format: format_detected must be "${context.formatDetected}"
+4. Games: games_won_p1 + games_lost_p1 = total_games
+5. Reasoning: Explain calculation considering rating diff, competitiveness, score margin, match weight, recent form, head-to-head, and win streak bonus (if applied).
 
-Now calculate the ELO changes and return the JSON response.`
+Return JSON response.`
 }
 
 function getFormatWeightDescription(weight: number): string {
