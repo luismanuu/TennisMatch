@@ -173,12 +173,27 @@
                 <div class="text-size-4 font-regular text-foreground-muted">Partidos</div>
               </div>
               <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.win_streak || 0 }}</div>
+                <div class="flex items-center justify-center gap-2 mb-1">
+                  <Icon v-if="(publicPlayer.win_streak || 0) > 0" name="heroicons:fire" class="w-6 h-6 text-orange-400" />
+                  <div class="text-size-1 font-semibold text-gradient-static">{{ publicPlayer.win_streak || 0 }}</div>
+                </div>
                 <div class="text-size-4 font-regular text-foreground-muted">Racha Victorias</div>
               </div>
-              <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
+              <!-- Show placement status if still in placement, otherwise show peak ELO -->
+              <div v-if="(publicPlayer.placement_matches_completed || 0) < 3" class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
                 <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.placement_matches_completed || 0 }}/3</div>
                 <div class="text-size-4 font-regular text-foreground-muted">Colocación</div>
+              </div>
+              <div v-else-if="playerStats" class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
+                <div class="flex items-center justify-center gap-2 mb-1">
+                  <Icon name="heroicons:trophy" class="w-5 h-5 text-amber-400" />
+                  <div class="text-size-1 font-semibold text-gradient-static">{{ playerStats.peak_elo }}</div>
+                </div>
+                <div class="text-size-4 font-regular text-foreground-muted">Peak SR</div>
+              </div>
+              <div v-else class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
+                <div class="text-size-1 font-semibold text-gradient-static mb-1">-</div>
+                <div class="text-size-4 font-regular text-foreground-muted">Peak SR</div>
               </div>
             </div>
           </div>
@@ -607,6 +622,10 @@ const matchHistoryPageSize = ref(10)
 const matchHistoryTotal = ref(0)
 const matchHistoryTotalPages = ref(0)
 
+// Player stats (peak ELO, etc.)
+const playerStats = ref<{ peak_elo: number } | null>(null)
+const playerStatsLoading = ref(false)
+
 // Match history filters
 const matchHistoryStatusFilter = ref<string>('')
 const matchHistoryStartDate = ref<string>('')
@@ -693,6 +712,27 @@ const loadRankingAndMatches = async () => {
     console.error('Error loading ranking:', err)
   } finally {
     rankingLoading.value = false
+  }
+
+  // Load player stats (peak ELO) if player has completed placement matches
+  if (publicPlayer.value && (publicPlayer.value.placement_matches_completed || 0) >= 3) {
+    playerStatsLoading.value = true
+    try {
+      const historyResponse = await $fetch<{
+        success: boolean
+        stats: { peak_elo: number }
+      }>(`/api/players/${playerId}/rating-history`, {
+        query: { limit: 1, period: 'all' } // Just need stats, not full history
+      }).catch(() => null)
+      
+      if (historyResponse?.success && historyResponse.stats) {
+        playerStats.value = { peak_elo: historyResponse.stats.peak_elo || publicPlayer.value.elo }
+      }
+    } catch (err) {
+      console.error('Error loading player stats:', err)
+    } finally {
+      playerStatsLoading.value = false
+    }
   }
 
   // Load match history with pagination

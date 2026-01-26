@@ -166,7 +166,11 @@
             <div v-if="isInPlacement" class="mt-3 pt-3 border-t border-border-subtle">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-size-4 font-semibold text-foreground">Partidos de Colocación</span>
-                <span class="text-size-4 text-accent font-semibold">{{ player.placement_matches_completed || 0 }} / 3</span>
+                <div v-if="(player.placement_matches_completed || 0) >= 3" class="flex items-center gap-2">
+                  <Icon name="heroicons:check-circle" class="w-5 h-5 text-green-400" />
+                  <span class="text-size-4 text-green-400 font-semibold">Completado</span>
+                </div>
+                <span v-else class="text-size-4 text-accent font-semibold">{{ player.placement_matches_completed || 0 }} / 3</span>
               </div>
               <div class="h-3 bg-surface-elevated rounded-full overflow-hidden">
                 <div 
@@ -175,7 +179,12 @@
                 ></div>
               </div>
               <p class="text-size-5 text-foreground-muted mt-1">
-                Completa 3 partidos para establecer tu ranking definitivo
+                <span v-if="(player.placement_matches_completed || 0) >= 3">
+                  ¡Ranking definitivo establecido! Ya puedes competir en el leaderboard.
+                </span>
+                <span v-else>
+                  Completa 3 partidos para establecer tu ranking definitivo
+                </span>
               </p>
             </div>
           </div>
@@ -328,12 +337,18 @@
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="text-center p-4 rounded-xl bg-green-500/10 border border-green-500/20">
                   <p class="text-size-5 text-foreground-muted mb-1">Racha Actual</p>
-                  <p class="text-size-1 font-bold text-green-400">{{ advancedStats.current_win_streak }}</p>
+                  <div class="flex items-center justify-center gap-2 mb-1">
+                    <Icon v-if="advancedStats.current_win_streak > 0" name="heroicons:fire" class="w-6 h-6 text-green-400" />
+                    <p class="text-size-1 font-bold text-green-400">{{ advancedStats.current_win_streak }}</p>
+                  </div>
                   <p class="text-size-5 text-foreground-muted">victorias</p>
                 </div>
                 <div class="text-center p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
                   <p class="text-size-5 text-foreground-muted mb-1">Mejor Racha</p>
-                  <p class="text-size-1 font-bold text-amber-400">{{ advancedStats.best_win_streak }}</p>
+                  <div class="flex items-center justify-center gap-2 mb-1">
+                    <Icon v-if="advancedStats.best_win_streak > 0" name="heroicons:fire" class="w-6 h-6 text-amber-400" />
+                    <p class="text-size-1 font-bold text-amber-400">{{ advancedStats.best_win_streak }}</p>
+                  </div>
                   <p class="text-size-5 text-foreground-muted">victorias</p>
                 </div>
                 <div v-if="advancedStats.current_losing_streak > 0" class="text-center p-4 rounded-xl bg-red-500/10 border border-red-500/20">

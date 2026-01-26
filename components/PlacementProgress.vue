@@ -2,7 +2,11 @@
   <div class="mt-6 pt-6 border-t border-border-subtle">
     <div class="flex items-center justify-between mb-3">
       <span class="text-size-4 font-semibold text-foreground">Partidos de Colocación</span>
-      <span class="text-size-4 text-accent font-semibold">{{ completed }} / {{ total }}</span>
+      <div v-if="isComplete" class="flex items-center gap-2">
+        <Icon name="heroicons:check-circle" class="w-5 h-5 text-green-400" />
+        <span class="text-size-4 text-green-400 font-semibold">Completado</span>
+      </div>
+      <span v-else class="text-size-4 text-accent font-semibold">{{ completed }} / {{ total }}</span>
     </div>
     
     <!-- Progress Bar -->
@@ -110,7 +114,7 @@ const getMatchClasses = (match: 'win' | 'loss' | null, index: number) => {
 
 const statusMessage = computed(() => {
   if (isComplete.value) {
-    return 'Completa 3 partidos para establecer tu ranking definitivo'
+    return '¡Ranking definitivo establecido! Ya puedes competir en el leaderboard.'
   }
   const remaining = total.value - props.completed
   return `Completa ${remaining} partido${remaining !== 1 ? 's' : ''} más para establecer tu ranking definitivo`

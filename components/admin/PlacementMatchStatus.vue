@@ -4,7 +4,11 @@
       <div class="flex-1">
         <div class="flex items-center justify-between mb-2">
           <span class="text-size-4 font-semibold text-foreground">Placement Matches</span>
-          <span class="text-size-3 font-bold text-accent">
+          <div v-if="completed >= total" class="flex items-center gap-2">
+            <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
+            <span class="text-size-3 font-bold text-green-400">Completado</span>
+          </div>
+          <span v-else class="text-size-3 font-bold text-accent">
             {{ completed }}/{{ total }}
           </span>
         </div>
