@@ -124,18 +124,18 @@ const title = computed(() => {
     return '¡Requisito mensual cumplido!'
   }
   if (isUrgent.value) {
-    return '¡Urgente! ELO en riesgo de decay'
+    return '¡Urgente! SR en riesgo de decay'
   }
-  return 'Juega para evitar decay de ELO'
+  return 'Juega para evitar decay de SR'
 })
 
 const description = computed(() => {
   if (isOnTrack.value) {
-    return 'Has jugado suficientes partidos este mes. Tu ELO está protegido.'
+    return 'Has jugado suficientes partidos este mes. Tu SR (Skill Rating) está protegido.'
   }
   if (isUrgent.value) {
-    return `Necesitas ${matchesNeeded.value} partido(s) más en ${props.daysRemaining} días para evitar perder ${props.estimatedDecay ?? matchesNeeded.value * 25} puntos de ELO.`
+    return `Necesitas ${matchesNeeded.value} partido(s) más en ${props.daysRemaining} días para evitar perder ${props.estimatedDecay ?? matchesNeeded.value * 25} puntos de SR.`
   }
-  return `Juega ${matchesNeeded.value} partido(s) más este mes para evitar decay de ELO.`
+  return `Juega ${matchesNeeded.value} partido(s) más este mes para evitar decay de SR.`
 })
 </script>

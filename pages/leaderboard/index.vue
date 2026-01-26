@@ -50,7 +50,7 @@
               <NuxtLink :to="`/players/${topPlayers[1]?.id}`" class="text-size-4 sm:text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
                 {{ topPlayers[1]?.name }}
               </NuxtLink>
-              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[1]?.elo }} ELO</div>
+              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[1]?.elo }} SR</div>
             </div>
           </div>
           
@@ -68,7 +68,7 @@
                 <NuxtLink :to="`/players/${topPlayers[0]?.id}`" class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
                   {{ topPlayers[0]?.name }}
                 </NuxtLink>
-                <div class="text-size-2 sm:text-size-1 font-bold text-gradient-static mt-1">{{ topPlayers[0]?.elo }} ELO</div>
+                <div class="text-size-2 sm:text-size-1 font-bold text-gradient-static mt-1">{{ topPlayers[0]?.elo }} SR</div>
               </div>
             </div>
           </div>
@@ -83,7 +83,7 @@
               <NuxtLink :to="`/players/${topPlayers[2]?.id}`" class="text-size-4 sm:text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
                 {{ topPlayers[2]?.name }}
               </NuxtLink>
-              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[2]?.elo }} ELO</div>
+              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[2]?.elo }} SR</div>
             </div>
           </div>
         </div>

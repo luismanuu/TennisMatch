@@ -97,7 +97,7 @@
 
             <div class="glass-card-elevated p-6 hover-lift animate-fade-up" style="animation-delay: 0.2s">
               <div class="flex items-center justify-between mb-4">
-                <h3 class="text-size-3 font-semibold text-foreground-muted">ELO Promedio</h3>
+                <h3 class="text-size-3 font-semibold text-foreground-muted">SR Promedio</h3>
                 <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center">
                   <Icon name="heroicons:star" class="w-6 h-6 text-accent" />
                 </div>
@@ -161,7 +161,7 @@
                       <p class="text-size-3 font-semibold text-foreground">{{ rankingStats.tier_distribution_percentages[tier] }}%</p>
                     </div>
                     <div class="text-right">
-                      <p class="text-size-5 text-foreground-muted mb-1">ELO Promedio</p>
+                      <p class="text-size-5 text-foreground-muted mb-1">SR Promedio</p>
                       <p class="text-size-3 font-semibold text-foreground">{{ rankingStats.average_elo_by_tier[tier] || 0 }}</p>
                     </div>
                   </div>
@@ -184,7 +184,7 @@
           <div class="glass-card-elevated p-4 md:p-6 lg:p-8 hover-lift animate-fade-up animate-delay-3">
             <div class="flex items-center gap-3 mb-4 md:mb-6">
               <Icon name="heroicons:chart-bar" class="w-5 h-5 md:w-6 md:h-6 text-accent" />
-              <h2 class="text-size-3 md:text-size-2 font-semibold text-foreground">Distribución de ELO</h2>
+              <h2 class="text-size-3 md:text-size-2 font-semibold text-foreground">Distribución de SR</h2>
             </div>
             <div class="w-full">
               <EloDistributionHistogram 
@@ -194,7 +194,7 @@
               <div v-else class="flex items-center justify-center h-48 md:h-64 text-foreground-muted">
                 <div class="text-center px-4">
                   <Icon name="heroicons:chart-bar" class="w-10 h-10 md:w-12 md:h-12 mx-auto mb-4 opacity-50" />
-                  <p class="text-size-4 md:text-size-3 font-semibold mb-2">No hay datos de distribución de ELO</p>
+                  <p class="text-size-4 md:text-size-3 font-semibold mb-2">No hay datos de distribución de SR</p>
                   <p class="text-size-5 md:text-size-4">Los jugadores aún no tienen suficientes partidos para generar estadísticas</p>
                 </div>
               </div>

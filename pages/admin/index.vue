@@ -418,7 +418,7 @@
                 <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30 hover:bg-blue-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:star" class="w-5 h-5 text-blue-400" />
-                    <p class="text-size-4 text-foreground-muted">ELO Promedio</p>
+                    <p class="text-size-4 text-foreground-muted">SR Promedio</p>
                   </div>
                   <p class="text-size-2 font-bold text-blue-400">{{ stats.rankings.average_elo }}</p>
                 </div>
@@ -462,7 +462,7 @@
                         <div class="flex-1 min-w-0">
                           <div class="flex items-center gap-3 mb-2">
                             <h4 class="text-size-3 font-semibold text-foreground truncate">{{ player.name || 'Sin nombre' }}</h4>
-                            <span class="text-size-3 font-bold text-accent">{{ player.elo }} ELO</span>
+                            <span class="text-size-3 font-bold text-accent">{{ player.elo }} SR</span>
                           </div>
                           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-size-4">
                             <div class="flex items-center gap-2">
@@ -828,7 +828,7 @@
                 </div>
                 <div>
                   <label class="block text-size-4 font-semibold text-foreground mb-2">
-                    ELO Rating
+                    SR Rating
                   </label>
                   <input
                     v-model.number="playerForm.elo"
@@ -890,7 +890,7 @@
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Name</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Email</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Category</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">ELO / Tier</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">SR / Tier</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Rank</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Placement</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Phone</th>
@@ -1067,7 +1067,7 @@
                 </div>
                 <div>
                   <label class="block text-size-4 font-semibold text-foreground mb-2">
-                    ELO Inicial
+                    SR Inicial
                   </label>
                   <input
                     v-model.number="categoryForm.default_elo"
@@ -1077,7 +1077,7 @@
                     class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
                     placeholder="Auto (basado en orden)"
                   />
-                  <p class="text-size-5 text-foreground-muted mt-1">ELO inicial para nuevos jugadores</p>
+                  <p class="text-size-5 text-foreground-muted mt-1">SR inicial para nuevos jugadores</p>
                 </div>
               </div>
               <div class="flex items-center gap-4">
@@ -1133,7 +1133,7 @@
                     <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Order</th>
                     <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Name</th>
                     <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell">Description</th>
-                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">ELO Inicial</th>
+                    <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">SR Inicial</th>
                     <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
@@ -1639,7 +1639,7 @@
         </div>
 
         <p class="text-size-4 font-regular text-foreground-muted mb-6">
-          This will reverse the current ELO calculations and recalculate using LLM (if available). Are you sure you want to continue?
+          This will reverse the current SR calculations and recalculate using LLM (if available). Are you sure you want to continue?
         </p>
 
         <div class="flex gap-3">

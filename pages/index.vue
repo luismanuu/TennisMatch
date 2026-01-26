@@ -373,7 +373,7 @@
               </div>
             </div>
             <p class="text-size-4 text-foreground-muted">
-              Aprende cómo funciona el sistema de ranking, tiers y cálculo de ELO
+              Aprende cómo funciona el sistema de ranking, tiers y cálculo de SR
             </p>
           </div>
         </div>
@@ -405,7 +405,7 @@
 
             <!-- Subheadline -->
             <p class="text-size-2 font-regular text-foreground-muted mb-8 max-w-2xl mx-auto">
-              La plataforma definitiva para jugadores amateur. Sistema ELO avanzado, 
+              La plataforma definitiva para jugadores amateur. Sistema SR (Skill Rating) avanzado, 
               matchmaking inteligente, torneos organizados y rankings en tiempo real.
             </p>
 
@@ -461,12 +461,12 @@
           </div>
           
           <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Sistema ELO -->
+            <!-- Sistema SR -->
             <div class="glass-card-elevated p-8 hover-lift group">
               <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <Icon name="heroicons:chart-bar" class="w-8 h-8 text-accent" />
               </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Sistema ELO Avanzado</h3>
+              <h3 class="text-size-2 font-semibold text-foreground mb-3">Sistema SR (Skill Rating) Avanzado</h3>
               <p class="text-size-4 font-regular text-foreground-muted mb-4">
                 Rating dinámico basado en tus resultados competitivos con 7 tiers (Bronze a Grandmaster)
               </p>
@@ -543,7 +543,7 @@
               </div>
               <h3 class="text-size-2 font-semibold text-foreground mb-3">Partidos Competitivos</h3>
               <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Diferencia entre partidos competitivos (afectan ELO) y amistosos (solo registro)
+                Diferencia entre partidos competitivos (afectan SR) y amistosos (solo registro)
               </p>
               <ul class="space-y-2 text-size-4 text-foreground-muted">
                 <li class="flex items-center gap-2">
@@ -552,7 +552,7 @@
                 </li>
                 <li class="flex items-center gap-2">
                   <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Partidos amistosos sin impacto ELO</span>
+                  <span>Partidos amistosos sin impacto SR</span>
                 </li>
                 <li class="flex items-center gap-2">
                   <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
@@ -602,7 +602,7 @@
                 </li>
                 <li class="flex items-center gap-2">
                   <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Gráficos de progreso ELO</span>
+                  <span>Gráficos de progreso SR</span>
                 </li>
                 <li class="flex items-center gap-2">
                   <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
@@ -650,7 +650,7 @@
                 {{ tier.tier }}
               </h3>
               <p class="text-size-4 text-foreground-muted">
-                {{ tier.minElo.toLocaleString() }} - {{ tier.maxElo === Infinity ? '∞' : tier.maxElo.toLocaleString() }} ELO
+                {{ tier.minElo.toLocaleString() }} - {{ tier.maxElo === Infinity ? '∞' : tier.maxElo.toLocaleString() }} SR
               </p>
             </div>
           </div>
@@ -948,7 +948,7 @@ const stats = computed(() => {
   }
   
   return [
-    { value: elo.toLocaleString(), label: 'Puntos ELO', icon: 'heroicons:trophy' },
+    { value: elo.toLocaleString(), label: 'Puntos SR', icon: 'heroicons:trophy' },
     { value: totalMatches.toString(), label: 'Partidos', icon: 'heroicons:calendar' },
     { value: totalWins.toString(), label: 'Victorias', icon: 'heroicons:trophy' },
     { value: winRate, label: 'Win Rate', icon: 'heroicons:chart-bar' }

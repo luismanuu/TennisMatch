@@ -60,12 +60,12 @@
         </div>
       </div>
       
-      <!-- Bottom Row: ELO, Tier, and Status -->
+      <!-- Bottom Row: SR, Tier, and Status -->
       <div class="flex items-center justify-between gap-2 flex-wrap">
-        <!-- ELO -->
+        <!-- SR -->
         <div class="flex items-center gap-2">
           <span class="text-size-3 md:text-size-2 font-bold text-foreground">{{ player.elo }}</span>
-          <span class="text-size-4 text-foreground-muted">ELO</span>
+          <span class="text-size-4 text-foreground-muted">SR</span>
         </div>
         
         <!-- Status Badges Row -->
@@ -184,11 +184,11 @@
         
       </div>
       
-      <!-- ELO and Tier -->
+      <!-- SR and Tier -->
       <div class="flex-shrink-0 text-right">
         <div class="flex items-center gap-2 justify-end mb-1">
           <span class="text-size-2 font-bold text-foreground">{{ player.elo }}</span>
-          <span class="text-size-4 text-foreground-muted">ELO</span>
+          <span class="text-size-4 text-foreground-muted">SR</span>
         </div>
         <!-- Placement Status -->
         <div v-if="isInPlacement" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-size-4 font-semibold mb-2">

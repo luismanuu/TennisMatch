@@ -95,10 +95,10 @@
                   </p>
                 </div>
 
-                <!-- ELO Display -->
+                <!-- SR Display -->
                 <div class="flex flex-col gap-2">
                   <div class="text-size-1 font-bold text-gradient-static">
-                    {{ publicPlayer.elo }} ELO
+                    {{ publicPlayer.elo }} SR
                   </div>
                   <RatingTierBadge 
                     :elo="publicPlayer.elo" 
@@ -137,7 +137,7 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
                 <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.elo }}</div>
-                <div class="text-size-4 font-regular text-foreground-muted">ELO</div>
+                <div class="text-size-4 font-regular text-foreground-muted">SR</div>
               </div>
               <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
                 <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.total_matches_played || 0 }}</div>
@@ -405,13 +405,13 @@
                       <p v-if="match.winner" class="text-size-5 text-foreground-muted mb-2">
                         Ganador: {{ match.winner.name }}
                       </p>
-                      <!-- ELO Change - Only show for competitive matches -->
+                      <!-- SR Change - Only show for competitive matches -->
                       <div v-if="match.is_competitive && match.elo_change !== undefined && match.elo_change !== null" class="mt-2">
                         <div 
                           class="text-size-2 font-bold"
                           :class="match.elo_change > 0 ? 'text-green-400' : match.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
                         >
-                          {{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }} ELO
+                          {{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }} SR
                         </div>
                       </div>
                     </div>
@@ -542,7 +542,7 @@
                   <h3 class="text-size-3 font-semibold text-foreground mb-2">Jugador Pendiente</h3>
                   <p class="text-size-4 font-regular text-foreground-muted">
                     Este jugador ha sido invitado a un partido pero aún no ha completado su registro. 
-                    Una vez que se registre, podrás ver su perfil completo con estadísticas y puntuación ELO.
+                    Una vez que se registre, podrás ver su perfil completo con estadísticas y puntuación SR.
                   </p>
                 </div>
               </div>

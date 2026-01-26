@@ -108,7 +108,8 @@
       }"
       style="background-color: var(--surface-elevated, oklch(0.22 0.01 250)); border-color: var(--border, oklch(0.25 0.01 250)); color: var(--foreground, oklch(0.95 0 0)); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);"
     >
-      <div class="font-semibold mb-1" style="color: var(--foreground, oklch(0.95 0 0));">{{ tooltip.elo }} ELO</div>
+      <div class="font-semibold mb-1" style="color: var(--foreground, oklch(0.95 0 0));">{{ tooltip.elo }} SR</div>
+      <div class="text-size-5 text-foreground-muted">(Skill Rating)</div>
       <div class="text-size-5">
         <span :style="{ color: tooltip.change >= 0 ? '#10b981' : '#ef4444' }">
           {{ tooltip.change >= 0 ? '+' : '' }}{{ tooltip.change }}
@@ -143,7 +144,7 @@ const tooltip = ref({
   change: 0
 })
 
-// Calculate min/max ELO for Y-axis
+// Calculate min/max SR (Skill Rating) for Y-axis
 const eloRange = computed(() => {
   if (!props.historyData || props.historyData.length === 0) {
     return { min: 1000, max: 1500 }

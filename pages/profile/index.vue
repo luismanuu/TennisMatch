@@ -143,7 +143,7 @@
 
           <!-- Rating Section -->
           <div class="mb-8">
-            <!-- ELO Rating with Tier -->
+            <!-- SR Rating with Tier -->
             <div class="p-8 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30 hover-lift">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <!-- Left: Rank Icon - Animated (League of Legends Style) -->
@@ -167,7 +167,7 @@
                   </div>
                 </div>
 
-                <!-- Right: ELO, Tier, and Info -->
+                <!-- Right: SR, Tier, and Info -->
                 <div class="flex flex-col gap-4">
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
@@ -175,7 +175,7 @@
                         <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
                       </div>
                       <div>
-                        <p class="text-size-3 font-semibold text-foreground">Puntuación ELO</p>
+                        <p class="text-size-3 font-semibold text-foreground">Puntuación SR (Skill Rating)</p>
                         <p class="text-size-4 text-foreground-muted">Clasificación Actual</p>
                       </div>
                     </div>
@@ -362,7 +362,7 @@
                   <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" />
                 </div>
                 <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ player.elo }}</div>
-                <div class="text-size-4 font-regular text-foreground-muted">ELO</div>
+                <div class="text-size-4 font-regular text-foreground-muted">SR</div>
               </div>
               <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
                 <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center mx-auto mb-3">

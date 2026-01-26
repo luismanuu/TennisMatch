@@ -85,7 +85,7 @@
         :style="getTooltipStyle()"
         style="background-color: var(--surface-elevated, oklch(0.22 0.01 250)); border-color: var(--border, oklch(0.25 0.01 250)); color: var(--foreground, oklch(0.95 0 0));"
       >
-        <div class="font-semibold text-foreground mb-1">{{ tooltip.range }} ELO</div>
+        <div class="font-semibold text-foreground mb-1">{{ tooltip.range }} SR</div>
         <div class="text-foreground-muted text-size-5">
           {{ tooltip.count }} jugador{{ tooltip.count !== 1 ? 'es' : '' }}
         </div>

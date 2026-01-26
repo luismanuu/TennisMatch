@@ -98,7 +98,7 @@
       >
         <div class="font-semibold mb-1" style="color: var(--foreground, oklch(0.95 0 0));">{{ formatDateLabel(tooltip.date) }}</div>
         <div class="text-size-5" style="color: var(--foreground-muted, oklch(0.70 0.01 250));">
-          ELO Promedio: {{ tooltip.value }}
+          SR Promedio: {{ tooltip.value }}
         </div>
       </div>
     </div>

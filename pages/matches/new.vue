@@ -30,7 +30,7 @@
             </span>
           </div>
           <p v-if="isFromMatchmaking" class="text-size-4 font-regular text-foreground-muted">
-            Los partidos desde matchmaking siempre son competitivos y afectan tu ELO
+            Los partidos desde matchmaking siempre son competitivos y afectan tu SR
           </p>
         </div>
 
@@ -200,7 +200,7 @@
                     <div class="flex-1">
                       <p class="text-size-4 font-semibold text-foreground mb-1">Partido Competitivo</p>
                       <p class="text-size-5 text-foreground-muted">
-                        Este partido afectará tu ELO y contará para partidos de colocación. Los partidos desde matchmaking siempre son competitivos.
+                        Este partido afectará tu SR y contará para partidos de colocación. Los partidos desde matchmaking siempre son competitivos.
                       </p>
                     </div>
                   </div>
@@ -227,7 +227,7 @@
                         <p class="text-size-3 font-semibold">Competitivo</p>
                       </div>
                       <p class="text-size-5 text-foreground-muted">
-                        Afecta tu ELO y cuenta para colocación
+                        Afecta tu SR y cuenta para colocación
                       </p>
                     </button>
                     <button
@@ -245,7 +245,7 @@
                         <p class="text-size-3 font-semibold">Amistoso</p>
                       </div>
                       <p class="text-size-5 text-foreground-muted">
-                        No afecta tu ELO ni ranking
+                        No afecta tu SR ni ranking
                       </p>
                     </button>
                   </div>

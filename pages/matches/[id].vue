@@ -274,24 +274,24 @@
                 </div>
               </div>
               
-              <!-- ELO Changes - Only show for competitive matches -->
-              <!-- Show loading state when ELO is being calculated -->
+              <!-- SR Changes - Only show for competitive matches -->
+              <!-- Show loading state when SR is being calculated -->
               <div v-if="match.is_competitive && isEloCalculating" class="pt-4 border-t border-accent/20">
-                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de ELO</p>
+                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de SR</p>
                 <div class="flex items-center gap-3 p-4 rounded-lg bg-surface/50 border border-border-subtle">
                   <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" />
                   <div class="flex-1">
-                    <p class="text-size-4 font-semibold text-foreground">Calculando ELO...</p>
+                    <p class="text-size-4 font-semibold text-foreground">Calculando SR...</p>
                     <p class="text-size-5 text-foreground-muted">La AI está procesando los cambios de rating</p>
                   </div>
                 </div>
               </div>
               
-              <!-- Show ELO changes when ready -->
+              <!-- Show SR changes when ready -->
               <div v-else-if="match.is_competitive && ratingHistory && (ratingHistory.player1 || ratingHistory.player2)" class="pt-4 border-t border-accent/20">
-                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de ELO</p>
+                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de SR</p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <!-- Player 1 ELO Change -->
+                  <!-- Player 1 SR Change -->
                   <div v-if="ratingHistory.player1 && match.player1" class="p-3 rounded-lg bg-surface/50 border border-border-subtle">
                     <div class="flex items-center gap-2 mb-1">
                       <NuxtLink
@@ -305,14 +305,14 @@
                       class="text-size-2 font-bold"
                       :class="ratingHistory.player1.elo_change > 0 ? 'text-green-400' : ratingHistory.player1.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
                     >
-                      {{ ratingHistory.player1.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player1.elo_change }} ELO
+                      {{ ratingHistory.player1.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player1.elo_change }} SR
                     </div>
                     <div class="text-size-5 text-foreground-muted mt-1">
                       {{ ratingHistory.player1.elo_before }} → {{ ratingHistory.player1.elo_after }}
                     </div>
                   </div>
                   
-                  <!-- Player 2 ELO Change -->
+                  <!-- Player 2 SR Change -->
                   <div v-if="ratingHistory.player2 && match.player2" class="p-3 rounded-lg bg-surface/50 border border-border-subtle">
                     <div class="flex items-center gap-2 mb-1">
                       <NuxtLink
@@ -326,7 +326,7 @@
                       class="text-size-2 font-bold"
                       :class="ratingHistory.player2.elo_change > 0 ? 'text-green-400' : ratingHistory.player2.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
                     >
-                      {{ ratingHistory.player2.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player2.elo_change }} ELO
+                      {{ ratingHistory.player2.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player2.elo_change }} SR
                     </div>
                     <div class="text-size-5 text-foreground-muted mt-1">
                       {{ ratingHistory.player2.elo_before }} → {{ ratingHistory.player2.elo_after }}

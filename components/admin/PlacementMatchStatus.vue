@@ -48,7 +48,7 @@
             Match {{ index + 1 }}: {{ match.was_winner ? 'Victoria' : 'Derrota' }}
           </span>
           <span class="text-size-4 font-semibold" :class="match.elo_change >= 0 ? 'text-green-400' : 'text-red-400'">
-            {{ match.elo_change >= 0 ? '+' : '' }}{{ match.elo_change }} ELO
+            {{ match.elo_change >= 0 ? '+' : '' }}{{ match.elo_change }} SR
           </span>
         </div>
         <p class="text-size-5 text-foreground-muted mt-1">

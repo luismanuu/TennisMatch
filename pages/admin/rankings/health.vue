@@ -112,7 +112,7 @@
               >
                 <p class="text-size-4 font-semibold text-foreground">{{ issue.player_name }}</p>
                 <p class="text-size-5 text-foreground-muted">
-                  ELO Esperado: {{ issue.expected_elo }}, ELO Actual: {{ issue.actual_elo }}, Diferencia: {{ issue.difference }}
+                  SR Esperado: {{ issue.expected_elo }}, SR Actual: {{ issue.actual_elo }}, Diferencia: {{ issue.difference }}
                 </p>
               </div>
             </div>
@@ -120,7 +120,7 @@
 
           <!-- Unusual Changes -->
           <div class="glass-card-elevated p-6 md:p-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">Cambios Inusuales de ELO</h2>
+            <h2 class="text-size-2 font-semibold text-foreground mb-6">Cambios Inusuales de SR</h2>
             <div class="mb-4">
               <p class="text-size-4 text-foreground-muted">Total: {{ rankingHealth.unusual_elo_changes.total }} cambios inusuales en los últimos 7 días</p>
             </div>
@@ -132,7 +132,7 @@
               >
                 <p class="text-size-4 font-semibold text-foreground">{{ change.player_name }}</p>
                 <p class="text-size-5 text-foreground-muted">
-                  Cambio: {{ change.elo_change >= 0 ? '+' : '' }}{{ change.elo_change }} ELO el {{ formatDate(change.date) }}
+                  Cambio: {{ change.elo_change >= 0 ? '+' : '' }}{{ change.elo_change }} SR el {{ formatDate(change.date) }}
                 </p>
               </div>
             </div>

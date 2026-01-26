@@ -119,13 +119,14 @@
                   </div>
                 </div>
 
-                <!-- Right: ELO, Tier, and Stats -->
+                <!-- Right: SR, Tier, and Stats -->
                 <div class="flex flex-col gap-3 items-center lg:items-start">
-                  <!-- ELO Display -->
+                  <!-- SR Display -->
                   <div class="flex flex-col items-center lg:items-start gap-2">
                     <div class="text-size-1 font-bold text-gradient-static text-center lg:text-left">
-                      {{ player.elo }} ELO
+                      {{ player.elo }} SR
                     </div>
+                    <p class="text-size-5 text-foreground-muted">(Skill Rating)</p>
                     <RatingTierBadge 
                       :elo="player.elo" 
                       :total-matches-played="player.total_matches_played || 0"
@@ -151,7 +152,7 @@
                   <div v-if="isInPlacement" class="text-center lg:text-left">
                     <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
                       <Icon name="heroicons:information-circle" class="w-5 h-5 text-amber-400" />
-                      <p class="text-size-4 text-amber-400 font-semibold">ELO Aproximado</p>
+                      <p class="text-size-4 text-amber-400 font-semibold">SR Aproximado</p>
                     </div>
                     <p class="text-size-5 text-foreground-muted mt-1">
                       Tu ranking final se establecerá después de 3 partidos
@@ -191,12 +192,12 @@
                   <span class="font-semibold" :style="{ color: nextTierProgress.nextTier?.color }">
                     {{ nextTierProgress.nextTier?.tier }}
                   </span>
-                  ({{ nextTierProgress.nextTier?.minElo }} ELO)
+                  ({{ nextTierProgress.nextTier?.minElo }} SR)
                 </p>
               </div>
               <div class="text-right">
                 <span class="text-size-2 font-bold text-foreground">{{ nextTierProgress.eloNeeded }}</span>
-                <span class="text-size-4 text-foreground-muted"> ELO más</span>
+                <span class="text-size-4 text-foreground-muted"> SR más</span>
               </div>
             </div>
             
@@ -252,13 +253,13 @@
               <p class="text-size-5 text-foreground-muted">Win Rate</p>
             </div>
 
-            <!-- Peak ELO -->
+            <!-- Peak SR -->
             <div class="glass-card p-5 text-center hover-lift">
               <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-3">
                 <Icon name="heroicons:arrow-up-circle" class="w-5 h-5 text-amber-400" />
               </div>
               <p class="text-size-2 font-bold text-foreground">{{ historyStats?.peak_elo || player.elo }}</p>
-              <p class="text-size-5 text-foreground-muted">Peak ELO</p>
+              <p class="text-size-5 text-foreground-muted">Peak SR</p>
             </div>
 
             <!-- Total Victories -->
@@ -273,7 +274,7 @@
             </div>
           </div>
 
-          <!-- Section D: ELO History Chart (hide during placement) -->
+          <!-- Section D: SR History Chart (hide during placement) -->
           <div v-if="!isInPlacement" class="glass-card-elevated p-6 mb-6 animate-fade-up animate-delay-3">
             <div class="flex items-center justify-between mb-6">
               <div class="flex items-center gap-3">
@@ -281,7 +282,7 @@
                   <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" />
                 </div>
                 <div>
-                  <h3 class="text-size-3 font-semibold text-foreground">Historial de ELO</h3>
+                  <h3 class="text-size-3 font-semibold text-foreground">Historial de SR</h3>
                   <p class="text-size-5 text-foreground-muted">Progresión en los últimos {{ ratingHistory.length }} partidos</p>
                 </div>
               </div>
@@ -502,11 +503,11 @@
                     </p>
                   </div>
                   <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
-                    <p class="text-size-5 text-foreground-muted mb-1">Avg ELO Ganado</p>
+                    <p class="text-size-5 text-foreground-muted mb-1">Avg SR Ganado</p>
                     <p class="text-size-2 font-bold text-green-400">+{{ Math.round(h2hStats.avg_elo_gain) }}</p>
                   </div>
                   <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
-                    <p class="text-size-5 text-foreground-muted mb-1">Avg ELO Perdido</p>
+                    <p class="text-size-5 text-foreground-muted mb-1">Avg SR Perdido</p>
                     <p class="text-size-2 font-bold text-red-400">-{{ Math.round(h2hStats.avg_elo_loss) }}</p>
                   </div>
                   <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
@@ -524,12 +525,12 @@
                 <div v-if="h2hStats.best_match || h2hStats.worst_match" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                   <div v-if="h2hStats.best_match" class="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
                     <p class="text-size-5 text-foreground-muted mb-1">Mejor Partido</p>
-                    <p class="text-size-2 font-bold text-green-400">+{{ h2hStats.best_match.elo_change }} ELO</p>
+                    <p class="text-size-2 font-bold text-green-400">+{{ h2hStats.best_match.elo_change }} SR</p>
                     <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.best_match.created_at) }}</p>
                   </div>
                   <div v-if="h2hStats.worst_match" class="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
                     <p class="text-size-5 text-foreground-muted mb-1">Peor Partido</p>
-                    <p class="text-size-2 font-bold text-red-400">{{ h2hStats.worst_match.elo_change }} ELO</p>
+                    <p class="text-size-2 font-bold text-red-400">{{ h2hStats.worst_match.elo_change }} SR</p>
                     <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.worst_match.created_at) }}</p>
                   </div>
                 </div>
@@ -612,7 +613,7 @@
                     </span>
                   </div>
                   <p class="text-size-5 text-foreground-muted">
-                    {{ formatMatchDate(match.created_at) }}
+                    {{ formatMatchDate(match.match_date || match.created_at) }}
                   </p>
                 </div>
 
@@ -625,7 +626,7 @@
                     {{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }}
                   </div>
                   <div class="text-size-5 text-foreground-muted">
-                    ELO
+                    SR
                   </div>
                 </div>
               </NuxtLink>
@@ -708,10 +709,10 @@
                 class="w-4 h-4"
               />
               <span v-if="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)">
-                ¡Meta cumplida! Tu ELO está protegido este mes.
+                ¡Meta cumplida! Tu SR está protegido este mes.
               </span>
               <span v-else>
-                Juega {{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) }} partido{{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) !== 1 ? 's' : '' }} más para evitar decay de ELO (-{{ decayStatus?.estimated_decay || 25 }} ELO).
+                Juega {{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) }} partido{{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) !== 1 ? 's' : '' }} más para evitar decay de SR (-{{ decayStatus?.estimated_decay || 25 }} SR).
               </span>
             </div>
           </div>
@@ -720,7 +721,7 @@
           <div v-else class="glass-card p-4 animate-fade-up animate-delay-4">
             <div class="flex items-center gap-3 text-size-4 text-foreground-muted">
               <Icon name="heroicons:information-circle" class="w-5 h-5 text-accent" />
-              <span>Durante los partidos de colocación no hay decay de ELO.</span>
+              <span>Durante los partidos de colocación no hay decay de SR.</span>
             </div>
           </div>
 
@@ -843,7 +844,24 @@ const winRate = computed(() => {
 const formatMatchDate = (dateString: string) => {
   const date = new Date(dateString)
   const now = new Date()
-  const diffTime = Math.abs(now.getTime() - date.getTime())
+  
+  // Helper to get date string in Ecuador timezone (YYYY-MM-DD)
+  const getEcuadorDateString = (d: Date): string => {
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }) // en-CA gives YYYY-MM-DD format
+  }
+  
+  // Get date strings in Ecuador timezone
+  const dateStr = getEcuadorDateString(date)
+  const nowStr = getEcuadorDateString(now)
+  
+  // Parse dates to compare
+  const dateParts = dateStr.split('-').map(Number)
+  const nowParts = nowStr.split('-').map(Number)
+  
+  const dateOnly = new Date(dateParts[0], dateParts[1] - 1, dateParts[2])
+  const nowDateOnly = new Date(nowParts[0], nowParts[1] - 1, nowParts[2])
+  
+  const diffTime = nowDateOnly.getTime() - dateOnly.getTime()
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
   
   if (diffDays === 0) {
@@ -946,7 +964,8 @@ const loadAllData = async () => {
           elo_before: h.elo_before,
           elo_after: h.elo_after,
           is_placement_match: h.is_placement_match,
-          created_at: h.created_at
+          created_at: h.created_at,
+          match_date: h.match_date || h.created_at // Use actual match date if available, fallback to created_at
         }))
     }
 

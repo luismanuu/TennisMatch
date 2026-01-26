@@ -93,7 +93,7 @@
         <div v-else-if="rankingTrends" class="space-y-8">
           <!-- Average ELO Over Time -->
           <div class="glass-card-elevated p-6 md:p-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">ELO Promedio en el Tiempo</h2>
+            <h2 class="text-size-2 font-semibold text-foreground mb-6">SR Promedio en el Tiempo</h2>
             <AdminRankingTrendsChart :data="rankingTrends.trends" metric="average_elo" />
           </div>
 

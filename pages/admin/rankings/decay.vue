@@ -64,7 +64,7 @@
           </div>
           <div class="glass-card-elevated p-6">
             <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Decay Total</h3>
-            <p class="text-size-1 font-bold text-red-400">-{{ decayStats.total_decay_amount }} ELO</p>
+            <p class="text-size-1 font-bold text-red-400">-{{ decayStats.total_decay_amount }} SR</p>
           </div>
         </div>
 

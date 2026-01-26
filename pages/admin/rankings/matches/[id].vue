@@ -58,15 +58,15 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-4">
                 <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <p class="text-size-4 text-foreground-muted mb-1">ELO Antes</p>
+                  <p class="text-size-4 text-foreground-muted mb-1">SR Antes</p>
                   <p class="text-size-2 font-bold text-foreground">{{ matchImpact.player1_impact.elo_before }}</p>
                 </div>
                 <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <p class="text-size-4 text-foreground-muted mb-1">ELO Después</p>
+                  <p class="text-size-4 text-foreground-muted mb-1">SR Después</p>
                   <p class="text-size-2 font-bold text-foreground">{{ matchImpact.player1_impact.elo_after }}</p>
                 </div>
                 <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <p class="text-size-4 text-foreground-muted mb-1">Cambio de ELO</p>
+                  <p class="text-size-4 text-foreground-muted mb-1">Cambio de SR</p>
                   <p 
                     class="text-size-2 font-bold"
                     :class="matchImpact.player1_impact.elo_change >= 0 ? 'text-green-400' : 'text-red-400'"
@@ -117,15 +117,15 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-4">
                 <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <p class="text-size-4 text-foreground-muted mb-1">ELO Antes</p>
+                  <p class="text-size-4 text-foreground-muted mb-1">SR Antes</p>
                   <p class="text-size-2 font-bold text-foreground">{{ matchImpact.player2_impact.elo_before }}</p>
                 </div>
                 <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <p class="text-size-4 text-foreground-muted mb-1">ELO Después</p>
+                  <p class="text-size-4 text-foreground-muted mb-1">SR Después</p>
                   <p class="text-size-2 font-bold text-foreground">{{ matchImpact.player2_impact.elo_after }}</p>
                 </div>
                 <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <p class="text-size-4 text-foreground-muted mb-1">Cambio de ELO</p>
+                  <p class="text-size-4 text-foreground-muted mb-1">Cambio de SR</p>
                   <p 
                     class="text-size-2 font-bold"
                     :class="matchImpact.player2_impact.elo_change >= 0 ? 'text-green-400' : 'text-red-400'"
@@ -173,7 +173,7 @@
             <h2 class="text-size-2 font-semibold text-foreground mb-6">Resumen</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">
-                <p class="text-size-4 text-foreground-muted mb-1">Cambio Total de ELO</p>
+                <p class="text-size-4 text-foreground-muted mb-1">Cambio Total de SR</p>
                 <p class="text-size-2 font-bold text-foreground">{{ matchImpact.summary.total_elo_change }}</p>
               </div>
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">

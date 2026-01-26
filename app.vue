@@ -34,7 +34,7 @@
 useHead({
   title: 'Tenis Ecuador - La plataforma para tenistas amateur',
   meta: [
-    { name: 'description', content: 'Registra tus partidos, sigue tu calificación ELO y participa en torneos competitivos de tenis en Ecuador.' },
+    { name: 'description', content: 'Registra tus partidos, sigue tu calificación SR (Skill Rating) y participa en torneos competitivos de tenis en Ecuador.' },
     { name: 'theme-color', content: '#0f1419' }
   ],
   link: [

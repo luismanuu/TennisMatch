@@ -94,7 +94,7 @@
               <thead class="bg-surface border-b border-border-subtle">
                 <tr>
                   <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Jugador</th>
-                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">ELO</th>
+                  <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">SR</th>
                   <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Placement</th>
                   <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell">Partidos</th>
                   <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground">Acciones</th>

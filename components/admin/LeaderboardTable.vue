@@ -219,7 +219,7 @@ const getShortLabel = (label: string) => {
   const shortLabels: Record<string, string> = {
     'Rank': '#',
     'Nombre': 'Nom.',
-    'ELO': 'ELO',
+    'ELO': 'SR',
     'Tier': 'Tier',
     'Partidos': 'Pts',
     'Racha': 'Racha',

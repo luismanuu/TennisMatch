@@ -60,7 +60,7 @@
               <div class="space-y-2 text-size-4 text-foreground-muted">
                 <p>7 niveles de ranking</p>
                 <p>Desde Bronce hasta Gran Maestro</p>
-                <p>ELO determina tu nivel</p>
+                <p>SR (Skill Rating) determina tu nivel</p>
                 <p>Sube ganando partidos</p>
               </div>
             </div>
@@ -87,10 +87,10 @@
               <h3 class="text-size-3 font-semibold text-foreground">PARTIDOS</h3>
               
               <div class="space-y-2 text-size-4 text-foreground-muted">
-                <p>Gana ELO al vencer</p>
-                <p>Pierde ELO al ser derrotado</p>
-                <p>ELO ganado/perdido depende del rival</p>
-                <p>Partidos justos = más ELO</p>
+                <p>Gana SR (Skill Rating) al vencer</p>
+                <p>Pierde SR al ser derrotado</p>
+                <p>SR ganado/perdido depende del rival</p>
+                <p>Partidos justos = más SR</p>
               </div>
             </div>
           </div>
@@ -113,7 +113,7 @@
               <h3 class="text-size-3 font-semibold text-foreground">SISTEMA DE RANKING</h3>
               
               <div class="space-y-2 text-size-4 text-foreground-muted">
-                <p>Decaimiento mensual de ELO</p>
+                <p>Decaimiento mensual de SR</p>
                 <p>Partidos de colocación iniciales</p>
                 <p>Ranking global visible</p>
                 <p>Recompensas por logros</p>
@@ -163,7 +163,7 @@
           <div class="space-y-2 text-size-4 text-foreground-muted">
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
-              <p>El ELO se ajusta después de cada partido completado</p>
+              <p>El SR (Skill Rating) se ajusta después de cada partido completado</p>
             </div>
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
@@ -171,11 +171,11 @@
             </div>
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
-              <p>El ELO decae mensualmente si no juegas partidos (para mantener el ranking activo)</p>
+              <p>El SR decae mensualmente si no juegas partidos (para mantener el ranking activo)</p>
             </div>
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
-              <p>Ganar contra oponentes de mayor ELO otorga más puntos</p>
+              <p>Ganar contra oponentes de mayor SR otorga más puntos</p>
             </div>
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />

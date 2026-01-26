@@ -192,7 +192,7 @@ const currentPage = computed(() => leaderboardPage.value)
 const tableColumns = [
   { key: 'rank', label: 'Rank', sortable: true },
   { key: 'name', label: 'Nombre', sortable: true },
-  { key: 'elo', label: 'ELO', sortable: true },
+  { key: 'elo', label: 'SR', sortable: true },
   { key: 'rating_tier', label: 'Tier', sortable: true },
   { key: 'total_matches_played', label: 'Partidos', sortable: true },
   { key: 'win_streak', label: 'Racha', sortable: true },

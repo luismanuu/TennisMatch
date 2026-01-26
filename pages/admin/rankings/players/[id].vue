@@ -22,7 +22,7 @@
               <div>
                 <h1 class="text-size-1 font-semibold text-foreground mb-2">{{ playerRankingDetails.player.name }}</h1>
                 <div class="flex items-center gap-4">
-                  <span class="text-size-3 font-bold text-accent">{{ playerRankingDetails.player.elo }} ELO</span>
+                  <span class="text-size-3 font-bold text-accent">{{ playerRankingDetails.player.elo }} SR</span>
                   <span 
                     class="px-3 py-1 rounded-full text-size-4 font-semibold"
                     :style="{ 
@@ -91,7 +91,7 @@
                 <div class="flex items-center justify-between">
                   <span class="text-size-4 text-foreground-muted">Decay estimado</span>
                   <span class="text-size-3 font-bold" :class="playerRankingDetails.decay_status.will_decay ? 'text-red-400' : 'text-green-400'">
-                    {{ playerRankingDetails.decay_status.will_decay ? `-${playerRankingDetails.decay_status.estimated_decay}` : '0' }} ELO
+                    {{ playerRankingDetails.decay_status.will_decay ? `-${playerRankingDetails.decay_status.estimated_decay}` : '0' }} SR
                   </span>
                 </div>
               </div>
@@ -100,7 +100,7 @@
 
           <!-- ELO Progression Chart -->
           <div v-if="playerRankingDetails.elo_progression && playerRankingDetails.elo_progression.length > 0" class="glass-card-elevated p-6">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">Progresión de ELO</h2>
+            <h2 class="text-size-2 font-semibold text-foreground mb-6">Progresión de SR</h2>
             <EloHistoryChart :history-data="playerRankingDetails.elo_progression.map((e: any) => ({
               id: e.date,
               elo_before: e.elo - e.change,
@@ -119,8 +119,8 @@
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Fecha</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Oponente</th>
                     <th class="text-left p-4 text-size-4 font-semibold text-foreground">Resultado</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Cambio ELO</th>
-                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">ELO Después</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">Cambio SR</th>
+                    <th class="text-left p-4 text-size-4 font-semibold text-foreground">SR Después</th>
                   </tr>
                 </thead>
                 <tbody>

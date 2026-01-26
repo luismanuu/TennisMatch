@@ -23,7 +23,7 @@
       <div>
         <p class="text-size-5 text-foreground-muted mb-1">Decay estimado</p>
         <p class="text-size-3 font-bold" :class="estimatedDecay > 0 ? 'text-red-400' : 'text-green-400'">
-          {{ estimatedDecay > 0 ? `-${estimatedDecay}` : '0' }} ELO
+          {{ estimatedDecay > 0 ? `-${estimatedDecay}` : '0' }} SR
         </p>
       </div>
     </div>

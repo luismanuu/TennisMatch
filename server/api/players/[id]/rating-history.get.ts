@@ -328,14 +328,36 @@ export default defineEventHandler(async (event) => {
     }
     
     // Calculate days since last match
+    // Compare dates in Ecuador timezone to get accurate day difference
     let daysSinceLastMatch = 0
     if (allHistory && allHistory.length > 0) {
       try {
         const lastMatchDate = getMatchDate(allHistory[0])
         if (!isNaN(lastMatchDate.getTime())) {
+          // Helper to get date string in Ecuador timezone (YYYY-MM-DD)
+          const getEcuadorDateString = (d: Date): string => {
+            return d.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }) // en-CA gives YYYY-MM-DD format
+          }
+          
+          // Get current date and last match date in Ecuador timezone
           const now = new Date()
-          const diffTime = now.getTime() - lastMatchDate.getTime()
+          const nowStr = getEcuadorDateString(now)
+          const lastMatchStr = getEcuadorDateString(lastMatchDate)
+          
+          // Parse dates to compare
+          const nowParts = nowStr.split('-').map(Number)
+          const lastMatchParts = lastMatchStr.split('-').map(Number)
+          
+          const nowDateOnly = new Date(nowParts[0], nowParts[1] - 1, nowParts[2])
+          const lastMatchDateOnly = new Date(lastMatchParts[0], lastMatchParts[1] - 1, lastMatchParts[2])
+          
+          const diffTime = nowDateOnly.getTime() - lastMatchDateOnly.getTime()
           daysSinceLastMatch = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+          
+          // Ensure non-negative
+          if (daysSinceLastMatch < 0) {
+            daysSinceLastMatch = 0
+          }
         }
       } catch (e) {
         console.warn('Error calculating days since last match:', e)
@@ -387,9 +409,18 @@ export default defineEventHandler(async (event) => {
     // For time_of_day: need at least 2 different hours OR 5+ matches  
     // For best_month: need at least 2 months OR 10+ matches
     
+    // Add match date to each history entry for frontend use
+    const historyWithMatchDate = (history ?? []).map((entry: any) => {
+      const matchDate = getMatchDate(entry)
+      return {
+        ...entry,
+        match_date: matchDate.toISOString() // Include the actual match date for frontend
+      }
+    })
+    
     return {
       success: true,
-      history: history ?? [],
+      history: historyWithMatchDate,
       pagination: {
         total: count ?? 0,
         limit,
