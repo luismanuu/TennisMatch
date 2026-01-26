@@ -58,28 +58,42 @@ export default defineEventHandler(async (event) => {
       .eq('status', 'completed')
       .not('score', 'is', null)
 
-    // Get total count
-    let countQuery = supabase
+    // First, get all match IDs that have active rating to exclude them
+    // We'll use this to filter both the query and the count
+    const { data: allFallbackMatchIds } = await supabase
       .from('matches')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .or('llm_calculation_failed.eq.true,and(llm_elo_calculated.eq.false,llm_calculation_failed.eq.false)')
       .eq('status', 'completed')
       .not('score', 'is', null)
-    
-    const { count, error: countError } = await countQuery
-    
-    if (countError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to count fallback matches',
-        data: countError
-      })
+
+    let matchesWithRatingIds: string[] = []
+    if (allFallbackMatchIds && allFallbackMatchIds.length > 0) {
+      const allMatchIds = allFallbackMatchIds.map((m: any) => m.id)
+      const { data: ratingHistoryForAll } = await supabase
+        .from('rating_history')
+        .select('match_id')
+        .in('match_id', allMatchIds)
+        .eq('rating_reversed', false)
+      
+      if (ratingHistoryForAll && Array.isArray(ratingHistoryForAll)) {
+        matchesWithRatingIds = ratingHistoryForAll
+          .map((entry: any) => entry.match_id)
+          .filter((id: string) => id) // Remove null/undefined
+      }
     }
 
+    // Get total count excluding matches with rating
+    const totalFallbackMatches = allFallbackMatchIds ? allFallbackMatchIds.length : 0
+    const count = totalFallbackMatches - matchesWithRatingIds.length
+
     // Apply pagination and ordering
+    // Note: We'll filter out matches with rating after fetching
+    // Fetch a bit more to account for filtered matches
+    const fetchLimit = matchesWithRatingIds.length > 0 ? Math.min(limit * 3, 500) : limit
     const { data: matches, error: fetchError } = await queryBuilder
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+      .range(0, fetchLimit - 1)
 
     if (fetchError) {
       throw createError({
@@ -98,19 +112,26 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // Check which matches have been reprocessed by checking rating_history
-    const matchIds = matches.map((m: any) => m.id)
+    // Filter out matches that already have active rating
+    const matchesWithRatingSet = new Set(matchesWithRatingIds)
+    let matchesWithoutRating = matches.filter((match: any) => !matchesWithRatingSet.has(match.id))
+    
+    // Apply pagination after filtering
+    const paginatedMatches = matchesWithoutRating.slice(offset, offset + limit)
+
+    // Get rating history for remaining matches to check reprocessed status
+    const matchIds = paginatedMatches.map((m: any) => m.id)
     const { data: ratingHistory, error: historyError } = await supabase
       .from('rating_history')
       .select('match_id, rating_reversed')
       .in('match_id', matchIds)
-      .eq('rating_reversed', true)
+      .eq('rating_reversed', true) // Only get reprocessed ones
 
     if (historyError) {
       console.error('Error fetching rating history for reprocessed status:', historyError)
     }
 
-    // Create a set of match IDs that have been reprocessed
+    // Create set of match IDs that have been reprocessed
     const reprocessedMatchIds = new Set<string>()
     if (ratingHistory && Array.isArray(ratingHistory)) {
       ratingHistory.forEach((entry: any) => {
@@ -121,7 +142,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Enrich matches with reprocessed status and fallback reason
-    const enrichedMatches = matches.map((match: any) => {
+    const enrichedMatches = paginatedMatches.map((match: any) => {
       const isReprocessed = reprocessedMatchIds.has(match.id)
       
       // Determine fallback reason
@@ -157,7 +178,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       data: enrichedMatches,
-      total: count || 0,
+      total: count,
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }

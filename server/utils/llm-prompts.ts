@@ -190,6 +190,7 @@ ${context.headToHead.length > 0
    - Base ranges: Close match 15-25, Moderate diff 20-35, Large diff 10-20 (upset 30-50)
    - Scale by match weight (${context.matchWeightFactors.finalWeight}): higher weight = higher changes
    - **Win Streak Bonus**: +6 for 2 wins, +12 for 3+ wins (capped). No bonus for 1 win. Loser gets no bonus.
+   - **Walkover (WO) Penalty**: If format is "walkover", apply 25% multiplier to ELO changes (walkovers give minimal points). No win streak bonus for walkovers.
 
 2. **Match Rating** for ${context.player1.name}:
    - Expected % = 1 / (1 + 10^((opponent_elo - player_elo) / 400))
@@ -222,7 +223,8 @@ Return a valid JSON object with the following structure:
 2. Match weight: Scale ELO changes by ${context.matchWeightFactors.finalWeight}
 3. Format: format_detected must be "${context.formatDetected}"
 4. Games: games_won_p1 + games_lost_p1 = total_games
-5. Reasoning: Provide a concise explanation (max 500 words) covering: rating diff, competitiveness, score margin, match weight, recent form, head-to-head, and win streak bonus (if applied).
+5. **Walkover handling**: If format_detected is "walkover", multiply ELO changes by 0.25 (25% of normal points). Walkovers should not receive win streak bonuses.
+6. Reasoning: Provide a concise explanation (max 500 words) covering: rating diff, competitiveness, score margin, match weight, recent form, head-to-head, and win streak bonus (if applied).
 
 Return JSON response.`
 }

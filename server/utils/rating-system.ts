@@ -906,6 +906,17 @@ export async function updateRatingsAfterMatch(
         player2Effective.mmr
       )
     }
+    
+    // Apply walkover penalty: walkovers should give minimal points (25% of normal)
+    // This prevents walkovers from being treated as full matches
+    if (isWalkover) {
+      const WALKOVER_MULTIPLIER = 0.25 // Walkovers give only 25% of normal points
+      eloResult.player1Change = Math.round(eloResult.player1Change * WALKOVER_MULTIPLIER)
+      eloResult.player2Change = Math.round(eloResult.player2Change * WALKOVER_MULTIPLIER)
+      // No win streak bonus for walkovers
+      eloResult.player1WinStreakBonus = 0
+      eloResult.player2WinStreakBonus = 0
+    }
   }
   
   // Calculate UTR match rating and weight (if score available)
@@ -996,6 +1007,13 @@ export async function updateRatingsAfterMatch(
     isPlayer1PlacementMatch,
     isPlayer2PlacementMatch
   )
+  
+  // Apply walkover penalty to MMR changes as well
+  if (isWalkover) {
+    const WALKOVER_MULTIPLIER = 0.25 // Walkovers give only 25% of normal points
+    mmrResult.player1MmrChange = mmrResult.player1MmrChange * WALKOVER_MULTIPLIER
+    mmrResult.player2MmrChange = mmrResult.player2MmrChange * WALKOVER_MULTIPLIER
+  }
   
   // Check if rating history already exists for this match (prevent duplicates)
   // This prevents double-counting if updateRatingsAfterMatch is called multiple times
