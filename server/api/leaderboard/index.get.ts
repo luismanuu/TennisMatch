@@ -38,6 +38,7 @@ export default defineEventHandler(async (event): Promise<LeaderboardResponse> =>
         placement_matches_completed,
         win_streak,
         loss_streak,
+        previous_rank,
         city:cities(id, name),
         category:categories(id, name)
       `)
@@ -158,10 +159,27 @@ export default defineEventHandler(async (event): Promise<LeaderboardResponse> =>
     }
     
     // Recalculate ranks after filtering (so ranks are 1, 2, 3... within the filtered results)
-    allRankings = allRankings.map((player, index) => ({
-      ...player,
-      rank: index + 1
-    }))
+    // Also calculate rank_change (positive = moved up, negative = moved down)
+    allRankings = allRankings.map((player, index) => {
+      const currentRank = index + 1
+      const previousRank = (player as any).previous_rank
+      let rankChange: number | undefined = undefined
+      
+      // Calculate rank change if previous_rank exists
+      if (previousRank !== null && previousRank !== undefined) {
+        // rank_change = previous_rank - current_rank
+        // Positive = moved up (previous rank was higher, e.g., 10 -> 5 = +5)
+        // Negative = moved down (previous rank was lower, e.g., 5 -> 10 = -5)
+        rankChange = previousRank - currentRank
+      }
+      
+      return {
+        ...player,
+        rank: currentRank,
+        previous_rank: previousRank,
+        rank_change: rankChange
+      }
+    })
     
     // Find current user's position AFTER filtering
     let currentUserPosition: LeaderboardPlayer | null = null

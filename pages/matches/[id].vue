@@ -101,6 +101,18 @@
                         >
                           Eliminado
                         </span>
+                        <!-- WhatsApp Contact Button for Player 1 (if opponent) -->
+                        <a
+                          v-if="match.player1_id !== currentPlayerId && match.player1?.phone_number"
+                          :href="getWhatsAppLink(match.player1.phone_number, `Hola ${match.player1.name}, te contacto desde la plataforma de Tenis Ecuador sobre nuestro partido`)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 text-green-400 transition-all group/wa"
+                          title="Contactar por WhatsApp"
+                        >
+                          <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4 group-hover/wa:scale-110 transition-transform" />
+                          <span class="text-size-5 font-semibold">WhatsApp</span>
+                        </a>
                       </div>
                       <p v-else class="text-size-2 font-semibold text-foreground mb-2">
                         Jugador 1
@@ -150,6 +162,18 @@
                         >
                           Eliminado
                         </span>
+                        <!-- WhatsApp Contact Button for Player 2 (if opponent) -->
+                        <a
+                          v-if="match.player2_id !== currentPlayerId && match.player2?.phone_number"
+                          :href="getWhatsAppLink(match.player2.phone_number, `Hola ${match.player2.name}, te contacto desde la plataforma de Tenis Ecuador sobre nuestro partido`)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 text-green-400 transition-all group/wa"
+                          title="Contactar por WhatsApp"
+                        >
+                          <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4 group-hover/wa:scale-110 transition-transform" />
+                          <span class="text-size-5 font-semibold">WhatsApp</span>
+                        </a>
                       </div>
                       <NuxtLink
                         v-else-if="match.pending_player2"
@@ -1410,6 +1434,7 @@ import type { Match, MatchMessage } from '~/types'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
 import { getCurrentEcuadorDatetimeLocal } from '~/composables/useTimezone'
+import { useWhatsApp } from '~/composables/useWhatsApp'
 
 definePageMeta({
   middleware: 'auth'
@@ -1423,6 +1448,7 @@ const { player, fetchPlayer } = usePlayer()
 const { isAdmin } = useAdmin()
 const { getMatch, updateMatchStatus, proposeScore, approveScore, rejectScore, cancelMatch, acceptMatch, rejectMatch, approveAcceptanceChange, rejectAcceptanceChange, proposeSchedule, approveSchedule, rejectSchedule, proposeReschedule, approveReschedule, rejectReschedule, organizerSetResult, loading, error } = useMatches()
 const { fetchMessages, sendMessage, messages: chatMessages, loading: chatLoading, isPolling, setPolling, removeOptimisticMessage } = useMatchChat()
+const { getWhatsAppLink } = useWhatsApp()
 const sendingMessage = ref(false)
 const initialLoading = ref(false)
 const isPollingPaused = ref(false)
@@ -1619,6 +1645,28 @@ const getTierNameInSpanish = (tier: string | null): string => {
   }
   return tierNames[tier] || tier
 }
+
+// Get opponent player (the one who is not the current player)
+const getOpponent = computed(() => {
+  if (!match.value || !currentPlayerId.value) return null
+  if (match.value.player1_id === currentPlayerId.value) {
+    return match.value.player2
+  }
+  return match.value.player1
+})
+
+// Get opponent phone number
+const getOpponentPhoneNumber = computed(() => {
+  const opponent = getOpponent.value
+  return opponent?.phone_number || null
+})
+
+// Check if current player can see opponent's phone number
+const canContactOpponent = computed(() => {
+  if (!match.value || !currentPlayerId.value) return false
+  if (!isPlayerInMatch.value) return false
+  return !!getOpponentPhoneNumber.value
+})
 
 const openRescheduleForm = () => {
   rescheduleFormError.value = null

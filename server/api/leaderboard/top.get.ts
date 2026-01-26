@@ -29,6 +29,7 @@ export default defineEventHandler(async (event) => {
         placement_matches_completed,
         win_streak,
         loss_streak,
+        previous_rank,
         city:cities(id, name),
         category:categories(id, name)
       `)
@@ -70,11 +71,22 @@ export default defineEventHandler(async (event) => {
         nextTierName = tierProgress.nextTier?.tier || null
       }
       
+      // Calculate rank change
+      const previousRank = (player as any).previous_rank
+      let rankChange: number | undefined = undefined
+      if (previousRank !== null && previousRank !== undefined) {
+        // rank_change = previous_rank - current_rank
+        // Positive = moved up, Negative = moved down
+        rankChange = previousRank - rank
+      }
+      
       return {
         id: player.id,
         name: player.name,
         elo: player.elo,
         rank,
+        previous_rank: previousRank,
+        rank_change: rankChange,
         rating_tier: tierInfo.tier, // Use ELO-based tier for all players
         total_matches_played: player.total_matches_played,
         win_streak: player.win_streak,

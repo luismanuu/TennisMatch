@@ -55,6 +55,7 @@ model Player {
   matchesThisMonth           Int       @default(0) @map("matches_this_month")
   lastDecayCheck             DateTime? @map("last_decay_check") @db.Date
   totalMatchesPlayed         Int       @default(0) @map("total_matches_played")
+  previousRank               Int?      @map("previous_rank")
   utrRating                  Decimal?  @map("utr_rating") @db.Decimal(10, 2)
   utrReliability             Decimal?  @map("utr_reliability") @db.Decimal(4, 3)
   status                     String    @default("active") @db.Text

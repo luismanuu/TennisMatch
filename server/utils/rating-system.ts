@@ -699,9 +699,10 @@ export async function updateRatingsAfterMatch(
   const player1IsUnrated = isPlayerUnrated(player1.total_matches_played)
   const player2IsUnrated = isPlayerUnrated(player2.total_matches_played)
   
-  // Check if placement match (only for rated players)
-  const isPlayer1PlacementMatch = !player1IsUnrated && player1.placement_matches_completed < 3
-  const isPlayer2PlacementMatch = !player2IsUnrated && player2.placement_matches_completed < 3
+  // Check if placement match (all matches count as placement until 3 are completed)
+  // This includes the first match (unrated) - all 3 placement matches should be marked
+  const isPlayer1PlacementMatch = player1.placement_matches_completed < 3
+  const isPlayer2PlacementMatch = player2.placement_matches_completed < 3
   
   // Get default ELO from category
   const player1DefaultElo = (player1.category as any)?.default_elo ?? 1000

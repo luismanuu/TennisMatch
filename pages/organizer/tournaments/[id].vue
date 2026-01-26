@@ -313,6 +313,15 @@
                       <div v-if="reg.player?.phone_number" class="flex items-center gap-2 text-size-4 text-foreground-muted">
                         <Icon name="heroicons:phone" class="w-4 h-4" />
                         <span>{{ reg.player.phone_number }}</span>
+                        <a
+                          :href="getWhatsAppLink(reg.player.phone_number, `Hola ${reg.player.name}, te contacto desde la plataforma de Tenis Ecuador`)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="ml-2 p-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 transition-all group"
+                          title="Abrir WhatsApp"
+                        >
+                          <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4 text-green-400 group-hover:scale-110 transition-transform" />
+                        </a>
                       </div>
                       <div v-if="!reg.player?.email && !reg.player?.phone_number" class="text-size-4 text-foreground-muted italic">
                         Sin información de contacto
@@ -543,6 +552,7 @@
 <script setup lang="ts">
 import type { Tournament, PlayerSearchResult } from '~/types'
 import { getCurrentEcuadorDatetimeLocal } from '~/composables/useTimezone'
+import { useWhatsApp } from '~/composables/useWhatsApp'
 
 definePageMeta({
   middleware: ['organizer']
@@ -553,6 +563,7 @@ const tournamentId = route.params.id as string
 
 const { userId, isLoaded } = useAuthState()
 const { getTournament: getOrgTournament, generateBrackets, generatePlayoffs, registerPlayer, setGroupDeadline, getPhaseStatus, advancePhase, updateBracket, currentTournament, loading, error } = useOrganizer()
+const { getWhatsAppLink } = useWhatsApp()
 
 const tournament = computed(() => currentTournament.value)
 

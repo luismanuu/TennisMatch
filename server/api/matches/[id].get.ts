@@ -55,6 +55,7 @@ export default defineEventHandler(async (event) => {
           elo,
           total_matches_played,
           placement_matches_completed,
+          phone_number,
           category:categories(id, name, description, order)
         ),
         player2:players!matches_player2_id_fkey(
@@ -65,6 +66,7 @@ export default defineEventHandler(async (event) => {
           elo,
           total_matches_played,
           placement_matches_completed,
+          phone_number,
           category:categories(id, name, description, order)
         ),
         pending_player2:pending_players(

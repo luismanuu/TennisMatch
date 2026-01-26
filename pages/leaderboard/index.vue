@@ -636,7 +636,7 @@ const loadMoreBelow = async () => {
   }
 }
 
-// Scroll to user's position
+// Scroll to user's position (only within the table container, not the whole page)
 const scrollToUser = () => {
   // Use multiple attempts with delays to ensure DOM is ready
   const attemptScroll = (attempt: number = 0) => {
@@ -644,30 +644,25 @@ const scrollToUser = () => {
     
     nextTick(() => {
       if (scrollContainer.value) {
-        // Find the user's card element
+        // Find the user's card element within the container
         const userCard = scrollContainer.value.querySelector('[data-user-card="true"]') as HTMLElement
         if (userCard) {
           // Calculate position relative to scroll container
-          const containerRect = scrollContainer.value.getBoundingClientRect()
-          const cardRect = userCard.getBoundingClientRect()
+          // Get the container's scroll position and the card's position within it
+          const containerTop = scrollContainer.value.scrollTop
+          const cardOffsetTop = userCard.offsetTop
+          const containerHeight = scrollContainer.value.clientHeight
+          const cardHeight = userCard.offsetHeight
           
-          // Calculate scroll position: position of card relative to container top
-          const scrollPosition = userCard.offsetTop - scrollContainer.value.offsetTop
+          // Calculate scroll position to center the card in the container
+          // Center the card vertically in the visible area
+          const scrollPosition = cardOffsetTop - (containerHeight / 2) + (cardHeight / 2)
           
-          // Scroll with smooth behavior
+          // Scroll only the container, not the whole page
           scrollContainer.value.scrollTo({
-            top: scrollPosition - 20, // Add small offset for better visibility
+            top: Math.max(0, scrollPosition), // Ensure we don't scroll to negative position
             behavior: 'smooth'
           })
-          
-          // Also try scrollIntoView as fallback
-          setTimeout(() => {
-            userCard.scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'center',
-              inline: 'nearest'
-            })
-          }, 100)
         } else if (attempt < 5) {
           // Retry if element not found yet
           setTimeout(() => attemptScroll(attempt + 1), 100)

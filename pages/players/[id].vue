@@ -131,6 +131,35 @@
             </div>
           </div>
 
+          <!-- Contact Information -->
+          <div v-if="publicPlayer.phone_number" class="mt-6">
+            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
+                    <Icon name="heroicons:phone" class="w-5 h-5 text-accent-secondary" />
+                  </div>
+                  <div>
+                    <p class="text-size-4 font-regular text-foreground-subtle mb-1">Teléfono</p>
+                    <p class="text-size-3 font-semibold text-foreground">
+                      {{ publicPlayer.phone_number }}
+                    </p>
+                  </div>
+                </div>
+                <a
+                  :href="getWhatsAppLink(publicPlayer.phone_number, `Hola ${publicPlayer.name}, te contacto desde la plataforma de Tenis Ecuador`)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 text-green-400 transition-all group"
+                  title="Abrir WhatsApp"
+                >
+                  <Icon name="heroicons:chat-bubble-left-right" class="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  <span class="text-size-4 font-semibold">Contactar por WhatsApp</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
           <!-- Stats -->
           <div class="mt-8 pt-8 border-t border-border-subtle">
             <h3 class="text-size-3 font-semibold text-foreground mb-4">Estadísticas</h3>
@@ -565,6 +594,7 @@ const playerId = route.params.id as string
 
 const { publicPlayer, publicLoading, publicError, fetchPublicPlayer } = usePlayer()
 const { publicPendingPlayer, publicPendingLoading, publicPendingError, fetchPublicPendingPlayer } = usePendingPlayers()
+const { getWhatsAppLink } = useWhatsApp()
 
 // Ranking and match history data
 const rankingPosition = ref<any>(null)
