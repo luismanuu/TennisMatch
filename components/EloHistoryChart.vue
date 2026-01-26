@@ -79,19 +79,19 @@
         />
       </g>
       
-      <!-- X-axis labels -->
+      <!-- X-axis labels (one per unique date) -->
       <g class="x-labels">
         <text 
-          v-for="(point, i) in dataPoints.filter((_, idx) => idx % Math.ceil(dataPoints.length / 5) === 0 || idx === dataPoints.length - 1)" 
-          :key="'x-'+i"
-          :x="point.x"
+          v-for="(group, idx) in filteredXLabels" 
+          :key="'x-'+idx"
+          :x="scaleX(groupedByDate.indexOf(group))"
           :y="height - padding.bottom + 18"
           text-anchor="middle"
           fill="var(--foreground-muted)"
           font-size="11"
           font-weight="500"
         >
-          {{ formatDate(historyData[dataPoints.indexOf(point)]?.created_at) }}
+          {{ formatDate(group.date) }}
         </text>
       </g>
     </svg>
@@ -167,11 +167,67 @@ const yLabels = computed(() => {
   return [max, max - step, max - 2 * step, max - 3 * step, min].map(v => Math.round(v))
 })
 
+// Group data by date (day)
+const groupedByDate = computed(() => {
+  if (!props.historyData) return []
+  
+  const groups = new Map<string, RatingHistoryEntry[]>()
+  
+  props.historyData.forEach(entry => {
+    const dateKey = getDateKey(entry.created_at)
+    if (!groups.has(dateKey)) {
+      groups.set(dateKey, [])
+    }
+    groups.get(dateKey)!.push(entry)
+  })
+  
+  return Array.from(groups.entries()).map(([dateKey, entries]) => ({
+    dateKey,
+    date: entries[0].created_at,
+    entries: entries.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  }))
+})
+
+// Get unique dates for X-axis
+const uniqueDates = computed(() => {
+  return groupedByDate.value.map(g => g.dateKey)
+})
+
+// Filtered X-axis labels (show max 5-6 dates)
+const filteredXLabels = computed(() => {
+  const totalDays = groupedByDate.value.length
+  if (totalDays <= 5) return groupedByDate.value
+  
+  const step = Math.ceil(totalDays / 5)
+  return groupedByDate.value.filter((_, idx) => 
+    idx % step === 0 || idx === totalDays - 1
+  )
+})
+
+// Get date key (YYYY-MM-DD)
+const getDateKey = (dateStr: string) => {
+  const date = new Date(dateStr)
+  const ecuadorDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }))
+  const year = ecuadorDate.getFullYear()
+  const month = String(ecuadorDate.getMonth() + 1).padStart(2, '0')
+  const day = String(ecuadorDate.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // Scale functions
-const scaleX = (index: number) => {
-  if (!props.historyData || props.historyData.length <= 1) return padding.left
-  const step = (width - padding.left - padding.right) / (props.historyData.length - 1)
-  return padding.left + index * step
+const scaleX = (dayIndex: number, matchIndexInDay: number = 0, totalMatchesInDay: number = 1) => {
+  if (!uniqueDates.value || uniqueDates.value.length <= 1) return padding.left
+  const step = (width - padding.left - padding.right) / (uniqueDates.value.length - 1)
+  const baseX = padding.left + dayIndex * step
+  
+  // If multiple matches on same day, spread them slightly
+  if (totalMatchesInDay > 1) {
+    const spread = Math.min(step * 0.3, 15) // Max 15px spread
+    const offset = (matchIndexInDay - (totalMatchesInDay - 1) / 2) * (spread / (totalMatchesInDay - 1))
+    return baseX + offset
+  }
+  
+  return baseX
 }
 
 const scaleY = (elo: number) => {
@@ -180,29 +236,74 @@ const scaleY = (elo: number) => {
   return padding.top + (1 - (elo - min) / (max - min)) * chartHeight
 }
 
-// Data points
+// Data points - flattened with day index info
 const dataPoints = computed(() => {
   if (!props.historyData) return []
-  return props.historyData.map((d, i) => ({
-    x: scaleX(i),
-    y: scaleY(d.elo_after)
-  }))
+  
+  const points: Array<{ x: number; y: number; dayIndex: number; entryIndex: number; dateKey: string }> = []
+  
+  groupedByDate.value.forEach((group, dayIndex) => {
+    group.entries.forEach((entry, matchIndex) => {
+      points.push({
+        x: scaleX(dayIndex, matchIndex, group.entries.length),
+        y: scaleY(entry.elo_after),
+        dayIndex,
+        entryIndex: matchIndex,
+        dateKey: group.dateKey
+      })
+    })
+  })
+  
+  return points
 })
 
-// SVG path for line
+// Map original data index to grouped data
+const getOriginalDataIndex = (dayIndex: number, entryIndex: number) => {
+  let currentIndex = 0
+  for (let i = 0; i < dayIndex; i++) {
+    currentIndex += groupedByDate.value[i].entries.length
+  }
+  return currentIndex + entryIndex
+}
+
+// SVG path for line - connect points in chronological order
 const linePath = computed(() => {
   if (dataPoints.value.length === 0) return ''
-  const points = dataPoints.value
-  return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  
+  // Flatten all entries in chronological order
+  const allEntries: Array<{ x: number; y: number }> = []
+  groupedByDate.value.forEach((group, dayIndex) => {
+    group.entries.forEach((entry, matchIndex) => {
+      allEntries.push({
+        x: scaleX(dayIndex, matchIndex, group.entries.length),
+        y: scaleY(entry.elo_after)
+      })
+    })
+  })
+  
+  if (allEntries.length === 0) return ''
+  return allEntries.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
 })
 
-// SVG path for area fill
+// SVG path for area fill - use same chronological order as line
 const areaPath = computed(() => {
   if (dataPoints.value.length === 0) return ''
-  const points = dataPoints.value
-  const start = `M ${points[0].x} ${height - padding.bottom}`
-  const line = points.map(p => `L ${p.x} ${p.y}`).join(' ')
-  const end = `L ${points[points.length - 1].x} ${height - padding.bottom} Z`
+  
+  // Flatten all entries in chronological order (same as linePath)
+  const allEntries: Array<{ x: number; y: number }> = []
+  groupedByDate.value.forEach((group, dayIndex) => {
+    group.entries.forEach((entry, matchIndex) => {
+      allEntries.push({
+        x: scaleX(dayIndex, matchIndex, group.entries.length),
+        y: scaleY(entry.elo_after)
+      })
+    })
+  })
+  
+  if (allEntries.length === 0) return ''
+  const start = `M ${allEntries[0].x} ${height - padding.bottom}`
+  const line = allEntries.map(p => `L ${p.x} ${p.y}`).join(' ')
+  const end = `L ${allEntries[allEntries.length - 1].x} ${height - padding.bottom} Z`
   return `${start} ${line} ${end}`
 })
 
@@ -214,12 +315,14 @@ const formatDate = (dateStr: string | undefined) => {
   return `${ecuadorDate.getDate()}/${ecuadorDate.getMonth() + 1}`
 }
 
-const showTooltip = (index: number, event: MouseEvent) => {
-  const entry = props.historyData[index]
-  if (!entry || !chartContainer.value) return
+const showTooltip = (pointIndex: number, event: MouseEvent) => {
+  const point = dataPoints.value[pointIndex]
+  if (!point || !chartContainer.value) return
   
-  const rect = chartContainer.value.getBoundingClientRect()
-  const point = dataPoints.value[index]
+  // Get the actual entry from grouped data
+  const group = groupedByDate.value[point.dayIndex]
+  const entry = group.entries[point.entryIndex]
+  if (!entry) return
   
   tooltip.value = {
     show: true,
