@@ -260,9 +260,37 @@
           </button>
         </div>
 
-        <!-- 24 Hour Filter Info -->
+        <!-- View Toggle (List/Calendar) -->
+        <div v-if="!loading && !error" class="mb-4 sm:mb-6 flex items-center justify-center gap-2 sm:gap-3 animate-fade-up">
+          <button
+            @click="viewMode = 'list'"
+            :class="[
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
+              viewMode === 'list'
+                ? 'bg-accent text-background border-2 border-accent'
+                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+            ]"
+          >
+            <Icon name="heroicons:list-bullet" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Lista</span>
+          </button>
+          <button
+            @click="viewMode = 'calendar'"
+            :class="[
+              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
+              viewMode === 'calendar'
+                ? 'bg-accent text-background border-2 border-accent'
+                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+            ]"
+          >
+            <Icon name="heroicons:calendar-days" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Calendario</span>
+          </button>
+        </div>
+
+        <!-- 24 Hour Filter Info (only show in list view) -->
         <div 
-          v-if="!loading && !error && isShowingDefault24HourFilter" 
+          v-if="!loading && !error && isShowingDefault24HourFilter && viewMode === 'list'" 
           class="mb-4 sm:mb-6 animate-fade-up"
         >
           <div class="glass-card-elevated p-3 sm:p-4 rounded-xl border border-accent/30 bg-accent-subtle/20 backdrop-blur-sm">
@@ -277,8 +305,17 @@
           </div>
         </div>
 
+        <!-- Calendar View -->
+        <div v-if="!loading && !error && viewMode === 'calendar'" class="animate-fade-up">
+          <MatchesCalendar
+            :matches="filteredMatchesForCalendar"
+            :loading="loading"
+            @navigate="handleMatchNavigate"
+          />
+        </div>
+
         <!-- Matches List -->
-        <div v-if="!loading && !error && paginatedFilteredMatches.length > 0" class="space-y-3 sm:space-y-4">
+        <div v-if="!loading && !error && viewMode === 'list' && paginatedFilteredMatches.length > 0" class="space-y-3 sm:space-y-4">
           <div 
             v-for="(match, index) in paginatedFilteredMatches" 
             :key="match.id"
@@ -470,7 +507,7 @@
         </div>
 
         <!-- Pagination -->
-        <div v-if="!loading && !error && (totalFilteredPages > 1 || (matches.value && matches.value.length >= pageSize && (pagination.value?.hasMore || pagination.value?.totalPages > 1)))" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
+        <div v-if="!loading && !error && viewMode === 'list' && (totalFilteredPages > 1 || (matches.value && matches.value.length >= pageSize && (pagination.value?.hasMore || pagination.value?.totalPages > 1)))" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
           <button
             @click="handlePreviousPage"
             :disabled="currentPage === 1"
@@ -495,8 +532,8 @@
           </button>
         </div>
 
-        <!-- Empty State -->
-        <div v-if="!loading && !error && paginatedFilteredMatches.length === 0" class="glass-card-elevated p-8 sm:p-12 text-center max-w-md mx-auto animate-fade-in-scale">
+        <!-- Empty State (List View) -->
+        <div v-if="!loading && !error && viewMode === 'list' && paginatedFilteredMatches.length === 0" class="glass-card-elevated p-8 sm:p-12 text-center max-w-md mx-auto animate-fade-in-scale">
           <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-4 sm:mb-6">
             <Icon name="heroicons:calendar-x" class="w-8 h-8 sm:w-12 sm:h-12 text-accent" />
           </div>
@@ -547,6 +584,7 @@ const opponentFilter = ref<string | null>(null)
 const opponentSearchQuery = ref('')
 const showOpponentSearchResults = ref(false)
 const opponentSearchResults = ref<any[]>([])
+const viewMode = ref<'list' | 'calendar'>('list')
 
 // Opponent filter functions
 const selectedOpponentName = ref<string>('')
@@ -844,6 +882,124 @@ const isShowingDefault24HourFilter = computed(() => {
   )
 })
 
+// Filtered matches for calendar view (all matches, not paginated)
+const filteredMatchesForCalendar = computed(() => {
+  // Use the same filtering logic as filteredMatches but return all matches
+  if (!matches.value || !Array.isArray(matches.value)) {
+    return []
+  }
+  let filtered = [...matches.value]
+  
+  // Apply status filter
+  if (statusFilter.value === 'pending') {
+    if (!player.value) return []
+    
+    filtered = filtered.filter(m => {
+      if (m.status === 'cancelled') return false
+      
+      const isPlayer1 = m.player1_id === player.value.id
+      const isPlayer2 = m.player2_id === player.value.id
+      
+      if (!isPlayer1 && !isPlayer2) return false
+      
+      if (m.match_proposed_by && !m.match_accepted_by && !m.match_rejected_by) {
+        if (isPlayer2 && m.match_proposed_by !== player.value.id) {
+          return true
+        }
+      }
+      
+      if (m.score_proposed_by && !m.score_approved_by) {
+        if (m.score_proposed_by !== player.value.id) {
+          return true
+        }
+      }
+      
+      if (m.schedule_proposed_by && !m.schedule_approved_by && !m.schedule_rejected_by) {
+        if (m.schedule_proposed_by !== player.value.id) {
+          return true
+        }
+      }
+      
+      if (m.reschedule_proposed_by && !m.reschedule_approved_by && !m.reschedule_rejected_by) {
+        if (m.reschedule_proposed_by !== player.value.id) {
+          return true
+        }
+      }
+      
+      if (m.acceptance_proposed_scheduled_at && !m.acceptance_change_approved_by && !m.acceptance_change_rejected_by) {
+        if (isPlayer1 && m.match_proposed_by === player.value.id) {
+          return true
+        }
+      }
+      
+      return false
+    })
+  } else {
+    if (statusFilter.value === 'cancelled') {
+      filtered = filtered.filter(m => m.status === 'cancelled')
+    } else if (!statusFilter.value) {
+      filtered = filtered.filter(m => m.status !== 'cancelled')
+    } else {
+      filtered = filtered.filter(m => m.status === statusFilter.value)
+    }
+  }
+  
+  // Apply opponent filter
+  if (opponentFilter.value) {
+    filtered = filtered.filter(m => 
+      m.player1_id === opponentFilter.value || 
+      m.player2_id === opponentFilter.value ||
+      m.pending_player2_id === opponentFilter.value
+    )
+  }
+  
+  // Sort by date (same as filteredMatches)
+  filtered = filtered.toSorted((a, b) => {
+    const getSortDate = (match: any) => {
+      if (match.status === 'completed' && match.played_at) {
+        return match.played_at
+      }
+      return match.scheduled_at
+    }
+    
+    const dateAStr = getSortDate(a)
+    const dateBStr = getSortDate(b)
+    
+    if (!dateAStr && !dateBStr) {
+      const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
+      return createdB - createdA
+    }
+    if (!dateAStr) return 1
+    if (!dateBStr) return -1
+    
+    const dateA = new Date(dateAStr).getTime()
+    const dateB = new Date(dateBStr).getTime()
+    
+    if (isNaN(dateA) && isNaN(dateB)) {
+      const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
+      return createdB - createdA
+    }
+    if (isNaN(dateA)) return 1
+    if (isNaN(dateB)) return -1
+    
+    const diff = dateB - dateA
+    if (diff !== 0) return diff
+    
+    const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
+    const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
+    return createdB - createdA
+  })
+  
+  return filtered
+})
+
+// Handle match navigation from calendar
+const handleMatchNavigate = (matchId: string) => {
+  navigateTo(`/matches/${matchId}`)
+}
+
 const handleOpponentSearch = async () => {
   if (opponentSearchQuery.value.trim().length >= 2) {
     await searchOpponents(opponentSearchQuery.value, player.value?.id)
@@ -886,6 +1042,48 @@ const loadMatches = async (page: number = 1) => {
     // Default: show matches from last 24 hours ONLY when statusFilter is null (Todos)
     // Status filter is handled by backend when statusFilter is set
     const filters: { status?: string; start_date?: string; end_date?: string; skip_24h_filter?: boolean; opponent_id?: string } = {}
+    
+    // For calendar view, load all matches for the visible period (no pagination)
+    if (viewMode.value === 'calendar') {
+      filters.skip_24h_filter = true
+      
+      // Calculate date range for calendar (current month or current week)
+      // For now, load matches from 3 months ago to 3 months ahead
+      const now = new Date()
+      const startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+      const endDate = new Date(now.getFullYear(), now.getMonth() + 4, 0) // Last day of month 3 months ahead
+      endDate.setHours(23, 59, 59, 999)
+      
+      filters.start_date = startDate.toISOString()
+      filters.end_date = endDate.toISOString()
+      
+      // Apply status filter if set
+      if (statusFilter.value && statusFilter.value !== 'pending') {
+        filters.status = statusFilter.value
+      }
+      
+      // Apply opponent filter if set
+      if (opponentFilter.value) {
+        filters.opponent_id = opponentFilter.value
+      }
+      
+      // Override with user date filters if applied
+      if (appliedDateFilterStart.value) {
+        filters.start_date = new Date(appliedDateFilterStart.value).toISOString()
+      }
+      if (appliedDateFilterEnd.value) {
+        const endDate = new Date(appliedDateFilterEnd.value)
+        endDate.setHours(23, 59, 59, 999)
+        filters.end_date = endDate.toISOString()
+      }
+      
+      // Load all matches (large limit for calendar view)
+      const limit = 1000
+      console.log('[Matches] loadMatches: Loading matches for calendar view, filters:', filters)
+      await fetchMatches(userId.value, 1, limit, filters)
+      currentPage.value = 1
+      return
+    }
     
     // For 'pending' filter, we need to load all matches and filter client-side
     // because it requires complex logic based on match state
@@ -1182,6 +1380,26 @@ watch(statusFilter, () => {
   if (isLoaded.value && userId.value) {
     loadMatches(1)
   }
+})
+
+// Reload when view mode changes
+watch(viewMode, () => {
+  if (isLoaded.value && userId.value) {
+    loadMatches(1)
+  }
+})
+
+// Load saved view preference
+onMounted(() => {
+  const savedView = localStorage.getItem('matches-view-mode')
+  if (savedView === 'list' || savedView === 'calendar') {
+    viewMode.value = savedView
+  }
+})
+
+// Save view preference
+watch(viewMode, (newView) => {
+  localStorage.setItem('matches-view-mode', newView)
 })
 </script>
 
