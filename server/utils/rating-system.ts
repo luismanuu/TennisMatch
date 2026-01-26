@@ -684,6 +684,25 @@ export async function updateRatingsAfterMatch(
     `)
     .in('id', [match.player1_id, match.player2_id])
   
+  // Also fetch actual placement match count from rating_history to ensure accuracy
+  // This prevents issues when matches are processed out of chronological order
+  const { count: player1PlacementCount } = await supabase
+    .from('rating_history')
+    .select('*', { count: 'exact', head: true })
+    .eq('player_id', match.player1_id)
+    .eq('is_placement_match', true)
+    .eq('rating_reversed', false)
+  
+  const { count: player2PlacementCount } = await supabase
+    .from('rating_history')
+    .select('*', { count: 'exact', head: true })
+    .eq('player_id', match.player2_id)
+    .eq('is_placement_match', true)
+    .eq('rating_reversed', false)
+  
+  const player1ActualPlacementCount = player1PlacementCount || 0
+  const player2ActualPlacementCount = player2PlacementCount || 0
+  
   if (playersError || !players || players.length !== 2) {
     console.error('Failed to fetch players:', playersError)
     return null
@@ -701,8 +720,12 @@ export async function updateRatingsAfterMatch(
   
   // Check if placement match (all matches count as placement until 3 are completed)
   // This includes the first match (unrated) - all 3 placement matches should be marked
-  const isPlayer1PlacementMatch = player1.placement_matches_completed < 3
-  const isPlayer2PlacementMatch = player2.placement_matches_completed < 3
+  // IMPORTANT: Use actual count from rating_history, not from players table
+  // This prevents bugs when matches are processed out of chronological order
+  // If a player has 2 placement matches in history, the next match should be placement
+  // even if placement_matches_completed in players table is already 3 (due to out-of-order processing)
+  const isPlayer1PlacementMatch = player1ActualPlacementCount < 3
+  const isPlayer2PlacementMatch = player2ActualPlacementCount < 3
   
   // Get default ELO from category
   const player1DefaultElo = (player1.category as any)?.default_elo ?? 1000

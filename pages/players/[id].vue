@@ -438,6 +438,13 @@
                         >
                           {{ getMatchStatusLabel(match.status) }}
                         </span>
+                        <!-- Competitive/Friendly Badge -->
+                        <span 
+                          class="px-3 py-1 rounded-full text-size-5 font-semibold border"
+                          :class="match.is_competitive !== false ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-gray-500/10 border-gray-500/30 text-gray-400'"
+                        >
+                          {{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}
+                        </span>
                         <span v-if="match.tournament" class="px-3 py-1 rounded-full bg-accent-subtle/30 border border-accent/30 text-size-5 text-foreground-muted">
                           {{ match.tournament.name }}
                         </span>

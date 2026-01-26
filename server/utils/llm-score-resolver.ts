@@ -367,68 +367,278 @@ function sanitizeJsonString(jsonText: string): string {
 }
 
 /**
- * Parse LLM JSON response
+ * Repair JSON with unterminated strings and other common issues
+ */
+function repairJsonString(jsonText: string): string {
+  let result = ''
+  let inString = false
+  let escapeNext = false
+  let braceDepth = 0
+  let bracketDepth = 0
+  
+  for (let i = 0; i < jsonText.length; i++) {
+    const char = jsonText[i]
+    if (!char) continue
+    
+    if (escapeNext) {
+      result += char
+      escapeNext = false
+      continue
+    }
+    
+    if (char === '\\') {
+      escapeNext = true
+      result += char
+      continue
+    }
+    
+    if (char === '"' && (i === 0 || jsonText[i - 1] !== '\\')) {
+      inString = !inString
+      result += char
+      continue
+    }
+    
+    if (inString) {
+      // Inside string - keep everything as is
+      result += char
+    } else {
+      // Outside string - handle structure
+      if (char === '{') {
+        braceDepth++
+        result += char
+      } else if (char === '}') {
+        if (braceDepth > 0) braceDepth--
+        result += char
+      } else if (char === '[') {
+        bracketDepth++
+        result += char
+      } else if (char === ']') {
+        if (bracketDepth > 0) bracketDepth--
+        result += char
+      } else {
+        result += char
+      }
+    }
+  }
+  
+  // Close any unterminated strings
+  if (inString) {
+    result += '"'
+  }
+  
+  // Close any unclosed braces/brackets
+  while (braceDepth > 0) {
+    result += '}'
+    braceDepth--
+  }
+  while (bracketDepth > 0) {
+    result += ']'
+    bracketDepth--
+  }
+  
+  return result
+}
+
+/**
+ * Extract JSON object from text, handling truncation
+ */
+function extractJsonObject(text: string): string {
+  // First, try to find JSON in markdown code blocks
+  const codeBlockMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?)\s*```/)
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    return codeBlockMatch[1]
+  }
+  
+  // Find the first { and try to find matching }
+  const firstBrace = text.indexOf('{')
+  if (firstBrace === -1) {
+    return text
+  }
+  
+  let braceCount = 0
+  let inString = false
+  let escapeNext = false
+  let lastValidBrace = firstBrace
+  
+  for (let i = firstBrace; i < text.length; i++) {
+    const char = text[i]
+    
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+    
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+    
+    if (char === '"' && (i === 0 || text[i - 1] !== '\\')) {
+      inString = !inString
+      continue
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        braceCount++
+        lastValidBrace = i
+      } else if (char === '}') {
+        braceCount--
+        lastValidBrace = i
+        if (braceCount === 0) {
+          // Found complete object
+          return text.substring(firstBrace, i + 1)
+        }
+      }
+    }
+  }
+  
+  // If we didn't find a complete object, return what we have and close it
+  const extracted = text.substring(firstBrace, lastValidBrace + 1)
+  // Close any unclosed braces
+  while (braceCount > 0) {
+    return extracted + '}'.repeat(braceCount)
+  }
+  
+  return extracted || text
+}
+
+/**
+ * Parse LLM JSON response with aggressive error recovery
  */
 function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
   try {
-    // Try to extract JSON from markdown code blocks if present
+    // Step 1: Extract JSON from text
     let jsonText = responseText.trim()
-    const jsonMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/)
-    if (jsonMatch && jsonMatch[1]) {
-      jsonText = jsonMatch[1]
-    }
+    jsonText = extractJsonObject(jsonText)
     
-    // Try parsing directly first
+    // Step 2: Try direct parse
     let parsed: any
     try {
       parsed = JSON.parse(jsonText)
     } catch (parseError: any) {
-      // If parsing fails, try sanitizing control characters
-      console.warn('[LLM] Initial JSON parse failed, attempting to sanitize control characters...')
-      const sanitized = sanitizeJsonString(jsonText)
+      // Step 3: Sanitize control characters
+      console.warn('[LLM] Initial JSON parse failed, attempting to sanitize...')
+      let sanitized = sanitizeJsonString(jsonText)
+      
       try {
         parsed = JSON.parse(sanitized)
       } catch (sanitizeError: any) {
-        // If still fails, try to extract just the JSON object more aggressively
-        // Find the first { and last } to extract the JSON object
-        const firstBrace = jsonText.indexOf('{')
-        const lastBrace = jsonText.lastIndexOf('}')
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          const extractedJson = jsonText.substring(firstBrace, lastBrace + 1)
-          const sanitizedExtracted = sanitizeJsonString(extractedJson)
-          try {
-            parsed = JSON.parse(sanitizedExtracted)
-          } catch (finalError: any) {
-            // Last resort: log the problematic section for debugging
-            const errorPos = parseError.message.match(/position (\d+)/)?.[1]
-            if (errorPos) {
-              const pos = parseInt(errorPos)
-              const start = Math.max(0, pos - 100)
-              const end = Math.min(jsonText.length, pos + 100)
-              console.error(`[LLM] JSON parse error at position ${pos}:`, jsonText.substring(start, end))
+        // Step 4: Repair unterminated strings and structures
+        console.warn('[LLM] Sanitized parse failed, attempting to repair JSON...')
+        let repaired = repairJsonString(sanitized)
+        
+        try {
+          parsed = JSON.parse(repaired)
+        } catch (repairError: any) {
+          // Step 5: Try to extract just the first complete JSON object
+          const firstBrace = repaired.indexOf('{')
+          const lastBrace = repaired.lastIndexOf('}')
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            const extracted = repaired.substring(firstBrace, lastBrace + 1)
+            try {
+              parsed = JSON.parse(extracted)
+            } catch (extractError: any) {
+              // Step 6: Last resort - try to extract values using regex as fallback
+              console.warn('[LLM] All parsing attempts failed, using regex extraction as fallback...')
+              parsed = extractJsonValuesWithRegex(repaired)
             }
-            throw new Error(`Failed to parse LLM response after sanitization: ${finalError.message}. Original error: ${parseError.message}`)
+          } else {
+            // Step 6: Last resort - regex extraction
+            parsed = extractJsonValuesWithRegex(repaired)
           }
-        } else {
-          throw new Error(`Failed to parse LLM response: ${parseError.message}`)
         }
       }
     }
     
+    // Return with safe defaults
     return {
-      player1_elo_change: parsed.player1_elo_change ?? 0,
-      player2_elo_change: parsed.player2_elo_change ?? 0,
-      match_rating: parsed.match_rating ?? 0,
-      match_weight: parsed.match_weight ?? 1.0,
-      format_detected: parsed.format_detected ?? 'unknown',
-      games_won_p1: parsed.games_won_p1 ?? 0,
-      games_lost_p1: parsed.games_lost_p1 ?? 0,
-      total_games: parsed.total_games ?? 0,
-      reasoning: parsed.reasoning ?? ''
+      player1_elo_change: parseFloat(parsed.player1_elo_change) || 0,
+      player2_elo_change: parseFloat(parsed.player2_elo_change) || 0,
+      match_rating: parseFloat(parsed.match_rating) || 0,
+      match_weight: parseFloat(parsed.match_weight) || 1.0,
+      format_detected: String(parsed.format_detected || 'unknown').substring(0, 50),
+      games_won_p1: parseInt(parsed.games_won_p1) || 0,
+      games_lost_p1: parseInt(parsed.games_lost_p1) || 0,
+      total_games: parseInt(parsed.total_games) || 0,
+      reasoning: String(parsed.reasoning || '').substring(0, 5000) // Limit reasoning length
     }
   } catch (error: any) {
-    throw new Error(`Failed to parse LLM response: ${error.message || error}`)
+    // Ultimate fallback - return safe defaults
+    console.error('[LLM] Complete parse failure, using defaults:', error.message)
+    return {
+      player1_elo_change: 0,
+      player2_elo_change: 0,
+      match_rating: 0,
+      match_weight: 1.0,
+      format_detected: 'unknown',
+      games_won_p1: 0,
+      games_lost_p1: 0,
+      total_games: 0,
+      reasoning: 'JSON parsing failed, using default values'
+    }
   }
+}
+
+/**
+ * Extract JSON values using regex as last resort
+ */
+function extractJsonValuesWithRegex(text: string): any {
+  const result: any = {}
+  
+  // Extract numeric values
+  const numericPatterns = {
+    player1_elo_change: /"player1_elo_change"\s*:\s*(-?\d+\.?\d*)/i,
+    player2_elo_change: /"player2_elo_change"\s*:\s*(-?\d+\.?\d*)/i,
+    match_rating: /"match_rating"\s*:\s*(-?\d+\.?\d*)/i,
+    match_weight: /"match_weight"\s*:\s*(-?\d+\.?\d*)/i,
+    games_won_p1: /"games_won_p1"\s*:\s*(\d+)/i,
+    games_lost_p1: /"games_lost_p1"\s*:\s*(\d+)/i,
+    total_games: /"total_games"\s*:\s*(\d+)/i
+  }
+  
+  for (const [key, pattern] of Object.entries(numericPatterns)) {
+    const match = text.match(pattern)
+    if (match && match[1]) {
+      result[key] = parseFloat(match[1]) || 0
+    }
+  }
+  
+  // Extract string values
+  const stringPatterns = {
+    format_detected: /"format_detected"\s*:\s*"([^"]*?)"/i,
+    reasoning: /"reasoning"\s*:\s*"([^"]*?)"/i
+  }
+  
+  for (const [key, pattern] of Object.entries(stringPatterns)) {
+    const match = text.match(pattern)
+    if (match && match[1]) {
+      result[key] = match[1]
+    }
+  }
+  
+  // For reasoning, try to extract even if unterminated
+  const reasoningMatch = text.match(/"reasoning"\s*:\s*"([^"]*)/i)
+  if (reasoningMatch && reasoningMatch[1] && !result.reasoning) {
+    // Extract everything after "reasoning": " until end or next quote
+    const start = text.indexOf('"reasoning"', reasoningMatch.index || 0)
+    if (start !== -1) {
+      const valueStart = text.indexOf('"', start + 11) + 1
+      if (valueStart > 0) {
+        // Extract until end of text or next unescaped quote
+        let value = ''
+        for (let i = valueStart; i < text.length; i++) {
+          if (text[i] === '"' && text[i - 1] !== '\\') {
+            break
+          }
+          value += text[i]
+        }
+        result.reasoning = value.substring(0, 5000)
+      }
+    }
+  }
+  
+  return result
 }
 
 /**

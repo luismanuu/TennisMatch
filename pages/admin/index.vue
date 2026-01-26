@@ -133,6 +133,18 @@
                 <Icon name="heroicons:exclamation-triangle" class="w-4 h-4 flex-shrink-0" />
                 <span>Fallback Matches</span>
               </button>
+              <button
+                @click="activeTab = 'missing-rating-history'"
+                :class="[
+                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  activeTab === 'missing-rating-history'
+                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
+                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                ]"
+              >
+                <Icon name="heroicons:clock" class="w-4 h-4 flex-shrink-0" />
+                <span>Missing Rating History</span>
+              </button>
             </div>
 
             <!-- Tournament Management Group -->
@@ -1551,6 +1563,81 @@
           </div>
         </div>
 
+        <!-- Missing Rating History Tab -->
+        <div v-show="activeTab === 'missing-rating-history' && !loading">
+          <div class="glass-card-elevated p-6 mb-6">
+            <h2 class="text-size-2 font-semibold text-foreground mb-4">Procesar Partidos sin Rating History</h2>
+            <p class="text-size-4 text-foreground-muted mb-6">
+              Estos son partidos completados y marcados como competitivos que no tienen rating_history.
+              Esto puede ocurrir si el procesamiento falló silenciosamente o si se completaron antes de que existiera el sistema.
+            </p>
+            
+            <div class="flex flex-col sm:flex-row gap-4 mb-6">
+              <div class="flex-1">
+                <label class="block text-size-4 font-semibold text-foreground mb-2">Player ID (opcional)</label>
+                <input
+                  v-model="missingRatingHistoryPlayerId"
+                  type="text"
+                  placeholder="Dejar vacío para todos los partidos"
+                  class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none text-size-4"
+                />
+              </div>
+              <div class="flex items-end">
+                <button
+                  @click="processMissingRatingHistory"
+                  :disabled="processingMissingRatingHistory"
+                  class="btn-primary text-size-4 disabled:opacity-50"
+                >
+                  <Icon 
+                    :name="processingMissingRatingHistory ? 'heroicons:arrow-path' : 'heroicons:play'" 
+                    :class="['w-4 h-4 mr-2', processingMissingRatingHistory ? 'animate-spin' : '']" 
+                  />
+                  {{ processingMissingRatingHistory ? 'Procesando...' : 'Procesar Partidos' }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="missingRatingHistoryResults" class="mt-6">
+              <div class="p-4 rounded-xl bg-surface border border-border-subtle mb-4">
+                <div class="grid grid-cols-3 gap-4">
+                  <div>
+                    <p class="text-size-4 text-foreground-muted mb-1">Total</p>
+                    <p class="text-size-2 font-bold text-foreground">{{ missingRatingHistoryResults.total || 0 }}</p>
+                  </div>
+                  <div>
+                    <p class="text-size-4 text-foreground-muted mb-1">Procesados</p>
+                    <p class="text-size-2 font-bold text-green-400">{{ missingRatingHistoryResults.processed || 0 }}</p>
+                  </div>
+                  <div>
+                    <p class="text-size-4 text-foreground-muted mb-1">Fallidos</p>
+                    <p class="text-size-2 font-bold text-red-400">{{ missingRatingHistoryResults.failed || 0 }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="missingRatingHistoryResults.results && missingRatingHistoryResults.results.length > 0" class="space-y-2 max-h-96 overflow-y-auto">
+                <div
+                  v-for="result in missingRatingHistoryResults.results"
+                  :key="result.match_id"
+                  class="p-3 rounded-lg border"
+                  :class="result.status === 'success' ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                      <p class="text-size-4 font-semibold text-foreground">Match: {{ result.match_id.slice(0, 8) }}...</p>
+                      <p class="text-size-5 text-foreground-muted">{{ result.message }}</p>
+                    </div>
+                    <Icon 
+                      :name="result.status === 'success' ? 'heroicons:check-circle' : 'heroicons:x-circle'" 
+                      :class="['w-5 h-5', result.status === 'success' ? 'text-green-400' : 'text-red-400']"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Tournaments Tab -->
         <div v-show="activeTab === 'tournaments' && !loading">
           <NuxtLink to="/admin/tournaments" class="block">
@@ -1672,6 +1759,8 @@ definePageMeta({
   middleware: ['admin']
 })
 
+const { userId } = useAuthState()
+
 const { 
   loading, 
   error, 
@@ -1715,7 +1804,7 @@ const {
 
 
 // Tab management
-const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'fallback-matches' | 'tournaments' | 'organizers' | 'city-segments' | 'rankings'>('overview')
+const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'fallback-matches' | 'missing-rating-history' | 'tournaments' | 'organizers' | 'city-segments' | 'rankings'>('overview')
 
 const successMessage = ref<string | null>(null)
 const resendingIds = ref<Set<string>>(new Set())
@@ -2336,6 +2425,23 @@ const loadStats = async () => {
 // Track if fallback matches are being loaded to prevent duplicate calls
 const isLoadingFallbackMatches = ref(false)
 
+// Missing rating history processing
+const missingRatingHistoryPlayerId = ref('')
+const processingMissingRatingHistory = ref(false)
+const missingRatingHistoryResults = ref<{
+  success: boolean
+  message: string
+  processed: number
+  failed: number
+  total: number
+  results?: Array<{
+    match_id: string
+    status: 'success' | 'error'
+    message: string
+    elo_changes?: { player1: number; player2: number }
+  }>
+} | null>(null)
+
 const loadFallbackMatches = async () => {
   // Prevent duplicate calls
   if (isLoadingFallbackMatches.value || loading.value) {
@@ -2398,6 +2504,54 @@ const handleReprocessConfirm = async () => {
 
 const handleFallbackMatchesPageChange = (page: number) => {
   fetchFallbackMatches(page)
+}
+
+// Process missing rating history
+const processMissingRatingHistory = async () => {
+  if (!userId.value) {
+    const toast = useToastNotifications()
+    toast.error('Usuario no autenticado')
+    return
+  }
+
+  processingMissingRatingHistory.value = true
+  missingRatingHistoryResults.value = null
+  const toast = useToastNotifications()
+
+  try {
+    const queryParams = new URLSearchParams({
+      clerk_id: userId.value,
+      limit: '100'
+    })
+
+    if (missingRatingHistoryPlayerId.value.trim()) {
+      queryParams.append('player_id', missingRatingHistoryPlayerId.value.trim())
+    }
+
+    const result = await $fetch<{
+      success: boolean
+      message: string
+      processed: number
+      failed: number
+      total: number
+      results?: Array<{
+        match_id: string
+        status: 'success' | 'error'
+        message: string
+        elo_changes?: { player1: number; player2: number }
+      }>
+    }>(`/api/admin/matches/process-missing-rating-history?${queryParams.toString()}`, {
+      method: 'POST'
+    })
+
+    missingRatingHistoryResults.value = result
+    toast.success(result.message || 'Partidos procesados exitosamente')
+  } catch (err: any) {
+    console.error('Error processing missing rating history:', err)
+    toast.error(err.data?.message || err.message || 'Error al procesar partidos')
+  } finally {
+    processingMissingRatingHistory.value = false
+  }
 }
 
 // Watch for tab changes to load data

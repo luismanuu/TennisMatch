@@ -395,6 +395,23 @@
                 <!-- Status Badge and Date -->
                 <div class="flex items-center gap-2 sm:gap-3 md:gap-4 flex-wrap mt-3">
                   <MatchTournamentBadge :match="match" />
+                  <!-- Competitive/Friendly Badge -->
+                  <div 
+                    class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-full border backdrop-blur-sm"
+                    :class="match.is_competitive !== false ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-500/10 border-gray-500/30'"
+                  >
+                    <Icon 
+                      :name="match.is_competitive !== false ? 'heroicons:trophy' : 'heroicons:hand-raised'" 
+                      class="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                      :class="match.is_competitive !== false ? 'text-green-400' : 'text-gray-400'"
+                    />
+                    <span 
+                      class="text-xs sm:text-size-4 font-semibold"
+                      :class="match.is_competitive !== false ? 'text-green-400' : 'text-gray-400'"
+                    >
+                      {{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}
+                    </span>
+                  </div>
                   <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-full border backdrop-blur-sm" :class="getStatusBadgeClass(match.status, match.scheduled_at)">
                     <Icon :name="getStatusIcon(match.status)" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     <span class="text-xs sm:text-size-4 font-semibold">{{ getStatusLabel(match.status, match.scheduled_at) }}</span>
