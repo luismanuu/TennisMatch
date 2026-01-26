@@ -540,6 +540,7 @@ export interface HeadToHeadMatch {
   match?: {
     played_at?: string
     scheduled_at?: string
+    score?: string
   }
 }
 

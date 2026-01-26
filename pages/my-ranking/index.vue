@@ -526,11 +526,17 @@
                   <div v-if="h2hStats.best_match" class="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
                     <p class="text-size-5 text-foreground-muted mb-1">Mejor Partido</p>
                     <p class="text-size-2 font-bold text-green-400">+{{ h2hStats.best_match.elo_change }} SR</p>
+                    <p v-if="h2hStats.best_match.match?.score" class="text-size-3 font-semibold text-foreground mt-2 mb-1">
+                      {{ h2hStats.best_match.match.score }}
+                    </p>
                     <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.best_match.created_at) }}</p>
                   </div>
                   <div v-if="h2hStats.worst_match" class="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
                     <p class="text-size-5 text-foreground-muted mb-1">Peor Partido</p>
                     <p class="text-size-2 font-bold text-red-400">{{ h2hStats.worst_match.elo_change }} SR</p>
+                    <p v-if="h2hStats.worst_match.match?.score" class="text-size-3 font-semibold text-foreground mt-2 mb-1">
+                      {{ h2hStats.worst_match.match.score }}
+                    </p>
                     <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.worst_match.created_at) }}</p>
                   </div>
                 </div>
