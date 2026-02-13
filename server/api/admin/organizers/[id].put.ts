@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
 
     // Update name if provided
     if (name !== undefined) {
@@ -91,11 +91,8 @@ export default defineEventHandler(async (event) => {
       message: 'No changes to update',
       organizer
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/admin/organizers/[id]')
   }
 })
 

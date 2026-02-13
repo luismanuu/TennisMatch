@@ -1,19 +1,16 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
+import { playerIdSchema, playerRatingHistoryQuerySchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
+  let playerId: string | undefined
   try {
-    const playerId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const limit = parseInt(query.limit as string) || 20
-    const offset = parseInt(query.offset as string) || 0
-    const period = (query.period as string) || 'year' // month, year, all
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
+    playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(playerRatingHistoryQuerySchema, getQuery(event))
+    const limit = query.limit ?? 20
+    const offset = query.offset ?? 0
+    const period = query.period ?? 'year' // month, year, all
     
     const supabase = getSupabaseAdmin()
     
@@ -73,7 +70,7 @@ export default defineEventHandler(async (event) => {
       .range(offset, offset + limit - 1)
     
     if (historyError) {
-      console.error('Error fetching rating history:', historyError)
+      logger.error('Error fetching rating history', historyError, { playerId })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch rating history'
@@ -103,11 +100,14 @@ export default defineEventHandler(async (event) => {
       allHistoryQuery = allHistoryQuery.gte('created_at', dateFilter.toISOString())
     }
     
+    // Cap stats history so "period=all" doesn't become unbounded
+    const MAX_STATS_ROWS = 5000
     const { data: allHistory, error: allHistoryError } = await allHistoryQuery
       .order('created_at', { ascending: false })
+      .limit(MAX_STATS_ROWS)
     
     if (allHistoryError) {
-      console.error('Error fetching all history for stats:', allHistoryError)
+      logger.error('Error fetching all history for stats', allHistoryError, { playerId })
       // Continue with empty array rather than failing completely
     }
     
@@ -115,7 +115,10 @@ export default defineEventHandler(async (event) => {
     if (allHistory && allHistory.length > 0) {
       const entriesWithMatchData = allHistory.filter(e => e.match).length
       if (entriesWithMatchData === 0) {
-        console.warn(`Player ${playerId} has ${allHistory.length} matches but no match data in join. Using created_at as fallback.`)
+        logger.warn('Player has matches but no match data in join. Using created_at as fallback.', { 
+          playerId, 
+          matchCount: allHistory.length 
+        })
       }
     }
     
@@ -126,16 +129,24 @@ export default defineEventHandler(async (event) => {
     const peakElo = history?.length ? Math.max(...history.map(h => h.elo_after)) : 0
     
     // Helper function to get match date - always fallback to created_at
-    const getMatchDate = (entry: any): Date => {
+    type MatchDateRef = { played_at?: string | null; scheduled_at?: string | null }
+
+    type HistoryEntryWithMatch = {
+      created_at: string
+      match?: MatchDateRef | MatchDateRef[] | null
+    }
+
+    const getMatchDate = (entry: HistoryEntryWithMatch): Date => {
+      const matchRef = Array.isArray(entry.match) ? entry.match[0] : entry.match
       try {
-        if (entry.match?.played_at) {
-          const date = new Date(entry.match.played_at)
+        if (matchRef?.played_at) {
+          const date = new Date(matchRef.played_at)
           if (!isNaN(date.getTime())) {
             return date
           }
         }
-        if (entry.match?.scheduled_at) {
-          const date = new Date(entry.match.scheduled_at)
+        if (matchRef?.scheduled_at) {
+          const date = new Date(matchRef.scheduled_at)
           if (!isNaN(date.getTime())) {
             return date
           }
@@ -167,7 +178,9 @@ export default defineEventHandler(async (event) => {
     if (allHistory && allHistory.length > 0) {
       // Current streak (from most recent, which is first in array since we order DESC)
       const firstEntry = allHistory[0]
-      if (firstEntry.was_winner) {
+      if (!firstEntry) {
+        // no-op
+      } else if (firstEntry.was_winner) {
         for (const entry of allHistory) {
           if (entry.was_winner) {
             currentWinStreak++
@@ -209,32 +222,33 @@ export default defineEventHandler(async (event) => {
             continue // Skip invalid dates
           }
           const ecuadorDate = toEcuadorTime(matchDate)
-          const dayName = dayNames[ecuadorDate.getDay()]
+          const dayName = dayNames[ecuadorDate.getDay()] ?? 'Desconocido'
           
-          if (!dayOfWeekStats[dayName]) {
-            dayOfWeekStats[dayName] = { wins: 0, losses: 0, win_rate: 0 }
-          }
+          const stats = dayOfWeekStats[dayName] || (dayOfWeekStats[dayName] = { wins: 0, losses: 0, win_rate: 0 })
           
           if (entry.was_winner) {
-            dayOfWeekStats[dayName].wins++
+            stats.wins++
           } else {
-            dayOfWeekStats[dayName].losses++
+            stats.losses++
           }
         } catch (e) {
           // Skip entries with date errors
-          console.warn('Error processing day of week for entry:', entry.id, e)
+          logger.warn('Error processing day of week for entry', { entryId: entry.id, error: e })
         }
       }
       
       // Calculate win rates
-      for (const day in dayOfWeekStats) {
-        const total = dayOfWeekStats[day].wins + dayOfWeekStats[day].losses
-        dayOfWeekStats[day].win_rate = total > 0 ? (dayOfWeekStats[day].wins / total) * 100 : 0
+      for (const [day, stats] of Object.entries(dayOfWeekStats)) {
+        if (!stats) continue
+        const total = stats.wins + stats.losses
+        stats.win_rate = total > 0 ? (stats.wins / total) * 100 : 0
+        dayOfWeekStats[day] = stats
       }
     }
     
     // Calculate time of day stats
-    const timeOfDayStats: { [key: string]: { wins: number; losses: number; win_rate: number } } = {
+    type Period = 'morning' | 'afternoon' | 'evening' | 'night'
+    const timeOfDayStats: Record<Period, { wins: number; losses: number; win_rate: number }> = {
       morning: { wins: 0, losses: 0, win_rate: 0 },
       afternoon: { wins: 0, losses: 0, win_rate: 0 },
       evening: { wins: 0, losses: 0, win_rate: 0 },
@@ -251,7 +265,7 @@ export default defineEventHandler(async (event) => {
           const ecuadorDate = toEcuadorTime(matchDate)
           const hour = ecuadorDate.getHours()
           
-          let period: 'morning' | 'afternoon' | 'evening' | 'night'
+          let period: Period
           if (hour >= 6 && hour < 12) {
             period = 'morning'
           } else if (hour >= 12 && hour < 18) {
@@ -269,12 +283,13 @@ export default defineEventHandler(async (event) => {
           }
         } catch (e) {
           // Skip entries with date errors
-          console.warn('Error processing time of day for entry:', entry.id, e)
+          logger.warn('Error processing time of day for entry', { entryId: entry.id, error: e })
         }
       }
       
       // Calculate win rates
-      for (const period in timeOfDayStats) {
+      const periods: Period[] = ['morning', 'afternoon', 'evening', 'night']
+      for (const period of periods) {
         const total = timeOfDayStats[period].wins + timeOfDayStats[period].losses
         timeOfDayStats[period].win_rate = total > 0 ? (timeOfDayStats[period].wins / total) * 100 : 0
       }
@@ -294,34 +309,35 @@ export default defineEventHandler(async (event) => {
           }
           const ecuadorDate = toEcuadorTime(matchDate)
           const monthKey = `${ecuadorDate.getFullYear()}-${ecuadorDate.getMonth()}`
-          const monthName = `${monthNames[ecuadorDate.getMonth()]} ${ecuadorDate.getFullYear()}`
+          const monthLabel = monthNames[ecuadorDate.getMonth()] ?? 'Mes'
+          const monthName = `${monthLabel} ${ecuadorDate.getFullYear()}`
           
-          if (!monthStats[monthKey]) {
-            monthStats[monthKey] = { wins: 0, losses: 0, win_rate: 0, matches: 0, monthName }
-          }
+          const stats = monthStats[monthKey] || (monthStats[monthKey] = { wins: 0, losses: 0, win_rate: 0, matches: 0, monthName })
           
-          monthStats[monthKey].matches++
+          stats.matches++
           if (entry.was_winner) {
-            monthStats[monthKey].wins++
+            stats.wins++
           } else {
-            monthStats[monthKey].losses++
+            stats.losses++
           }
         } catch (e) {
           // Skip entries with date errors
-          console.warn('Error processing month for entry:', entry.id, e)
+          logger.warn('Error processing month for entry', { entryId: entry.id, error: e })
         }
       }
       
       // Calculate win rates and find best month
       for (const key in monthStats) {
-        const total = monthStats[key].wins + monthStats[key].losses
-        monthStats[key].win_rate = total > 0 ? (monthStats[key].wins / total) * 100 : 0
+        const stats = monthStats[key]
+        if (!stats) continue
+        const total = stats.wins + stats.losses
+        stats.win_rate = total > 0 ? (stats.wins / total) * 100 : 0
         
-        if (!bestMonth || monthStats[key].win_rate > bestMonth.win_rate) {
+        if (!bestMonth || stats.win_rate > bestMonth.win_rate) {
           bestMonth = {
-            month: monthStats[key].monthName,
-            win_rate: monthStats[key].win_rate,
-            matches: monthStats[key].matches
+            month: stats.monthName,
+            win_rate: stats.win_rate,
+            matches: stats.matches
           }
         }
       }
@@ -332,7 +348,8 @@ export default defineEventHandler(async (event) => {
     let daysSinceLastMatch = 0
     if (allHistory && allHistory.length > 0) {
       try {
-        const lastMatchDate = getMatchDate(allHistory[0])
+        const firstHistoryEntry = allHistory[0] as unknown as HistoryEntryWithMatch | undefined
+        const lastMatchDate = firstHistoryEntry ? getMatchDate(firstHistoryEntry) : new Date()
         if (!isNaN(lastMatchDate.getTime())) {
           // Helper to get date string in Ecuador timezone (YYYY-MM-DD)
           const getEcuadorDateString = (d: Date): string => {
@@ -344,23 +361,35 @@ export default defineEventHandler(async (event) => {
           const nowStr = getEcuadorDateString(now)
           const lastMatchStr = getEcuadorDateString(lastMatchDate)
           
-          // Parse dates to compare
-          const nowParts = nowStr.split('-').map(Number)
-          const lastMatchParts = lastMatchStr.split('-').map(Number)
+          // Parse dates to compare safely
+          const [nowYearStr, nowMonthStr, nowDayStr] = nowStr.split('-')
+          const [lastYearStr, lastMonthStr, lastDayStr] = lastMatchStr.split('-')
           
-          const nowDateOnly = new Date(nowParts[0], nowParts[1] - 1, nowParts[2])
-          const lastMatchDateOnly = new Date(lastMatchParts[0], lastMatchParts[1] - 1, lastMatchParts[2])
+          const nowYear = Number(nowYearStr)
+          const nowMonth = Number(nowMonthStr)
+          const nowDay = Number(nowDayStr)
+          const lastYear = Number(lastYearStr)
+          const lastMonth = Number(lastMonthStr)
+          const lastDay = Number(lastDayStr)
           
-          const diffTime = nowDateOnly.getTime() - lastMatchDateOnly.getTime()
-          daysSinceLastMatch = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-          
-          // Ensure non-negative
-          if (daysSinceLastMatch < 0) {
-            daysSinceLastMatch = 0
+          if (
+            !Number.isNaN(nowYear) && !Number.isNaN(nowMonth) && !Number.isNaN(nowDay) &&
+            !Number.isNaN(lastYear) && !Number.isNaN(lastMonth) && !Number.isNaN(lastDay)
+          ) {
+            const nowDateOnly = new Date(nowYear, nowMonth - 1, nowDay)
+            const lastMatchDateOnly = new Date(lastYear, lastMonth - 1, lastDay)
+            
+            const diffTime = nowDateOnly.getTime() - lastMatchDateOnly.getTime()
+            daysSinceLastMatch = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+            
+            // Ensure non-negative
+            if (daysSinceLastMatch < 0) {
+              daysSinceLastMatch = 0
+            }
           }
         }
       } catch (e) {
-        console.warn('Error calculating days since last match:', e)
+        logger.warn('Error calculating days since last match', { error: e, playerId })
         // If we can't get the date, assume it's recent (0 days) so it shows
         daysSinceLastMatch = 0
       }
@@ -410,7 +439,7 @@ export default defineEventHandler(async (event) => {
     // For best_month: need at least 2 months OR 10+ matches
     
     // Add match date to each history entry for frontend use
-    const historyWithMatchDate = (history ?? []).map((entry: any) => {
+    const historyWithMatchDate = (history ?? []).map((entry) => {
       const matchDate = getMatchDate(entry)
       return {
         ...entry,
@@ -450,12 +479,7 @@ export default defineEventHandler(async (event) => {
         }
       }
     }
-  } catch (error: any) {
-    console.error('Error in rating-history endpoint:', error)
-    console.error('Stack:', error.stack)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/[id]/rating-history')
   }
 })

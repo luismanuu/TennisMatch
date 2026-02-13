@@ -1,6 +1,4 @@
-﻿<script setup lang="ts">
-import { UserProfile } from '@clerk/vue'
-
+<script setup lang="ts">
 definePageMeta({
   middleware: 'auth'
 })

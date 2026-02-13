@@ -1,6 +1,66 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 import { getRatingTier, getNextTierProgress } from '~/server/utils/rating-system'
 import type { LeaderboardPlayer, BadgeType } from '~/types/leaderboard'
+import type { City, Category } from '~/types'
+import { leaderboardTopQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+
+type PlayerRow = {
+  id: string
+  name: string | null
+  elo: number
+  total_matches_played: number
+  placement_matches_completed: number | null
+  win_streak: number
+  loss_streak: number
+  previous_rank: number | null
+  city: unknown
+  category: unknown
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function toCity(value: unknown): City | undefined {
+  const r = asRecord(value)
+  if (!r) return undefined
+  return typeof r.id === 'string' &&
+    typeof r.name === 'string' &&
+    typeof r.order === 'number' &&
+    typeof r.created_at === 'string' &&
+    typeof r.updated_at === 'string'
+    ? {
+        id: r.id,
+        name: r.name,
+        order: r.order,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      }
+    : undefined
+}
+
+function toCategory(value: unknown): Category | undefined {
+  const r = asRecord(value)
+  if (!r) return undefined
+  return typeof r.id === 'string' &&
+    typeof r.name === 'string' &&
+    typeof r.order === 'number' &&
+    typeof r.default_elo === 'number' &&
+    typeof r.created_at === 'string' &&
+    typeof r.updated_at === 'string'
+    ? {
+        id: r.id,
+        name: r.name,
+        description: typeof r.description === 'string' ? r.description : undefined,
+        order: r.order,
+        default_elo: r.default_elo,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      }
+    : undefined
+}
 
 // Helper to calculate badges for a player (disabled for now)
 function getPlayerBadges(
@@ -13,8 +73,8 @@ function getPlayerBadges(
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 10, 50)
+    const query = validateQuery(leaderboardTopQuerySchema, getQuery(event))
+    const limit = query.limit ?? 10
     
     const supabase = getSupabaseAdmin()
     
@@ -30,8 +90,8 @@ export default defineEventHandler(async (event) => {
         win_streak,
         loss_streak,
         previous_rank,
-        city:cities(id, name),
-        category:categories(id, name)
+        city:cities(id, name, order, created_at, updated_at),
+        category:categories(id, name, description, order, default_elo, created_at, updated_at)
       `)
       .eq('status', 'active')
       // Include all players
@@ -55,8 +115,9 @@ export default defineEventHandler(async (event) => {
     }
     
     // Map to LeaderboardPlayer format
-    const topPlayers: LeaderboardPlayer[] = players.map((player, index) => {
-      const tierInfo = getRatingTier(player.elo)
+    const typedPlayers = (players || []) as unknown as PlayerRow[]
+    const topPlayers: LeaderboardPlayer[] = typedPlayers.map((player, index) => {
+      const tierInfo = getRatingTier(player.elo || 0)
       const rank = index + 1
       const badges = getPlayerBadges(rank, player.win_streak, player.total_matches_played)
       const isInPlacement = player.total_matches_played === 0 || (player.placement_matches_completed || 0) < 3
@@ -65,14 +126,14 @@ export default defineEventHandler(async (event) => {
       // This works for both rated players and players in placement
       let isNearPromotion = false
       let nextTierName: string | null = null
-      const tierProgress = getNextTierProgress(player.elo)
+      const tierProgress = getNextTierProgress(player.elo || 0)
       if (!tierProgress.isMaxTier && tierProgress.eloNeeded <= 100) {
         isNearPromotion = true
         nextTierName = tierProgress.nextTier?.tier || null
       }
       
       // Calculate rank change
-      const previousRank = (player as any).previous_rank
+      const previousRank = player.previous_rank
       let rankChange: number | undefined = undefined
       if (previousRank !== null && previousRank !== undefined) {
         // rank_change = previous_rank - current_rank
@@ -83,7 +144,7 @@ export default defineEventHandler(async (event) => {
       return {
         id: player.id,
         name: player.name,
-        elo: player.elo,
+        elo: player.elo || 0,
         rank,
         previous_rank: previousRank,
         rank_change: rankChange,
@@ -92,8 +153,8 @@ export default defineEventHandler(async (event) => {
         win_streak: player.win_streak,
         loss_streak: player.loss_streak,
         placement_matches_completed: player.placement_matches_completed,
-        city: player.city as any,
-        category: player.category as any,
+        city: toCity(player.city),
+        category: toCategory(player.category),
         badges,
         is_current_user: false,
         near_promotion: isNearPromotion,
@@ -106,11 +167,7 @@ export default defineEventHandler(async (event) => {
       top_players: topPlayers,
       total: topPlayers.length
     }
-  } catch (error: any) {
-    console.error('Top players error:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/leaderboard/top')
   }
 })

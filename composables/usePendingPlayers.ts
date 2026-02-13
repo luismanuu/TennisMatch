@@ -1,4 +1,12 @@
-import type { PendingPlayer, CreatePendingPlayerPayload } from '~/types'
+import type { PendingPlayer, Player, CreatePendingPlayerPayload } from '~/types'
+
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
+
+function hasStatusCode(err: unknown, code: number): boolean {
+  return typeof err === 'object' && err !== null && 'statusCode' in err && (err as { statusCode: number }).statusCode === code
+}
 
 export const usePendingPlayers = () => {
   const loading = ref(false)
@@ -20,8 +28,8 @@ export const usePendingPlayers = () => {
         }
       })
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -35,8 +43,8 @@ export const usePendingPlayers = () => {
     try {
       const data = await $fetch<PendingPlayer>(`/api/pending-players/invitation/${token}`)
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -48,15 +56,15 @@ export const usePendingPlayers = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; player?: any; player_id?: string; message: string }>(`/api/pending-players/${pendingPlayerId}`, {
+      const data = await $fetch<{ success: boolean; player?: Player; player_id?: string; message: string }>(`/api/pending-players/${pendingPlayerId}`, {
         method: 'PUT',
         body: {
           clerk_id: clerkId
         }
       })
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -75,9 +83,9 @@ export const usePendingPlayers = () => {
     try {
       const data = await $fetch<PendingPlayer | null>(`/api/pending-players/${pendingPlayerId}`, {
         method: 'GET'
-      }).catch((err: any) => {
+      }).catch((err: unknown) => {
         // Handle 404 gracefully - pending player doesn't exist
-        if (err.statusCode === 404) {
+        if (hasStatusCode(err, 404)) {
           return null
         }
         // Re-throw other errors
@@ -86,10 +94,10 @@ export const usePendingPlayers = () => {
       
       publicPendingPlayer.value = data
       return data
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Only set error for unexpected errors, not for missing pending players
-      if (err.statusCode && err.statusCode !== 404) {
-        publicPendingError.value = err
+      if (err !== null && typeof err === 'object' && 'statusCode' in err && (err as { statusCode: number }).statusCode !== 404) {
+        publicPendingError.value = toError(err)
         console.error('Error fetching public pending player:', err)
       }
       publicPendingPlayer.value = null

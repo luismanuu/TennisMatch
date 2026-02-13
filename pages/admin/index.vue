@@ -460,7 +460,7 @@
                     <div class="flex items-start justify-between gap-4">
                       <div class="flex items-start gap-4 flex-1">
                         <div class="flex flex-col items-center justify-center min-w-[60px]">
-                          <span class="text-size-2 font-bold text-accent">#{{ index + 1 }}</span>
+                          <span class="text-size-2 font-bold text-accent">#{{ Number(index) + 1 }}</span>
                           <span 
                             class="px-2 py-1 rounded text-size-5 font-semibold mt-1"
                             :style="{ 
@@ -600,7 +600,7 @@
           </div>
           <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
           <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
-          <button @click="loadPendingPlayers" class="btn-primary text-size-3 w-full justify-center group">
+          <button @click="() => loadPendingPlayers()" class="btn-primary text-size-3 w-full justify-center group">
             <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
             Reintentar
           </button>
@@ -679,7 +679,7 @@
                   <td class="p-3 sm:p-4">
                     <div class="flex flex-col sm:flex-row gap-2">
                       <button
-                        v-if="player.status === 'pending' && !(player as any).revoked"
+                        v-if="player.status === 'pending' && !(('revoked' in (player as object)) && (player as { revoked?: boolean | null }).revoked)"
                         @click="handleResend(player.clerk_invitation_id || player.id)"
                         :disabled="loading || resendingIds.has(player.clerk_invitation_id || player.id) || deletingPendingIds.has(player.clerk_invitation_id || player.id)"
                         class="btn-primary text-size-4 !py-2 !px-4 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -695,8 +695,8 @@
                         <span v-if="deletingPendingIds.has(player.clerk_invitation_id || player.id)">Deleting...</span>
                         <span v-else>Delete</span>
                       </button>
-                      <span v-if="player.status !== 'pending' || (player as any).revoked" class="text-size-4 font-regular text-foreground-muted flex items-center">
-                        {{ (player as any).revoked ? 'Revoked' : player.status === 'accepted' ? 'Accepted' : 'Expired' }}
+                      <span v-if="player.status !== 'pending' || (('revoked' in (player as object)) && (player as { revoked?: boolean | null }).revoked)" class="text-size-4 font-regular text-foreground-muted flex items-center">
+                        {{ (('revoked' in (player as object)) && (player as { revoked?: boolean | null }).revoked) ? 'Revoked' : player.status === 'accepted' ? 'Accepted' : 'Expired' }}
                       </span>
                     </div>
                   </td>
@@ -879,7 +879,7 @@
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
-            <button @click="loadPlayers" class="btn-primary text-size-3 w-full justify-center group">
+            <button @click="() => loadPlayers()" class="btn-primary text-size-3 w-full justify-center group">
               <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
               Reintentar
             </button>
@@ -1275,7 +1275,7 @@
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
-            <button @click="loadMatches" class="btn-primary text-size-3 w-full justify-center group">
+            <button @click="() => loadMatches()" class="btn-primary text-size-3 w-full justify-center group">
               <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
               Reintentar
             </button>
@@ -1543,6 +1543,7 @@
               
               <PaginationControls
                 :current-page="fallbackMatchesPage"
+                :total-pages="Math.max(1, Math.ceil((fallbackMatchesTotal || 0) / (fallbackMatchesPageSize || 1)))"
                 :total="fallbackMatchesTotal"
                 :page-size="fallbackMatchesPageSize"
                 :loading="loading"

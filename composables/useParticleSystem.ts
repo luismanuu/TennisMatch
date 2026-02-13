@@ -180,7 +180,10 @@ export function useParticleSystem(options: ParticleSystemOptions) {
     // Add remaining particles to first type
     const remaining = config.particleCount - Object.values(typeCounts).reduce((a, b) => a + b, 0)
     if (config.particleTypes.length > 0 && remaining > 0) {
-      typeCounts[config.particleTypes[0]] = (typeCounts[config.particleTypes[0]] || 0) + remaining
+      const firstType = config.particleTypes[0]
+      if (firstType) {
+        typeCounts[firstType] = (typeCounts[firstType] || 0) + remaining
+      }
     }
 
     // Create main particles

@@ -145,7 +145,7 @@
                   <p class="text-size-2 md:text-size-1 font-semibold text-foreground">{{ tier }}</p>
                   <span 
                     class="px-3 py-1 rounded-lg text-size-4 font-semibold"
-                    :style="{ color: getTierColor(tier), backgroundColor: getTierColor(tier) + '20' }"
+                    :style="{ color: getTierColor(String(tier)), backgroundColor: getTierColor(String(tier)) + '20' }"
                   >
                     {{ tier }}
                   </span>

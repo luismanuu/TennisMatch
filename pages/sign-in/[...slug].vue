@@ -24,7 +24,7 @@
         </div>
 
         <!-- Clerk Sign In Component -->
-        <div class="clerk-wrapper" v-if="!(isFactorTwoRoute && sessionStorage.getItem('clerk-2fa-code-sent') && !sessionStorage.getItem('clerk-2fa-initiated'))">
+        <div class="clerk-wrapper" v-if="shouldRenderSignIn">
           <ClientOnly>
             <SignIn
               v-if="shouldRenderSignIn"
@@ -43,7 +43,7 @@
           </ClientOnly>
         </div>
         <!-- Custom message for reload scenarios -->
-        <div v-else-if="isFactorTwoRoute && sessionStorage.getItem('clerk-2fa-code-sent') && !sessionStorage.getItem('clerk-2fa-initiated')" class="code-entry-message">
+        <div v-else-if="isFactorTwoRoute && !shouldRenderSignIn" class="code-entry-message">
           <div class="message-content">
             <p class="message-title">Ingresa tu código de verificación</p>
             <p class="message-text">
@@ -264,28 +264,25 @@ if (process.client) {
     const currentHash = window.location.hash
     const isOnFactorTwo = currentPath.includes('factor-two') || currentHash.includes('factor-two')
 
-    if (isOnFactorTwo) {
-      const codeSentTimestamp = sessionStorage.getItem(twoFactorCodeSentKey)
-      const twoFactorInitiated = sessionStorage.getItem(twoFactorInitiatedKey)
-      const codeSentRecently = codeSentTimestamp && (Date.now() - parseInt(codeSentTimestamp)) < 10 * 60 * 1000
+        if (isOnFactorTwo) {
+          const codeSentTimestamp = sessionStorage.getItem(twoFactorCodeSentKey)
+          const twoFactorInitiated = sessionStorage.getItem(twoFactorInitiatedKey)
+          const codeSentRecently = codeSentTimestamp && (Date.now() - parseInt(codeSentTimestamp)) < 10 * 60 * 1000
 
-      // If code was sent recently and no initiated flag, this is DEFINITELY a reload - prevent rendering
-      if (codeSentRecently && !twoFactorInitiated) {
-        console.log('🚫 IMMEDIATE: Preventing Clerk SignIn render on reload - code already sent', {
-          codeSentTimestamp,
-          twoFactorInitiated,
-          isOnFactorTwo
-        })
-        shouldRenderSignIn.value = false
-
-        // Force update the key to prevent any Clerk component from mounting
-        signInKey.value = `reload-blocked-${Date.now()}`
-        return // Don't run any other checks
-      }
-    }
-    
-    // Check if we should render SignIn on mount (in case it wasn't set synchronously)
-    checkShouldRender()
+          // If code was sent recently and no initiated flag, this is DEFINITELY a reload - prevent rendering
+          if (codeSentRecently && !twoFactorInitiated) {
+            console.log('🚫 IMMEDIATE: Preventing Clerk SignIn render on reload - code already sent', {
+              codeSentTimestamp,
+              twoFactorInitiated,
+              isOnFactorTwo
+            })
+            shouldRenderSignIn.value = false
+            return // Don't run any other checks
+          }
+        }
+        
+        // Check if we should render SignIn on mount (in case it wasn't set synchronously)
+        checkShouldRender()
     
     // Watch for route changes
     watch(() => route.path, () => {
@@ -301,14 +298,14 @@ if (process.client) {
       
       // Target the specific badge element
       const badge = clerkWrapper.querySelector('.cl-lastAuthenticationStrategyBadge')
-      if (badge) {
+      if (badge instanceof HTMLElement) {
         badge.style.display = 'none'
         badge.style.visibility = 'hidden'
       }
       
       // Also target by data attribute as fallback
       const badgeByAttr = clerkWrapper.querySelector('[data-localization-key="lastAuthenticationStrategy"]')
-      if (badgeByAttr) {
+      if (badgeByAttr instanceof HTMLElement) {
         badgeByAttr.style.display = 'none'
         badgeByAttr.style.visibility = 'hidden'
       }

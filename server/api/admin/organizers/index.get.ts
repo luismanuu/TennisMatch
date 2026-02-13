@@ -1,80 +1,166 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getAllClerkInvitations, getClerkClient } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
+import { adminOrganizersListQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import { getOrSetTtlCache } from '~/server/utils/ttl-cache'
+
+type PlayerRow = {
+  id: string
+  name: string | null
+  clerk_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+type ClerkEmailAddress = { emailAddress?: string | null }
+
+type ClerkUserLike = {
+  id: string
+  emailAddresses?: ClerkEmailAddress[]
+  publicMetadata?: Record<string, unknown>
+}
+
+type OrganizerDto = {
+  id: string
+  clerk_id: string | null
+  name: string | null
+  email: string
+  created_at: string
+  updated_at: string
+}
+
+type PendingInvitationDto = {
+  id: string
+  email: string | null | undefined
+  name: string
+  status: string | null | undefined
+  created_at: unknown
+}
+
+function getRoleFromPublicMetadata(meta: unknown): string | undefined {
+  if (!meta || typeof meta !== 'object') return undefined
+  const role = (meta as Record<string, unknown>)['role']
+  return typeof role === 'string' ? role : undefined
+}
+
+function getNameFromPublicMetadata(meta: unknown): string | undefined {
+  if (!meta || typeof meta !== 'object') return undefined
+  const name = (meta as Record<string, unknown>)['name']
+  return typeof name === 'string' ? name : undefined
+}
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    // Pagination parameters
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminOrganizersListQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const limit = query.limit ?? 50
+    const offset = query.offset ?? 0
 
     await requireAdmin(clerkId)
 
-    const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
+    // This endpoint hits Clerk + scans players; cache briefly to avoid repeated work in admin UI.
+    const cacheKey = `admin:organizers:v1:${offset}:${limit}`
+    return await getOrSetTtlCache(cacheKey, 60_000, async () => {
+      const supabase = getSupabaseAdmin()
+      const clerkClient = getClerkClient()
 
-    // Get all players with tournament_organizer role
-    const { data: allPlayers, error: playersError } = await supabase
-      .from('players')
-      .select('id, name, clerk_id, created_at, updated_at')
-      .order('created_at', { ascending: false })
+      // Get all players (role lives in Clerk metadata, so we can't filter in DB)
+      const { data: allPlayers, error: playersError } = await supabase
+        .from('players')
+        .select('id, name, clerk_id, created_at, updated_at')
+        .order('created_at', { ascending: false })
 
-    if (playersError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch players',
-        data: playersError
-      })
-    }
+      if (playersError) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Failed to fetch players',
+          data: playersError
+        })
+      }
 
-    // Get Clerk users to check their roles
-    const organizers: any[] = []
-    
-    for (const player of allPlayers || []) {
+    // Get Clerk users in batches to check their roles (avoid N+1)
+    const clerkUsersById = new Map<string, ClerkUserLike>()
+    const players = (allPlayers || []) as unknown as PlayerRow[]
+    const clerkIds = players
+      .map((p) => p.clerk_id || undefined)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+
+    const CHUNK_SIZE = 100
+    for (let i = 0; i < clerkIds.length; i += CHUNK_SIZE) {
+      const chunk = clerkIds.slice(i, i + CHUNK_SIZE)
       try {
-        const clerkUser = await clerkClient.users.getUser(player.clerk_id)
-        const role = clerkUser.publicMetadata?.role as string | undefined
-        
-        if (role === 'tournament_organizer') {
-          organizers.push({
-            id: player.id,
-            clerk_id: player.clerk_id,
-            name: player.name,
-            email: clerkUser.emailAddresses[0]?.emailAddress || '',
-            created_at: player.created_at,
-            updated_at: player.updated_at
+        // Clerk SDK supports list filtering by emailAddress; in practice it also supports userId arrays.
+        // We keep this cast to stay resilient across SDK typings.
+        const users = await clerkClient.users.getUserList(
+          { userId: chunk } as unknown as Parameters<typeof clerkClient.users.getUserList>[0]
+        )
+        if (Array.isArray(users)) {
+          users.forEach((u) => {
+            const maybe = u as unknown as Partial<ClerkUserLike>
+            if (typeof maybe?.id === 'string') clerkUsersById.set(maybe.id, maybe as ClerkUserLike)
           })
         }
       } catch (err) {
-        // Skip if user doesn't exist in Clerk
-        console.warn(`Could not fetch Clerk user for ${player.clerk_id}:`, err)
+        // Fallback to individual fetches if batch query isn't supported by the SDK/environment.
+        logger.warn('Batch Clerk user fetch failed; falling back to per-user', { error: err })
+        for (const id of chunk) {
+          try {
+            const u = await clerkClient.users.getUser(id)
+            if (u?.id) clerkUsersById.set(u.id, u)
+          } catch (innerErr) {
+            logger.warn('Could not fetch Clerk user', { error: innerErr, clerkId: id })
+          }
+        }
+      }
+    }
+
+    // Build organizers from players + Clerk role/email
+    const organizers: OrganizerDto[] = []
+    
+    for (const player of players) {
+      const clerkUser = player.clerk_id ? clerkUsersById.get(player.clerk_id) : undefined
+      const role = getRoleFromPublicMetadata(clerkUser?.publicMetadata)
+
+      if (role === 'tournament_organizer') {
+        organizers.push({
+          id: player.id,
+          clerk_id: player.clerk_id,
+          name: player.name,
+          email: clerkUser?.emailAddresses?.[0]?.emailAddress || '',
+          created_at: player.created_at,
+          updated_at: player.updated_at
+        })
       }
     }
 
     // Also get pending invitations for tournament organizers
     const { invitations: clerkInvitations } = await getAllClerkInvitations()
-    const allPendingInvitations = clerkInvitations
-      .filter((inv: any) => {
-        const metadata = inv.publicMetadata as any
-        return metadata?.role === 'tournament_organizer' && !inv.revoked
+    const allPendingInvitations: PendingInvitationDto[] = clerkInvitations
+      .filter((inv) => {
+        const role = getRoleFromPublicMetadata((inv as { publicMetadata?: unknown }).publicMetadata)
+        const revoked = (inv as { revoked?: unknown }).revoked === true
+        return role === 'tournament_organizer' && !revoked
       })
-      .map((inv: any) => ({
-        id: inv.id,
-        email: inv.emailAddress,
-        name: (inv.publicMetadata as any)?.name || inv.emailAddress?.split('@')[0] || 'Unknown',
-        status: inv.status,
-        created_at: inv.createdAt
-      }))
+      .map((inv) => {
+        const invAny = inv as {
+          id: string
+          emailAddress?: string | null
+          status?: string | null
+          createdAt?: unknown
+          publicMetadata?: unknown
+        }
+        const name = getNameFromPublicMetadata(invAny.publicMetadata)
+        const email = invAny.emailAddress
+        return {
+          id: invAny.id,
+          email,
+          name: name || email?.split('@')[0] || 'Unknown',
+          status: invAny.status,
+          created_at: invAny.createdAt
+        }
+      })
     
     // Apply pagination to organizers
     const totalOrganizers = organizers.length
@@ -84,19 +170,17 @@ export default defineEventHandler(async (event) => {
     const totalPending = allPendingInvitations.length
     const paginatedPending = allPendingInvitations.slice(offset, offset + limit)
 
-    return {
-      organizers: paginatedOrganizers,
-      pendingInvitations: paginatedPending,
-      total: totalOrganizers,
-      total_pending: totalPending,
-      page: Math.floor(offset / limit) + 1,
-      page_size: limit
-    }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      return {
+        organizers: paginatedOrganizers,
+        pendingInvitations: paginatedPending,
+        total: totalOrganizers,
+        total_pending: totalPending,
+        page: Math.floor(offset / limit) + 1,
+        page_size: limit
+      }
     })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/organizers/index')
   }
 })
 

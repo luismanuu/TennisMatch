@@ -1,6 +1,7 @@
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, passthrough } from 'msw'
 
 const CLERK_API_BASE = 'https://api.clerk.com/v1'
+const OPENROUTER_API_BASE = 'https://openrouter.ai'
 
 // Mock Clerk API responses
 export const handlers = [
@@ -114,6 +115,11 @@ export const handlers = [
       status: 'active',
       last_active_at: Date.now(),
     }, { status: 200 })
+  }),
+
+  // Passthrough for OpenRouter API - allow real API calls for LLM integration tests
+  http.all(`${OPENROUTER_API_BASE}/*`, () => {
+    return passthrough()
   }),
 ]
 

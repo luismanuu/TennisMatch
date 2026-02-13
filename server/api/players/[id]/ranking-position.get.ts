@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 import { getRatingTier } from '~/server/utils/rating-system'
-import type { RatingTier } from '~/types'
+import { playerIdSchema, validateParam } from '~/server/utils/validation'
 
 interface RankingPosition {
   global_rank: number
@@ -17,14 +18,7 @@ interface RankingPosition {
 
 export default defineEventHandler(async (event) => {
   try {
-    const playerId = getRouterParam(event, 'id')
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
     
     const supabase = getSupabaseAdmin()
     
@@ -60,7 +54,7 @@ export default defineEventHandler(async (event) => {
       .gte('total_matches_played', 1)
     
     if (countError) {
-      console.error('Error counting players:', countError)
+      logger.error('Error counting players', countError, { playerId })
     }
     
     // If count fails or returns 0, but player has matches, assume at least 1 (the player themselves)
@@ -98,8 +92,10 @@ export default defineEventHandler(async (event) => {
         .limit(1) // Use the first segment if city is in multiple segments
       
       if (segmentCities && segmentCities.length > 0) {
-        const segmentId = segmentCities[0].city_segment_id
-        const segmentName = (segmentCities[0].city_segment as any)?.name || 'Segmento'
+        const segmentCity = segmentCities[0]!
+        const segmentId = segmentCity.city_segment_id
+        const typedSegmentCity = segmentCity as unknown as { city_segment?: { name?: string | null } | null }
+        const segmentName = typedSegmentCity.city_segment?.name || 'Segmento'
         
         // Get all cities in this segment
         const { data: segmentCityIds } = await supabase
@@ -165,10 +161,7 @@ export default defineEventHandler(async (event) => {
       tier,
       current_players: actualTotalPlayers
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/[id]/ranking-position')
   }
 })

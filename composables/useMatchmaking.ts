@@ -59,9 +59,9 @@ export function useMatchmaking() {
       message.value = response.message || null
       
       return response
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching matchmaking recommendations:', err)
-      error.value = err
+      error.value = err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
       throw err
     } finally {
       loading.value = false

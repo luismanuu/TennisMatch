@@ -515,21 +515,21 @@ const filteredRegistrations = computed(() => {
   // Filter by search
   if (playerFilters.value.search) {
     const searchTerm = playerFilters.value.search.toLowerCase()
-    filtered = filtered.filter(reg => 
+    filtered = filtered.filter((reg) => 
       reg.player?.name?.toLowerCase().includes(searchTerm)
     )
   }
   
   // Filter by category
   if (playerFilters.value.category) {
-    filtered = filtered.filter(reg => 
+    filtered = filtered.filter((reg) => 
       reg.player?.category?.name === playerFilters.value.category
     )
   }
   
   // Filter by status
   if (playerFilters.value.status) {
-    filtered = filtered.filter(reg => reg.status === playerFilters.value.status)
+    filtered = filtered.filter((reg) => reg.status === playerFilters.value.status)
   }
   
   return filtered
@@ -539,7 +539,7 @@ const filteredRegistrations = computed(() => {
 const uniqueCategories = computed(() => {
   if (!tournament.value?.registrations) return []
   const categories = new Set<string>()
-  tournament.value.registrations.forEach(reg => {
+  tournament.value.registrations.forEach((reg) => {
     if (reg.player?.category?.name) {
       categories.add(reg.player.category.name)
     }

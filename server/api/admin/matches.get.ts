@@ -1,28 +1,24 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { adminMatchesListQuerySchema, validateQuery } from '~/server/utils/validation'
+import type { PaginatedResponse } from '~/types'
+import { handleApiError } from '~/server/utils/errors'
 
 // Ecuador timezone offset: UTC-5
 const ECUADOR_UTC_OFFSET = -5
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<PaginatedResponse<unknown>> => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const status = query.status as string | undefined
-    const playerId = query.player_id as string | undefined
-    const startDate = query.start_date as string | undefined
-    const endDate = query.end_date as string | undefined
+    const query = validateQuery(adminMatchesListQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const status = query.status
+    const playerId = query.player_id
+    const startDate = query.start_date
+    const endDate = query.end_date
     
     // Pagination parameters
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const limit = query.limit ?? 50
+    const offset = query.offset ?? 0
 
     await requireAdmin(clerkId)
 
@@ -77,14 +73,16 @@ export default defineEventHandler(async (event) => {
         // If startDate is just a date (YYYY-MM-DD), ensure it starts at 00:00:00 in Ecuador timezone
         startDateValue = startDate
         if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-          // Convert start of day in Ecuador (00:00:00) to UTC
-          // Ecuador is UTC-5, so 00:00:00 on day X in Ecuador = 05:00:00 on day X-1 in UTC
-          // Example: 2026-01-22 00:00:00 Ecuador = 2026-01-21 05:00:00 UTC
-          const [year, month, day] = startDate.split('-').map(Number)
-          // Create UTC date: day X at 05:00 UTC = day X at 00:00 Ecuador
-          // We need day X-1 at 05:00 UTC
-          const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
-          startDateValue = utcDate.toISOString()
+          const [yearStr, monthStr, dayStr] = startDate.split('-')
+          const year = Number(yearStr)
+          const month = Number(monthStr)
+          const day = Number(dayStr)
+          if (!Number.isNaN(year) && !Number.isNaN(month) && !Number.isNaN(day)) {
+            // Convert start of day in Ecuador (00:00:00) to UTC
+            // Ecuador is UTC-5, so 00:00:00 on day X in Ecuador = 05:00:00 on day X-1 in UTC
+            const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
+            startDateValue = utcDate.toISOString()
+          }
         }
       }
       
@@ -92,15 +90,15 @@ export default defineEventHandler(async (event) => {
         // If endDate is just a date (YYYY-MM-DD), include the entire day in Ecuador timezone
         endDateValue = endDate
         if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-          // Convert end of day in Ecuador (23:59:59.999) to UTC
-          // Ecuador is UTC-5, so 23:59:59.999 on day X in Ecuador = 04:59:59.999 on day X+1 in UTC
-          // To include the entire day, we use 05:00:00 on day X+1 in UTC
-          // Example: 2026-01-22 23:59:59.999 Ecuador = 2026-01-23 04:59:59.999 UTC
-          // We use 2026-01-23 05:00:00 UTC to include everything
-          const [year, month, day] = endDate.split('-').map(Number)
-          // Create UTC date: day X+1 at 05:00 UTC = day X+1 at 00:00 Ecuador (includes all of day X)
-          const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
-          endDateValue = utcDate.toISOString()
+          const [yearStr, monthStr, dayStr] = endDate.split('-')
+          const year = Number(yearStr)
+          const month = Number(monthStr)
+          const day = Number(dayStr)
+          if (!Number.isNaN(year) && !Number.isNaN(month) && !Number.isNaN(day)) {
+            // Convert end of day in Ecuador to UTC (see comment above)
+            const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
+            endDateValue = utcDate.toISOString()
+          }
         }
       }
       
@@ -153,18 +151,28 @@ export default defineEventHandler(async (event) => {
       if (startDate) {
         startDateValue = startDate
         if (/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-          const [year, month, day] = startDate.split('-').map(Number)
-          const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
-          startDateValue = utcDate.toISOString()
+          const [yearStr, monthStr, dayStr] = startDate.split('-')
+          const year = Number(yearStr)
+          const month = Number(monthStr)
+          const day = Number(dayStr)
+          if (!Number.isNaN(year) && !Number.isNaN(month) && !Number.isNaN(day)) {
+            const utcDate = new Date(Date.UTC(year, month - 1, day - 1, 5, 0, 0, 0))
+            startDateValue = utcDate.toISOString()
+          }
         }
       }
       
       if (endDate) {
         endDateValue = endDate
         if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-          const [year, month, day] = endDate.split('-').map(Number)
-          const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
-          endDateValue = utcDate.toISOString()
+          const [yearStr, monthStr, dayStr] = endDate.split('-')
+          const year = Number(yearStr)
+          const month = Number(monthStr)
+          const day = Number(dayStr)
+          if (!Number.isNaN(year) && !Number.isNaN(month) && !Number.isNaN(day)) {
+            const utcDate = new Date(Date.UTC(year, month - 1, day + 1, 5, 0, 0, 0))
+            endDateValue = utcDate.toISOString()
+          }
         }
       }
       
@@ -216,24 +224,24 @@ export default defineEventHandler(async (event) => {
     // Only if matches exist and have these fields
     const allPlayerIds = new Set<string>()
     if (matches && Array.isArray(matches)) {
-      matches.forEach((match: any) => {
-        if (match && typeof match === 'object') {
-          if (match.score_proposed_by && typeof match.score_proposed_by === 'string') {
-            allPlayerIds.add(match.score_proposed_by)
-          }
-          if (match.score_approved_by && typeof match.score_approved_by === 'string') {
-            allPlayerIds.add(match.score_approved_by)
-          }
-          if (match.reschedule_proposed_by && typeof match.reschedule_proposed_by === 'string') {
-            allPlayerIds.add(match.reschedule_proposed_by)
-          }
-          if (match.reschedule_approved_by && typeof match.reschedule_approved_by === 'string') {
-            allPlayerIds.add(match.reschedule_approved_by)
-          }
-          if (match.reschedule_rejected_by && typeof match.reschedule_rejected_by === 'string') {
-            allPlayerIds.add(match.reschedule_rejected_by)
-          }
-        }
+      matches.forEach((match) => {
+        const m = match as Record<string, unknown> | null
+        if (!m) return
+
+        const scoreProposedBy = typeof m['score_proposed_by'] === 'string' ? (m['score_proposed_by'] as string) : null
+        const scoreApprovedBy = typeof m['score_approved_by'] === 'string' ? (m['score_approved_by'] as string) : null
+        const rescheduleProposedBy =
+          typeof m['reschedule_proposed_by'] === 'string' ? (m['reschedule_proposed_by'] as string) : null
+        const rescheduleApprovedBy =
+          typeof m['reschedule_approved_by'] === 'string' ? (m['reschedule_approved_by'] as string) : null
+        const rescheduleRejectedBy =
+          typeof m['reschedule_rejected_by'] === 'string' ? (m['reschedule_rejected_by'] as string) : null
+
+        if (scoreProposedBy) allPlayerIds.add(scoreProposedBy)
+        if (scoreApprovedBy) allPlayerIds.add(scoreApprovedBy)
+        if (rescheduleProposedBy) allPlayerIds.add(rescheduleProposedBy)
+        if (rescheduleApprovedBy) allPlayerIds.add(rescheduleApprovedBy)
+        if (rescheduleRejectedBy) allPlayerIds.add(rescheduleRejectedBy)
       })
     }
 
@@ -248,37 +256,33 @@ export default defineEventHandler(async (event) => {
           .in('id', playerIdsArray)
         
         if (!playersError && players && Array.isArray(players)) {
-          playerMap = new Map(players.map((p: any) => [p.id, p]))
+          const typedPlayers = players as unknown as Array<{ id: string; name: string }>
+          playerMap = new Map(typedPlayers.map((p) => [p.id, p]))
         }
       }
     }
 
     // Enrich matches with optional player relationships using the batched data
     const enrichedMatches = Array.isArray(matches) 
-      ? matches.map((match: any) => {
-          if (!match || typeof match !== 'object') {
-            return match
-          }
-          
-          const enriched: any = { ...match }
-          
-          // Only add these fields if they exist in the original match
-          if (match.score_proposed_by) {
-            enriched.score_proposed_by_player = playerMap.get(match.score_proposed_by) || null
-          }
-          if (match.score_approved_by) {
-            enriched.score_approved_by_player = playerMap.get(match.score_approved_by) || null
-          }
-          if (match.reschedule_proposed_by) {
-            enriched.reschedule_proposed_by_player = playerMap.get(match.reschedule_proposed_by) || null
-          }
-          if (match.reschedule_approved_by) {
-            enriched.reschedule_approved_by_player = playerMap.get(match.reschedule_approved_by) || null
-          }
-          if (match.reschedule_rejected_by) {
-            enriched.reschedule_rejected_by_player = playerMap.get(match.reschedule_rejected_by) || null
-          }
-          
+      ? matches.map((match) => {
+          if (!match || typeof match !== 'object') return match
+          const m = match as Record<string, unknown>
+
+          const scoreProposedBy = typeof m['score_proposed_by'] === 'string' ? (m['score_proposed_by'] as string) : null
+          const scoreApprovedBy = typeof m['score_approved_by'] === 'string' ? (m['score_approved_by'] as string) : null
+          const rescheduleProposedBy =
+            typeof m['reschedule_proposed_by'] === 'string' ? (m['reschedule_proposed_by'] as string) : null
+          const rescheduleApprovedBy =
+            typeof m['reschedule_approved_by'] === 'string' ? (m['reschedule_approved_by'] as string) : null
+          const rescheduleRejectedBy =
+            typeof m['reschedule_rejected_by'] === 'string' ? (m['reschedule_rejected_by'] as string) : null
+
+          const enriched: Record<string, unknown> = { ...m }
+          if (scoreProposedBy) enriched['score_proposed_by_player'] = playerMap.get(scoreProposedBy) ?? null
+          if (scoreApprovedBy) enriched['score_approved_by_player'] = playerMap.get(scoreApprovedBy) ?? null
+          if (rescheduleProposedBy) enriched['reschedule_proposed_by_player'] = playerMap.get(rescheduleProposedBy) ?? null
+          if (rescheduleApprovedBy) enriched['reschedule_approved_by_player'] = playerMap.get(rescheduleApprovedBy) ?? null
+          if (rescheduleRejectedBy) enriched['reschedule_rejected_by_player'] = playerMap.get(rescheduleRejectedBy) ?? null
           return enriched
         })
       : []
@@ -289,12 +293,8 @@ export default defineEventHandler(async (event) => {
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/matches')
   }
 })
 

@@ -1,10 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { playersSearchQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const searchTerm = (query.q as string) || ''
-    const excludePlayerId = query.exclude_player_id as string | undefined
+    const query = validateQuery(playersSearchQuerySchema, getQuery(event))
+    const searchTerm = query.q || ''
+    const excludePlayerId = query.exclude_player_id
+    const limit = query.limit ?? 20
     
     if (!searchTerm || searchTerm.trim().length < 2) {
       return []
@@ -32,7 +35,7 @@ export default defineEventHandler(async (event) => {
     }
     
     const { data, error } = await queryBuilder
-      .limit(20)
+      .limit(limit)
       .order('name', { ascending: true })
     
     if (error) {
@@ -44,11 +47,8 @@ export default defineEventHandler(async (event) => {
     }
     
     return data || []
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/search')
   }
 })
 

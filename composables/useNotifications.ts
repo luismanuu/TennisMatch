@@ -10,8 +10,9 @@ export interface Notification {
   created_at: string
   read_at: string | null
   dismissed_at: string | null
-  metadata: Record<string, any>
-  match?: any
+  metadata: Record<string, unknown>
+  /** Match summary for display (location, scheduled_at, etc.) */
+  match?: Record<string, unknown>
 }
 
 export interface NotificationCounts {
@@ -42,6 +43,20 @@ export interface NotificationResponse {
   count: NotificationCounts
 }
 
+// Shared singleton state - prevents duplicate API calls
+let sharedState: {
+  notifications: ReturnType<typeof ref<Notification[]>>
+  categorized: ReturnType<typeof ref<NotificationResponse['categorized'] | null>>
+  count: ReturnType<typeof ref<NotificationCounts>>
+  loading: ReturnType<typeof ref<boolean>>
+  error: ReturnType<typeof ref<string | null>>
+  pollInterval: NodeJS.Timeout | null
+  previousCount: number
+  isTabActive: boolean
+  activeInstances: number
+  visibilityHandler: (() => void) | null
+} | null = null
+
 /**
  * Composable for managing notifications with polling
  * Features:
@@ -50,45 +65,67 @@ export interface NotificationResponse {
  * - Pause polling when tab is hidden
  * - Methods to mark as read/dismiss
  * - Toast integration for new notifications
+ * - Singleton pattern to prevent duplicate API calls
  */
 export const useNotifications = () => {
   const authState = useAuthState()
   const toast = useToastNotifications()
   
-  const notifications = ref<Notification[]>([])
-  const categorized = ref<NotificationResponse['categorized'] | null>(null)
-  const count = ref<NotificationCounts>({
-    total: 0,
-    unread: 0,
-    match_proposals: 0,
-    match_created: 0,
-    score_proposals: 0,
-    schedule_proposals: 0,
-    reschedule_proposals: 0,
-    acceptance_changes: 0
-  })
+  // Initialize shared state if it doesn't exist
+  if (!sharedState) {
+    sharedState = {
+      notifications: ref<Notification[]>([]),
+      categorized: ref<NotificationResponse['categorized'] | null>(null),
+      count: ref<NotificationCounts>({
+        total: 0,
+        unread: 0,
+        match_proposals: 0,
+        match_created: 0,
+        score_proposals: 0,
+        schedule_proposals: 0,
+        reschedule_proposals: 0,
+        acceptance_changes: 0
+      }),
+      loading: ref(false),
+      error: ref<string | null>(null),
+      pollInterval: null,
+      previousCount: 0,
+      isTabActive: true,
+      activeInstances: 0,
+      visibilityHandler: null
+    }
+  }
   
-  const loading = ref(false)
-  const error = ref<string | null>(null)
-  
-  let pollInterval: NodeJS.Timeout | null = null
-  let previousCount = 0
-  let isTabActive = true
+  // Use shared state
+  const notifications = sharedState.notifications
+  const categorized = sharedState.categorized
+  const count = sharedState.count
+  const loading = sharedState.loading
+  const error = sharedState.error
   
   // Computed values
-  const hasNotifications = computed(() => count.value.total > 0)
-  const unreadCount = computed(() => count.value.unread)
+  const hasNotifications = computed(() => (count.value?.total ?? 0) > 0)
+  const unreadCount = computed(() => count.value?.unread ?? 0)
   
   /**
    * Fetch pending notifications from API
+   * Uses a debounce mechanism to prevent duplicate calls
    */
+  let fetchInProgress = false
   const fetchNotifications = async () => {
     if (!authState.userId.value) {
       console.log('[Notifications] No clerk ID, skipping fetch')
       return
     }
     
+    // Prevent duplicate concurrent calls
+    if (fetchInProgress) {
+      console.log('[Notifications] Fetch already in progress, skipping duplicate call')
+      return
+    }
+    
     try {
+      fetchInProgress = true
       loading.value = true
       error.value = null
       
@@ -107,8 +144,8 @@ export const useNotifications = () => {
         const newCount = response.count.total
         
         // Check if there are new notifications since last poll
-        if (previousCount > 0 && newCount > previousCount) {
-          const diff = newCount - previousCount
+        if (sharedState!.previousCount > 0 && newCount > sharedState!.previousCount) {
+          const diff = newCount - sharedState!.previousCount
           toast.info(
             `Tienes ${diff} ${diff === 1 ? 'nueva notificación' : 'nuevas notificaciones'}`,
             5000
@@ -116,14 +153,15 @@ export const useNotifications = () => {
         }
         
         count.value = response.count
-        previousCount = newCount
+        sharedState!.previousCount = newCount
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Notifications] Fetch error:', err)
-      error.value = err.message || 'Error fetching notifications'
+      error.value = err instanceof Error ? err.message : 'Error fetching notifications'
       // Don't throw - let polling continue
     } finally {
       loading.value = false
+      fetchInProgress = false
     }
   }
   
@@ -142,13 +180,16 @@ export const useNotifications = () => {
       })
       
       // Update local state
-      const notification = notifications.value.find(n => n.id === notificationId)
+      const notification = (notifications.value ?? []).find(n => n.id === notificationId)
       if (notification) {
         notification.is_read = true
         notification.read_at = new Date().toISOString()
-        count.value.unread = Math.max(0, count.value.unread - 1)
+        const c = count.value
+        if (c) {
+          count.value = { ...c, unread: Math.max(0, c.unread - 1) }
+        }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Notifications] Mark as read error:', err)
       toast.error('Error al marcar notificación como leída')
     }
@@ -169,19 +210,19 @@ export const useNotifications = () => {
       })
       
       // Remove from local state
-      notifications.value = notifications.value.filter(n => n.id !== notificationId)
+      notifications.value = (notifications.value ?? []).filter(n => n.id !== notificationId)
       
       // Update counts
-      count.value.total = Math.max(0, count.value.total - 1)
-      
-      const notification = notifications.value.find(n => n.id === notificationId)
-      if (notification && !notification.is_read) {
-        count.value.unread = Math.max(0, count.value.unread - 1)
+      const c = count.value
+      if (c) {
+        count.value = { ...c, total: Math.max(0, c.total - 1) }
       }
+      
+      // Note: we removed it already, so we can't safely inspect it here.
       
       // Refresh to get accurate counts
       await fetchNotifications()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Notifications] Dismiss error:', err)
       toast.error('Error al descartar notificación')
     }
@@ -202,14 +243,16 @@ export const useNotifications = () => {
       })
       
       // Update local state
-      notifications.value.forEach(n => {
+      ;(notifications.value ?? []).forEach(n => {
         n.is_read = true
         n.read_at = new Date().toISOString()
       })
-      count.value.unread = 0
+      if (count.value) {
+        count.value = { ...count.value, unread: 0 }
+      }
       
       toast.success('Todas las notificaciones marcadas como leídas')
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Notifications] Mark all as read error:', err)
       toast.error('Error al marcar todas como leídas')
     }
@@ -217,18 +260,24 @@ export const useNotifications = () => {
   
   /**
    * Start polling for notifications
+   * Only starts if no other instance is polling
    */
   const startPolling = () => {
-    if (pollInterval) return
+    if (sharedState!.pollInterval) {
+      // Polling already started by another instance
+      sharedState!.activeInstances++
+      return
+    }
     
     console.log('[Notifications] Starting polling every 30 seconds')
+    sharedState!.activeInstances++
     
     // Initial fetch
     fetchNotifications()
     
     // Poll every 30 seconds
-    pollInterval = setInterval(() => {
-      if (isTabActive && authState.userId.value) {
+    sharedState!.pollInterval = setInterval(() => {
+      if (sharedState!.isTabActive && authState.userId.value) {
         fetchNotifications()
       }
     }, 30000) // 30 seconds
@@ -236,11 +285,15 @@ export const useNotifications = () => {
   
   /**
    * Stop polling for notifications
+   * Only stops when all instances are unmounted
    */
   const stopPolling = () => {
-    if (pollInterval) {
-      clearInterval(pollInterval)
-      pollInterval = null
+    sharedState!.activeInstances--
+    
+    if (sharedState!.activeInstances <= 0 && sharedState!.pollInterval) {
+      clearInterval(sharedState!.pollInterval)
+      sharedState!.pollInterval = null
+      sharedState!.activeInstances = 0
       console.log('[Notifications] Stopped polling')
     }
   }
@@ -248,9 +301,11 @@ export const useNotifications = () => {
   /**
    * Handle visibility change (pause polling when tab is hidden)
    */
-  const handleVisibilityChange = () => {
-    isTabActive = !document.hidden
-    console.log('[Notifications] Tab active:', isTabActive)
+  if (!sharedState!.visibilityHandler) {
+    sharedState!.visibilityHandler = () => {
+      sharedState!.isTabActive = !document.hidden
+      console.log('[Notifications] Tab active:', sharedState!.isTabActive)
+    }
   }
   
   // Setup polling on mount
@@ -258,15 +313,20 @@ export const useNotifications = () => {
     if (authState.userId.value) {
       startPolling()
       
-      // Listen for visibility changes
-      document.addEventListener('visibilitychange', handleVisibilityChange)
+      // Listen for visibility changes (only add once)
+      if (sharedState!.activeInstances === 1 && sharedState!.visibilityHandler) {
+        document.addEventListener('visibilitychange', sharedState!.visibilityHandler)
+      }
     }
   })
   
   // Cleanup on unmount
   onUnmounted(() => {
     stopPolling()
-    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    // Only remove listener if this was the last instance
+    if (sharedState!.activeInstances === 0 && sharedState!.visibilityHandler) {
+      document.removeEventListener('visibilitychange', sharedState!.visibilityHandler)
+    }
   })
   
   return {

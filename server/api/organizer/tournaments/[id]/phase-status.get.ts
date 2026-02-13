@@ -1,26 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { getTournamentPhaseStatus } from '~/server/utils/tournament-phases'
+import { clerkIdQuerySchema, tournamentIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const tournamentId = validateParam(tournamentIdSchema, getRouterParam(event, 'id'))
 
     await requireOrganizer(clerkId)
 
@@ -47,11 +35,8 @@ export default defineEventHandler(async (event) => {
     const phaseStatus = await getTournamentPhaseStatus(tournamentId, supabase)
 
     return phaseStatus
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/organizer/tournaments/[id]/phase-status')
   }
 })
 

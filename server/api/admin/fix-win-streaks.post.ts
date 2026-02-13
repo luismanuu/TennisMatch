@@ -5,18 +5,14 @@
 
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
+import { clerkIdQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     await requireAdmin(clerkId)
 
@@ -56,7 +52,7 @@ export default defineEventHandler(async (event) => {
         .order('created_at', { ascending: false })
 
       if (historyError) {
-        console.error(`Error fetching history for player ${player.id}:`, historyError)
+        logger.error('Error fetching history for player', historyError, { playerId: player.id })
         continue
       }
 
@@ -69,7 +65,7 @@ export default defineEventHandler(async (event) => {
         .eq('rating_reversed', false)
 
       if (matchIdsError) {
-        console.error(`Error fetching match IDs for player ${player.id}:`, matchIdsError)
+        logger.error('Error fetching match IDs for player', matchIdsError, { playerId: player.id })
         continue
       }
 
@@ -107,7 +103,7 @@ export default defineEventHandler(async (event) => {
           .eq('id', player.id)
 
         if (updateError) {
-          console.error(`Error updating player ${player.id}:`, updateError)
+          logger.error('Error updating player', updateError, { playerId: player.id })
           results.push({
             player_id: player.id,
             player_name: player.name,
@@ -141,11 +137,7 @@ export default defineEventHandler(async (event) => {
       total_fixed: fixedCount,
       results: results.filter(r => r.fixed || r.old_total_matches !== r.new_total_matches || r.old_win_streak !== r.new_win_streak)
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/fix-win-streaks')
   }
 })

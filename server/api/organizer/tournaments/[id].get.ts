@@ -1,26 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { getClerkClient } from '~/server/utils/clerk'
+import { clerkIdQuerySchema, tournamentIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const tournamentId = validateParam(tournamentIdSchema, getRouterParam(event, 'id'))
 
     await requireOrganizer(clerkId)
 
@@ -47,10 +35,27 @@ export default defineEventHandler(async (event) => {
     const { data: tournament, error } = await supabase
       .from('tournaments')
       .select(`
-        *,
-        category:categories(*),
+        id,
+        name,
+        status,
+        start_date,
+        end_date,
+        description,
+        category_id,
+        organizer_id,
+        current_phase,
+        tournament_type,
+        registration_open,
+        group_size,
+        players_per_group_advance,
+        min_players,
+        max_players,
+        points_config,
+        category:categories(id, name, description, order),
         registrations:tournament_registrations(
-          *,
+          id,
+          status,
+          withdrawn_at,
           player:players(
             id,
             name,
@@ -59,14 +64,13 @@ export default defineEventHandler(async (event) => {
             category:categories(id, name, description, order)
           )
         ),
-        groups:tournament_groups(
-          *,
-          players:tournament_group_players(
-            *,
-            player:players(*)
-          )
-        ),
-        rounds:tournament_rounds(*)
+        groups:tournament_groups(id),
+        rounds:tournament_rounds(
+          id,
+          bracket_type,
+          round_number,
+          deadline
+        )
       `)
       .eq('id', tournamentId)
       .single()
@@ -79,43 +83,41 @@ export default defineEventHandler(async (event) => {
     }
 
     // Enrich registrations with email from Clerk
-    if (tournament.registrations && tournament.registrations.length > 0) {
+    type RegistrationRow = {
+      id: string
+      status: string | null
+      withdrawn_at: string | null
+      player: Array<Record<string, unknown> & { clerk_id?: string | null }>
+    }
+
+    const tournamentRecord = tournament as unknown as Record<string, unknown>
+    const registrations = tournamentRecord['registrations'] as unknown as RegistrationRow[] | undefined
+
+    if (registrations && registrations.length > 0) {
       const enrichedRegistrations = await Promise.all(
-        tournament.registrations.map(async (reg: any) => {
-          if (reg.player?.clerk_id) {
-            try {
-              const clerkUser = await clerkClient.users.getUser(reg.player.clerk_id)
-              const email = clerkUser.emailAddresses[0]?.emailAddress || null
-              return {
-                ...reg,
-                player: {
-                  ...reg.player,
-                  email
-                }
-              }
-            } catch (err) {
-              // If we can't get Clerk user, just return without email
-              return {
-                ...reg,
-                player: {
-                  ...reg.player,
-                  email: null
-                }
-              }
-            }
+        registrations.map(async (reg) => {
+          const firstPlayer = Array.isArray(reg.player) ? reg.player[0] : undefined
+          const clerkIdValue = firstPlayer && typeof firstPlayer.clerk_id === 'string' ? firstPlayer.clerk_id : null
+          if (!clerkIdValue) return reg
+
+          try {
+            const clerkUser = await clerkClient.users.getUser(clerkIdValue)
+            const email = clerkUser.emailAddresses[0]?.emailAddress || null
+            const newFirstPlayer = { ...firstPlayer, email }
+            return { ...reg, player: [newFirstPlayer, ...reg.player.slice(1)] }
+          } catch {
+            const newFirstPlayer = { ...firstPlayer, email: null }
+            return { ...reg, player: [newFirstPlayer, ...reg.player.slice(1)] }
           }
-          return reg
         })
       )
-      tournament.registrations = enrichedRegistrations
+
+      return { ...tournamentRecord, registrations: enrichedRegistrations }
     }
 
     return tournament
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/organizer/tournaments/[id]')
   }
 })
 

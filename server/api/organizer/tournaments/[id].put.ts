@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import type { UpdateTournamentPayload } from '~/types'
 
@@ -76,12 +77,12 @@ export default defineEventHandler(async (event) => {
       if (!groupMatches || groupMatches.length === 0) {
         // Matches don't exist, but groups do - this shouldn't happen if brackets were generated correctly
         // But we'll allow it and let the organizer generate brackets manually
-        console.warn(`Tournament ${tournamentId} has groups but no matches. Organizer should generate brackets.`)
+        logger.warn('Tournament has groups but no matches. Organizer should generate brackets.', { tournamentId })
       }
     }
 
     // Build update object
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name.trim()
     if (start_date !== undefined) updateData.start_date = start_date
     if (end_date !== undefined) updateData.end_date = end_date || null
@@ -143,11 +144,8 @@ export default defineEventHandler(async (event) => {
       message: 'Tournament updated successfully',
       tournament
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/organizer/tournaments/[id]')
   }
 })
 

@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { 
   calculateGroupStandings, 
@@ -7,26 +8,13 @@ import {
   recalculateGroupStandings 
 } from '~/server/utils/tournament-brackets'
 import type { Tournament } from '~/types'
+import { clerkIdBodySchema, tournamentIdSchema, validateBody, validateQuery } from '~/server/utils/validation'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export default defineEventHandler(async (event) => {
   try {
-    const body = await readBody(event)
-    const clerkId = body.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const { clerk_id: clerkId } = validateBody(clerkIdBodySchema, await readBody(event))
+    const tournamentId = validateQuery(tournamentIdSchema, getRouterParam(event, 'id'))
 
     await requireOrganizer(clerkId)
 
@@ -52,7 +40,7 @@ export default defineEventHandler(async (event) => {
     // Get tournament info
     const { data: tournament, error: tournamentError } = await supabase
       .from('tournaments')
-      .select('*')
+      .select('id, name, status, format, group_stage_config, playoff_config')
       .eq('id', tournamentId)
       .single()
 
@@ -130,24 +118,40 @@ export default defineEventHandler(async (event) => {
         .eq('bracket_type', 'group')
 
       if (matchesError) {
-        console.error(`Error fetching matches for group ${group.id}:`, matchesError)
+        logger.error('Error fetching matches for group', matchesError, { groupId: group.id, tournamentId })
         continue
       }
 
       // Calculate standings with head-to-head
+      type GroupMatchRow = {
+        matches?: Array<{
+          player1_id: string | null
+          player2_id: string | null
+          winner_id: string | null
+          score: string | null
+          status: string | null
+        }>
+      }
+
       const completedMatches = (groupMatches || [])
-        .filter((tm: any) => tm.matches && tm.matches.status === 'completed' && tm.matches.winner_id)
-        .map((tm: any) => ({
-          player1_id: tm.matches.player1_id,
-          player2_id: tm.matches.player2_id,
-          winner_id: tm.matches.winner_id,
-          score: tm.matches.score
-        }))
+        .flatMap((tm) => {
+          const row = tm as unknown as GroupMatchRow
+          const match = Array.isArray(row.matches) ? row.matches[0] : undefined
+          if (!match || match.status !== 'completed' || !match.winner_id || !match.player1_id || !match.player2_id) return []
+          return [
+            {
+              player1_id: match.player1_id,
+              player2_id: match.player2_id,
+              winner_id: match.winner_id,
+              score: match.score ?? undefined
+            }
+          ]
+        })
 
       const calculatedStandings = calculateGroupStandings(
         group.id,
         completedMatches,
-        tournament as Tournament
+        tournament as unknown as Tournament
       )
 
       // Convert standings to array format
@@ -179,8 +183,10 @@ export default defineEventHandler(async (event) => {
     const shuffleArray = <T>(array: T[]): T[] => {
       const shuffled = [...array]
       for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+        const j = Math.floor(Math.random() * (i + 1))
+        const temp = shuffled[i]!
+        shuffled[i] = shuffled[j]!
+        shuffled[j] = temp
       }
       return shuffled
     }
@@ -210,11 +216,8 @@ export default defineEventHandler(async (event) => {
       mainMatches: mainMatchesCount,
       backdrawMatches: backdrawMatchesCount
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/organizer/tournaments/[id]/generate-playoffs')
   }
 })
 
@@ -236,9 +239,17 @@ async function createPlayoffMatches(
     is_bye: boolean
   }>,
   bracketType: 'main' | 'backdraw',
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<number> {
-  const tournamentMatchRecords: any[] = []
+  const tournamentMatchRecords: Array<{
+    tournament_id: string
+    match_id: string | null
+    bracket_type: 'main' | 'backdraw'
+    round_number: number
+    bracket_position: number
+    is_bye: boolean
+    player_id?: string
+  }> = []
 
   for (const bracketMatch of bracket) {
     // Only create matches for the first round (round 1) where we have actual player IDs
@@ -297,7 +308,7 @@ async function createPlayoffMatches(
       .single()
 
     if (matchError || !matchRecord) {
-      console.error('Error creating playoff match:', matchError)
+      logger.error('Error creating playoff match', matchError, { tournamentId })
       continue
     }
 

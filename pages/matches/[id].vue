@@ -34,7 +34,7 @@
               Acceso Denegado
             </h2>
             <p class="text-size-4 text-foreground-muted mb-8 text-center leading-relaxed">
-              {{ error.statusCode === 403 
+              {{ (typeof error === 'object' && error !== null && 'statusCode' in error && (error as { statusCode?: number }).statusCode === 403)
                 ? 'No tienes permiso para ver este partido. Solo puedes ver los partidos en los que participas.' 
                 : error.message || 'Error al cargar el partido' }}
             </p>
@@ -524,7 +524,7 @@
               <button
                 v-if="match.status === 'scheduled' && match.scheduled_at && !match.pending_player2_id && isPlayerInMatch && !isTournamentOrganizer && (!match.match_proposed_by || match.match_accepted_by || match.tournament_id) && !((match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by)"
                 @click="handleStartMatch"
-                :disabled="actionLoading || (match.match_proposed_by && !match.match_accepted_by && !match.tournament_id)"
+                :disabled="actionLoading || (!!match.match_proposed_by && !match.match_accepted_by && !match.tournament_id)" 
                 class="btn-primary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
               >
                 <Icon name="heroicons:play" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
@@ -1608,7 +1608,9 @@ const getPlayerInitials = (name: string) => {
   if (!name) return '?'
   const parts = name.trim().split(' ')
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    const first = parts[0]?.[0] || ''
+    const last = parts[parts.length - 1]?.[0] || ''
+    return (first + last || '?').toUpperCase()
   }
   return name.substring(0, 2).toUpperCase()
 }
@@ -1624,10 +1626,10 @@ const getPlayerTier = (player: any): string | null => {
 }
 
 // Get player rank icon path
-const getPlayerRankIcon = (player: any): string | null => {
+const getPlayerRankIcon = (player: any): string | undefined => {
   const tier = getPlayerTier(player)
-  if (!tier) return null
-  return useRankIconAsset(tier)
+  if (!tier) return undefined
+  return useRankIconAsset(tier) ?? undefined
 }
 
 // Get tier name in Spanish

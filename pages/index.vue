@@ -779,14 +779,17 @@ const { isOrganizer } = useOrganizer()
 const { isAdmin } = useAdmin()
 
 // Notifications for pending actions section
-const { notifications, count: notificationsCount } = useNotifications()
+const notificationsApi = useNotifications()
+const notifications = notificationsApi.notifications
+type NotificationsCount = { total: number; unread: number }
+const notificationsCount = computed<NotificationsCount>(() => notificationsApi.count.value ?? { total: 0, unread: 0 })
 
 // Determine if user is staff (admin or organizer)
 const isStaff = computed(() => isAdmin.value || isOrganizer.value)
 
 // Notification helpers for pending actions section
 const topNotifications = computed(() => {
-  return notifications.value.slice(0, 3)
+  return (notifications.value ?? []).slice(0, 3)
 })
 
 const router = useRouter()
@@ -886,18 +889,12 @@ const shouldLoadProfile = computed(() => {
 })
 
 // Watch for auth state changes and load profile when ready
+// Use immediate: true to handle initial load, avoiding duplicate calls
 watch(shouldLoadProfile, async (shouldLoad) => {
   if (shouldLoad) {
     await loadPlayerProfile()
   }
-}, { immediate: false })
-
-// Also check on mount in case Clerk is already loaded
-onMounted(async () => {
-  if (isLoaded.value && userId.value && !playerLoading.value) {
-    await loadPlayerProfile()
-  }
-})
+}, { immediate: true })
 
 // Watch for when player profile loading completes and redirect to onboarding if no profile exists
 const route = useRoute()

@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser, revokePendingInvitationsByEmail } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
     // Fetch pending player
     const { data: pendingPlayer, error: fetchError } = await supabase
       .from('pending_players')
-      .select('*')
+      .select('id, status, email, name, category_id, clerk_invitation_id')
       .eq('id', pendingPlayerId)
       .single()
     
@@ -62,7 +63,10 @@ export default defineEventHandler(async (event) => {
       try {
         await revokePendingInvitationsByEmail(pendingPlayer.email)
       } catch (revokeError) {
-        console.warn('Warning: Could not revoke pending invitations in Clerk:', revokeError)
+        logger.warn('Could not revoke pending invitations in Clerk', { 
+          error: revokeError, 
+          email: pendingPlayer.email 
+        })
         // Don't fail - this is cleanup
       }
       
@@ -74,7 +78,7 @@ export default defineEventHandler(async (event) => {
         .eq('id', pendingPlayerId)
       
       if (updatePendingError) {
-        console.error('Error updating pending player status:', updatePendingError)
+        logger.error('Error updating pending player status', updatePendingError, { pendingPlayerId })
         throw createError({
           statusCode: 500,
           statusMessage: 'Failed to update pending player status',
@@ -92,7 +96,7 @@ export default defineEventHandler(async (event) => {
         .eq('pending_player2_id', pendingPlayerId)
       
       if (updateMatchesError) {
-        console.warn('Error updating matches (non-critical):', updateMatchesError)
+        logger.warn('Error updating matches (non-critical)', { error: updateMatchesError, pendingPlayerId })
         // Don't fail if matches update fails - it's not critical
       }
       
@@ -104,7 +108,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Create player record from pending player data
-    const { data: newPlayer, error: createError } = await supabase
+    const { data: newPlayer, error: insertError } = await supabase
       .from('players')
       .insert({
         clerk_id,
@@ -118,11 +122,11 @@ export default defineEventHandler(async (event) => {
       `)
       .single()
     
-    if (createError) {
+    if (insertError) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create player from pending player',
-        data: createError
+        data: insertError
       })
     }
     
@@ -131,7 +135,10 @@ export default defineEventHandler(async (event) => {
     try {
       await revokePendingInvitationsByEmail(pendingPlayer.email)
     } catch (revokeError) {
-      console.warn('Warning: Could not revoke pending invitations in Clerk:', revokeError)
+      logger.warn('Could not revoke pending invitations in Clerk', { 
+        error: revokeError, 
+        email: pendingPlayer.email 
+      })
       // Don't fail - this is cleanup
     }
     
@@ -142,7 +149,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', pendingPlayerId)
     
     if (updatePendingError) {
-      console.error('Error updating pending player status:', updatePendingError)
+      logger.error('Error updating pending player status', updatePendingError, { pendingPlayerId })
       // Don't fail here - player was created successfully
       // Just log the error
     }
@@ -157,7 +164,7 @@ export default defineEventHandler(async (event) => {
       .eq('pending_player2_id', pendingPlayerId)
     
     if (updateMatchesError) {
-      console.warn('Error updating matches (non-critical):', updateMatchesError)
+      logger.warn('Error updating matches (non-critical)', { error: updateMatchesError, pendingPlayerId })
       // Don't fail if matches update fails - it's not critical
     }
     
@@ -166,20 +173,8 @@ export default defineEventHandler(async (event) => {
       player: newPlayer,
       message: 'Invitation accepted - player created'
     }
-  } catch (error: any) {
-    console.error('Error in accept invitation endpoint:', {
-      message: error.message,
-      statusCode: error.statusCode,
-      statusMessage: error.statusMessage,
-      data: error.data,
-      stack: error.stack
-    })
-    
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/pending-players/[id]')
   }
 })
 

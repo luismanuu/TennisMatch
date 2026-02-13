@@ -1,5 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
+import { clerkIdBodySchema, validateBody } from '~/server/utils/validation'
 
 /**
  * POST /api/notifications/mark-all-read
@@ -8,15 +10,7 @@ import { getClerkUser } from '~/server/utils/clerk'
  */
 export default defineEventHandler(async (event) => {
   try {
-    const body = await readBody<{ clerk_id: string }>(event)
-    const { clerk_id } = body
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
+    const { clerk_id } = validateBody(clerkIdBodySchema, await readBody(event))
     
     // Verify Clerk user exists
     await getClerkUser(clerk_id)
@@ -50,7 +44,7 @@ export default defineEventHandler(async (event) => {
       .select()
     
     if (updateError) {
-      console.error('[API] Mark all as read error:', updateError)
+      logger.error('Mark all as read error', updateError, { playerId: currentPlayer.id })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to mark all notifications as read',
@@ -63,11 +57,7 @@ export default defineEventHandler(async (event) => {
       count: notifications?.length || 0,
       notifications
     }
-  } catch (error: any) {
-    console.error('[API] Mark all as read error:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/notifications/mark-all-read')
   }
 })

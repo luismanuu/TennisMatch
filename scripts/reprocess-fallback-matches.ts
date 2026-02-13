@@ -15,7 +15,7 @@ import { config } from 'dotenv'
 // Load environment variables
 config()
 
-const CLERK_ID = process.argv[2]
+const CLERK_ID = process.argv[2] ?? ''
 const args = process.argv.slice(3)
 
 if (!CLERK_ID) {
@@ -38,7 +38,11 @@ for (let i = 0; i < args.length; i++) {
     matchId = args[i + 1]
     i++
   } else if (args[i] === '--limit' && args[i + 1]) {
-    limit = parseInt(args[i + 1])
+    const value = args[i + 1] ?? ''
+    const parsed = parseInt(value, 10)
+    if (!Number.isNaN(parsed)) {
+      limit = parsed
+    }
     i++
   } else if (args[i] === '--dry-run') {
     dryRun = true

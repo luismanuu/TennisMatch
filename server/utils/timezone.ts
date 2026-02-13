@@ -26,8 +26,16 @@ export function datetimeLocalToISO(datetimeLocal: string): string {
   if (datetimeLocal.includes('T')) {
     // Parse the datetime-local string
     const [datePart, timePart] = datetimeLocal.split('T')
-    const [year, month, day] = datePart.split('-').map(Number)
-    const [hours, minutes] = (timePart || '00:00').split(':').map(Number)
+    if (!datePart) {
+      throw new Error('Invalid datetime format, missing date part')
+    }
+    const [yearStr, monthStr, dayStr] = datePart.split('-')
+    const [hourStr, minuteStr] = (timePart || '00:00').split(':')
+    const year = Number(yearStr)
+    const month = Number(monthStr)
+    const day = Number(dayStr)
+    const hours = Number(hourStr)
+    const minutes = Number(minuteStr)
 
     // Create a date representing the Ecuador local time
     // Ecuador is UTC-5, so to convert to UTC we need to ADD 5 hours

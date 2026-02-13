@@ -1,20 +1,18 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getRatingTier, RATING_TIERS } from '~/server/utils/rating-system'
+import { logger } from '~/server/utils/logger'
+import { adminRankingsTrendsQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
+  let timeRange = '30d' // 7d, 30d, 90d, 1y
+  let granularity = 'daily' // daily, weekly, monthly
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const timeRange = (query.time_range as string) || '30d' // 7d, 30d, 90d, 1y
-    const granularity = (query.granularity as string) || 'daily' // daily, weekly, monthly
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminRankingsTrendsQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    timeRange = query.time_range || timeRange
+    granularity = query.granularity || granularity
 
     await requireAdmin(clerkId)
 
@@ -60,7 +58,7 @@ export default defineEventHandler(async (event) => {
       .limit(10000) // Limit to prevent memory issues
 
     if (historyError) {
-      console.error('Rating history error:', historyError)
+      logger.error('Rating history error', historyError, { timeRange, granularity })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch rating history',
@@ -109,15 +107,15 @@ export default defineEventHandler(async (event) => {
       const d = new Date(date)
       switch (granularity) {
         case 'daily':
-          return d.toISOString().split('T')[0]
+          return d.toISOString().split('T')[0] as string
         case 'weekly':
           const weekStart = new Date(d)
           weekStart.setDate(d.getDate() - d.getDay())
-          return weekStart.toISOString().split('T')[0]
+          return weekStart.toISOString().split('T')[0] as string
         case 'monthly':
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
         default:
-          return d.toISOString().split('T')[0]
+          return d.toISOString().split('T')[0] as string
       }
     }
 
@@ -129,8 +127,7 @@ export default defineEventHandler(async (event) => {
     while (currentDate <= now && iterations < maxIterations) {
       try {
         const key = getDateKey(currentDate)
-        if (!timeSeriesData[key]) {
-          timeSeriesData[key] = {
+        const bucket = timeSeriesData[key] || (timeSeriesData[key] = {
             date: key,
             average_elo: 0,
             tier_population: {},
@@ -138,11 +135,10 @@ export default defineEventHandler(async (event) => {
             tier_promotions: 0,
             tier_demotions: 0,
             elo_volatility: 0
-          }
-          RATING_TIERS.forEach(tier => {
-            timeSeriesData[key].tier_population[tier.tier] = 0
           })
-        }
+        RATING_TIERS.forEach(tier => {
+          bucket.tier_population[tier.tier] = 0
+        })
         
         // Increment date based on granularity
         if (granularity === 'daily') {
@@ -157,7 +153,7 @@ export default defineEventHandler(async (event) => {
         
         iterations++
       } catch (err) {
-        console.error('Error initializing time series bucket:', err)
+        logger.error('Error initializing time series bucket', err, { dateKey: getDateKey(currentDate) })
         break
       }
     }
@@ -167,7 +163,7 @@ export default defineEventHandler(async (event) => {
     
     if (ratingHistory && ratingHistory.length > 0) {
       try {
-        ratingHistory.forEach(entry => {
+        ratingHistory.forEach((entry) => {
           try {
             const entryDate = new Date(entry.created_at)
             if (isNaN(entryDate.getTime())) {
@@ -202,30 +198,38 @@ export default defineEventHandler(async (event) => {
               }
             }
           } catch (err) {
-            console.warn('Error processing rating history entry:', err)
+            logger.warn('Error processing rating history entry', { error: err, entryId: entry.id })
             // Continue with next entry
           }
         })
       } catch (err) {
-        console.error('Error processing rating history:', err)
+        logger.error('Error processing rating history', err)
       }
     }
 
     // Calculate average ELO and tier population for each time period
     Object.keys(timeSeriesData).forEach(dateKey => {
       try {
+        const bucket = timeSeriesData[dateKey]
+        if (!bucket) return
         // Handle different date formats
         let date: Date
         if (granularity === 'monthly' && dateKey.includes('-') && !dateKey.includes('T')) {
           // Format: YYYY-MM
-          const [year, month] = dateKey.split('-').map(Number)
+          const [yearStr, monthStr] = dateKey.split('-')
+          const year = Number(yearStr)
+          const month = Number(monthStr)
+          if (Number.isNaN(year) || Number.isNaN(month)) {
+            logger.warn('Invalid monthly date key', { dateKey })
+            return
+          }
           date = new Date(year, month - 1, 1)
         } else {
           date = new Date(dateKey)
         }
         
         if (isNaN(date.getTime())) {
-          console.warn('Invalid date key:', dateKey)
+          logger.warn('Invalid date key', { dateKey })
           return
         }
         
@@ -269,18 +273,18 @@ export default defineEventHandler(async (event) => {
               }
             }
           } catch (err) {
-            console.warn('Error processing player:', player.id, err)
+            logger.warn('Error processing player', { error: err, playerId: player.id })
           }
         })
 
         if (elos.length > 0) {
-          timeSeriesData[dateKey].average_elo = Math.round(
+          bucket.average_elo = Math.round(
             elos.reduce((a, b) => a + b, 0) / elos.length
           )
         }
-        timeSeriesData[dateKey].tier_population = tierCounts
+        bucket.tier_population = tierCounts
       } catch (err) {
-        console.error('Error processing date key:', dateKey, err)
+        logger.error('Error processing date key', err, { dateKey })
       }
     })
 
@@ -301,13 +305,15 @@ export default defineEventHandler(async (event) => {
         }
       } catch (err) {
         // Skip players with invalid data
-        console.warn('Error processing new player:', player.id, err)
+        logger.warn('Error processing new player', { error: err, playerId: player.id })
       }
     })
 
     // Calculate ELO volatility (simplified - average absolute change)
     Object.keys(timeSeriesData).forEach(dateKey => {
       try {
+        const bucket = timeSeriesData[dateKey]
+        if (!bucket) return
         const eloChanges: number[] = []
         
         if (ratingHistory && ratingHistory.length > 0) {
@@ -333,10 +339,10 @@ export default defineEventHandler(async (event) => {
         if (eloChanges.length > 0) {
           // Simplified: use average instead of standard deviation
           const avgChange = eloChanges.reduce((a, b) => a + b, 0) / eloChanges.length
-          timeSeriesData[dateKey].elo_volatility = Math.round(avgChange)
+          bucket.elo_volatility = Math.round(avgChange)
         }
       } catch (err) {
-        console.warn('Error calculating volatility for:', dateKey, err)
+        logger.warn('Error calculating volatility', { error: err, dateKey })
       }
     })
 
@@ -351,12 +357,7 @@ export default defineEventHandler(async (event) => {
       end_date: now.toISOString(),
       trends
     }
-  } catch (error: any) {
-    console.error('Trends endpoint error:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/rankings/trends')
   }
 })

@@ -575,9 +575,9 @@ const weekDays = computed(() => {
     days.push({
       date,
       dateKey,
-      dayName: dayNames[date.getDay()],
+      dayName: dayNames[date.getDay()] ?? 'Día',
       dayNumber: date.getDate(),
-      monthName: monthNames[date.getMonth()],
+      monthName: monthNames[date.getMonth()] ?? 'Mes',
       isToday: dateKey === getTodayKey(),
       matches: matchesByDate.value.get(dateKey) || []
     })
@@ -588,8 +588,8 @@ const weekDays = computed(() => {
 
 const weekRangeText = computed(() => {
   if (weekDays.value.length === 0) return ''
-  const firstDay = weekDays.value[0]
-  const lastDay = weekDays.value[6]
+  const firstDay = weekDays.value[0]!
+  const lastDay = weekDays.value[6]!
   
   if (firstDay.date.getMonth() === lastDay.date.getMonth()) {
     return `${firstDay.dayNumber} - ${lastDay.dayNumber} de ${firstDay.monthName} ${firstDay.date.getFullYear()}`
@@ -633,7 +633,7 @@ const toggleDayExpansion = (dateKey: string) => {
 
 // Helper functions
 const getDayName = (date: Date): string => {
-  return dayNames[date.getDay()]
+  return dayNames[date.getDay()] ?? 'Día'
 }
 
 const getPlayerNames = (match: Match): string => {
@@ -668,14 +668,14 @@ const getDayBadgeClass = (matches: Match[]): string => {
   // If all matches have same status, use that color
   const statuses = new Set(matches.map(m => m.status))
   if (statuses.size === 1) {
-    const status = matches[0].status
+    const status = matches[0]?.status
     const classes: Record<string, string> = {
       scheduled: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
       active: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
       completed: 'bg-green-500/20 text-green-400 border border-green-500/30',
       cancelled: 'bg-red-500/20 text-red-400 border border-red-500/30'
     }
-    return classes[status] || 'bg-surface text-foreground border border-border-subtle'
+    return status ? (classes[status] || 'bg-surface text-foreground border border-border-subtle') : 'bg-surface text-foreground border border-border-subtle'
   }
   
   // Mixed statuses - use orange for pending

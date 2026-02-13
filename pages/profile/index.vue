@@ -456,7 +456,6 @@
 </template>
 
 <script setup lang="ts">
-import { UserProfile } from '@clerk/vue'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 
 definePageMeta({

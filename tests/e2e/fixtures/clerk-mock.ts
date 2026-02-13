@@ -1,78 +1,84 @@
+import type { Route } from '@playwright/test'
 import { test as base } from '@playwright/test'
+import { e2eEnv } from '../env'
+import { E2E_LOGIN_EMAIL, E2E_LOGIN_PASSWORD, E2E_TEST_CLERK_ID } from './test-user'
 
-// Mock Clerk API responses for E2E tests
+function isSignInRequest(url: string, method: string): boolean {
+  return method === 'POST' && (url.includes('/client/sign_in') || url.includes('sign_in'))
+}
+
+function credentialsMatch(body: Record<string, unknown> | null): boolean {
+  if (!body || body?.password !== E2E_LOGIN_PASSWORD) return false
+  const id = body.identifier ?? body.email_address ?? body.email
+  return id === E2E_LOGIN_EMAIL
+}
+
+const successfulSignInBody = () => ({
+  response: {
+    id: E2E_TEST_CLERK_ID,
+    email_addresses: [
+      {
+        id: 'idn_mock_e2e_123',
+        email_address: E2E_LOGIN_EMAIL,
+        verification: { status: 'verified' },
+      },
+    ],
+    first_name: 'Test',
+    last_name: 'User',
+    created_at: Date.now(),
+    updated_at: Date.now(),
+  },
+  client: {
+    sessions: [
+      {
+        id: 'sess_mock_e2e_123',
+        status: 'active',
+        last_active_at: Date.now(),
+      },
+    ],
+  },
+})
+
+// Mock Clerk API responses for E2E tests (uses e2e test user from test-user.ts)
 export const test = base.extend({
   page: async ({ page }, use) => {
-    // Intercept Clerk API calls
-    await page.route('**/api.clerk.com/**', async (route) => {
+    async function handleClerkRoute(route: Route) {
       const url = route.request().url()
       const method = route.request().method()
-      
-      // Mock sign-in endpoint
-      if (url.includes('/client/sign_in') && method === 'POST') {
-        const body = await route.request().postDataJSON()
-        
-        // Check if credentials are valid
-        if (body?.identifier === 'test@example.com' && body?.password === 'SecurePassword123!') {
+      const body = method === 'POST' ? await route.request().postDataJSON() : null
+
+      // Sign-in: match by path or by POST to a clerk URL with password in body (catch any Clerk host)
+      const isSignIn =
+        isSignInRequest(url, method) ||
+        (method === 'POST' && url.includes('clerk') && body !== null && typeof body?.password === 'string')
+
+      if (isSignIn) {
+        if (credentialsMatch(body)) {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({
-              response: {
-                id: 'user_mock_e2e_123',
-                email_addresses: [
-                  {
-                    id: 'idn_mock_e2e_123',
-                    email_address: body.identifier,
-                    verification: { status: 'verified' },
-                  },
-                ],
-                first_name: 'Test',
-                last_name: 'User',
-                created_at: Date.now(),
-                updated_at: Date.now(),
-              },
-              client: {
-                sessions: [
-                  {
-                    id: 'sess_mock_e2e_123',
-                    status: 'active',
-                    last_active_at: Date.now(),
-                  },
-                ],
-              },
-            }),
+            body: JSON.stringify(successfulSignInBody()),
           })
         } else {
-          // Invalid credentials
           await route.fulfill({
             status: 401,
             contentType: 'application/json',
-            body: JSON.stringify({
-              errors: [{ message: 'Invalid credentials' }],
-            }),
+            body: JSON.stringify({ errors: [{ message: 'Invalid credentials' }] }),
           })
         }
         return
       }
-      
-      // Mock sign-up endpoint
+
       if (url.includes('/client/sign_up') && method === 'POST') {
-        const body = await route.request().postDataJSON()
-        
-        // Check for duplicate email
+        const body = (await route.request().postDataJSON()) as Record<string, unknown> | null
         if (body?.email_address === 'existing@example.com') {
           await route.fulfill({
             status: 422,
             contentType: 'application/json',
-            body: JSON.stringify({
-              errors: [{ message: 'Email already exists' }],
-            }),
+            body: JSON.stringify({ errors: [{ message: 'Email already exists' }] }),
           })
           return
         }
-        
-        // Successful sign-up
         if (body?.email_address && body?.password) {
           await route.fulfill({
             status: 200,
@@ -81,49 +87,34 @@ export const test = base.extend({
               response: {
                 id: 'user_mock_e2e_456',
                 email_addresses: [
-                  {
-                    id: 'idn_mock_e2e_456',
-                    email_address: body.email_address,
-                    verification: { status: 'unverified' },
-                  },
+                  { id: 'idn_mock_e2e_456', email_address: body.email_address, verification: { status: 'unverified' } },
                 ],
                 first_name: body.first_name || '',
                 last_name: body.last_name || '',
                 created_at: Date.now(),
                 updated_at: Date.now(),
               },
-              client: {
-                sessions: [],
-              },
+              client: { sessions: [] },
             }),
           })
           return
         }
-        
-        // Missing required fields
         await route.fulfill({
           status: 400,
           contentType: 'application/json',
-          body: JSON.stringify({
-            errors: [{ message: 'Invalid input' }],
-          }),
+          body: JSON.stringify({ errors: [{ message: 'Invalid input' }] }),
         })
         return
       }
-      
-      // Mock session verification
+
       if (url.includes('/me') && method === 'GET') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            id: 'user_mock_e2e_123',
+            id: E2E_TEST_CLERK_ID,
             email_addresses: [
-              {
-                id: 'idn_mock_e2e_123',
-                email_address: 'test@example.com',
-                verification: { status: 'verified' },
-              },
+              { id: 'idn_mock_e2e_123', email_address: E2E_LOGIN_EMAIL, verification: { status: 'verified' } },
             ],
             first_name: 'Test',
             last_name: 'User',
@@ -131,8 +122,7 @@ export const test = base.extend({
         })
         return
       }
-      
-      // Mock session creation
+
       if (url.includes('/client/sessions') && method === 'POST') {
         await route.fulfill({
           status: 200,
@@ -145,14 +135,19 @@ export const test = base.extend({
         })
         return
       }
-      
-      // Default: continue with original request (for other Clerk endpoints)
+
       await route.continue()
-    })
-    
+    }
+
+    if (!e2eEnv.useRealClerk) {
+      await page.route('**/api.clerk.com/**', handleClerkRoute)
+      await page.route('**/*.clerk.accounts.dev/**', handleClerkRoute)
+      await page.route('**/v1/client/**', handleClerkRoute)
+      await page.route('**/*sign_in*', handleClerkRoute)
+    }
+
     await use(page)
   },
 })
 
 export { expect } from '@playwright/test'
-

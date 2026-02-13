@@ -1,5 +1,16 @@
 import { getClerkClient, getAllClerkInvitations } from '~/server/utils/clerk'
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function getStringProp(obj: unknown, key: string): string | undefined {
+  const r = asRecord(obj)
+  const v = r ? r[key] : undefined
+  return typeof v === 'string' ? v : undefined
+}
 
 export default defineEventHandler(async (event) => {
   try {
@@ -25,10 +36,13 @@ export default defineEventHandler(async (event) => {
     
     // Verify invitation
     const { invitations } = await getAllClerkInvitations()
-    const clerkInvitation = invitations.find((inv: any) => {
-      const metadata = (inv.publicMetadata as any) || {}
-      return metadata.invitationToken === invitation_token
-    })
+    const typedInvitations = invitations as unknown as Array<{
+      id: string
+      emailAddress?: string | null
+      revoked?: boolean
+      publicMetadata?: unknown
+    }>
+    const clerkInvitation = typedInvitations.find((inv) => getStringProp(inv.publicMetadata, 'invitationToken') === invitation_token)
     
     if (!clerkInvitation) {
       throw createError({
@@ -53,8 +67,10 @@ export default defineEventHandler(async (event) => {
     
     // Check if user already exists in Clerk
     const existingUsers = await clerkClient.users.getUserList({ emailAddress: [email] })
-    if (existingUsers.data && existingUsers.data.length > 0) {
-      const existingUser = existingUsers.data[0]
+    if (Array.isArray(existingUsers) && existingUsers.length > 0) {
+      const existingUser = existingUsers[0]!
+      const existingRole =
+        getStringProp((existingUser as unknown as { publicMetadata?: unknown }).publicMetadata, 'role') || 'player'
       
       // Check if player already exists
       const { data: existingPlayer } = await supabase
@@ -71,8 +87,8 @@ export default defineEventHandler(async (event) => {
       }
       
       // Get role from invitation metadata and update user if needed
-      const invitationMetadata = (clerkInvitation.publicMetadata as any) || {}
-      const role = invitationMetadata.role || 'player'
+      const invitationMetadata = asRecord(clerkInvitation.publicMetadata) ?? {}
+      const role = getStringProp(invitationMetadata, 'role') || 'player'
       
       // For organizers, category_id is not required
       if (role === 'tournament_organizer' && !category_id) {
@@ -85,20 +101,20 @@ export default defineEventHandler(async (event) => {
       }
       
       // Update user role if it's different
-      if (role !== (existingUser.publicMetadata?.role as string || 'player')) {
+      if (role !== existingRole) {
         try {
           await clerkClient.users.updateUser(existingUser.id, {
             publicMetadata: {
-              role: role
-            }
+              role,
+            },
           })
         } catch (updateError) {
-          console.warn('Could not update user role:', updateError)
+          logger.warn('Could not update user role', { error: updateError, userId: existingUser.id })
         }
       }
 
       // User exists but no player - create player
-      const { data: newPlayer, error: createError } = await supabase
+      const { data: newPlayer, error: insertError } = await supabase
         .from('players')
         .insert({
           clerk_id: existingUser.id,
@@ -112,11 +128,11 @@ export default defineEventHandler(async (event) => {
         `)
         .single()
       
-      if (createError) {
+      if (insertError) {
         throw createError({
           statusCode: 500,
           statusMessage: 'Failed to create player',
-          data: createError
+          data: insertError,
         })
       }
       
@@ -124,7 +140,7 @@ export default defineEventHandler(async (event) => {
       try {
         await clerkClient.invitations.revokeInvitation(clerkInvitation.id)
       } catch (revokeError) {
-        console.warn('Could not revoke invitation:', revokeError)
+        logger.warn('Could not revoke invitation', { error: revokeError, email })
       }
       
       return {
@@ -136,8 +152,8 @@ export default defineEventHandler(async (event) => {
     }
     
     // Get role from invitation metadata
-    const invitationMetadata = (clerkInvitation.publicMetadata as any) || {}
-    const role = invitationMetadata.role || 'player'
+    const invitationMetadata = asRecord(clerkInvitation.publicMetadata) ?? {}
+    const role = getStringProp(invitationMetadata, 'role') || 'player'
     
     // For organizers, category_id is not required
     if (role === 'tournament_organizer' && !category_id) {
@@ -161,7 +177,7 @@ export default defineEventHandler(async (event) => {
     })
     
     // Create player in our system (organizers are also stored as players)
-    const { data: newPlayer, error: createError } = await supabase
+    const { data: newPlayer, error: insertError } = await supabase
       .from('players')
       .insert({
         clerk_id: clerkUser.id,
@@ -175,18 +191,18 @@ export default defineEventHandler(async (event) => {
       `)
       .single()
     
-    if (createError) {
+    if (insertError) {
       // If player creation fails, try to delete the Clerk user
       try {
         await clerkClient.users.deleteUser(clerkUser.id)
       } catch (deleteError) {
-        console.error('Error deleting Clerk user after player creation failure:', deleteError)
+        logger.error('Error deleting Clerk user after player creation failure', deleteError, { email })
       }
       
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create player',
-        data: createError
+        data: insertError,
       })
     }
     
@@ -194,7 +210,7 @@ export default defineEventHandler(async (event) => {
     try {
       await clerkClient.invitations.revokeInvitation(clerkInvitation.id)
     } catch (revokeError) {
-      console.warn('Could not revoke invitation:', revokeError)
+      logger.warn('Could not revoke invitation', { error: revokeError, email })
     }
     
     return {
@@ -203,12 +219,8 @@ export default defineEventHandler(async (event) => {
       player: newPlayer,
       message: 'User and player created successfully'
     }
-  } catch (error: any) {
-    console.error('Error in create user endpoint:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.message || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/invitations/create-user')
   }
 })
 

@@ -1,17 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { requireOrganizer } from '~/server/utils/organizer'
+import { organizerTournamentsListQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import type { PaginatedResponse } from '~/types'
+import { handleApiError } from '~/server/utils/errors'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<PaginatedResponse<unknown>> => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(organizerTournamentsListQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     await requireOrganizer(clerkId)
 
@@ -31,26 +28,41 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Get tournaments created by this organizer
+    const limit = query.limit ?? 20
+    const offset = query.offset ?? 0
+
+    // Count tournaments created by this organizer
+    const { count, error: countError } = await supabase
+      .from('tournaments')
+      .select('id', { count: 'exact', head: true })
+      .eq('organizer_id', organizer.id)
+
+    if (countError) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to count tournaments',
+        data: countError
+      })
+    }
+
+    // Get tournaments created by this organizer (list view: keep it lightweight)
     const { data: tournaments, error } = await supabase
       .from('tournaments')
       .select(`
-        *,
-        category:categories(*),
-        registrations:tournament_registrations(
-          *,
-          player:players(*)
-        ),
-        groups:tournament_groups(
-          *,
-          players:tournament_group_players(
-            *,
-            player:players(*)
-          )
-        )
+        id,
+        name,
+        status,
+        start_date,
+        end_date,
+        category_id,
+        created_at,
+        category:categories(id, name),
+        registrations:tournament_registrations(id),
+        groups:tournament_groups(id)
       `)
       .eq('organizer_id', organizer.id)
       .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       throw createError({
@@ -60,12 +72,14 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    return tournaments || []
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+    return {
+      data: tournaments || [],
+      total: count || 0,
+      page: Math.floor(offset / limit) + 1,
+      page_size: limit
+    }
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/organizer/tournaments')
   }
 })
 

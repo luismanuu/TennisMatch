@@ -1,5 +1,25 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getAllClerkInvitations } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function getStringProp(obj: unknown, key: string): string | undefined {
+  const r = asRecord(obj)
+  const v = r ? r[key] : undefined
+  return typeof v === 'string' ? v : undefined
+}
+
+function toIsoNowFallback(value: unknown): string {
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value)
+    if (!Number.isNaN(d.getTime())) return d.toISOString()
+  }
+  return new Date().toISOString()
+}
 
 export default defineEventHandler(async (event) => {
   try {
@@ -17,10 +37,16 @@ export default defineEventHandler(async (event) => {
     // First, try to find invitation in Clerk (for admin-created invitations)
     try {
       const { invitations } = await getAllClerkInvitations()
-      const clerkInvitation = invitations.find((inv: any) => {
-        const metadata = (inv.publicMetadata as any) || {}
-        return metadata.invitationToken === token
-      })
+      const typedInvitations = invitations as unknown as Array<{
+        id: string
+        emailAddress?: string | null
+        revoked?: boolean
+        status?: string | null
+        createdAt?: unknown
+        updatedAt?: unknown
+        publicMetadata?: unknown
+      }>
+      const clerkInvitation = typedInvitations.find((inv) => getStringProp(inv.publicMetadata, 'invitationToken') === token)
       
       if (clerkInvitation) {
         // Found in Clerk - check if it's valid
@@ -31,18 +57,20 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        const metadata = (clerkInvitation.publicMetadata as any) || {}
-        const role = metadata.role || 'player'
+        const metadata = asRecord(clerkInvitation.publicMetadata) ?? {}
+        const role = getStringProp(metadata, 'role') || 'player'
+        const categoryId = getStringProp(metadata, 'category_id') || null
+        const categoryName = getStringProp(metadata, 'category_name') || null
         
         // Return in the same format as database pending player
         return {
           id: clerkInvitation.id,
-          name: metadata.name || clerkInvitation.emailAddress?.split('@')[0] || 'Unknown',
+          name: getStringProp(metadata, 'name') || clerkInvitation.emailAddress?.split('@')[0] || 'Unknown',
           email: clerkInvitation.emailAddress || '',
-          category_id: metadata.category_id || null,
-          category: metadata.category_name ? {
-            id: metadata.category_id,
-            name: metadata.category_name,
+          category_id: categoryId,
+          category: categoryId && categoryName ? {
+            id: categoryId,
+            name: categoryName,
             description: null,
             order: null
           } : null,
@@ -51,18 +79,22 @@ export default defineEventHandler(async (event) => {
           clerk_invitation_id: clerkInvitation.id,
           invitation_token: token,
           status: clerkInvitation.revoked ? 'revoked' : (clerkInvitation.status || 'pending'),
-          created_at: clerkInvitation.createdAt ? new Date(clerkInvitation.createdAt).toISOString() : new Date().toISOString(),
-          updated_at: clerkInvitation.updatedAt ? new Date(clerkInvitation.updatedAt).toISOString() : new Date().toISOString(),
+          created_at: toIsoNowFallback(clerkInvitation.createdAt),
+          updated_at: toIsoNowFallback(clerkInvitation.updatedAt),
           role: role // Include role to identify organizer invitations
         }
       }
-    } catch (clerkError: any) {
+    } catch (clerkError: unknown) {
+      const err = typeof clerkError === 'object' && clerkError !== null ? (clerkError as Record<string, unknown>) : null
       // If it's a 400 error (revoked/expired), re-throw it
-      if (clerkError.statusCode === 400) {
+      if (err && err['statusCode'] === 400) {
         throw clerkError
       }
       // Otherwise, continue to check database
-      console.warn('Error checking Clerk invitations, falling back to database:', clerkError?.message)
+      logger.warn('Error checking Clerk invitations, falling back to database', { 
+        error: err && typeof err['message'] === 'string' ? (err['message'] as string) : 'Unknown error',
+        token 
+      })
     }
     
     // Fallback: Check database for player-created invitations
@@ -92,11 +124,8 @@ export default defineEventHandler(async (event) => {
     }
     
     return pendingPlayer
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/pending-players/invitation/[token]')
   }
 })
 

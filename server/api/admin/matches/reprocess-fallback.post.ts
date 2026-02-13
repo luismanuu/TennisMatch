@@ -1,6 +1,9 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { requireAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
+import { adminReprocessFallbackQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 /**
  * Admin endpoint to reprocess matches that used fallback calculation
@@ -8,21 +11,14 @@ import { requireAdmin } from '~/server/utils/admin'
  */
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminReprocessFallbackQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     // Verify admin access
     await requireAdmin(clerkId)
-    const matchId = query.match_id as string | undefined
-    const limit = parseInt(query.limit as string) || 100
-    const dryRun = query.dry_run === 'true'
+    const matchId = query.match_id
+    const limit = query.limit ?? 100
+    const dryRun = query.dry_run ?? false
 
     const supabase = getSupabaseAdmin()
 
@@ -68,6 +64,8 @@ export default defineEventHandler(async (event) => {
       status: 'success' | 'error' | 'skipped'
       message: string
       error?: string
+      llm_used?: boolean
+      llm_failed?: boolean
     }> = []
 
     if (dryRun) {
@@ -90,7 +88,7 @@ export default defineEventHandler(async (event) => {
         // Step 1: Get rating history for this match
         const { data: ratingHistory, error: historyError } = await supabase
           .from('rating_history')
-          .select('*')
+          .select('id, match_id, player_id, elo_change, mmr_change, uncertainty_before, uncertainty_after, is_placement_match, rating_reversed')
           .eq('match_id', match.id)
           .eq('rating_reversed', false)
 
@@ -262,14 +260,15 @@ export default defineEventHandler(async (event) => {
             message: 'Recalculation returned null (check logs for details)'
           })
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
         results.push({
           match_id: match.id,
           status: 'error',
           message: 'Failed to reprocess match',
-          error: error.message || 'Unknown error'
+          error: message
         })
-        console.error(`Error reprocessing match ${match.id}:`, error)
+        logger.error('Error reprocessing match', error, { matchId: match.id })
       }
     }
 
@@ -285,11 +284,7 @@ export default defineEventHandler(async (event) => {
       skipped: skippedCount,
       results
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error',
-      data: error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/matches/reprocess-fallback')
   }
 })

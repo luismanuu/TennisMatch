@@ -1,5 +1,9 @@
 import type { City } from '~/types'
 
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
+
 export const useCities = () => {
   const cities = ref<City[]>([])
   const loading = ref(false)
@@ -17,8 +21,8 @@ export const useCities = () => {
       const data = await $fetch<City[]>('/api/cities')
       cities.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false

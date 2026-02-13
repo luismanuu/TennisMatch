@@ -1,37 +1,19 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
 import type { RemoveCityFromSegmentPayload } from '~/types'
+import { adminCitySegmentRemoveCityQuerySchema, uuidSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const segmentId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const cityId = query.city_id as string
-    
-    if (!segmentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Segment ID is required'
-      })
-    }
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    if (!cityId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'city_id is required'
-      })
-    }
+    const segmentId = validateParam(uuidSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(adminCitySegmentRemoveCityQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const cityId = query.city_id
     
     // Verify admin
-    await checkIsAdmin(clerkId)
+    await requireAdmin(clerkId)
     
     const supabase = getSupabaseAdmin()
     
@@ -43,7 +25,7 @@ export default defineEventHandler(async (event) => {
       .eq('city_id', cityId)
     
     if (deleteError) {
-      console.error('Error removing city from segment:', deleteError)
+      logger.error('Error removing city from segment', deleteError, { segmentId: getRouterParam(event, 'id') })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to remove city from segment'
@@ -80,6 +62,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Transform data
+    type CityRef = { id: string; name: string; order: number | null }
     const transformedSegment = {
       id: updatedSegment.id,
       name: updatedSegment.name,
@@ -87,19 +70,19 @@ export default defineEventHandler(async (event) => {
       created_at: updatedSegment.created_at,
       updated_at: updatedSegment.updated_at,
       cities: updatedSegment.city_segment_cities
-        ?.map((csc: any) => csc.city)
-        .filter(Boolean)
-        .sort((a: any, b: any) => a.order - b.order) ?? [],
+        ?.map((csc: unknown) => {
+          const row = csc as { city?: CityRef | null } | null
+          return row?.city ?? null
+        })
+        .filter((c): c is CityRef => Boolean(c))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) ?? [],
     }
     
     return {
       success: true,
       segment: transformedSegment,
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'DELETE /api/admin/city-segments/[id]/cities')
   }
 })

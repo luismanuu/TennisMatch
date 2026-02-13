@@ -1,12 +1,16 @@
 import { useAuthState } from './useAuthState'
 
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
+
 export const useAdminRankings = () => {
   const { userId } = useAuthState()
   
   const loading = ref(false)
   const error = ref<Error | null>(null)
   
-  // Ranking statistics
+  // Ranking statistics (API response shape varies; consumers use specific fields)
   const rankingStats = ref<any>(null)
   
   // Ranking trends
@@ -54,8 +58,8 @@ export const useAdminRankings = () => {
       const data = await $fetch<any>(`/api/admin/rankings/stats?clerk_id=${userId.value}`)
       rankingStats.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -83,8 +87,8 @@ export const useAdminRankings = () => {
       const data = await $fetch<any>(`/api/admin/rankings/trends?${params.toString()}`)
       rankingTrends.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -104,8 +108,8 @@ export const useAdminRankings = () => {
       const data = await $fetch<any>(`/api/admin/rankings/players/${playerId}?clerk_id=${userId.value}`)
       playerRankingDetails.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -125,8 +129,8 @@ export const useAdminRankings = () => {
       const data = await $fetch<any>(`/api/admin/rankings/health?clerk_id=${userId.value}`)
       rankingHealth.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -170,8 +174,8 @@ export const useAdminRankings = () => {
       }
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -197,8 +201,8 @@ export const useAdminRankings = () => {
       placementStats.value = data.statistics || null
       placementTotal.value = data.total || 0
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -226,8 +230,8 @@ export const useAdminRankings = () => {
       await fetchPlacementMatches()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -255,8 +259,8 @@ export const useAdminRankings = () => {
       await fetchPlacementMatches()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -288,8 +292,8 @@ export const useAdminRankings = () => {
       decayStats.value = data.statistics || null
       decayTotal.value = data.total || 0
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -317,8 +321,8 @@ export const useAdminRankings = () => {
       await fetchDecayStatus()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -346,8 +350,8 @@ export const useAdminRankings = () => {
       await fetchDecayStatus()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -367,8 +371,8 @@ export const useAdminRankings = () => {
       const data = await $fetch<any>(`/api/admin/rankings/matches/${matchId}/impact?clerk_id=${userId.value}`)
       matchImpact.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false

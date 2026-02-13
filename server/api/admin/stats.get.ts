@@ -1,18 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getRatingTier, RATING_TIERS } from '~/server/utils/rating-system'
+import { clerkIdQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import { handleApiError } from '~/server/utils/errors'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     await requireAdmin(clerkId)
 
@@ -21,19 +17,19 @@ export default defineEventHandler(async (event) => {
     // Get total active players
     const { count: activePlayersCount } = await supabase
       .from('players')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'active')
 
     // Get total deleted players
     const { count: deletedPlayersCount } = await supabase
       .from('players')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'deleted')
 
     // Get pending players count
     const { count: pendingPlayersCount } = await supabase
       .from('pending_players')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'pending')
 
     // Get matches by status
@@ -41,6 +37,7 @@ export default defineEventHandler(async (event) => {
       .from('matches')
       .select('status')
 
+    type MatchStatusRow = { status: 'scheduled' | 'active' | 'completed' | 'cancelled' | string | null }
     const matchesStats = {
       scheduled: 0,
       active: 0,
@@ -50,10 +47,11 @@ export default defineEventHandler(async (event) => {
     }
 
     if (matchesByStatus) {
-      matchesByStatus.forEach((match: any) => {
+      ;(matchesByStatus as unknown as MatchStatusRow[]).forEach((match) => {
         matchesStats.total++
-        if (match.status in matchesStats) {
-          matchesStats[match.status as keyof typeof matchesStats]++
+        const status = match.status
+        if (typeof status === 'string' && status in matchesStats) {
+          matchesStats[status as keyof typeof matchesStats]++
         }
       })
     }
@@ -66,7 +64,8 @@ export default defineEventHandler(async (event) => {
 
     const categoryDistribution: Record<string, number> = {}
     if (playersByCategory) {
-      playersByCategory.forEach((player: any) => {
+      const typedPlayersByCategory = playersByCategory as unknown as Array<{ category?: { name?: string | null } | null }>
+      typedPlayersByCategory.forEach((player) => {
         const categoryName = player.category?.name || 'No Category'
         categoryDistribution[categoryName] = (categoryDistribution[categoryName] || 0) + 1
       })
@@ -78,13 +77,13 @@ export default defineEventHandler(async (event) => {
 
     const { count: recentPlayers } = await supabase
       .from('players')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'active')
       .gte('created_at', sevenDaysAgo.toISOString())
 
     const { count: recentMatches } = await supabase
       .from('matches')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'completed')
       .gte('updated_at', sevenDaysAgo.toISOString())
 
@@ -107,10 +106,11 @@ export default defineEventHandler(async (event) => {
     }
 
     if (tournamentsByStatus) {
-      tournamentsByStatus.forEach((tournament: any) => {
+      ;(tournamentsByStatus as unknown as Array<{ status: string | null }>).forEach((tournament) => {
         tournamentStats.total++
-        if (tournament.status in tournamentStats) {
-          tournamentStats[tournament.status as keyof typeof tournamentStats]++
+        const status = tournament.status
+        if (typeof status === 'string' && status in tournamentStats) {
+          tournamentStats[status as keyof typeof tournamentStats]++
         }
       })
     }
@@ -118,7 +118,7 @@ export default defineEventHandler(async (event) => {
     // Get total tournament registrations
     const { count: totalRegistrations } = await supabase
       .from('tournament_registrations')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'confirmed')
       .is('withdrawn_at', null)
 
@@ -130,10 +130,8 @@ export default defineEventHandler(async (event) => {
 
     const uniqueOrganizers = new Set()
     if (organizersData) {
-      organizersData.forEach((t: any) => {
-        if (t.organizer_id) {
-          uniqueOrganizers.add(t.organizer_id)
-        }
+      ;(organizersData as unknown as Array<{ organizer_id: string | null }>).forEach((t) => {
+        if (t.organizer_id) uniqueOrganizers.add(t.organizer_id)
       })
     }
 
@@ -185,8 +183,8 @@ export default defineEventHandler(async (event) => {
       win_streak: p.win_streak || 0,
       loss_streak: p.loss_streak || 0,
       placement_matches_completed: p.placement_matches_completed || 0,
-      city: p.city as any,
-      category: p.category as any
+      city: p.city,
+      category: p.category
     })) || []
 
     // Tier distribution summary
@@ -203,7 +201,7 @@ export default defineEventHandler(async (event) => {
     // Recent ranking changes (last 7 days)
     const { count: recentRankingChanges } = await supabase
       .from('rating_history')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .gte('created_at', sevenDaysAgo.toISOString())
 
     return {
@@ -235,12 +233,8 @@ export default defineEventHandler(async (event) => {
         recent_changes_7_days: recentRankingChanges || 0
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/stats')
   }
 })
 

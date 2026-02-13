@@ -1,65 +1,94 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { validateRatingConsistency } from '~/server/utils/rating-system'
+import { clerkIdQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import { getOrSetTtlCache } from '~/server/utils/ttl-cache'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  let i = 0
+
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (i < items.length) {
+      const idx = i++
+      results[idx] = await mapper(items[idx]!)
+    }
+  })
+
+  await Promise.all(workers)
+  return results
+}
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     await requireAdmin(clerkId)
 
-    const supabase = getSupabaseAdmin()
+    // Cache the heavy computation briefly so admin navigation/refreshes are fast.
+    // Note: per-process cache (Nitro node-server), safe short TTL.
+    return await getOrSetTtlCache('admin:rankings:health:v1', 60_000, async () => {
+      const supabase = getSupabaseAdmin()
 
-    // Get all active players
-    const { data: players, error: playersError } = await supabase
-      .from('players')
-      .select('id, name, elo, total_matches_played, placement_matches_completed')
-      .eq('status', 'active')
+      // Get all active players
+      const { data: players, error: playersError } = await supabase
+        .from('players')
+        .select('id, name, elo, total_matches_played, placement_matches_completed, matches_this_month, last_decay_check')
+        .eq('status', 'active')
 
-    if (playersError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch players',
-        data: playersError
-      })
-    }
+      if (playersError) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Failed to fetch players',
+          data: playersError
+        })
+      }
 
-    // Rating consistency checks
-    const consistencyChecks: Array<{
-      player_id: string
-      player_name: string
-      is_consistent: boolean
-      expected_elo: number
-      actual_elo: number
-      difference: number
-    }> = []
+      // Rating consistency checks
+      const consistencyChecks: Array<{
+        player_id: string
+        player_name: string
+        is_consistent: boolean
+        expected_elo: number
+        actual_elo: number
+        difference: number
+      }> = []
 
-    // Sample check (first 50 players for performance, or all if less than 50)
-    const playersToCheck = players ? players.slice(0, 50) : []
-    
-    for (const player of playersToCheck) {
-      if ((player.total_matches_played || 0) > 0) {
-        const consistency = await validateRatingConsistency(player.id, supabase)
-        if (!consistency.isConsistent) {
+      // Sample check (first 50 players for performance, or all if less than 50)
+      const playersToCheck = players ? players.slice(0, 50) : []
+
+      const consistencyTargets = playersToCheck.filter(p => (p.total_matches_played || 0) > 0)
+      const consistencyResults = await mapWithConcurrency(
+        consistencyTargets,
+        5,
+        async (player) => {
+          const consistency = await validateRatingConsistency(player.id, supabase)
+          return { player, consistency }
+        }
+      )
+
+      for (const r of consistencyResults) {
+        if (!r.consistency.isConsistent) {
           consistencyChecks.push({
-            player_id: player.id,
-            player_name: player.name,
-            is_consistent: consistency.isConsistent,
-            expected_elo: consistency.expectedElo,
-            actual_elo: consistency.actualElo,
-            difference: Math.abs(consistency.expectedElo - consistency.actualElo)
+            player_id: r.player.id,
+            player_name: r.player.name,
+            is_consistent: r.consistency.isConsistent,
+            expected_elo: r.consistency.expectedElo,
+            actual_elo: r.consistency.actualElo,
+            difference: Math.abs(r.consistency.expectedElo - r.consistency.actualElo)
           })
         }
       }
-    }
 
     // Players with unusual ELO changes (check recent rating history)
     const sevenDaysAgo = new Date()
@@ -82,9 +111,14 @@ export default defineEventHandler(async (event) => {
       recentHistory.forEach(entry => {
         // Flag changes greater than 100 ELO as unusual
         if (Math.abs(entry.elo_change) > 100) {
+          const playerRecord = asRecord((entry as { player?: unknown }).player)
+          const playerName =
+            playerRecord && typeof playerRecord['name'] === 'string'
+              ? (playerRecord['name'] as string)
+              : 'Unknown'
           unusualChanges.push({
             player_id: entry.player_id,
-            player_name: (entry.player as any)?.name || 'Unknown',
+            player_name: playerName,
             elo_change: entry.elo_change,
             date: entry.created_at
           })
@@ -107,13 +141,6 @@ export default defineEventHandler(async (event) => {
         : 0
     }
 
-    // Decay application status
-    const { data: decayStatus, error: decayError } = await supabase
-      .from('players')
-      .select('id, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed')
-      .eq('status', 'active')
-      .gte('total_matches_played', 1)
-
     const decayStats = {
       players_eligible: 0,
       players_at_risk: 0,
@@ -121,12 +148,17 @@ export default defineEventHandler(async (event) => {
       last_decay_check: null as string | null
     }
 
-    if (decayStatus) {
-      decayStatus.forEach(player => {
+    if (players) {
+      players.forEach(player => {
+        const isRated = (player.total_matches_played || 0) >= 1
         const isInPlacement = (player.placement_matches_completed || 0) < 3
-        const matchesThisMonth = player.matches_this_month || 0
+        const playerRecord = asRecord(player)
+        const matchesThisMonth =
+          playerRecord && typeof playerRecord['matches_this_month'] === 'number'
+            ? (playerRecord['matches_this_month'] as number)
+            : 0
         
-        if (!isInPlacement) {
+        if (isRated && !isInPlacement) {
           decayStats.players_eligible++
           if (matchesThisMonth < 2) {
             decayStats.players_at_risk++
@@ -137,14 +169,17 @@ export default defineEventHandler(async (event) => {
       })
 
       // Get most recent decay check
-      const lastChecks = decayStatus
-        .map(p => p.last_decay_check)
-        .filter(Boolean)
+      const lastChecks = players
+        .map((p) => {
+          const pr = asRecord(p)
+          return pr && typeof pr['last_decay_check'] === 'string' ? (pr['last_decay_check'] as string) : null
+        })
+        .filter((v): v is string => typeof v === 'string' && v.length > 0)
         .sort()
         .reverse()
       
       if (lastChecks.length > 0) {
-        decayStats.last_decay_check = lastChecks[0]
+        decayStats.last_decay_check = lastChecks[0] ?? null
       }
     }
 
@@ -162,15 +197,38 @@ export default defineEventHandler(async (event) => {
       issue: string
     }> = []
 
-    if (completedMatches) {
-      for (const match of completedMatches) {
-        // Check if rating history exists for this match
-        const { count: historyCount } = await supabase
-          .from('rating_history')
-          .select('*', { count: 'exact', head: true })
-          .eq('match_id', match.id)
+    if (completedMatches && completedMatches.length > 0) {
+      const matchIds = completedMatches.map(m => m.id).filter(Boolean)
+      const matchIdsWithHistory = new Set<string>()
 
-        if ((historyCount || 0) === 0) {
+      // Supabase `in()` has limits; chunk to stay safe
+      const CHUNK_SIZE = 200
+      for (let i = 0; i < matchIds.length; i += CHUNK_SIZE) {
+        const chunk = matchIds.slice(i, i + CHUNK_SIZE)
+        const { data: historyRows, error: historyRowsError } = await supabase
+          .from('rating_history')
+          .select('match_id')
+          .in('match_id', chunk)
+          .eq('rating_reversed', false)
+
+        if (historyRowsError) {
+          throw createError({
+            statusCode: 500,
+            statusMessage: 'Failed to fetch rating history for completed matches',
+            data: historyRowsError
+          })
+        }
+
+        const typedRows = (historyRows || []) as unknown as Array<{ match_id: string | null }>
+        for (const row of typedRows) {
+          if (typeof row.match_id === 'string' && row.match_id.length > 0) {
+            matchIdsWithHistory.add(row.match_id)
+          }
+        }
+      }
+
+      for (const match of completedMatches) {
+        if (!matchIdsWithHistory.has(match.id)) {
           ratingErrors.push({
             match_id: match.id,
             date: match.played_at || match.id,
@@ -203,38 +261,35 @@ export default defineEventHandler(async (event) => {
                          healthScore >= 60 ? 'warning' : 
                          'critical'
 
-    return {
-      health_score: healthScore,
-      health_status: healthStatus,
-      consistency_checks: {
-        total_checked: playersToCheck.length,
-        inconsistent: consistencyChecks.length,
-        issues: consistencyChecks
-      },
-      unusual_elo_changes: {
-        total: unusualChanges.length,
-        changes: unusualChanges.slice(0, 20) // Limit to 20 most recent
-      },
-      placement_match_stats: placementStats,
-      decay_stats: decayStats,
-      rating_calculation_errors: {
-        total: ratingErrors.length,
-        errors: ratingErrors.slice(0, 20) // Limit to 20 most recent
-      },
-      recommendations: generateRecommendations({
-        consistencyIssues: consistencyChecks.length,
-        unusualChanges: unusualChanges.length,
-        ratingErrors: ratingErrors.length,
-        placementRate: placementStats.completion_rate,
-        healthScore
-      })
-    }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
+      return {
+        health_score: healthScore,
+        health_status: healthStatus,
+        consistency_checks: {
+          total_checked: playersToCheck.length,
+          inconsistent: consistencyChecks.length,
+          issues: consistencyChecks
+        },
+        unusual_elo_changes: {
+          total: unusualChanges.length,
+          changes: unusualChanges.slice(0, 20) // Limit to 20 most recent
+        },
+        placement_match_stats: placementStats,
+        decay_stats: decayStats,
+        rating_calculation_errors: {
+          total: ratingErrors.length,
+          errors: ratingErrors.slice(0, 20) // Limit to 20 most recent
+        },
+        recommendations: generateRecommendations({
+          consistencyIssues: consistencyChecks.length,
+          unusualChanges: unusualChanges.length,
+          ratingErrors: ratingErrors.length,
+          placementRate: placementStats.completion_rate,
+          healthScore
+        })
+      }
     })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/rankings/health')
   }
 })
 

@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
     // Get tournament
     const { data: tournament, error: tournamentError } = await supabase
       .from('tournaments')
-      .select('*')
+      .select('id, category_id, max_players')
       .eq('id', tournamentId)
       .single()
 
@@ -115,7 +115,7 @@ export default defineEventHandler(async (event) => {
     if (tournament.max_players) {
       const { count } = await supabase
         .from('tournament_registrations')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('tournament_id', tournamentId)
         .eq('status', 'confirmed')
         .is('withdrawn_at', null)
@@ -156,8 +156,16 @@ export default defineEventHandler(async (event) => {
         confirmed_at: new Date().toISOString()
       })
       .select(`
-        *,
-        player:players(*)
+        id,
+        tournament_id,
+        player_id,
+        status,
+        registered_at,
+        withdrawn_at,
+        confirmed_at,
+        check_in_status,
+        check_in_at,
+        player:players(id, name)
       `)
       .single()
 
@@ -174,11 +182,8 @@ export default defineEventHandler(async (event) => {
       message: 'Player registered successfully',
       registration
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/tournaments/[id]/register')
   }
 })
 

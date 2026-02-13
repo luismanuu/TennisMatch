@@ -1,18 +1,45 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getRatingTier, RATING_TIERS } from '~/server/utils/rating-system'
+import { clerkIdQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+
+type CityRef = { id: string; name: string }
+type CategoryRef = { id: string; name: string }
+
+type PlayerRow = {
+  id: string
+  elo: number | null
+  total_matches_played: number | null
+  placement_matches_completed: number | null
+  win_streak: number | null
+  loss_streak: number | null
+  matches_this_month: number | null
+  last_match_at: string | null
+  city_id: string | null
+  category_id: string | null
+  city: CityRef | null
+  category: CategoryRef | null
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function toCityName(value: unknown): string {
+  const r = asRecord(value)
+  return r && typeof r['name'] === 'string' ? (r['name'] as string) : 'Unknown'
+}
+
+function toCategoryName(value: unknown): string {
+  const r = asRecord(value)
+  return r && typeof r['name'] === 'string' ? (r['name'] as string) : 'No Category'
+}
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     await requireAdmin(clerkId)
 
@@ -71,13 +98,14 @@ export default defineEventHandler(async (event) => {
     }
 
     // Calculate basic statistics
-    const ratedPlayers = players.filter(p => (p.total_matches_played || 0) > 0)
-    const playersInPlacement = players.filter(p => 
+    const typedPlayers = (players || []) as unknown as PlayerRow[]
+    const ratedPlayers = typedPlayers.filter(p => (p.total_matches_played || 0) > 0)
+    const playersInPlacement = typedPlayers.filter(p => 
       (p.total_matches_played || 0) === 0 || ((p.placement_matches_completed || 0) < 3)
     )
 
-    const totalElo = players.reduce((sum, p) => sum + (p.elo || 0), 0)
-    const averageElo = players.length > 0 ? Math.round(totalElo / players.length) : 0
+    const totalElo = typedPlayers.reduce((sum, p) => sum + (p.elo || 0), 0)
+    const averageElo = typedPlayers.length > 0 ? Math.round(totalElo / typedPlayers.length) : 0
 
     // Players by tier
     const playersByTier: Record<string, number> = {}
@@ -88,16 +116,17 @@ export default defineEventHandler(async (event) => {
       eloByTier[tier.tier] = []
     })
 
-    players.forEach(player => {
+    typedPlayers.forEach((player) => {
       const tierInfo = getRatingTier(player.elo || 0)
       playersByTier[tierInfo.tier] = (playersByTier[tierInfo.tier] || 0) + 1
-      eloByTier[tierInfo.tier].push(player.elo || 0)
+      const bucket = eloByTier[tierInfo.tier] || (eloByTier[tierInfo.tier] = [])
+      bucket.push(player.elo || 0)
     })
 
     // Average ELO by tier
     const averageEloByTier: Record<string, number> = {}
     Object.keys(eloByTier).forEach(tier => {
-      const elos = eloByTier[tier]
+      const elos = eloByTier[tier] || []
       if (elos.length > 0) {
         averageEloByTier[tier] = Math.round(elos.reduce((a, b) => a + b, 0) / elos.length)
       } else {
@@ -119,61 +148,61 @@ export default defineEventHandler(async (event) => {
       .map(([range, count]) => ({
         range,
         count,
-        min: parseInt(range.split('-')[0]),
-        max: parseInt(range.split('-')[1])
+        min: parseInt((range.split('-')[0] || '0'), 10),
+        max: parseInt((range.split('-')[1] || '0'), 10)
       }))
       .sort((a, b) => a.min - b.min)
 
     // Tier distribution percentages
     const tierDistributionPercentages: Record<string, number> = {}
-    const totalPlayers = players.length
+    const totalPlayers = typedPlayers.length
     Object.keys(playersByTier).forEach(tier => {
       tierDistributionPercentages[tier] = totalPlayers > 0
-        ? parseFloat(((playersByTier[tier] / totalPlayers) * 100).toFixed(2))
+        ? parseFloat((((playersByTier[tier] || 0) / totalPlayers) * 100).toFixed(2))
         : 0
     })
 
     // City-wise tier distribution
     const cityWiseTierDistribution: Record<string, Record<string, number>> = {}
-    players.forEach(player => {
-      const cityName = (player.city as any)?.name || 'Unknown'
+    typedPlayers.forEach(player => {
+      const cityName = toCityName(player.city)
       const tierInfo = getRatingTier(player.elo || 0)
       
       if (!cityWiseTierDistribution[cityName]) {
         cityWiseTierDistribution[cityName] = {}
         RATING_TIERS.forEach(t => {
-          cityWiseTierDistribution[cityName][t.tier] = 0
+          cityWiseTierDistribution[cityName]![t.tier] = 0
         })
       }
       
-      cityWiseTierDistribution[cityName][tierInfo.tier] = 
-        (cityWiseTierDistribution[cityName][tierInfo.tier] || 0) + 1
+      cityWiseTierDistribution[cityName]![tierInfo.tier] = 
+        (cityWiseTierDistribution[cityName]![tierInfo.tier] || 0) + 1
     })
 
     // Category-wise tier distribution
     const categoryWiseTierDistribution: Record<string, Record<string, number>> = {}
-    players.forEach(player => {
-      const categoryName = (player.category as any)?.name || 'No Category'
+    typedPlayers.forEach(player => {
+      const categoryName = toCategoryName(player.category)
       const tierInfo = getRatingTier(player.elo || 0)
       
       if (!categoryWiseTierDistribution[categoryName]) {
         categoryWiseTierDistribution[categoryName] = {}
         RATING_TIERS.forEach(t => {
-          categoryWiseTierDistribution[categoryName][t.tier] = 0
+          categoryWiseTierDistribution[categoryName]![t.tier] = 0
         })
       }
       
-      categoryWiseTierDistribution[categoryName][tierInfo.tier] = 
-        (categoryWiseTierDistribution[categoryName][tierInfo.tier] || 0) + 1
+      categoryWiseTierDistribution[categoryName]![tierInfo.tier] = 
+        (categoryWiseTierDistribution[categoryName]![tierInfo.tier] || 0) + 1
     })
 
     // Players with active streaks
-    const playersWithWinStreaks = players.filter(p => (p.win_streak || 0) > 0).length
-    const playersWithLossStreaks = players.filter(p => (p.loss_streak || 0) > 0).length
+    const playersWithWinStreaks = typedPlayers.filter(p => (p.win_streak || 0) > 0).length
+    const playersWithLossStreaks = typedPlayers.filter(p => (p.loss_streak || 0) > 0).length
 
     // Players at risk of decay (inactive this month)
     const now = new Date()
-    const playersAtDecayRisk = players.filter(p => {
+    const playersAtDecayRisk = typedPlayers.filter(p => {
       const matchesThisMonth = p.matches_this_month || 0
       const isInPlacement = (p.total_matches_played || 0) === 0 || ((p.placement_matches_completed || 0) < 3)
       return !isInPlacement && matchesThisMonth < 2
@@ -187,17 +216,17 @@ export default defineEventHandler(async (event) => {
 
     const { count: recentChanges7Days } = await supabase
       .from('rating_history')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .gte('created_at', sevenDaysAgo.toISOString())
 
     const { count: recentChanges30Days } = await supabase
       .from('rating_history')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .gte('created_at', thirtyDaysAgo.toISOString())
 
     // Players at ELO floor (500) and ceiling (4000+)
-    const playersAtEloFloor = players.filter(p => (p.elo || 0) <= 500).length
-    const playersAtEloCeiling = players.filter(p => (p.elo || 0) >= 4000).length
+    const playersAtEloFloor = typedPlayers.filter(p => (p.elo || 0) <= 500).length
+    const playersAtEloCeiling = typedPlayers.filter(p => (p.elo || 0) >= 4000).length
 
     return {
       total_rated_players: ratedPlayers.length,
@@ -221,11 +250,7 @@ export default defineEventHandler(async (event) => {
       players_at_elo_floor: playersAtEloFloor,
       players_at_elo_ceiling: playersAtEloCeiling
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/rankings/stats')
   }
 })

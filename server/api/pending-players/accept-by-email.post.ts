@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     // Find pending player by email
     const { data: pendingPlayer, error: fetchError } = await supabase
       .from('pending_players')
-      .select('*')
+      .select('id, status, email, name, category_id, clerk_invitation_id')
       .eq('email', clerkEmail.toLowerCase())
       .eq('status', 'pending')
       .single()
@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Create player record from pending player data
-    const { data: newPlayer, error: createError } = await supabase
+    const { data: newPlayer, error: insertError } = await supabase
       .from('players')
       .insert({
         clerk_id,
@@ -98,11 +98,11 @@ export default defineEventHandler(async (event) => {
       `)
       .single()
     
-    if (createError) {
+    if (insertError) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create player from pending player',
-        data: createError
+        data: insertError
       })
     }
     
@@ -127,11 +127,8 @@ export default defineEventHandler(async (event) => {
       message: 'Invitation accepted - player created',
       hasInvitation: true
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/pending-players/accept-by-email')
   }
 })
 

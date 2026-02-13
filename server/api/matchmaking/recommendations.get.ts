@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
 import { 
   getRatingTier, 
   getExpectedWinProbability, 
@@ -8,6 +9,18 @@ import {
   RATING_TIERS
 } from '~/server/utils/rating-system'
 import type { MatchmakingRecommendation, Player, RatingTier } from '~/types'
+import { matchmakingRecommendationsQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function getCategoryDefaultElo(category: unknown): number {
+  const r = asRecord(category)
+  const v = r ? r['default_elo'] : undefined
+  return typeof v === 'number' ? v : 1000
+}
 
 // ============================================
 // OPTIMIZED MATCHMAKING ALGORITHM
@@ -20,19 +33,13 @@ import type { MatchmakingRecommendation, Player, RatingTier } from '~/types'
 // ============================================
 
 export default defineEventHandler(async (event) => {
+  let clerkId: string | undefined
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const limit = parseInt(query.limit as string) || 20 // Increased default for pagination
-    const page = parseInt(query.page as string) || 1
+    const query = validateQuery(matchmakingRecommendationsQuerySchema, getQuery(event))
+    clerkId = query.clerk_id
+    const limit = query.limit ?? 20
+    const page = query.page ?? 1
     const offset = (page - 1) * limit
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
 
     // Verify Clerk user exists
     await getClerkUser(clerkId)
@@ -87,7 +94,7 @@ export default defineEventHandler(async (event) => {
       .eq('city_id', currentPlayer.city_id)
 
     if (segmentsError) {
-      console.error('Error fetching city segments:', segmentsError)
+      logger.error('Error fetching city segments', segmentsError, { clerkId })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch city segments'
@@ -112,7 +119,7 @@ export default defineEventHandler(async (event) => {
       .in('city_segment_id', segmentIds)
 
     if (citiesError) {
-      console.error('Error fetching segment cities:', citiesError)
+      logger.error('Error fetching segment cities', citiesError, { clerkId, segmentIds })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch segment cities'
@@ -125,7 +132,7 @@ export default defineEventHandler(async (event) => {
     // STEP 3: Calculate ELO range for filtering
     // ============================================
     const currentIsUnrated = isPlayerUnrated(currentPlayer.total_matches_played)
-    const categoryDefaultElo = (currentPlayer.category as any)?.default_elo ?? 1000
+    const categoryDefaultElo = getCategoryDefaultElo((currentPlayer as { category?: unknown }).category)
     const currentEffectiveElo = currentIsUnrated ? categoryDefaultElo : currentPlayer.elo
     
     // Get current player's tier
@@ -136,10 +143,10 @@ export default defineEventHandler(async (event) => {
     const minTierIndex = Math.max(0, currentTierIndex - 1)
     const maxTierIndex = Math.min(RATING_TIERS.length - 1, currentTierIndex + 2)
     
-    const minAllowedElo = RATING_TIERS[minTierIndex].minElo
-    const maxAllowedElo = RATING_TIERS[maxTierIndex].maxElo === Infinity 
+    const minAllowedElo = RATING_TIERS[minTierIndex]!.minElo
+    const maxAllowedElo = RATING_TIERS[maxTierIndex]!.maxElo === Infinity 
       ? 10000 
-      : RATING_TIERS[maxTierIndex].maxElo
+      : RATING_TIERS[maxTierIndex]!.maxElo
 
     // ============================================
     // STEP 4: Pre-calculate date boundaries (MOVED OUTSIDE LOOP)
@@ -175,7 +182,7 @@ export default defineEventHandler(async (event) => {
       .limit(500) // Fetch up to 500 for better pagination support
 
     if (playersError) {
-      console.error('Error fetching players:', playersError)
+      logger.error('Error fetching players', playersError, { clerkId, cityIds: matchableCityIds })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch players for matchmaking'
@@ -211,10 +218,10 @@ export default defineEventHandler(async (event) => {
       ])
 
       if (matchesAsPlayer1.error) {
-        console.error('Error fetching matches as player1:', matchesAsPlayer1.error)
+        logger.error('Error fetching matches as player1', matchesAsPlayer1.error, { playerId: currentPlayer.id })
       }
       if (matchesAsPlayer2.error) {
-        console.error('Error fetching matches as player2:', matchesAsPlayer2.error)
+        logger.error('Error fetching matches as player2', matchesAsPlayer2.error, { playerId: currentPlayer.id })
       }
 
       // Combine results from both queries
@@ -254,7 +261,7 @@ export default defineEventHandler(async (event) => {
         // Check: filter by effective ELO within tier range (for unrated players)
         const playerIsUnrated = isPlayerUnrated(player.total_matches_played)
         if (playerIsUnrated) {
-          const playerEffectiveElo = (player.category as any)?.default_elo ?? 1000
+          const playerEffectiveElo = getCategoryDefaultElo((player as { category?: unknown }).category)
           if (playerEffectiveElo < minAllowedElo || playerEffectiveElo > maxAllowedElo) {
             return false
           }
@@ -266,7 +273,7 @@ export default defineEventHandler(async (event) => {
       // Convert to recommendations
       recommendations = eligiblePlayers.map(player => {
         const playerIsUnrated = isPlayerUnrated(player.total_matches_played)
-        const playerDefaultElo = (player.category as any)?.default_elo ?? 1000
+        const playerDefaultElo = getCategoryDefaultElo((player as { category?: unknown }).category)
         const playerEffectiveElo = playerIsUnrated ? playerDefaultElo : player.elo
         const playerEffectiveMmr = playerIsUnrated 
           ? eloToMmr(playerDefaultElo)
@@ -302,7 +309,7 @@ export default defineEventHandler(async (event) => {
             category: player.category,
             total_matches_played: player.total_matches_played,
             last_match_at: player.last_match_at,
-          } as Player,
+          } as unknown as Player,
           expected_win_probability: expectedWinProb,
           mmr_difference: mmrDiff,
           rating_tier: tier,
@@ -425,11 +432,7 @@ export default defineEventHandler(async (event) => {
         recommendations_count: 0,
       }
     }
-  } catch (error: any) {
-    console.error('Matchmaking error:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/matchmaking/recommendations')
   }
 })

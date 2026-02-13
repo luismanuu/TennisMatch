@@ -1,5 +1,9 @@
 import type { MatchMessage, CreateMatchMessagePayload } from '~/types'
 
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
+
 interface OptimisticMessage extends MatchMessage {
   _optimistic?: boolean
   _sending?: boolean
@@ -45,7 +49,7 @@ export const useMatchChat = () => {
     error.value = null
     
     try {
-      const query: any = { clerk_id: clerkId }
+      const query: Record<string, string> = { clerk_id: clerkId }
       if (since) {
         query.since = since
       }
@@ -88,13 +92,14 @@ export const useMatchChat = () => {
       }
       
       return data
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Retry logic for network errors
-      if (retries > 0 && (err.statusCode >= 500 || !err.statusCode)) {
+      const statusCode = typeof err === 'object' && err !== null && 'statusCode' in err ? (err as { statusCode: number }).statusCode : undefined
+      if (retries > 0 && (statusCode === undefined || statusCode >= 500)) {
         await new Promise(resolve => setTimeout(resolve, 1000))
         return fetchMessages(matchId, clerkId, since, retries - 1, isPolling)
       }
-      error.value = err
+      error.value = err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
       throw err
     } finally {
       if (!isPolling) {
@@ -146,7 +151,7 @@ export const useMatchChat = () => {
       messages.value = sortMessages(messages.value)
       
       return data
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Mark optimistic message as error
       const messageIndex = messages.value.findIndex(m => m.id === tempId)
       if (messageIndex !== -1) {
@@ -156,7 +161,7 @@ export const useMatchChat = () => {
           _error: true
         }
       }
-      error.value = err
+      error.value = toError(err)
       throw err
     }
   }

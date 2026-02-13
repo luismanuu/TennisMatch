@@ -115,7 +115,7 @@ export interface LeaderboardPlayer {
   placement_matches_completed: number
   city?: City
   category?: Category
-  badges: BadgeType[]
+  badges: readonly BadgeType[]
   is_current_user?: boolean
   near_promotion?: boolean // True if within 200 ELO of next tier
   next_tier?: string | null // Name of next tier if near promotion

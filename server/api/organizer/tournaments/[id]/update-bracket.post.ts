@@ -1,34 +1,24 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { updateBracketFromCompletedMatches } from '~/server/utils/tournament-brackets'
-import { getClerkClient } from '~/server/utils/clerk'
+import {
+  clerkIdQuerySchema,
+  tournamentIdSchema,
+  updateBracketBodySchema,
+  validateBody,
+  validateQuery
+} from '~/server/utils/validation'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-    const body = await readBody(event)
-    const bracketType = (body.bracketType || 'all') as 'main' | 'backdraw' | 'all'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const { clerk_id: clerkId } = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const tournamentId = validateQuery(tournamentIdSchema, getRouterParam(event, 'id'))
+    const { bracketType } = validateBody(updateBracketBodySchema, await readBody(event))
+    const bracketTypeToUpdate = (bracketType ?? 'all') as 'main' | 'backdraw' | 'all'
 
     await requireOrganizer(clerkId)
 
     const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
 
     // Get organizer's player ID
     const { data: organizer, error: organizerError } = await supabase
@@ -48,14 +38,11 @@ export default defineEventHandler(async (event) => {
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
 
     // Update bracket from all completed matches
-    await updateBracketFromCompletedMatches(tournamentId, bracketType, supabase)
+    await updateBracketFromCompletedMatches(tournamentId, bracketTypeToUpdate, supabase)
 
     return { success: true, message: 'Bracket updated successfully' }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/organizer/tournaments/[id]/update-bracket')
   }
 })
 

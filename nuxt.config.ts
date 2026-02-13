@@ -33,7 +33,6 @@ export default defineNuxtConfig({
     signUpUrl: '/sign-up',
     signInFallbackRedirectUrl: '/',
     redirectUrl: '/',
-    // @ts-ignore - localization is supported but not in types yet
     localization: esES,
     // Removed custom appearance - using Clerk's default light theme
   },
@@ -51,7 +50,8 @@ export default defineNuxtConfig({
 
   typescript: {
     strict: true,
-    typeCheck: false // Disable type checking during dev to avoid vue-tsc issues
-  }
+    // Disable dev typeCheck when E2E_RUNNING=1 to avoid vite-plugin-checker overlay blocking clicks
+    typeCheck: process.env.E2E_RUNNING === '1' ? false : true,
+  },
 })
 

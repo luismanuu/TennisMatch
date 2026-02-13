@@ -59,7 +59,7 @@ useHead({
   },
   style: [
     {
-      children: `
+      innerHTML: `
         /* Critical CSS - prevents FOUC */
         :root {
           --font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;

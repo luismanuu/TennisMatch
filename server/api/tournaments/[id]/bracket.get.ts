@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -17,14 +18,37 @@ export default defineEventHandler(async (event) => {
     const { data: groups, error: groupsError } = await supabase
       .from('tournament_groups')
       .select(`
-        *,
+        id,
+        tournament_id,
+        group_name,
+        group_number,
+        created_at,
         players:tournament_group_players(
-          *,
-          player:players(*)
+          id,
+          tournament_id,
+          group_id,
+          player_id,
+          seed_position,
+          player:players(id, name)
         ),
         standings:tournament_standings(
-          *,
-          player:players(*)
+          id,
+          tournament_id,
+          group_id,
+          player_id,
+          wins,
+          losses,
+          sets_won,
+          sets_lost,
+          games_won,
+          games_lost,
+          head_to_head_wins,
+          points,
+          game_difference,
+          final_position,
+          qualified,
+          updated_at,
+          player:players(id, name)
         )
       `)
       .eq('tournament_id', tournamentId)
@@ -70,24 +94,6 @@ export default defineEventHandler(async (event) => {
     const backdrawMatches = (matches || []).filter(m => m.bracket_type === 'backdraw')
     const groupMatches = (matches || []).filter(m => m.bracket_type === 'group')
     
-    // Debug: Log matches by round
-    const mainByRound = new Map<number, any[]>()
-    mainMatches.forEach((m: any) => {
-      const round = m.round_number || 1
-      if (!mainByRound.has(round)) {
-        mainByRound.set(round, [])
-      }
-      mainByRound.get(round)!.push(m)
-    })
-    
-    console.log(`[Bracket API] Tournament ${tournamentId} - Main bracket matches by round:`)
-    mainByRound.forEach((matches, round) => {
-      console.log(`  Round ${round}: ${matches.length} matches`)
-      matches.forEach((m: any) => {
-        console.log(`    - Match ${m.bracket_position || '?'}: ${m.match_id || 'NO MATCH ID'} (has match: ${!!m.match}, player1: ${m.match?.player1_id || 'null'}, player2: ${m.match?.player2_id || 'null'})`)
-      })
-    })
-    
     const bracketData = {
       groups: groups || [],
       main: mainMatches,
@@ -96,11 +102,8 @@ export default defineEventHandler(async (event) => {
     }
 
     return bracketData
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/tournaments/[id]/bracket')
   }
 })
 

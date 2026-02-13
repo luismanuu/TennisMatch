@@ -1,18 +1,22 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
-import type { CreatePlayerPayload } from '~/types'
+import { logger } from '~/server/utils/logger'
+import { ValidationError, ConflictError, NotFoundError, InternalServerError, handleApiError } from '~/server/utils/errors'
+import { validateBody, createPlayerWithClerkSchema } from '~/server/utils/validation'
+import { CATEGORY_SELECT_FULL, CITY_SELECT_FULL } from '~/server/utils/supabase-selects'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
 
 export default defineEventHandler(async (event) => {
   try {
-    const body = await readBody<CreatePlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, phone_number, city_id, category_id } = body
+    const body = await readBody(event)
     
-    if (!clerk_id || !name || !category_id || !city_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, name, category_id, city_id'
-      })
-    }
+    // Validate request body with Zod
+    const validatedBody = validateBody(createPlayerWithClerkSchema, body)
+    
+    const { clerk_id, name, phone_number, city_id, category_id } = validatedBody
     
     // Verify city exists
     const supabase = getSupabaseAdmin()
@@ -23,23 +27,16 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (cityError || !city) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Invalid city_id'
-      })
+      throw new ValidationError('Invalid city_id')
     }
     
     // Verify Clerk user exists
     let clerkUser
     try {
       clerkUser = await getClerkUser(clerk_id)
-    } catch (clerkError: any) {
-      console.error('Clerk user verification error:', clerkError)
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Clerk user not found',
-        data: clerkError
-      })
+    } catch (clerkError: unknown) {
+      logger.error('Clerk user verification error', clerkError, { clerk_id })
+      throw new NotFoundError('Clerk user not found', { clerk_id })
     }
     
     // Verify category exists and get default_elo
@@ -50,14 +47,15 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (categoryError || !category) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Invalid category_id'
-      })
+      throw new ValidationError('Invalid category_id')
     }
     
     // Use category's default_elo or fallback to 1000
-    const initialElo = (category as any).default_elo || 1000
+    const categoryRecord = asRecord(category)
+    const initialElo =
+      categoryRecord && typeof categoryRecord['default_elo'] === 'number'
+        ? (categoryRecord['default_elo'] as number)
+        : 1000
     
     // Check if player already exists
     const { data: existingPlayer } = await supabase
@@ -67,10 +65,7 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (existingPlayer) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: 'Player profile already exists'
-      })
+      throw new ConflictError('Player profile already exists', { clerk_id })
     }
     
     // Calculate initial MMR from ELO
@@ -91,35 +86,20 @@ export default defineEventHandler(async (event) => {
       })
       .select(`
         *,
-        category:categories(*),
-        city:cities(*)
+        category:categories(${CATEGORY_SELECT_FULL}),
+        city:cities(${CITY_SELECT_FULL})
       `)
       .single()
     
     if (insertError) {
-      console.error('Supabase insert error:', insertError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to create player profile',
-        data: insertError
-      })
+      logger.error('Supabase insert error', insertError, { clerk_id, name })
+      throw new InternalServerError('Failed to create player profile', { insertError })
     }
     
+    logger.info('Player profile created successfully', { player_id: player.id, clerk_id, name })
     return player
-  } catch (error: any) {
-    console.error('Error in /api/players/me POST:', error)
-    
-    // If it's already a createError, re-throw it
-    if (error.statusCode) {
-      throw error
-    }
-    
-    // Otherwise, wrap it
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/players/me')
   }
 })
 

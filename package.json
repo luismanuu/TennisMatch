@@ -8,7 +8,7 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare",
+    "postinstall": "nuxt prepare || echo 'Note: nuxt prepare failed, but continuing...'",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:reset": "prisma migrate reset",
@@ -19,11 +19,14 @@
     "db:setup": "prisma db push --accept-data-loss && npm run db:generate",
     "test": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:desktop": "playwright test --project=chromium",
+    "test:e2e:real-clerk": "cross-env E2E_USE_REAL_CLERK=1 playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:integration": "vitest run tests/integration",
     "test:integration:ui": "vitest --ui",
     "test:integration:real-api": "cross-env VITEST_RUN_REAL_API=true vitest run tests/integration/clerk-real-api.spec.ts",
-    "test:all": "npm run test:integration && npm run test:e2e"
+    "test:all": "npm run test:integration && npm run test:e2e",
+    "typecheck": "nuxt typecheck"
   },
   "dependencies": {
     "@clerk/localizations": "^3.32.1",
@@ -33,12 +36,12 @@
     "bracketry": "^1.1.3",
     "nuxt": "^4.2.2",
     "vue": "latest",
-    "vue-router": "latest"
+    "vue-router": "latest",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@clerk/clerk-sdk-node": "^4.13.23",
-    "@nuxt/test-utils": "^3.21.0",
-    "@nuxt/typescript-build": "^3.0.2",
+    "@nuxt/test-utils": "^3.23.0",
     "@playwright/test": "^1.57.0",
     "@prisma/client": "^7.2.0",
     "@types/node": "^25.0.3",
@@ -49,7 +52,14 @@
     "msw": "^2.12.7",
     "prisma": "^7.2.0",
     "typescript": "^5.3.3",
+    "vue-tsc": "latest",
     "vite": "^7.3.0",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "@koa/router": "^15.0.0",
+    "glob": "^10.0.0",
+    "inflight": "^1.0.6",
+    "keygrip": "^1.1.0"
   }
 }

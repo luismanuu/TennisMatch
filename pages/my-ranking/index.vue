@@ -92,7 +92,7 @@
         </div>
 
         <!-- Main Content -->
-        <template v-else>
+        <template v-else-if="player">
           <!-- Section A: Current Rating Card -->
           <div class="glass-card-elevated px-4 pt-4 pb-2 mb-6 animate-fade-up relative overflow-hidden w-full">
             <!-- Content -->
@@ -316,7 +316,7 @@
                     { value: 'all', label: 'Todo el Tiempo' }
                   ]"
                   :key="period.value"
-                  @click="selectedPeriod = period.value as any"
+                  @click="selectedPeriod = period.value as typeof selectedPeriod"
                   class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-size-4 sm:text-size-4 font-semibold transition-all"
                   :class="selectedPeriod === period.value
                     ? 'bg-accent text-white'
@@ -479,7 +479,7 @@
                       { value: 'all', label: 'Todo el Tiempo' }
                     ]"
                     :key="period.value"
-                    @click="h2hPeriod = period.value as any"
+                  @click="h2hPeriod = period.value as typeof h2hPeriod"
                     class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-size-4 sm:text-size-4 font-semibold transition-all"
                     :class="h2hPeriod === period.value
                       ? 'bg-accent text-white'
@@ -674,18 +674,18 @@
             <div class="flex items-center gap-4 mb-4">
               <div 
                 class="w-12 h-12 rounded-xl flex items-center justify-center"
-                :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
+                :class="hasMetDecayMatches
                   ? 'bg-green-500/10 border border-green-500/20'
-                  : decayStatus?.days_remaining_in_month <= 7
+                  : isDecayUrgent
                     ? 'bg-red-500/10 border border-red-500/20'
                     : 'bg-amber-500/10 border border-amber-500/20'"
               >
                 <Icon 
                   name="heroicons:clock" 
                   class="w-6 h-6"
-                  :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
+                  :class="hasMetDecayMatches
                     ? 'text-green-400'
-                    : decayStatus?.days_remaining_in_month <= 7
+                    : isDecayUrgent
                       ? 'text-red-400'
                       : 'text-amber-400'"
                 />
@@ -695,12 +695,12 @@
                 <p class="text-size-4 text-foreground-muted">
                   Partidos este mes: 
                   <span class="font-semibold text-foreground">
-                    {{ decayStatus?.matches_this_month || 0 }} / {{ decayStatus?.matches_required || 2 }}
+                    {{ decayMatchesThisMonth }} / {{ decayMatchesRequired }}
                   </span>
                 </p>
               </div>
               <div class="text-right">
-                <p class="text-size-4 font-semibold text-foreground">{{ decayStatus?.days_remaining_in_month || 0 }}</p>
+                <p class="text-size-4 font-semibold text-foreground">{{ decayDaysRemaining }}</p>
                 <p class="text-size-5 text-foreground-muted">días restantes</p>
               </div>
             </div>
@@ -709,31 +709,27 @@
             <div class="h-2 bg-surface-elevated rounded-full overflow-hidden mb-3">
               <div 
                 class="h-full rounded-full transition-all duration-500"
-                :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
-                  ? 'bg-green-500'
-                  : 'bg-amber-500'"
-                :style="{ width: `${Math.min(((decayStatus?.matches_this_month || 0) / (decayStatus?.matches_required || 2)) * 100, 100)}%` }"
+                :class="hasMetDecayMatches ? 'bg-green-500' : 'bg-amber-500'"
+                :style="{ width: `${Math.min((decayMatchesThisMonth / decayMatchesRequired) * 100, 100)}%` }"
               ></div>
             </div>
 
             <!-- Status Message -->
             <div 
               class="flex items-center gap-2 text-size-4"
-              :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
-                ? 'text-green-400'
-                : 'text-amber-400'"
+              :class="hasMetDecayMatches ? 'text-green-400' : 'text-amber-400'"
             >
               <Icon 
-                :name="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
+                :name="hasMetDecayMatches
                   ? 'heroicons:check-circle'
                   : 'heroicons:exclamation-triangle'" 
                 class="w-4 h-4"
               />
-              <span v-if="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)">
+              <span v-if="hasMetDecayMatches">
                 ¡Meta cumplida! Tu SR está protegido este mes.
               </span>
               <span v-else>
-                Juega {{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) }} partido{{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) !== 1 ? 's' : '' }} más para evitar decay de SR (-{{ decayStatus?.estimated_decay || 25 }} SR).
+                Juega {{ decayMatchesRequired - decayMatchesThisMonth }} partido{{ decayMatchesRequired - decayMatchesThisMonth !== 1 ? 's' : '' }} más para evitar decay de SR (-{{ decayEstimatedLoss }} SR).
               </span>
             </div>
           </div>
@@ -862,6 +858,23 @@ const winRate = computed(() => {
   return Math.round(historyStats.value.win_rate)
 })
 
+// Safe decay status helpers to avoid undefined properties in template
+const hasMetDecayMatches = computed(() => {
+  const matches = decayStatus.value?.matches_this_month ?? 0
+  const required = decayStatus.value?.matches_required ?? 2
+  return matches >= required
+})
+
+const isDecayUrgent = computed(() => {
+  const daysRemaining = decayStatus.value?.days_remaining_in_month ?? 0
+  return daysRemaining <= 7
+})
+
+const decayMatchesThisMonth = computed(() => decayStatus.value?.matches_this_month ?? 0)
+const decayMatchesRequired = computed(() => decayStatus.value?.matches_required ?? 2)
+const decayDaysRemaining = computed(() => decayStatus.value?.days_remaining_in_month ?? 0)
+const decayEstimatedLoss = computed(() => decayStatus.value?.estimated_decay ?? 25)
+
 const formatMatchDate = (dateString: string) => {
   const date = new Date(dateString)
   const now = new Date()
@@ -875,12 +888,31 @@ const formatMatchDate = (dateString: string) => {
   const dateStr = getEcuadorDateString(date)
   const nowStr = getEcuadorDateString(now)
   
-  // Parse dates to compare
-  const dateParts = dateStr.split('-').map(Number)
-  const nowParts = nowStr.split('-').map(Number)
+  // Parse dates to compare safely
+  const [dateYearStr, dateMonthStr, dateDayStr] = dateStr.split('-')
+  const [nowYearStr, nowMonthStr, nowDayStr] = nowStr.split('-')
+
+  const dateYear = Number(dateYearStr)
+  const dateMonth = Number(dateMonthStr)
+  const dateDay = Number(dateDayStr)
+  const nowYear = Number(nowYearStr)
+  const nowMonth = Number(nowMonthStr)
+  const nowDay = Number(nowDayStr)
+
+  if (
+    Number.isNaN(dateYear) || Number.isNaN(dateMonth) || Number.isNaN(dateDay) ||
+    Number.isNaN(nowYear) || Number.isNaN(nowMonth) || Number.isNaN(nowDay)
+  ) {
+    return date.toLocaleDateString('es-ES', {
+      timeZone: 'America/Guayaquil',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
+  }
   
-  const dateOnly = new Date(dateParts[0], dateParts[1] - 1, dateParts[2])
-  const nowDateOnly = new Date(nowParts[0], nowParts[1] - 1, nowParts[2])
+  const dateOnly = new Date(dateYear, dateMonth - 1, dateDay)
+  const nowDateOnly = new Date(nowYear, nowMonth - 1, nowDay)
   
   const diffTime = nowDateOnly.getTime() - dateOnly.getTime()
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
@@ -1026,7 +1058,7 @@ const tierInfo = computed<RatingTierInfo>(() => {
       return tier
     }
   }
-  return RATING_TIERS[0]
+  return RATING_TIERS[0]!
 })
 
 // Get rank icon path
@@ -1039,8 +1071,15 @@ const handleImageError = () => {
   imageError.value = true
 }
 
-const calculateTierProgress = (elo: number) => {
-  const currentTierData = RATING_TIERS.find(t => elo >= t.minElo && elo <= t.maxElo) || RATING_TIERS[0]
+const calculateTierProgress = (elo: number): {
+  currentTier: { tier: string; minElo: number; maxElo: number; color: string }
+  nextTier: { tier: string; minElo: number; maxElo: number; color: string } | null
+  eloNeeded: number
+  progressPercent: number
+  isMaxTier: boolean
+} => {
+  const currentTierData: RatingTierInfo =
+    RATING_TIERS.find(t => elo >= t.minElo && elo <= t.maxElo) || RATING_TIERS[0]!
   const currentIndex = RATING_TIERS.findIndex(t => t.tier === currentTierData.tier)
   
   if (currentIndex === RATING_TIERS.length - 1 || currentTierData.tier === 'Grandmaster') {
@@ -1053,7 +1092,7 @@ const calculateTierProgress = (elo: number) => {
     }
   }
   
-  const nextTierData = RATING_TIERS[currentIndex + 1]
+  const nextTierData = RATING_TIERS[currentIndex + 1]!
   const eloNeeded = nextTierData.minElo - elo
   const tierRange = currentTierData.maxElo - currentTierData.minElo
   const eloInTier = elo - currentTierData.minElo
@@ -1203,10 +1242,10 @@ const getPlayerTier = (player: PlayerSearchResult | null | undefined): string | 
 }
 
 // Get player rank icon path
-const getPlayerRankIcon = (player: PlayerSearchResult | null | undefined): string | null => {
+const getPlayerRankIcon = (player: PlayerSearchResult | null | undefined): string | undefined => {
   const tier = getPlayerTier(player)
-  if (!tier) return null
-  return useRankIconAsset(tier)
+  if (!tier) return undefined
+  return useRankIconAsset(tier) ?? undefined
 }
 
 // Get tier name in Spanish

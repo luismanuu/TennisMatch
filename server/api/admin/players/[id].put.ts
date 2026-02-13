@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Build update object
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name.trim()
     if (phone_number !== undefined) updateData.phone_number = phone_number?.trim() || null
     if (category_id !== undefined) updateData.category_id = category_id || null
@@ -104,11 +104,8 @@ export default defineEventHandler(async (event) => {
       message: 'Player updated successfully',
       player: updatedPlayer
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/admin/players/[id]')
   }
 })
 

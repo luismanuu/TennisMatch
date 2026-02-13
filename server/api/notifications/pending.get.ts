@@ -1,5 +1,8 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { validateQuery, notificationPendingQuerySchema } from '~/server/utils/validation'
+import { ValidationError, ForbiddenError, toNuxtError } from '~/server/utils/errors'
+import { logger } from '~/server/utils/logger'
 
 /**
  * GET /api/notifications/pending
@@ -10,14 +13,10 @@ import { getClerkUser } from '~/server/utils/clerk'
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
     
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
+    // Validate query parameters with Zod
+    const validatedQuery = validateQuery(notificationPendingQuerySchema, query)
+    const { clerk_id, limit = 50 } = validatedQuery
     
     // Verify Clerk user exists
     await getClerkUser(clerk_id)
@@ -32,15 +31,10 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (playerError || !currentPlayer) {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Player not found'
-      })
+      throw new ForbiddenError('Player not found', { clerk_id })
     }
     
-    // Get limit from query (default 50, max 200 for performance)
-    // Reduced from 100 to improve load time
-    const limit = Math.min(parseInt(query.limit as string) || 50, 200)
+    // Limit is already validated by Zod schema (default 50, max 200)
     
     // Fetch pending notifications (not read and not dismissed)
     // Limit to most recent to handle large volumes efficiently
@@ -104,13 +98,54 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    type MatchRef = {
+      id: string
+      player1_id: string | null
+      player2_id: string | null
+      scheduled_at: string | null
+      location: string | null
+      status: string | null
+      score: string | null
+      tournament_id: string | null
+      match_proposed_by: string | null
+      match_accepted_by: string | null
+      match_rejected_by: string | null
+      score_proposed_by: string | null
+      score_approved_by: string | null
+      schedule_proposed_by: string | null
+      schedule_approved_by: string | null
+      schedule_rejected_by: string | null
+      reschedule_proposed_by: string | null
+      reschedule_approved_by: string | null
+      reschedule_rejected_by: string | null
+      acceptance_proposed_scheduled_at: string | null
+      acceptance_change_approved_by: string | null
+      acceptance_change_rejected_by: string | null
+      player1?: { id: string; name: string | null } | null
+      player2?: { id: string; name: string | null } | null
+    }
+
+    type NotificationRow = {
+      id: string
+      player_id: string
+      type: string
+      match_id: string | null
+      is_read: boolean
+      is_dismissed: boolean
+      created_at: string
+      read_at: string | null
+      dismissed_at: string | null
+      metadata: unknown
+      match: MatchRef | null
+    }
+
     // Ensure notifications is an array (safety check)
-    const notificationsList = notifications || []
+    const notificationsList = (notifications || []) as unknown as NotificationRow[]
     
     // Filter notifications to only include those where current user has a pending action
     // This matches the logic from the "Acciones Pendientes" filter
     // Filter cancelled matches first to reduce processing
-    const actionableNotifications = notificationsList.filter((n: any) => {
+    const actionableNotifications = notificationsList.filter((n) => {
       const match = n.match
       if (!match) return false
       
@@ -158,17 +193,17 @@ export default defineEventHandler(async (event) => {
     
     // Categorize actionable notifications by type
     const categorized = {
-      match_proposals: actionableNotifications.filter((n: any) => n.type === 'match_proposal'),
-      match_created: actionableNotifications.filter((n: any) => n.type === 'match_created'),
-      score_proposals: actionableNotifications.filter((n: any) => n.type === 'score_proposal'),
-      schedule_proposals: actionableNotifications.filter((n: any) => n.type === 'schedule_proposal'),
-      reschedule_proposals: actionableNotifications.filter((n: any) => n.type === 'reschedule_proposal'),
-      acceptance_changes: actionableNotifications.filter((n: any) => n.type === 'acceptance_change')
+      match_proposals: actionableNotifications.filter((n) => n.type === 'match_proposal'),
+      match_created: actionableNotifications.filter((n) => n.type === 'match_created'),
+      score_proposals: actionableNotifications.filter((n) => n.type === 'score_proposal'),
+      schedule_proposals: actionableNotifications.filter((n) => n.type === 'schedule_proposal'),
+      reschedule_proposals: actionableNotifications.filter((n) => n.type === 'reschedule_proposal'),
+      acceptance_changes: actionableNotifications.filter((n) => n.type === 'acceptance_change')
     }
     
     // Count totals (only actionable notifications)
     const totalCount = actionableNotifications.length
-    const unreadCount = actionableNotifications.filter((n: any) => !n.is_read).length
+    const unreadCount = actionableNotifications.filter((n) => !n.is_read).length
     
     // Check if there are more notifications beyond the limit
     const hasMore = actionableNotifications.length >= limit
@@ -190,11 +225,9 @@ export default defineEventHandler(async (event) => {
         displayed: actionableNotifications.length
       }
     }
-  } catch (error: any) {
-    console.error('[API] Get pending notifications error:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    logger.error('Get pending notifications error', error)
+    const nuxtError = toNuxtError(error as Error)
+    throw createError(nuxtError)
   }
 })

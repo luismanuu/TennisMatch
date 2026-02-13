@@ -109,7 +109,7 @@
                   </span>
                 </div>
                 <AdminRankingTrendsChart 
-                  :data="rankingTrends.trends.map(t => ({ date: t.date, average_elo: t.tier_population[tier] || 0 }))" 
+                  :data="rankingTrends.trends.map((t: any) => ({ date: t.date, average_elo: t.tier_population[tier] || 0 }))" 
                   :metric="'average_elo'"
                 />
               </div>

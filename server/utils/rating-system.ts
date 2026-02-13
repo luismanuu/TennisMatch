@@ -3,6 +3,7 @@ import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayS
 import { 
   calculateEloWithLLM, 
   getDefaultEloCalculation,
+  LLM_MODEL,
   type LlmEloCalculationResult 
 } from './llm-score-resolver'
 import {
@@ -16,6 +17,7 @@ import {
   getCompetitivenessWeight,
   getReliabilityWeight
 } from './utr-rating-system'
+import { logger } from './logger'
 
 // ============================================
 // CONSTANTS
@@ -93,7 +95,7 @@ export function getRatingTier(elo: number): RatingTierInfo {
       return tier
     }
   }
-  return RATING_TIERS[0] // Default to Bronze
+  return RATING_TIERS[0]! // Default to Bronze
 }
 
 /**
@@ -111,9 +113,10 @@ export interface NextTierProgress {
 export function getNextTierProgress(elo: number): NextTierProgress {
   const currentTier = getRatingTier(elo)
   const currentIndex = RATING_TIERS.findIndex(t => t.tier === currentTier.tier)
+  const nextTier = RATING_TIERS[currentIndex + 1] || null
   
-  // Check if already at max tier (Grandmaster)
-  if (currentIndex === RATING_TIERS.length - 1 || currentTier.tier === 'Grandmaster') {
+  // Check if already at max tier (Grandmaster) or there is no next tier
+  if (!nextTier || currentIndex === RATING_TIERS.length - 1 || currentTier.tier === 'Grandmaster') {
     return {
       currentTier,
       nextTier: null,
@@ -123,7 +126,6 @@ export function getNextTierProgress(elo: number): NextTierProgress {
     }
   }
   
-  const nextTier = RATING_TIERS[currentIndex + 1]
   const eloNeeded = nextTier.minElo - elo
   
   // Calculate progress within current tier
@@ -630,38 +632,39 @@ export async function updateRatingsAfterMatch(
       status,
       played_at,
       tournament_id,
-      score
+      score,
+      is_competitive
     `)
     .eq('id', matchId)
     .single()
   
   if (matchError || !match) {
-    console.error('Failed to fetch match:', matchError)
+    logger.error('Failed to fetch match', matchError, { matchId })
     return null
   }
   
   // Validate match state
   if (match.status !== 'completed' || !match.winner_id) {
-    console.error('Match is not completed or has no winner')
+    logger.error('Match is not completed or has no winner', undefined, { matchId })
     return null
   }
   
   // Both players must exist
   if (!match.player1_id || !match.player2_id) {
-    console.error('Match must have both players')
+    logger.error('Match must have both players', undefined, { matchId })
     return null
   }
   
   // Prevent self-match
   if (match.player1_id === match.player2_id) {
-    console.error('Invalid match: player1_id equals player2_id')
+    logger.error('Invalid match: player1_id equals player2_id', undefined, { matchId })
     return null
   }
   
   // Only competitive matches affect ratings
   // Friendly matches (is_competitive = false) don't count
   if (match.is_competitive === false) {
-    console.log('Match is not competitive (friendly match), skipping rating update')
+    logger.debug('Match is not competitive (friendly match), skipping rating update', { matchId })
     return null
   }
   
@@ -680,6 +683,7 @@ export async function updateRatingsAfterMatch(
       matches_this_month,
       last_match_at,
       category_id,
+      name,
       category:categories(id, order, default_elo)
     `)
     .in('id', [match.player1_id, match.player2_id])
@@ -704,7 +708,7 @@ export async function updateRatingsAfterMatch(
   const player2ActualPlacementCount = player2PlacementCount || 0
   
   if (playersError || !players || players.length !== 2) {
-    console.error('Failed to fetch players:', playersError)
+    logger.error('Failed to fetch players', playersError, { matchId, player1_id: match.player1_id, player2_id: match.player2_id })
     return null
   }
   
@@ -728,8 +732,15 @@ export async function updateRatingsAfterMatch(
   const isPlayer2PlacementMatch = player2ActualPlacementCount < 3
   
   // Get default ELO from category
-  const player1DefaultElo = (player1.category as any)?.default_elo ?? 1000
-  const player2DefaultElo = (player2.category as any)?.default_elo ?? 1000
+  const getCategoryDefaultElo = (category: unknown): number => {
+    const cat = Array.isArray(category) ? category[0] : category
+    if (!cat || typeof cat !== 'object') return 1000
+    const rec = cat as Record<string, unknown>
+    const val = rec['default_elo']
+    return typeof val === 'number' ? val : 1000
+  }
+  const player1DefaultElo = getCategoryDefaultElo((player1 as Record<string, unknown>)['category'])
+  const player2DefaultElo = getCategoryDefaultElo((player2 as Record<string, unknown>)['category'])
   
   // Get effective ratings (use category defaults for unrated)
   const player1Effective = getEffectiveRatings(
@@ -785,43 +796,45 @@ export async function updateRatingsAfterMatch(
         } else {
           // If validation or parsing failed, retry might help
           if (retryCount < LLM_MAX_RETRIES) {
-            console.warn(`[LLM] Calculation failed (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, llmResult.error)
+            logger.warn('LLM calculation failed, retrying', { attempt: retryCount + 1, maxRetries: LLM_MAX_RETRIES + 1, error: llmResult.error, matchId })
             await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS))
             retryCount++
             continue
           } else {
             llmFailed = true
             fallbackReason = `LLM calculation failed after ${LLM_MAX_RETRIES + 1} attempts: ${llmResult.error || 'Unknown error'}`
-            console.warn('LLM calculation failed after retries, using fallback:', llmResult.error)
+            logger.warn('LLM calculation failed after retries, using fallback', { error: llmResult.error, matchId })
             break
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const err = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null
         // Check if it's a rate limiting error
-        if (error?.message?.includes('rate limited') || error?.message?.includes('429')) {
+        const message = err && typeof err['message'] === 'string' ? (err['message'] as string) : null
+        if (message?.includes('rate limited') || message?.includes('429')) {
           // Rate limiting already has retry logic in callOpenRouterAPI, but if it still fails, retry the whole call
           if (retryCount < LLM_MAX_RETRIES) {
-            console.warn(`[LLM] Rate limited (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying entire call...`)
+            logger.warn('LLM rate limited, retrying entire call', { attempt: retryCount + 1, maxRetries: LLM_MAX_RETRIES + 1, matchId })
             await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS * (retryCount + 1))) // Exponential backoff
             retryCount++
             continue
           } else {
             llmFailed = true
             fallbackReason = 'LLM calculation rate limited after retries. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.'
-            console.warn('LLM calculation rate limited after retries, using fallback. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.')
+            logger.warn('LLM calculation rate limited after retries, using fallback', { matchId })
             break
           }
         } else {
           // Other errors - retry might help (network issues, timeouts, etc.)
           if (retryCount < LLM_MAX_RETRIES) {
-            console.warn(`[LLM] Error (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, error.message)
+            logger.warn('LLM error, retrying', { attempt: retryCount + 1, maxRetries: LLM_MAX_RETRIES + 1, error: message, matchId })
             await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS * (retryCount + 1))) // Exponential backoff
             retryCount++
             continue
           } else {
             llmFailed = true
-            fallbackReason = `LLM calculation error after ${LLM_MAX_RETRIES + 1} attempts: ${error?.message || 'Unknown error'}`
-            console.error('LLM calculation error after retries:', error)
+            fallbackReason = `LLM calculation error after ${LLM_MAX_RETRIES + 1} attempts: ${message || 'Unknown error'}`
+            logger.error('LLM calculation error after retries', error, { matchId })
             break
           }
         }
@@ -833,8 +846,7 @@ export async function updateRatingsAfterMatch(
   } else if (!config.openRouterApiKey) {
     // No API key configured
     fallbackReason = 'No OpenRouter API key configured. LLM calculation was not attempted.'
-    console.warn('[LLM] No API key found. Check OPENROUTER_API_KEY environment variable.')
-    console.warn('[LLM] Config check:', {
+    logger.warn('No OpenRouter API key found', {
       hasApiKey: !!config.openRouterApiKey,
       apiKeyType: typeof config.openRouterApiKey,
       apiKeyLength: config.openRouterApiKey?.length || 0
@@ -977,7 +989,7 @@ export async function updateRatingsAfterMatch(
         format
       }
     } catch (error) {
-      console.error('Error calculating UTR data:', error)
+      logger.error('Error calculating UTR data', error, { matchId })
     }
   }
   
@@ -989,7 +1001,7 @@ export async function updateRatingsAfterMatch(
         llm_elo_calculated: llmUsed,
         llm_calculation_failed: llmFailed,
         llm_calculation_reasoning: llmUsed ? (llmResult?.reasoning || null) : fallbackReason,
-        llm_calculation_model: llmUsed ? 'google/gemini-2.5-flash' : null,
+        llm_calculation_model: llmUsed ? LLM_MODEL : null,
         llm_calculation_timestamp: llmUsed || llmFailed || fallbackReason ? new Date().toISOString() : null
       })
       .eq('id', matchId)
@@ -1026,7 +1038,7 @@ export async function updateRatingsAfterMatch(
     .limit(2) // We expect 2 entries (one per player) if they exist
   
   if (historyCheckError) {
-    console.error('Error checking existing rating history:', historyCheckError)
+    logger.error('Error checking existing rating history', historyCheckError, { matchId })
     // Continue anyway - this is just a safety check
   }
   
@@ -1037,7 +1049,7 @@ export async function updateRatingsAfterMatch(
     const player2HistoryExists = existingHistory.some(h => h.player_id === player2.id)
     
     if (player1HistoryExists && player2HistoryExists) {
-      console.warn(`[updateRatingsAfterMatch] Rating history already exists for match ${matchId}. Skipping duplicate calculation.`)
+      logger.warn('Rating history already exists for match, skipping duplicate calculation', { matchId })
       // Return null to indicate no calculation was performed (match already processed)
       return null
     }
@@ -1076,9 +1088,23 @@ export async function updateRatingsAfterMatch(
   const player2NewLossStreak = winnerId === 2 ? 0 : (player2.loss_streak || 0) + 1
   
   // Debug logging for win streak calculation
-  console.log(`[Win Streak Debug] Match ${matchId}:`)
-  console.log(`  Player1: ${player1.name} - Current matches: ${currentPlayer1Matches}, Old streak: ${player1.win_streak || 0}, New streak: ${player1NewWinStreak}, Winner: ${winnerId === 1 ? 'YES' : 'NO'}`)
-  console.log(`  Player2: ${player2.name} - Current matches: ${currentPlayer2Matches}, Old streak: ${player2.win_streak || 0}, New streak: ${player2NewWinStreak}, Winner: ${winnerId === 2 ? 'YES' : 'NO'}`)
+  logger.debug('Win streak calculation', {
+    matchId,
+    player1: {
+      name: player1.name,
+      currentMatches: currentPlayer1Matches,
+      oldStreak: player1.win_streak || 0,
+      newStreak: player1NewWinStreak,
+      isWinner: winnerId === 1
+    },
+    player2: {
+      name: player2.name,
+      currentMatches: currentPlayer2Matches,
+      oldStreak: player2.win_streak || 0,
+      newStreak: player2NewWinStreak,
+      isWinner: winnerId === 2
+    }
+  })
   
   // Update placement matches count (only increment if was in placement)
   const player1NewPlacementCount = isPlayer1PlacementMatch 
@@ -1105,7 +1131,7 @@ export async function updateRatingsAfterMatch(
     .eq('id', player1.id)
   
   if (update1Error) {
-    console.error('Failed to update player 1:', update1Error)
+    logger.error('Failed to update player 1', update1Error, { matchId, player1_id: match.player1_id })
     return null
   }
   
@@ -1126,7 +1152,7 @@ export async function updateRatingsAfterMatch(
     .eq('id', player2.id)
   
   if (update2Error) {
-    console.error('Failed to update player 2:', update2Error)
+    logger.error('Failed to update player 2', update2Error, { matchId, player2_id: match.player2_id })
     return null
   }
   
@@ -1217,7 +1243,7 @@ export async function updateRatingsAfterMatch(
   })
   
   if (player1HistoryError) {
-    console.error('Failed to insert rating history for player 1:', player1HistoryError)
+    logger.error('Failed to insert rating history for player 1', player1HistoryError, { matchId, player1_id: match.player1_id })
     // Continue anyway - rating history is important but not critical
   }
   
@@ -1255,7 +1281,7 @@ export async function updateRatingsAfterMatch(
   })
   
   if (player2HistoryError) {
-    console.error('Failed to insert rating history for player 2:', player2HistoryError)
+    logger.error('Failed to insert rating history for player 2', player2HistoryError, { matchId, player2_id: match.player2_id })
     // Continue anyway - rating history is important but not critical
   }
   
@@ -1313,7 +1339,7 @@ async function updatePlayerUtrRating(playerId: string, supabase: SupabaseClient)
       .limit(50) // Get more to filter by date
     
     if (historyError) {
-      console.error('Error fetching match history for UTR:', historyError)
+      logger.error('Error fetching match history for UTR', historyError, { playerId })
       return
     }
     
@@ -1347,7 +1373,7 @@ async function updatePlayerUtrRating(playerId: string, supabase: SupabaseClient)
       .in('id', matchIds)
     
     if (matchesError) {
-      console.error('Error fetching matches for UTR:', matchesError)
+      logger.error('Error fetching matches for UTR', matchesError, { playerId })
       return
     }
     
@@ -1396,7 +1422,7 @@ async function updatePlayerUtrRating(playerId: string, supabase: SupabaseClient)
       })
       .eq('id', playerId)
   } catch (error) {
-    console.error('Error updating player UTR rating:', error)
+    logger.error('Error updating player UTR rating', error, { playerId })
   }
 }
 
@@ -1434,7 +1460,7 @@ export async function checkAndApplyMonthlyDecay(
     .single()
   
   if (error || !player) {
-    console.error('Failed to fetch player for decay check:', error)
+    logger.error('Failed to fetch player for decay check', error, { playerId })
     return null
   }
   
@@ -1490,7 +1516,7 @@ export async function checkAndApplyMonthlyDecay(
     .eq('id', playerId)
   
   if (updateError) {
-    console.error('Failed to apply decay:', updateError)
+    logger.error('Failed to apply decay', updateError, { playerId })
     return null
   }
   
@@ -1529,10 +1555,14 @@ export async function validateRatingConsistency(
   }
   
   // Calculate expected ELO from history
-  const defaultElo = (player.category as any)?.default_elo ?? 1000
-  let expectedElo = history && history.length > 0 
-    ? (history[0].is_unrated_match ? defaultElo : defaultElo)
-    : defaultElo
+  const defaultElo = (() => {
+    const cat = (player as Record<string, unknown>)['category']
+    const c = Array.isArray(cat) ? cat[0] : cat
+    if (!c || typeof c !== 'object') return 1000
+    const rec = c as Record<string, unknown>
+    return typeof rec['default_elo'] === 'number' ? (rec['default_elo'] as number) : 1000
+  })()
+  let expectedElo = defaultElo
   
   if (history) {
     for (const entry of history) {

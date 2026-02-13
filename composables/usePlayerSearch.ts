@@ -1,5 +1,9 @@
 import type { PlayerSearchResult } from '~/types'
 
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
+
 export const usePlayerSearch = () => {
   const results = ref<PlayerSearchResult[]>([])
   const loading = ref(false)
@@ -27,7 +31,7 @@ export const usePlayerSearch = () => {
         error.value = null
         
         try {
-          const queryParams: any = { q: query.trim() }
+          const queryParams: Record<string, string> = { q: query.trim() }
           if (excludePlayerId) {
             queryParams.exclude_player_id = excludePlayerId
           }
@@ -37,8 +41,8 @@ export const usePlayerSearch = () => {
           })
           results.value = data
           resolve(data)
-        } catch (err: any) {
-          error.value = err
+        } catch (err: unknown) {
+          error.value = toError(err)
           reject(err)
         } finally {
           loading.value = false

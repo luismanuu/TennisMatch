@@ -1,26 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { checkIsAdmin } from '~/server/utils/admin'
+import { clerkIdQuerySchema, matchIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const matchId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    if (!matchId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Match ID is required'
-      })
-    }
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const matchId = validateParam(matchIdSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
     
     // Verify Clerk user exists
     await getClerkUser(clerkId)
@@ -109,7 +97,9 @@ export default defineEventHandler(async (event) => {
     if (!ratingHistory || ratingHistory.length === 0) {
       // If there are reversed entries but no non-reversed ones, it means recalculation is in progress
       // or failed - we should still return null so frontend shows "Calculando ELO..."
-      const hasReversedEntries = allHistoryEntries && allHistoryEntries.some((h: any) => h.rating_reversed)
+      const hasReversedEntries =
+        Boolean(allHistoryEntries) &&
+        (allHistoryEntries as unknown as Array<{ rating_reversed?: boolean | null }>).some((h) => h.rating_reversed)
       if (hasReversedEntries) {
         // Match was reprocessed but new entries not created yet - return null to show calculating state
         // The frontend will continue polling until new entries are created
@@ -147,10 +137,7 @@ export default defineEventHandler(async (event) => {
         } : null
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/matches/[id]/rating-history')
   }
 })

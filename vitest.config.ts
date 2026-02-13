@@ -1,4 +1,17 @@
 import { defineConfig } from 'vitest/config'
+import { resolve } from 'path'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
+
+// Ensure .nuxt directory exists for module resolution
+const nuxtBuildPath = resolve(__dirname, '.nuxt')
+if (!existsSync(nuxtBuildPath)) {
+  mkdirSync(nuxtBuildPath, { recursive: true })
+  // Create a minimal route-rules.mjs file to satisfy module resolution
+  writeFileSync(
+    resolve(nuxtBuildPath, 'route-rules.mjs'),
+    'export default {};\n'
+  )
+}
 
 export default defineConfig({
   test: {
@@ -21,6 +34,19 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['tests/integration/clerk-real-api.spec.ts', 'node'],
     ],
+  },
+  resolve: {
+    alias: {
+      // Resolve Nuxt's #build alias to the .nuxt directory
+      '#build': nuxtBuildPath,
+      // Ensure absolute paths are used (Vitest requirement)
+      '~': resolve(__dirname, '.'),
+      '@': resolve(__dirname, '.'),
+    },
+  },
+  // Optimize dependencies to exclude Nuxt from pre-bundling
+  optimizeDeps: {
+    exclude: ['nuxt', '@nuxt/kit'],
   },
 })
 

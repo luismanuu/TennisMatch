@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MatchFormat } from './utr-rating-system'
 import type { LlmEloCalculationRequest } from './llm-prompts'
+import { logger } from './logger'
 
 export interface LlmEloCalculationResponse {
   player1_elo_change: number
@@ -29,8 +30,8 @@ import {
 import { buildMatchContext, getEloCalculationPrompt } from './llm-prompts'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
-// Using Google Gemini 2.5 Flash via OpenRouter
-const LLM_MODEL = 'google/gemini-2.5-flash'
+// Using OpenAI GPT-OSS 120B via OpenRouter
+export const LLM_MODEL = 'openai/gpt-oss-120b'
 const LLM_TIMEOUT = 30000 // 30 seconds
 const MAX_RETRIES = 2
 
@@ -76,9 +77,20 @@ export async function calculateEloWithLLM(
     if (playersError || !players || players.length !== 2) {
       throw new Error('Failed to fetch players')
     }
-    
-    const player1 = players.find(p => p.id === request.player1Id)!
-    const player2 = players.find(p => p.id === request.player2Id)!
+
+    type PlayerRow = {
+      id: string
+      name: string
+      elo: number | null
+      utr_rating: number | null
+      total_matches_played: number | null
+      last_match_at: string | null
+      win_streak: number | null
+      loss_streak: number | null
+    }
+    const typedPlayers = players as unknown as PlayerRow[]
+    const player1 = typedPlayers.find(p => p.id === request.player1Id)!
+    const player2 = typedPlayers.find(p => p.id === request.player2Id)!
     
     // Fetch recent matches and head-to-head in parallel for better performance
     // Reduced to 5 matches per player to improve API response time
@@ -137,7 +149,7 @@ export async function calculateEloWithLLM(
     const eloDifference = Math.abs(request.player1Elo - request.player2Elo)
     const competitivenessWeight = getCompetitivenessWeight(eloDifference)
     const reliabilityWeight = getReliabilityWeight(
-      player2.total_matches_played,
+      player2.total_matches_played ?? 0,
       player2.last_match_at
     )
     const finalMatchWeight = formatWeight * competitivenessWeight * reliabilityWeight
@@ -145,8 +157,13 @@ export async function calculateEloWithLLM(
     // Build context
     const context = buildMatchContext(
       request,
-      { ...player1, recentMatches: player1Matches || [], headToHead: headToHead?.filter(h => h.was_winner !== undefined) || [] } as any,
-      { ...player2, recentMatches: player2Matches || [], headToHead: [] } as any,
+      {
+        ...player1,
+        recentMatches: (player1Matches as unknown as Array<Record<string, unknown>>) || [],
+        headToHead:
+          (headToHead as unknown as Array<{ was_winner?: boolean | null }>)?.filter(h => h.was_winner !== undefined) || []
+      },
+      { ...player2, recentMatches: (player2Matches as unknown as Array<Record<string, unknown>>) || [], headToHead: [] },
       {
         formatWeight,
         competitivenessWeight,
@@ -182,8 +199,10 @@ export async function calculateEloWithLLM(
       reasoning: validated.reasoning,
       model: LLM_MODEL
     }
-  } catch (error: any) {
-    console.error('LLM ELO calculation failed:', error)
+  } catch (error: unknown) {
+    const err = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null
+    const message = err && typeof err['message'] === 'string' ? (err['message'] as string) : 'Unknown error'
+    logger.error('LLM ELO calculation failed', error, { matchId: request.matchId })
     return {
       success: false,
       player1EloChange: 0,
@@ -195,7 +214,7 @@ export async function calculateEloWithLLM(
       gamesLostP1: 0,
       totalGames: 0,
       reasoning: '',
-      error: error.message || 'Unknown error'
+      error: message
     }
   }
 }
@@ -207,7 +226,7 @@ async function callOpenRouterAPI(
   prompt: string,
   apiKey: string,
   retryCount = 0
-): Promise<any> {
+): Promise<string> {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT)
@@ -243,7 +262,7 @@ async function callOpenRouterAPI(
     
     if (!response.ok) {
       const errorText = await response.text()
-      let errorData: any = null
+      let errorData: unknown = null
       
       try {
         errorData = JSON.parse(errorText)
@@ -253,14 +272,20 @@ async function callOpenRouterAPI(
       
       // Handle rate limiting (429) with longer backoff
       if (response.status === 429) {
-        const isRateLimited = errorData?.error?.metadata?.raw?.includes('rate-limited') || 
-                              errorText.includes('rate-limited') ||
-                              errorText.includes('429')
+        const err = typeof errorData === 'object' && errorData !== null ? (errorData as Record<string, unknown>) : null
+        const errError = err && typeof err['error'] === 'object' && err['error'] !== null ? (err['error'] as Record<string, unknown>) : null
+        const errMetadata =
+          errError && typeof errError['metadata'] === 'object' && errError['metadata'] !== null
+            ? (errError['metadata'] as Record<string, unknown>)
+            : null
+        const raw = typeof errMetadata?.['raw'] === 'string' ? (errMetadata['raw'] as string) : null
+        const isRateLimited =
+          (raw ? raw.includes('rate-limited') : false) || errorText.includes('rate-limited') || errorText.includes('429')
         
         if (isRateLimited && retryCount < MAX_RETRIES) {
           // Longer delay for rate limiting: 5s, 15s, 30s
           const delay = retryCount === 0 ? 5000 : retryCount === 1 ? 15000 : 30000
-          console.warn(`[LLM] Rate limited, retrying after ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`)
+          logger.warn('LLM rate limited, retrying', { delay, attempt: retryCount + 1, maxRetries: MAX_RETRIES + 1 })
           await new Promise(resolve => setTimeout(resolve, delay))
           return callOpenRouterAPI(prompt, apiKey, retryCount + 1)
         }
@@ -272,27 +297,34 @@ async function callOpenRouterAPI(
       throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`)
     }
     
-    const data = await response.json()
+    const data = (await response.json()) as unknown
+    const obj = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : null
+    const choices = obj && Array.isArray(obj['choices']) ? (obj['choices'] as Array<Record<string, unknown>>) : null
+    const first = choices && choices[0] ? choices[0] : null
+    const messageObj = first && typeof first['message'] === 'object' && first['message'] !== null ? (first['message'] as Record<string, unknown>) : null
+    const content = messageObj && typeof messageObj['content'] === 'string' ? (messageObj['content'] as string) : null
     
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+    if (!content) {
       throw new Error('Invalid response format from OpenRouter API')
     }
     
-    return data.choices[0].message.content
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
+    return content
+  } catch (error: unknown) {
+    const err = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null
+    if (err && err['name'] === 'AbortError') {
       throw new Error('LLM API timeout')
     }
     
     // If error already handled (rate limiting with retries exhausted), re-throw
-    if (error.message?.includes('rate limited')) {
+    const message = err && typeof err['message'] === 'string' ? (err['message'] as string) : null
+    if (message?.includes('rate limited')) {
       throw error
     }
     
     // Retry with exponential backoff for other errors
     if (retryCount < MAX_RETRIES) {
       const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s
-      console.warn(`[LLM] API error, retrying after ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, error.message)
+      logger.warn('LLM API error, retrying', { delay, attempt: retryCount + 1, maxRetries: MAX_RETRIES + 1, error: message })
       await new Promise(resolve => setTimeout(resolve, delay))
       return callOpenRouterAPI(prompt, apiKey, retryCount + 1)
     }
@@ -513,24 +545,26 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
     jsonText = extractJsonObject(jsonText)
     
     // Step 2: Try direct parse
-    let parsed: any
+    let parsed: unknown
     try {
       parsed = JSON.parse(jsonText)
-    } catch (parseError: any) {
+    } catch (parseError: unknown) {
       // Step 3: Sanitize control characters
-      console.warn('[LLM] Initial JSON parse failed, attempting to sanitize...')
+      const perr = typeof parseError === 'object' && parseError !== null ? (parseError as Record<string, unknown>) : null
+      logger.debug('Initial JSON parse failed, attempting to sanitize', { error: perr && typeof perr['message'] === 'string' ? (perr['message'] as string) : undefined })
       let sanitized = sanitizeJsonString(jsonText)
       
       try {
         parsed = JSON.parse(sanitized)
-      } catch (sanitizeError: any) {
+      } catch (sanitizeError: unknown) {
         // Step 4: Repair unterminated strings and structures
-        console.warn('[LLM] Sanitized parse failed, attempting to repair JSON...')
+        const serr = typeof sanitizeError === 'object' && sanitizeError !== null ? (sanitizeError as Record<string, unknown>) : null
+        logger.debug('Sanitized parse failed, attempting to repair JSON', { error: serr && typeof serr['message'] === 'string' ? (serr['message'] as string) : undefined })
         let repaired = repairJsonString(sanitized)
         
         try {
           parsed = JSON.parse(repaired)
-        } catch (repairError: any) {
+        } catch (repairError: unknown) {
           // Step 5: Try to extract just the first complete JSON object
           const firstBrace = repaired.indexOf('{')
           const lastBrace = repaired.lastIndexOf('}')
@@ -538,9 +572,10 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
             const extracted = repaired.substring(firstBrace, lastBrace + 1)
             try {
               parsed = JSON.parse(extracted)
-            } catch (extractError: any) {
+            } catch (extractError: unknown) {
               // Step 6: Last resort - try to extract values using regex as fallback
-              console.warn('[LLM] All parsing attempts failed, using regex extraction as fallback...')
+              const eerr = typeof extractError === 'object' && extractError !== null ? (extractError as Record<string, unknown>) : null
+              logger.warn('All parsing attempts failed, using regex extraction as fallback', { error: eerr && typeof eerr['message'] === 'string' ? (eerr['message'] as string) : undefined })
               parsed = extractJsonValuesWithRegex(repaired)
             }
           } else {
@@ -551,21 +586,23 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
       }
     }
     
+    const pobj = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {}
     // Return with safe defaults
+    const formatString = String(pobj['format_detected'] || 'unknown').substring(0, 50)
     return {
-      player1_elo_change: parseFloat(parsed.player1_elo_change) || 0,
-      player2_elo_change: parseFloat(parsed.player2_elo_change) || 0,
-      match_rating: parseFloat(parsed.match_rating) || 0,
-      match_weight: parseFloat(parsed.match_weight) || 1.0,
-      format_detected: String(parsed.format_detected || 'unknown').substring(0, 50),
-      games_won_p1: parseInt(parsed.games_won_p1) || 0,
-      games_lost_p1: parseInt(parsed.games_lost_p1) || 0,
-      total_games: parseInt(parsed.total_games) || 0,
-      reasoning: String(parsed.reasoning || '').substring(0, 5000) // Limit reasoning length
+      player1_elo_change: parseFloat(String(pobj['player1_elo_change'] ?? '')) || 0,
+      player2_elo_change: parseFloat(String(pobj['player2_elo_change'] ?? '')) || 0,
+      match_rating: parseFloat(String(pobj['match_rating'] ?? '')) || 0,
+      match_weight: parseFloat(String(pobj['match_weight'] ?? '')) || 1.0,
+      format_detected: formatString as MatchFormat,
+      games_won_p1: parseInt(String(pobj['games_won_p1'] ?? '')) || 0,
+      games_lost_p1: parseInt(String(pobj['games_lost_p1'] ?? '')) || 0,
+      total_games: parseInt(String(pobj['total_games'] ?? '')) || 0,
+      reasoning: String(pobj['reasoning'] || '').substring(0, 5000) // Limit reasoning length
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Ultimate fallback - return safe defaults
-    console.error('[LLM] Complete parse failure, using defaults:', error.message)
+    logger.error('Complete parse failure, using defaults', error)
     return {
       player1_elo_change: 0,
       player2_elo_change: 0,
@@ -583,8 +620,8 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
 /**
  * Extract JSON values using regex as last resort
  */
-function extractJsonValuesWithRegex(text: string): any {
-  const result: any = {}
+function extractJsonValuesWithRegex(text: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
   
   // Extract numeric values
   const numericPatterns = {
@@ -652,7 +689,7 @@ function validateLLMResponse(
   const sum = response.player1_elo_change + response.player2_elo_change
   if (Math.abs(sum) > 2) {
     // Recalculate to enforce zero-sum
-    console.warn(`LLM response violated zero-sum (sum=${sum}), enforcing zero-sum`)
+    logger.warn('LLM response violated zero-sum, enforcing zero-sum', { sum, player1_elo_change: response.player1_elo_change })
     response.player2_elo_change = -response.player1_elo_change
   }
   
@@ -675,7 +712,11 @@ function validateLLMResponse(
   
   // Validate games count
   if (response.games_won_p1 + response.games_lost_p1 !== response.total_games) {
-    console.warn(`Games count mismatch: ${response.games_won_p1} + ${response.games_lost_p1} != ${response.total_games}`)
+    logger.warn('Games count mismatch, recalculating from score', {
+      games_won_p1: response.games_won_p1,
+      games_lost_p1: response.games_lost_p1,
+      total_games: response.total_games
+    })
     // Recalculate from score
     const gamesData = parseGamesFromScore(request.score, 1)
     response.games_won_p1 = gamesData.gamesWon

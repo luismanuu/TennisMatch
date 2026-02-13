@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { CATEGORY_SELECT_FULL, CITY_SELECT_FULL } from '~/server/utils/supabase-selects'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -22,9 +23,9 @@ export default defineEventHandler(async (event) => {
         id,
         name,
         category_id,
-        category:categories(*),
+        category:categories(${CATEGORY_SELECT_FULL}),
         city_id,
-        city:cities(*),
+        city:cities(${CITY_SELECT_FULL}),
         elo,
         total_matches_played,
         win_streak,
@@ -42,11 +43,8 @@ export default defineEventHandler(async (event) => {
     }
     
     return player
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/[id]')
   }
 })
 

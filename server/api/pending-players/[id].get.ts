@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { CATEGORY_SELECT_FULL } from '~/server/utils/supabase-selects'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -23,7 +24,7 @@ export default defineEventHandler(async (event) => {
         name,
         email,
         category_id,
-        category:categories(*),
+        category:categories(${CATEGORY_SELECT_FULL}),
         status,
         created_at
       `)
@@ -38,11 +39,8 @@ export default defineEventHandler(async (event) => {
     }
     
     return pendingPlayer
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/pending-players/[id]')
   }
 })
 

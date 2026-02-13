@@ -50,8 +50,8 @@
             class="cursor-pointer"
             @mouseenter="showTooltip(bar, $event)"
             @mouseleave="hideTooltip"
-            @mouseover="(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.filter = 'brightness(1.15)' }"
-            @mouseout="(e) => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.filter = 'none' }"
+            @mouseover="onBarMouseOver"
+            @mouseout="onBarMouseOut"
           />
         </g>
         
@@ -118,6 +118,20 @@ const tooltip = ref({
   range: '',
   count: 0
 })
+
+const onBarMouseOver = (e: MouseEvent) => {
+  const el = e.currentTarget instanceof HTMLElement ? e.currentTarget : null
+  if (!el) return
+  el.style.opacity = '1'
+  el.style.filter = 'brightness(1.15)'
+}
+
+const onBarMouseOut = (e: MouseEvent) => {
+  const el = e.currentTarget instanceof HTMLElement ? e.currentTarget : null
+  if (!el) return
+  el.style.opacity = '0.9'
+  el.style.filter = 'none'
+}
 
 const maxCount = computed(() => {
   if (!props.data || props.data.length === 0) return 1

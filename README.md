@@ -27,7 +27,9 @@ A platform for amateur tennis players in Ecuador to track matches, ELO ratings, 
 npm install
 ```
 
-2. Create a `.env` file in the root directory with the following variables:
+2. Create a `.env` file in the root directory with the required variables.
+   - Recommended: copy `.env.example` to `.env` and fill in the values.
+   - See `docs/CONFIGURATION.md` for details.
 
 ```env
 # Clerk Authentication
@@ -126,7 +128,7 @@ The application uses Clerk for authentication. Users can:
 1. **Enable Test Emails** (Recommended):
    - Go to Clerk Dashboard → **Configure** → **Email & SMS** → Enable test emails
    - View test emails at [https://go.clerk.com/test-emails](https://go.clerk.com/test-emails)
-   - See `CLERK_TEST_EMAILS.md` for detailed instructions
+   - See `docs/CLERK_TEST_EMAILS.md` for detailed instructions
 
 2. **Benefits of Test Emails**:
    - Unlimited testing (no email limit)

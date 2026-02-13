@@ -70,10 +70,11 @@ export default defineEventHandler(async (event) => {
       if (registration_deadline) {
         registrationDeadlineISO = datetimeLocalToISO(registration_deadline)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Invalid date'
       throw createError({
         statusCode: 400,
-        statusMessage: `Invalid date format: ${error.message}`
+        statusMessage: `Invalid date format: ${message}`
       })
     }
 
@@ -121,11 +122,8 @@ export default defineEventHandler(async (event) => {
       message: 'Tournament created successfully',
       tournament
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/tournaments/index')
   }
 })
 

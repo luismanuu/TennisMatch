@@ -1,4 +1,5 @@
 import { getClerkUser } from './clerk'
+import { logger } from './logger'
 
 /**
  * Check if a user has admin role in Clerk metadata
@@ -11,7 +12,7 @@ export async function checkIsAdmin(clerkId: string): Promise<boolean> {
     const role = clerkUser.publicMetadata?.role as string | undefined
     return role === 'admin'
   } catch (error) {
-    console.error('Error checking admin status:', error)
+    logger.error('Error checking admin status', error, { clerkId })
     return false
   }
 }

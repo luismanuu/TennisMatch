@@ -1,13 +1,17 @@
 import { useAuthState } from './useAuthState'
-import type { CreateTournamentPayload, UpdateTournamentPayload, RegisterPlayerPayload } from '~/types'
+import type { CreateTournamentPayload, Tournament, TournamentMatch, UpdateTournamentPayload, RegisterPlayerPayload } from '~/types'
+
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
 
 export const useOrganizer = () => {
   const { userId, user } = useAuthState()
   
   const loading = ref(false)
   const error = ref<Error | null>(null)
-  const tournaments = ref<any[]>([])
-  const currentTournament = ref<any>(null)
+  const tournaments = ref<Tournament[]>([])
+  const currentTournament = ref<Tournament | null>(null)
   
   // Check if current user is tournament organizer
   const isOrganizer = computed(() => {
@@ -15,20 +19,35 @@ export const useOrganizer = () => {
     return role === 'tournament_organizer'
   })
 
-  const fetchOrganizerTournaments = async () => {
+  // Pagination state (organizer tournaments list)
+  const organizerTournamentsPage = ref(1)
+  const organizerTournamentsPageSize = ref(20)
+  const organizerTournamentsTotal = ref(0)
+  const organizerTournamentsHasMore = computed(() => {
+    return organizerTournamentsPage.value * organizerTournamentsPageSize.value < organizerTournamentsTotal.value
+  })
+
+  const fetchOrganizerTournaments = async (page?: number, pageSize?: number, append?: boolean) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
     }
     
+    if (page !== undefined) organizerTournamentsPage.value = page
+    if (pageSize !== undefined) organizerTournamentsPageSize.value = pageSize
+
     loading.value = true
     error.value = null
     
     try {
-      const data = await $fetch<any[]>(`/api/organizer/tournaments?clerk_id=${userId.value}`)
-      tournaments.value = data
-      return data
-    } catch (err: any) {
-      error.value = err
+      const offset = (organizerTournamentsPage.value - 1) * organizerTournamentsPageSize.value
+      const data = await $fetch<{ data: Tournament[]; total: number; page: number; page_size: number }>(
+        `/api/organizer/tournaments?clerk_id=${userId.value}&limit=${organizerTournamentsPageSize.value}&offset=${offset}`
+      )
+      tournaments.value = append ? [...tournaments.value, ...(data.data || [])] : (data.data || [])
+      organizerTournamentsTotal.value = data.total || 0
+      return tournaments.value
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -44,15 +63,15 @@ export const useOrganizer = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/organizer/tournaments/${tournamentId}`, {
+      const data = await $fetch<Tournament>(`/api/organizer/tournaments/${tournamentId}`, {
         query: {
           clerk_id: userId.value
         }
       })
       currentTournament.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -68,7 +87,7 @@ export const useOrganizer = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; tournament: any }>(
+      const data = await $fetch<{ success: boolean; message: string; tournament: Tournament }>(
         '/api/organizer/tournaments',
         {
           method: 'POST',
@@ -81,8 +100,8 @@ export const useOrganizer = () => {
       
       await fetchOrganizerTournaments()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -98,7 +117,7 @@ export const useOrganizer = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; tournament: any }>(
+      const data = await $fetch<{ success: boolean; message: string; tournament: Tournament }>(
         `/api/organizer/tournaments/${tournamentId}`,
         {
           method: 'PUT',
@@ -118,8 +137,8 @@ export const useOrganizer = () => {
       }
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -147,8 +166,8 @@ export const useOrganizer = () => {
       
       await fetchOrganizerTournaments()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -176,8 +195,8 @@ export const useOrganizer = () => {
       
       await getTournament(tournamentId)
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -206,8 +225,8 @@ export const useOrganizer = () => {
       
       await getTournament(tournamentId)
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -235,8 +254,8 @@ export const useOrganizer = () => {
       )
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -269,8 +288,8 @@ export const useOrganizer = () => {
       )
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -286,7 +305,7 @@ export const useOrganizer = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any[]>(
+      const data = await $fetch<TournamentMatch[]>(
         `/api/organizer/tournaments/${tournamentId}/unscheduled-matches`,
         {
           query: {
@@ -296,8 +315,8 @@ export const useOrganizer = () => {
       )
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -310,14 +329,14 @@ export const useOrganizer = () => {
     }
     
     try {
-      const data = await $fetch<any>(`/api/organizer/tournaments/${tournamentId}/phase-status`, {
+      const data = await $fetch<Record<string, unknown>>(`/api/organizer/tournaments/${tournamentId}/phase-status`, {
         query: {
           clerk_id: userId.value
         }
       })
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     }
   }
@@ -343,8 +362,8 @@ export const useOrganizer = () => {
       
       await getTournament(tournamentId)
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -360,7 +379,7 @@ export const useOrganizer = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/organizer/tournaments/${tournamentId}/advance-phase`, {
+      const data = await $fetch<Record<string, unknown>>(`/api/organizer/tournaments/${tournamentId}/advance-phase`, {
         method: 'POST',
         body: {
           clerk_id: userId.value
@@ -369,8 +388,8 @@ export const useOrganizer = () => {
       // Reload tournament to get updated phase
       await getTournament(tournamentId)
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -400,8 +419,8 @@ export const useOrganizer = () => {
       )
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -415,6 +434,10 @@ export const useOrganizer = () => {
     tournaments: readonly(tournaments),
     currentTournament: readonly(currentTournament),
     fetchOrganizerTournaments,
+    organizerTournamentsPage: readonly(organizerTournamentsPage),
+    organizerTournamentsPageSize: readonly(organizerTournamentsPageSize),
+    organizerTournamentsTotal: readonly(organizerTournamentsTotal),
+    organizerTournamentsHasMore,
     getTournament,
     createTournament,
     updateTournament,

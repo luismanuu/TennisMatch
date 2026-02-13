@@ -391,8 +391,9 @@ const clearAllFilters = async () => {
   
   if (showAroundMe.value && player.value?.id) {
     // Reset tier to user's tier
-    if (player.value.total_matches_played > 0 && (player.value.placement_matches_completed || 0) >= 3) {
-      selectedTier.value = getUserTier(player.value.elo, player.value.total_matches_played)
+    const p = player.value
+    if (p && p.total_matches_played > 0 && (p.placement_matches_completed || 0) >= 3) {
+      selectedTier.value = getUserTier(p.elo, p.total_matches_played)
     } else {
       selectedTier.value = undefined
     }
@@ -405,7 +406,8 @@ const clearAllFilters = async () => {
     // Reset to user's tier if authenticated, otherwise Bronze
     if (player.value?.id) {
       // All players now have tiers based on ELO
-      selectedTier.value = getUserTier(player.value.elo, player.value.total_matches_played)
+      const p = player.value
+      if (p) selectedTier.value = getUserTier(p.elo, p.total_matches_played)
       await fetchLeaderboard({ tier: selectedTier.value, limit: 50, offset: 0 })
     } else {
       selectedTier.value = 'Bronze'
@@ -438,7 +440,8 @@ const toggleView = async () => {
     rankings.value = []
     if (player.value?.id) {
       // All players now have tiers based on ELO
-      const userTier = getUserTier(player.value.elo, player.value.total_matches_played)
+      const p = player.value
+      const userTier = p ? getUserTier(p.elo, p.total_matches_played) : 'Bronze'
       selectedTier.value = userTier
       await fetchLeaderboard({ 
         tier: userTier,
@@ -501,7 +504,9 @@ const initializeAroundUser = async () => {
   hasMoreBelow.value = false
   
   // Get user's tier based on ELO (all players now have tiers based on ELO)
-  const userTier = getUserTier(player.value.elo, player.value.total_matches_played)
+  const p = player.value
+  if (!p) return
+  const userTier = getUserTier(p.elo, p.total_matches_played)
   selectedTier.value = userTier
   
   // Fetch players around user (by tier if rated, by ELO range if in placement)
@@ -525,7 +530,8 @@ const loadPlayersAroundUser = async () => {
     // This allows users to change the tier filter without it being reset
     // All players now have tiers based on ELO, regardless of placement status
     if (!selectedTier.value) {
-      selectedTier.value = getUserTier(player.value.elo, player.value.total_matches_played)
+      const p = player.value
+      if (p) selectedTier.value = getUserTier(p.elo, p.total_matches_played)
     }
     
     // Send tier filter (respects user's selection)
@@ -723,8 +729,9 @@ const initialize = async () => {
         }
         
         // Fetch nearby players (only if not in placement)
-        if (player.value.total_matches_played > 0 && (player.value.placement_matches_completed || 0) >= 3) {
-          await fetchNearbyPlayers(player.value.id, 3)
+        const p = player.value
+        if (p && p.total_matches_played > 0 && (p.placement_matches_completed || 0) >= 3) {
+          await fetchNearbyPlayers(p.id, 3)
         }
       } else {
         // Player not found, set default tier to Bronze and fetch leaderboard
@@ -748,11 +755,16 @@ const initialize = async () => {
 
 // Watch for auth changes
 watch([isAuthenticated, userId], async ([auth, uid]) => {
-  if (auth && uid && !player.value) {
+  if (!auth || !uid) return
+
+  // Don't let the `!player.value` guard permanently narrow `player.value` to null (it breaks TS flow)
+  if (!player.value) {
     await fetchPlayer(uid)
-    if (player.value?.id && player.value.total_matches_played > 0) {
-      await fetchNearbyPlayers(player.value.id, 3)
-    }
+  }
+
+  const p = player.value
+  if (p && p.total_matches_played > 0) {
+    await fetchNearbyPlayers(p.id, 3)
   }
 })
 

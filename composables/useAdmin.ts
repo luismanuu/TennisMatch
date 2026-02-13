@@ -1,5 +1,17 @@
-import type { PendingPlayer, Player } from '~/types'
+import type { Category, Match, PendingPlayer, Player } from '~/types'
 import { useAuthState } from './useAuthState'
+
+interface AdminInvitationRow {
+  id: string
+  name: string
+  email: string
+  category_id?: string | null
+  category?: unknown
+  clerk_invitation_id?: string
+  status: string
+  created_at: string
+  updated_at: string
+}
 
 export const useAdmin = () => {
   const { userId } = useAuthState()
@@ -28,7 +40,10 @@ export const useAdmin = () => {
     const role = user.value?.publicMetadata?.role as string | undefined
     return role === 'admin'
   })
-  
+
+  const toError = (err: unknown): Error =>
+    err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+
   // Fetch all pending invitations directly from Clerk (admin only)
   const fetchPendingPlayers = async (page?: number, pageSize?: number) => {
     if (!userId.value) {
@@ -43,7 +58,7 @@ export const useAdmin = () => {
     
     try {
       const offset = (pendingPlayersPage.value - 1) * pendingPlayersPageSize.value
-      const data = await $fetch<{ invitations: any[], allInvitations: any[], total: number, page: number, page_size: number }>(
+      const data = await $fetch<{ invitations: AdminInvitationRow[]; allInvitations: AdminInvitationRow[]; total: number; page: number; page_size: number }>(
         `/api/admin/invitations?clerk_id=${userId.value}&limit=${pendingPlayersPageSize.value}&offset=${offset}`
       )
       // Transform to match PendingPlayer type for compatibility
@@ -60,11 +75,11 @@ export const useAdmin = () => {
         status: inv.status,
         created_at: inv.created_at,
         updated_at: inv.updated_at
-      })) as PendingPlayer[]
+      })) as unknown as PendingPlayer[]
       pendingPlayersTotal.value = data.total || 0
       return pendingPlayers.value
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -95,8 +110,8 @@ export const useAdmin = () => {
       await fetchPendingPlayers()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -128,8 +143,8 @@ export const useAdmin = () => {
       await fetchPendingPlayers()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -161,8 +176,8 @@ export const useAdmin = () => {
       players.value = data.data
       playersTotal.value = data.total || 0
       return data.data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -193,8 +208,8 @@ export const useAdmin = () => {
       await fetchPendingPlayers()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -222,11 +237,11 @@ export const useAdmin = () => {
           synced: number
         }
         details: {
-          clerkOnlyInvitations: any[]
-          dbOnlyInvitations: any[]
-          mismatchedInvitations: any[]
+          clerkOnlyInvitations: AdminInvitationRow[]
+          dbOnlyInvitations: AdminInvitationRow[]
+          mismatchedInvitations: AdminInvitationRow[]
         }
-        actions: any[]
+        actions: unknown[]
       }>('/api/admin/invitations/sync', {
         method: 'POST',
         body: {
@@ -238,8 +253,8 @@ export const useAdmin = () => {
       await fetchPendingPlayers()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -270,8 +285,8 @@ export const useAdmin = () => {
       await fetchPlayers()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -302,8 +317,8 @@ export const useAdmin = () => {
       await fetchPlayers()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -311,7 +326,7 @@ export const useAdmin = () => {
   }
   
   // Category management functions
-  const categories = ref<any[]>([])
+  const categories = ref<Category[]>([])
 
   const fetchCategories = async () => {
     if (!userId.value) {
@@ -322,11 +337,11 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any[]>(`/api/admin/categories?clerk_id=${userId.value}`)
+      const data = await $fetch<Category[]>(`/api/admin/categories?clerk_id=${userId.value}`)
       categories.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -342,7 +357,7 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; category: any }>(
+      const data = await $fetch<{ success: boolean; message: string; category: Category }>(
         '/api/admin/categories',
         {
           method: 'POST',
@@ -355,8 +370,8 @@ export const useAdmin = () => {
       
       await fetchCategories()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -372,7 +387,7 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; category: any }>(
+      const data = await $fetch<{ success: boolean; message: string; category: Category }>(
         `/api/admin/categories/${categoryId}`,
         {
           method: 'PUT',
@@ -385,8 +400,8 @@ export const useAdmin = () => {
       
       await fetchCategories()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -414,8 +429,8 @@ export const useAdmin = () => {
       
       await fetchCategories()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -444,8 +459,8 @@ export const useAdmin = () => {
       
       await fetchCategories()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -477,8 +492,8 @@ export const useAdmin = () => {
       await fetchPlayers(lastIncludeDeleted.value)
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -486,7 +501,7 @@ export const useAdmin = () => {
   }
 
   // Fetch all matches (admin only)
-  const allMatches = ref<any[]>([])
+  const allMatches = ref<Match[]>([])
 
   const fetchAllMatches = async (filters?: { status?: string; player_id?: string; start_date?: string; end_date?: string }, page?: number, pageSize?: number) => {
     if (!userId.value) {
@@ -510,12 +525,12 @@ export const useAdmin = () => {
       if (filters?.start_date) queryParams.append('start_date', filters.start_date)
       if (filters?.end_date) queryParams.append('end_date', filters.end_date)
 
-      const data = await $fetch<{ data: any[], total: number, page: number, page_size: number }>(`/api/admin/matches?${queryParams.toString()}`)
+      const data = await $fetch<{ data: Match[]; total: number; page: number; page_size: number }>(`/api/admin/matches?${queryParams.toString()}`)
       allMatches.value = data.data
       matchesTotal.value = data.total || 0
       return data.data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -537,8 +552,8 @@ export const useAdmin = () => {
       const data = await $fetch<any>(`/api/admin/stats?clerk_id=${userId.value}`)
       stats.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -546,7 +561,7 @@ export const useAdmin = () => {
   }
 
   // Fallback matches state
-  const fallbackMatches = ref<any[]>([])
+  const fallbackMatches = ref<Match[]>([])
   const fallbackMatchesPage = ref(1)
   const fallbackMatchesPageSize = ref(15)
   const fallbackMatchesTotal = ref(0)
@@ -565,14 +580,14 @@ export const useAdmin = () => {
     
     try {
       const offset = (fallbackMatchesPage.value - 1) * fallbackMatchesPageSize.value
-      const data = await $fetch<{ data: any[], total: number, page: number, page_size: number }>(
+      const data = await $fetch<{ data: Match[]; total: number; page: number; page_size: number }>(
         `/api/admin/matches/fallback?clerk_id=${userId.value}&limit=${fallbackMatchesPageSize.value}&offset=${offset}`
       )
       fallbackMatches.value = data.data
       fallbackMatchesTotal.value = data.total || 0
       return data.data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -613,8 +628,8 @@ export const useAdmin = () => {
       await fetchFallbackMatches()
       
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -623,7 +638,7 @@ export const useAdmin = () => {
   
   // Organizer management functions
   const organizers = ref<any[]>([])
-  const pendingOrganizerInvitations = ref<any[]>([])
+  const pendingOrganizerInvitations = ref<AdminInvitationRow[]>([])
 
   const organizersPage = ref(1)
   const organizersPageSize = ref(15)
@@ -643,7 +658,7 @@ export const useAdmin = () => {
     
     try {
       const offset = (organizersPage.value - 1) * organizersPageSize.value
-      const data = await $fetch<{ organizers: any[]; pendingInvitations: any[]; total: number; total_pending: number; page: number; page_size: number }>(
+      const data = await $fetch<{ organizers: Record<string, unknown>[]; pendingInvitations: AdminInvitationRow[]; total: number; total_pending: number; page: number; page_size: number }>(
         `/api/admin/organizers?clerk_id=${userId.value}&limit=${organizersPageSize.value}&offset=${offset}`
       )
       organizers.value = data.organizers || []
@@ -651,8 +666,8 @@ export const useAdmin = () => {
       organizersTotal.value = data.total || 0
       organizersPendingTotal.value = data.total_pending || 0
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -668,7 +683,7 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; invitation: any }>(
+      const data = await $fetch<{ success: boolean; message: string; invitation: AdminInvitationRow }>(
         '/api/admin/organizers',
         {
           method: 'POST',
@@ -681,8 +696,8 @@ export const useAdmin = () => {
       
       await fetchOrganizers()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -710,8 +725,8 @@ export const useAdmin = () => {
       
       await fetchOrganizers()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false

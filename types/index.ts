@@ -28,6 +28,7 @@ export interface Player {
   id: string
   clerk_id: string
   name: string
+  email?: string
   phone_number?: string
   city_id?: string
   city?: City
@@ -49,6 +50,13 @@ export interface Player {
   deleted_at?: string
   created_at: string
   updated_at: string
+}
+
+// A lightweight "player reference" shape used for FK joins that only select id/name.
+// (Many endpoints join proposal/approval users using `select('id, name')` only.)
+export interface PlayerRef {
+  id: string
+  name: string
 }
 
 // Helper to check if player is unrated
@@ -77,9 +85,9 @@ export interface PendingPlayer {
   category_id?: string | null
   category?: Category
   invited_by_player_id?: string | null
-  invited_by_player?: Player
+  invited_by_player?: Player | null
   clerk_invitation_id?: string
-  invitation_token?: string
+  invitation_token?: string | null
   status: 'pending' | 'accepted' | 'expired' | 'revoked'
   created_at: string
   updated_at: string
@@ -98,32 +106,46 @@ export interface Match {
   winner?: Player
   tournament_id?: string
   tournament?: Tournament
+  tournament_match?: TournamentMatch | TournamentMatch[] | null
   status: 'scheduled' | 'active' | 'completed' | 'cancelled'
   score?: string
   scheduled_at: string | null
   played_at?: string
   is_competitive?: boolean // Whether this match counts towards ratings (default: true)
+  // Match acceptance flow (non-tournament matches)
+  match_proposed_by?: string | null
+  match_proposed_by_player?: PlayerRef | null
+  match_accepted_by?: string | null
+  match_accepted_by_player?: PlayerRef | null
+  match_rejected_by?: string | null
+  match_rejected_by_player?: PlayerRef | null
+  acceptance_proposed_scheduled_at?: string | null
+  acceptance_proposed_location?: string | null
+  acceptance_change_approved_by?: string | null
+  acceptance_change_approved_by_player?: PlayerRef | null
+  acceptance_change_rejected_by?: string | null
+  acceptance_change_rejected_by_player?: PlayerRef | null
   schedule_proposed_by?: string
-  schedule_proposed_by_player?: Player
+  schedule_proposed_by_player?: PlayerRef | null
   schedule_proposed_at?: string
   schedule_proposed_scheduled_at?: string
   schedule_approved_by?: string
-  schedule_approved_by_player?: Player
+  schedule_approved_by_player?: PlayerRef | null
   schedule_rejected_by?: string
-  schedule_rejected_by_player?: Player
+  schedule_rejected_by_player?: PlayerRef | null
   score_proposed_by?: string
-  score_proposed_by_player?: Player
+  score_proposed_by_player?: PlayerRef | null
   score_proposed_at?: string
   score_approved_by?: string
-  score_approved_by_player?: Player
+  score_approved_by_player?: PlayerRef | null
   reschedule_proposed_by?: string
-  reschedule_proposed_by_player?: Player
+  reschedule_proposed_by_player?: PlayerRef | null
   reschedule_proposed_at?: string
   reschedule_proposed_scheduled_at?: string
   reschedule_approved_by?: string
-  reschedule_approved_by_player?: Player
+  reschedule_approved_by_player?: PlayerRef | null
   reschedule_rejected_by?: string
-  reschedule_rejected_by_player?: Player
+  reschedule_rejected_by_player?: PlayerRef | null
   location?: string
   llm_elo_calculated?: boolean
   llm_calculation_reasoning?: string
@@ -133,6 +155,10 @@ export interface Match {
   created_at: string
   updated_at: string
   messages?: MatchMessage[]
+  /** Admin/fallback: whether this match was reprocessed from fallback */
+  is_reprocessed?: boolean
+  /** Admin: reason match was in fallback list */
+  fallback_reason?: string
 }
 
 export interface Tournament {
@@ -166,6 +192,10 @@ export interface Tournament {
       final?: number
     }
   }
+  // Optional relational fields loaded in various pages/endpoints
+  registrations?: TournamentRegistration[]
+  rounds?: TournamentRound[]
+  groups?: TournamentGroup[]
   created_at: string
   updated_at: string
 }
@@ -190,6 +220,7 @@ export interface TournamentGroup {
   tournament?: Tournament
   group_name: string
   group_number: number
+  players?: TournamentGroupPlayer[]
   created_at: string
 }
 
@@ -648,5 +679,33 @@ export interface LlmResolutionData {
   llmCalculationFailed: boolean
 }
 
+// ============================================
+// API response DTOs (shared server/client)
+// ============================================
+
+/** Standard paginated list response used by admin/organizer list endpoints */
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  page_size: number
+}
+
+/** Matches list response (user or admin) – pagination shape may use totalPages/hasMore in some endpoints */
+export interface MatchesListResponse {
+  matches?: Match[]
+  pagination?: {
+    page: number
+    limit: number
+    total: number
+    totalPages?: number
+    hasMore?: boolean
+  }
+  /** Admin/list endpoint alternate shape */
+  data?: Match[]
+  total?: number
+  page?: number
+  page_size?: number
+}
 
 

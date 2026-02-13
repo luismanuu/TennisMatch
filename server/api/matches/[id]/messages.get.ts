@@ -2,29 +2,19 @@ import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { checkIsAdmin } from '~/server/utils/admin'
+import { matchIdSchema, matchMessagesQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const matchId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
-    
-    if (!matchId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Match ID is required'
-      })
-    }
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
+    const matchId = validateQuery(matchIdSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(matchMessagesQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const since = query.since
+    const limit = query.limit ?? 200
     
     // Verify Clerk user exists
-    await getClerkUser(clerk_id)
+    await getClerkUser(clerkId)
     
     const supabase = getSupabaseAdmin()
     
@@ -32,7 +22,7 @@ export default defineEventHandler(async (event) => {
     const { data: currentPlayer, error: playerError } = await supabase
       .from('players')
       .select('id')
-      .eq('clerk_id', clerk_id)
+      .eq('clerk_id', clerkId)
       .single()
     
     if (playerError || !currentPlayer) {
@@ -51,7 +41,7 @@ export default defineEventHandler(async (event) => {
         pending_player2_id, 
         tournament_id,
         pending_player2:pending_players(id, invited_by_player_id),
-        tournament:tournaments(id, organizer_id, created_by)
+        tournament:tournaments(id)
       `)
       .eq('id', matchId)
       .single()
@@ -66,11 +56,13 @@ export default defineEventHandler(async (event) => {
     // Verify user is part of the match
     const isPlayer1 = match.player1_id === currentPlayer.id
     const isPlayer2 = match.player2_id === currentPlayer.id
-    const isPendingPlayerInviter = match.pending_player2_id && 
-      (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
+    const invitedByPlayerId = (
+      match as unknown as { pending_player2?: { invited_by_player_id?: string | null } | null }
+    ).pending_player2?.invited_by_player_id
+    const isPendingPlayerInviter = Boolean(match.pending_player2_id) && invitedByPlayerId === currentPlayer.id
     
     // Check if user is admin
-    const isAdmin = await checkIsAdmin(clerk_id)
+    const isAdmin = await checkIsAdmin(clerkId)
     
     // Check if user is organizer of the tournament (if match belongs to a tournament)
     let isTournamentOrganizer = false
@@ -93,11 +85,14 @@ export default defineEventHandler(async (event) => {
     }
     
     // Fetch messages (optionally filter by since timestamp for incremental updates)
-    const since = query.since as string | undefined
     let queryBuilder = supabase
       .from('match_messages')
       .select(`
-        *,
+        id,
+        match_id,
+        player_id,
+        message,
+        created_at,
         player:players(
           id,
           name,
@@ -111,8 +106,11 @@ export default defineEventHandler(async (event) => {
       queryBuilder = queryBuilder.gt('created_at', since)
     }
     
-    const { data: messages, error: messagesError } = await queryBuilder
-      .order('created_at', { ascending: true })
+    // For initial load (no since): fetch last N messages (DESC) then reverse for UI
+    // For incremental load: fetch ASC after `since` so appending preserves order
+    const { data: messages, error: messagesError } = await (since
+      ? queryBuilder.order('created_at', { ascending: true }).limit(limit)
+      : queryBuilder.order('created_at', { ascending: false }).limit(limit))
     
     if (messagesError) {
       throw createError({
@@ -122,12 +120,10 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    return messages || []
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+    const rows = messages || []
+    return since ? rows : rows.slice().reverse()
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/matches/[id]/messages')
   }
 })
 

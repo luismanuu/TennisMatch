@@ -1,21 +1,16 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { playerIdSchema, publicPlayerMatchesQuerySchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const playerId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const limit = parseInt(query.limit as string) || 10
-    const offset = parseInt(query.offset as string) || 0
-    const status = query.status as string | undefined
-    const startDate = query.start_date as string | undefined
-    const endDate = query.end_date as string | undefined
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(publicPlayerMatchesQuerySchema, getQuery(event))
+    const limit = query.limit ?? 10
+    const offset = query.offset ?? 0
+    const status = query.status
+    const startDate = query.start_date
+    const endDate = query.end_date
     
     const supabase = getSupabaseAdmin()
     
@@ -157,27 +152,35 @@ export default defineEventHandler(async (event) => {
     }
     
     // For competitive completed matches, get rating history
-    const matchesWithRating = await Promise.all((matches || []).map(async (match: any) => {
-      if (match.is_competitive && match.status === 'completed' && match.id) {
+    const matchesWithRating = await Promise.all((matches || []).map(async (match) => {
+      const matchRecord = match as Record<string, unknown>
+      const matchId = typeof matchRecord['id'] === 'string' ? (matchRecord['id'] as string) : null
+      const statusValue = typeof matchRecord['status'] === 'string' ? (matchRecord['status'] as string) : null
+      const isCompetitive = Boolean(matchRecord['is_competitive'])
+
+      if (isCompetitive && statusValue === 'completed' && matchId) {
         try {
           // Get rating history for this match
           const { data: ratingHistory } = await supabase
             .from('rating_history')
             .select('player_id, elo_change, was_winner')
-            .eq('match_id', match.id)
+            .eq('match_id', matchId)
             .eq('rating_reversed', false)
             .eq('player_id', playerId)
             .single()
           
           if (ratingHistory) {
-            match.elo_change = ratingHistory.elo_change
-            match.was_winner = ratingHistory.was_winner
+            return {
+              ...matchRecord,
+              elo_change: ratingHistory.elo_change,
+              was_winner: ratingHistory.was_winner,
+            }
           }
         } catch (err) {
           // Silently fail - rating history is optional
         }
       }
-      return match
+      return matchRecord
     }))
     
     const totalPages = Math.ceil((totalMatches || 0) / limit)
@@ -195,10 +198,7 @@ export default defineEventHandler(async (event) => {
         has_previous: offset > 0
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/[id]/matches')
   }
 })

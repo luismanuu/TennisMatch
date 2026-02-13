@@ -1,7 +1,9 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { updateClerkUserName } from '~/server/utils/clerk'
 import { eloToMmr } from '~/server/utils/rating-system'
+import { logger } from '~/server/utils/logger'
 import type { UpdatePlayerPayload } from '~/types'
+import { CATEGORY_SELECT_FULL, CITY_SELECT_FULL } from '~/server/utils/supabase-selects'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -49,7 +51,11 @@ export default defineEventHandler(async (event) => {
         })
       }
       
-      newCategoryDefaultElo = (category as any).default_elo || 1000
+      const defaultElo =
+        category && typeof category === 'object' && typeof (category as { default_elo?: unknown }).default_elo === 'number'
+          ? (category as { default_elo: number }).default_elo
+          : null
+      newCategoryDefaultElo = defaultElo ?? 1000
     }
     
     // If city_id is provided, verify it exists
@@ -81,7 +87,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Prepare update payload
-    const updatePayload: any = {}
+    const updatePayload: Record<string, unknown> = {}
     if (name !== undefined) {
       updatePayload.name = name
     }
@@ -124,8 +130,8 @@ export default defineEventHandler(async (event) => {
       .eq('id', playerId)
       .select(`
         *,
-        category:categories(*),
-        city:cities(*)
+        category:categories(${CATEGORY_SELECT_FULL}),
+        city:cities(${CITY_SELECT_FULL})
       `)
       .single()
     
@@ -143,16 +149,13 @@ export default defineEventHandler(async (event) => {
         await updateClerkUserName(clerk_id, name)
       } catch (clerkError) {
         // Log error but don't fail the request
-        console.error('Failed to update Clerk user name:', clerkError)
+        logger.error('Failed to update Clerk user name', clerkError, { playerId, clerkId: clerk_id })
       }
     }
     
     return updatedPlayer
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/players/[id]')
   }
 })
 

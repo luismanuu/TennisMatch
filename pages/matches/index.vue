@@ -70,7 +70,7 @@
           </div>
           <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
           <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message }}</p>
-          <button @click="loadMatches" class="btn-primary text-size-3 w-full justify-center group">
+          <button @click="() => loadMatches()" class="btn-primary text-size-3 w-full justify-center group">
             <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
             Reintentar
           </button>
@@ -507,7 +507,7 @@
         </div>
 
         <!-- Pagination -->
-        <div v-if="!loading && !error && viewMode === 'list' && (totalFilteredPages > 1 || (matches.value && matches.value.length >= pageSize && (pagination.value?.hasMore || pagination.value?.totalPages > 1)))" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
+        <div v-if="!loading && !error && viewMode === 'list' && (totalFilteredPages > 1 || (matches && matches.length >= pageSize && ((pagination?.hasMore ?? false) || (pagination?.totalPages ?? 0) > 1)))" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
           <button
             @click="handlePreviousPage"
             :disabled="currentPage === 1"
@@ -562,6 +562,7 @@
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
 import { usePlayerSearch } from '~/composables/usePlayerSearch'
+import type { Match } from '~/types'
 
 definePageMeta({
   middleware: []
@@ -698,14 +699,15 @@ const filteredMatches = computed(() => {
   if (statusFilter.value === 'pending') {
     // Show matches where CURRENT USER has a pending action to take
     // This requires complex client-side filtering
-    filtered = filtered.filter(m => {
-      if (!player.value) return false
+    filtered = filtered.filter((m: Match) => {
+      const currentPlayer = player.value
+      if (!currentPlayer) return false
       
       // Exclude cancelled matches
       if (m.status === 'cancelled') return false
       
-      const isPlayer1 = m.player1_id === player.value.id
-      const isPlayer2 = m.player2_id === player.value.id
+      const isPlayer1 = m.player1_id === currentPlayer.id
+      const isPlayer2 = m.player2_id === currentPlayer.id
       
       // User must be involved in the match
       if (!isPlayer1 && !isPlayer2) return false
@@ -713,7 +715,7 @@ const filteredMatches = computed(() => {
       // 1. Match proposal pending acceptance (only for player2, not player1 who proposed)
       if (m.match_proposed_by && !m.match_accepted_by && !m.match_rejected_by) {
         // Only show if current user is player2 (the one who needs to accept)
-        if (isPlayer2 && m.match_proposed_by !== player.value.id) {
+        if (isPlayer2 && m.match_proposed_by !== currentPlayer.id) {
           return true
         }
       }
@@ -721,7 +723,7 @@ const filteredMatches = computed(() => {
       // 2. Score proposal pending approval (only for the opponent, not the proposer)
       if (m.score_proposed_by && !m.score_approved_by) {
         // Only show if current user is NOT the one who proposed the score
-        if (m.score_proposed_by !== player.value.id) {
+        if (m.score_proposed_by !== currentPlayer.id) {
           return true
         }
       }
@@ -729,7 +731,7 @@ const filteredMatches = computed(() => {
       // 3. Schedule proposal pending approval (only for the opponent, not the proposer)
       if (m.schedule_proposed_by && !m.schedule_approved_by && !m.schedule_rejected_by) {
         // Only show if current user is NOT the one who proposed the schedule
-        if (m.schedule_proposed_by !== player.value.id) {
+        if (m.schedule_proposed_by !== currentPlayer.id) {
           return true
         }
       }
@@ -737,7 +739,7 @@ const filteredMatches = computed(() => {
       // 4. Reschedule proposal pending approval (only for the opponent, not the proposer)
       if (m.reschedule_proposed_by && !m.reschedule_approved_by && !m.reschedule_rejected_by) {
         // Only show if current user is NOT the one who proposed the reschedule
-        if (m.reschedule_proposed_by !== player.value.id) {
+        if (m.reschedule_proposed_by !== currentPlayer.id) {
           return true
         }
       }
@@ -745,7 +747,7 @@ const filteredMatches = computed(() => {
       // 5. Acceptance change pending approval (only for player1 who originally proposed, not player2)
       if (m.acceptance_proposed_scheduled_at && !m.acceptance_change_approved_by && !m.acceptance_change_rejected_by) {
         // Only show if current user is player1 (the one who originally proposed the match)
-        if (isPlayer1 && m.match_proposed_by === player.value.id) {
+        if (isPlayer1 && m.match_proposed_by === currentPlayer.id) {
           return true
         }
       }
@@ -771,7 +773,7 @@ const filteredMatches = computed(() => {
   // For completed matches, use played_at if available, otherwise scheduled_at
   // For other matches, use scheduled_at
   // Use toSorted() to avoid mutating the array
-  filtered = filtered.toSorted((a, b) => {
+  filtered = filtered.sort((a: any, b: any) => {
     // Get the appropriate date for sorting
     const getSortDate = (match: any) => {
       // For completed matches, prefer played_at if available, otherwise scheduled_at
@@ -892,42 +894,43 @@ const filteredMatchesForCalendar = computed(() => {
   
   // Apply status filter
   if (statusFilter.value === 'pending') {
-    if (!player.value) return []
+    const currentPlayer = player.value
+    if (!currentPlayer) return []
     
     filtered = filtered.filter(m => {
       if (m.status === 'cancelled') return false
       
-      const isPlayer1 = m.player1_id === player.value.id
-      const isPlayer2 = m.player2_id === player.value.id
+      const isPlayer1 = m.player1_id === currentPlayer.id
+      const isPlayer2 = m.player2_id === currentPlayer.id
       
       if (!isPlayer1 && !isPlayer2) return false
       
       if (m.match_proposed_by && !m.match_accepted_by && !m.match_rejected_by) {
-        if (isPlayer2 && m.match_proposed_by !== player.value.id) {
+        if (isPlayer2 && m.match_proposed_by !== currentPlayer.id) {
           return true
         }
       }
       
       if (m.score_proposed_by && !m.score_approved_by) {
-        if (m.score_proposed_by !== player.value.id) {
+        if (m.score_proposed_by !== currentPlayer.id) {
           return true
         }
       }
       
       if (m.schedule_proposed_by && !m.schedule_approved_by && !m.schedule_rejected_by) {
-        if (m.schedule_proposed_by !== player.value.id) {
+        if (m.schedule_proposed_by !== currentPlayer.id) {
           return true
         }
       }
       
       if (m.reschedule_proposed_by && !m.reschedule_approved_by && !m.reschedule_rejected_by) {
-        if (m.reschedule_proposed_by !== player.value.id) {
+        if (m.reschedule_proposed_by !== currentPlayer.id) {
           return true
         }
       }
       
       if (m.acceptance_proposed_scheduled_at && !m.acceptance_change_approved_by && !m.acceptance_change_rejected_by) {
-        if (isPlayer1 && m.match_proposed_by === player.value.id) {
+        if (isPlayer1 && m.match_proposed_by === currentPlayer.id) {
           return true
         }
       }
@@ -954,7 +957,7 @@ const filteredMatchesForCalendar = computed(() => {
   }
   
   // Sort by date (same as filteredMatches)
-  filtered = filtered.toSorted((a, b) => {
+  filtered = filtered.sort((a: any, b: any) => {
     const getSortDate = (match: any) => {
       if (match.status === 'completed' && match.played_at) {
         return match.played_at
@@ -1188,9 +1191,10 @@ const handleNextPage = () => {
 
 // Determine if current user won the match
 const didUserWin = (match: Match) => {
-  if (!match.winner_id || !player.value) return null
+  const currentPlayer = player.value
+  if (!match.winner_id || !currentPlayer) return null
   // Check if the winner is the current player
-  return match.winner_id === player.value.id
+  return match.winner_id === currentPlayer.id
 }
 
 // Get match card border color based on result
@@ -1289,7 +1293,9 @@ const getPlayerInitials = (name: string) => {
   if (!name) return '?'
   const parts = name.trim().split(' ')
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    const first = parts[0]?.[0] || ''
+    const last = parts[parts.length - 1]?.[0] || ''
+    return (first + last || '?').toUpperCase()
   }
   return name.substring(0, 2).toUpperCase()
 }
@@ -1302,10 +1308,10 @@ const getPlayerTier = (player: any): string | null => {
 }
 
 // Get player rank icon path
-const getPlayerRankIcon = (player: any): string | null => {
+const getPlayerRankIcon = (player: any): string | undefined => {
   const tier = getPlayerTier(player)
-  if (!tier) return null
-  return useRankIconAsset(tier)
+  if (!tier) return undefined
+  return useRankIconAsset(tier) ?? undefined
 }
 
 // Get tier name in Spanish

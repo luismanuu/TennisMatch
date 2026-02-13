@@ -1,6 +1,32 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getAllClerkInvitations } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
+
+type PendingPlayerRow = {
+  id: string
+  email: string
+  clerk_invitation_id: string | null
+  status: string
+  name: string | null
+}
+
+type ClerkInvitationRow = {
+  id: string
+  emailAddress: string | null
+  status: string | null
+  revoked: boolean
+  createdAt?: unknown
+  publicMetadata?: unknown
+}
+
+type MismatchIssue = 'email_match_id_mismatch' | 'clerk_revoked_db_pending' | 'clerk_pending_db_expired'
+
+type InvitationMismatch = {
+  clerkInvitation: ClerkInvitationRow
+  dbInvitation: PendingPlayerRow
+  issue: MismatchIssue
+}
 
 export default defineEventHandler(async (event) => {
   try {
@@ -20,8 +46,9 @@ export default defineEventHandler(async (event) => {
 
     // Get all invitations from Clerk
     const { invitations: clerkInvitations, total: clerkTotal } = await getAllClerkInvitations()
+    const typedClerkInvitations = clerkInvitations as unknown as ClerkInvitationRow[]
     
-    console.log(`Sync: Found ${clerkInvitations.length} Clerk invitations (total: ${clerkTotal})`)
+    logger.info('Sync: Found Clerk invitations', { count: typedClerkInvitations.length, total: clerkTotal })
 
     // Get all pending players from database (including expired ones for sync)
     const { data: dbPendingPlayers, error: dbError } = await supabase
@@ -29,7 +56,8 @@ export default defineEventHandler(async (event) => {
       .select('id, email, clerk_invitation_id, status, name')
       .order('created_at', { ascending: false })
     
-    console.log(`Sync: Found ${dbPendingPlayers?.length || 0} pending players in database`)
+    const typedDbPendingPlayers = (dbPendingPlayers ?? []) as unknown as PendingPlayerRow[]
+    logger.info('Sync: Found pending players in database', { count: typedDbPendingPlayers.length })
 
     if (dbError) {
       throw createError({
@@ -40,10 +68,10 @@ export default defineEventHandler(async (event) => {
     }
 
     // Create maps for easier lookup
-    const dbInvitationsByClerkId = new Map<string, typeof dbPendingPlayers[0]>()
-    const dbInvitationsByEmail = new Map<string, typeof dbPendingPlayers[0]>()
+    const dbInvitationsByClerkId = new Map<string, PendingPlayerRow>()
+    const dbInvitationsByEmail = new Map<string, PendingPlayerRow>()
 
-    dbPendingPlayers?.forEach((pp) => {
+    typedDbPendingPlayers.forEach((pp) => {
       if (pp.clerk_invitation_id) {
         dbInvitationsByClerkId.set(pp.clerk_invitation_id, pp)
       }
@@ -51,16 +79,21 @@ export default defineEventHandler(async (event) => {
     })
 
     // Analyze differences
-    const clerkOnlyInvitations: any[] = []
-    const dbOnlyInvitations: typeof dbPendingPlayers = []
-    const mismatchedInvitations: any[] = []
+    const clerkOnlyInvitations: ClerkInvitationRow[] = []
+    const dbOnlyInvitations: PendingPlayerRow[] = []
+    const mismatchedInvitations: InvitationMismatch[] = []
 
     // Check Clerk invitations
-    for (const clerkInv of clerkInvitations) {
+    for (const clerkInv of typedClerkInvitations) {
       const clerkEmail = clerkInv.emailAddress?.toLowerCase() || ''
       const clerkStatus = clerkInv.revoked ? 'revoked' : clerkInv.status || 'pending'
       
-      console.log(`Checking Clerk invitation: ${clerkInv.id}, email: ${clerkInv.emailAddress}, status: ${clerkStatus}, revoked: ${clerkInv.revoked}`)
+      logger.debug('Checking Clerk invitation', { 
+        invitationId: clerkInv.id, 
+        email: clerkInv.emailAddress, 
+        status: clerkStatus, 
+        revoked: clerkInv.revoked 
+      })
       
       const dbInv = clerkInv.id ? dbInvitationsByClerkId.get(clerkInv.id) : null
       const dbInvByEmail = clerkEmail ? dbInvitationsByEmail.get(clerkEmail) : null
@@ -69,7 +102,11 @@ export default defineEventHandler(async (event) => {
         // Invitation exists in Clerk but not in database (by ID)
         if (dbInvByEmail) {
           // Same email but different invitation ID - might need to update
-          console.log(`Found email match for ${clerkEmail}: DB ID ${dbInvByEmail.id} vs Clerk ID ${clerkInv.id}`)
+          logger.debug('Found email match with ID mismatch', { 
+            email: clerkEmail, 
+            dbId: dbInvByEmail.id, 
+            clerkId: clerkInv.id 
+          })
           mismatchedInvitations.push({
             clerkInvitation: clerkInv,
             dbInvitation: dbInvByEmail,
@@ -77,18 +114,25 @@ export default defineEventHandler(async (event) => {
           })
         } else {
           // Completely missing from database
-          console.log(`Clerk invitation ${clerkInv.id} (${clerkEmail}) not found in database`)
+          logger.debug('Clerk invitation not found in database', { 
+            invitationId: clerkInv.id, 
+            email: clerkEmail 
+          })
           clerkOnlyInvitations.push(clerkInv)
         }
       } else {
         // Found by ID - check if status matches
         const dbStatus = dbInv.status
-        console.log(`Found DB match for Clerk invitation ${clerkInv.id}: DB status=${dbStatus}, Clerk status=${clerkStatus}`)
+        logger.debug('Found DB match for Clerk invitation', { 
+          invitationId: clerkInv.id, 
+          dbStatus, 
+          clerkStatus 
+        })
 
         if (clerkStatus !== dbStatus) {
           if (clerkStatus === 'revoked' && dbStatus === 'pending') {
             // Clerk revoked but DB still pending
-            console.log(`Mismatch: Clerk revoked but DB pending for ${clerkEmail}`)
+            logger.debug('Mismatch: Clerk revoked but DB pending', { email: clerkEmail })
             mismatchedInvitations.push({
               clerkInvitation: clerkInv,
               dbInvitation: dbInv,
@@ -96,7 +140,7 @@ export default defineEventHandler(async (event) => {
             })
           } else if (clerkStatus === 'pending' && dbStatus === 'expired') {
             // Clerk has pending invitation but DB is expired - should reactivate
-            console.log(`Mismatch: Clerk pending but DB expired for ${clerkEmail} - will reactivate`)
+            logger.debug('Mismatch: Clerk pending but DB expired - will reactivate', { email: clerkEmail })
             mismatchedInvitations.push({
               clerkInvitation: clerkInv,
               dbInvitation: dbInv,
@@ -108,9 +152,9 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check database invitations
-    for (const dbInv of dbPendingPlayers || []) {
+    for (const dbInv of typedDbPendingPlayers) {
       if (dbInv.clerk_invitation_id) {
-        const clerkInv = clerkInvitations.find((ci) => ci.id === dbInv.clerk_invitation_id)
+        const clerkInv = typedClerkInvitations.find((ci) => ci.id === dbInv.clerk_invitation_id)
         if (!clerkInv) {
           // Invitation exists in database but not in Clerk (was deleted/revoked)
           dbOnlyInvitations.push(dbInv)
@@ -132,7 +176,7 @@ export default defineEventHandler(async (event) => {
       } else {
         // Check by email for invitations without clerk_invitation_id or with expired status
         const dbEmail = dbInv.email.toLowerCase()
-        const clerkInvByEmail = clerkInvitations.find(
+        const clerkInvByEmail = typedClerkInvitations.find(
           (ci) => {
             const ciEmail = ci.emailAddress?.toLowerCase() || ''
             const ciStatus = ci.revoked ? 'revoked' : ci.status || 'pending'
@@ -142,11 +186,15 @@ export default defineEventHandler(async (event) => {
         
         if (clerkInvByEmail) {
           // Found a pending invitation in Clerk for this email
-          console.log(`Found Clerk invitation by email for ${dbEmail}: Clerk ID ${clerkInvByEmail.id}, DB status=${dbInv.status}`)
+          logger.debug('Found Clerk invitation by email', { 
+            email: dbEmail, 
+            clerkId: clerkInvByEmail.id, 
+            dbStatus: dbInv.status 
+          })
           
           if (dbInv.status === 'expired') {
             // DB is expired but Clerk has pending - should reactivate
-            console.log(`Will reactivate expired DB invitation for ${dbEmail}`)
+            logger.debug('Will reactivate expired DB invitation', { email: dbEmail })
             mismatchedInvitations.push({
               clerkInvitation: clerkInvByEmail,
               dbInvitation: dbInv,
@@ -154,7 +202,7 @@ export default defineEventHandler(async (event) => {
             })
           } else if (dbInv.status === 'pending' && !dbInv.clerk_invitation_id) {
             // DB is pending but missing clerk_invitation_id - update it
-            console.log(`Will update missing clerk_invitation_id for ${dbEmail}`)
+            logger.debug('Will update missing clerk_invitation_id', { email: dbEmail })
             mismatchedInvitations.push({
               clerkInvitation: clerkInvByEmail,
               dbInvitation: dbInv,
@@ -165,11 +213,11 @@ export default defineEventHandler(async (event) => {
           // No matching Clerk invitation found by email
           if (dbInv.status === 'pending') {
             // Pending invitation without matching Clerk invitation
-            console.log(`DB pending invitation for ${dbEmail} has no matching Clerk invitation`)
+            logger.debug('DB pending invitation has no matching Clerk invitation', { email: dbEmail })
             dbOnlyInvitations.push(dbInv)
           } else if (dbInv.status === 'expired' && !dbInv.clerk_invitation_id) {
             // Expired invitation without clerk_invitation_id - might have been deleted in Clerk
-            console.log(`DB expired invitation for ${dbEmail} has no matching Clerk invitation`)
+            logger.debug('DB expired invitation has no matching Clerk invitation', { email: dbEmail })
             // Don't add to dbOnlyInvitations as it's already expired
           }
         }
@@ -181,7 +229,7 @@ export default defineEventHandler(async (event) => {
       clerkOnly: clerkOnlyInvitations.length,
       dbOnly: dbOnlyInvitations.length,
       mismatched: mismatchedInvitations.length,
-      actions: [] as any[]
+      actions: [] as Array<Record<string, unknown>>
     }
 
     // Update database for mismatched invitations
@@ -204,20 +252,27 @@ export default defineEventHandler(async (event) => {
             })
           }
         } catch (error) {
-          console.error('Error updating invitation status:', error)
+          logger.error('Error updating invitation status', error, { invitationId: mismatch.dbInvitation.id })
         }
       } else if (mismatch.issue === 'clerk_pending_db_expired') {
         // Reactivate expired invitation in DB because Clerk has a pending invitation
         try {
-          console.log(`Reactivating invitation ${mismatch.dbInvitation.id} for ${mismatch.dbInvitation.email}`)
-          const updateData: any = { 
+          logger.info('Reactivating invitation', { 
+            invitationId: mismatch.dbInvitation.id, 
+            email: mismatch.dbInvitation.email 
+          })
+          const updateData: Record<string, unknown> = { 
             status: 'pending',
             updated_at: new Date().toISOString()
           }
           // Update clerk_invitation_id if it's different or missing
           if (mismatch.dbInvitation.clerk_invitation_id !== mismatch.clerkInvitation.id) {
             updateData.clerk_invitation_id = mismatch.clerkInvitation.id
-            console.log(`Updating clerk_invitation_id from ${mismatch.dbInvitation.clerk_invitation_id || 'null'} to ${mismatch.clerkInvitation.id}`)
+            logger.debug('Updating clerk_invitation_id', { 
+              invitationId: mismatch.dbInvitation.id,
+              from: mismatch.dbInvitation.clerk_invitation_id || 'null', 
+              to: mismatch.clerkInvitation.id 
+            })
           }
           
           const { error: updateError, data: updatedData } = await supabase
@@ -227,7 +282,7 @@ export default defineEventHandler(async (event) => {
             .select()
 
           if (!updateError) {
-            console.log(`Successfully reactivated invitation ${mismatch.dbInvitation.id}`)
+            logger.info('Successfully reactivated invitation', { invitationId: mismatch.dbInvitation.id })
             syncResults.actions.push({
               type: 'reactivated_invitation',
               invitationId: mismatch.dbInvitation.id,
@@ -238,10 +293,10 @@ export default defineEventHandler(async (event) => {
               clerkInvitationId: mismatch.clerkInvitation.id
             })
           } else {
-            console.error('Error reactivating invitation:', updateError)
+            logger.error('Error reactivating invitation', updateError, { invitationId: mismatch.dbInvitation.id })
           }
         } catch (error) {
-          console.error('Error reactivating invitation:', error)
+          logger.error('Error reactivating invitation', error, { invitationId: mismatch.dbInvitation.id })
         }
       } else if (mismatch.issue === 'email_match_id_mismatch') {
         // Update database invitation with Clerk invitation ID
@@ -260,7 +315,7 @@ export default defineEventHandler(async (event) => {
             })
           }
         } catch (error) {
-          console.error('Error updating clerk_invitation_id:', error)
+          logger.error('Error updating clerk_invitation_id', error, { invitationId: mismatch.dbInvitation.id })
         }
       }
     }
@@ -286,7 +341,7 @@ export default defineEventHandler(async (event) => {
             })
           }
         } catch (error) {
-          console.error('Error updating deleted invitation status:', error)
+          logger.error('Error updating deleted invitation status', error, { invitationId: dbOnly.id })
         }
       }
     }
@@ -295,7 +350,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       summary: {
         clerkTotal,
-        dbTotal: dbPendingPlayers?.length || 0,
+        dbTotal: typedDbPendingPlayers.length,
         clerkOnly: clerkOnlyInvitations.length,
         dbOnly: dbOnlyInvitations.length,
         mismatched: mismatchedInvitations.length,
@@ -332,11 +387,8 @@ export default defineEventHandler(async (event) => {
       },
       actions: syncResults.actions
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/invitations/sync')
   }
 })
 

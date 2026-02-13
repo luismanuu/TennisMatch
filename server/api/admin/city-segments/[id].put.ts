@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { checkIsAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
 import type { UpdateCitySegmentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
     const supabase = getSupabaseAdmin()
     
     // Build update object
-    const updateData: Record<string, any> = {}
+    const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (description !== undefined) updateData.description = description || null
     
@@ -64,7 +65,7 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (segmentError) {
-      console.error('Error updating city segment:', segmentError)
+      logger.error('Error updating city segment', segmentError, { segmentId: getRouterParam(event, 'id') })
       if (segmentError.code === '23505') {
         throw createError({
           statusCode: 400,
@@ -85,6 +86,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Transform data
+    type CityRef = { id: string; name: string; order: number | null }
     const transformedSegment = {
       id: segment.id,
       name: segment.name,
@@ -92,19 +94,19 @@ export default defineEventHandler(async (event) => {
       created_at: segment.created_at,
       updated_at: segment.updated_at,
       cities: segment.city_segment_cities
-        ?.map((csc: any) => csc.city)
-        .filter(Boolean)
-        .sort((a: any, b: any) => a.order - b.order) ?? [],
+        ?.map((csc: unknown) => {
+          const row = csc as { city?: CityRef | null } | null
+          return row?.city ?? null
+        })
+        .filter((c): c is CityRef => Boolean(c))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) ?? [],
     }
     
     return {
       success: true,
       segment: transformedSegment,
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/admin/city-segments/[id]')
   }
 })

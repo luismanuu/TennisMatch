@@ -69,6 +69,7 @@
 </template>
 
 <script setup lang="ts">
+import type { CSSProperties } from 'vue'
 import type { RatingTier, RatingTierInfo } from '~/types'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { useRankAnimation, shouldUseParticles, getTierAnimationClass, type RankAnimationConfig } from '~/composables/useRankAnimation'
@@ -91,7 +92,7 @@ function getRatingTier(elo: number): RatingTierInfo {
       return tier
     }
   }
-  return RATING_TIERS[0] // Default to Bronze
+  return RATING_TIERS[0]! // Default to Bronze
 }
 
 const props = withDefaults(defineProps<{
@@ -265,17 +266,15 @@ const iconStyle = computed(() => {
 })
 
 // Canvas style
-const canvasStyle = computed(() => {
-  return {
-    position: 'absolute',
-    top: '0',
-    left: '0',
-    width: '100%',
-    height: '100%',
-    pointerEvents: 'none',
-    zIndex: '5'
-  }
-})
+const canvasStyle = computed<CSSProperties>(() => ({
+  position: 'absolute',
+  top: '0',
+  left: '0',
+  width: '100%',
+  height: '100%',
+  pointerEvents: 'none',
+  zIndex: 5
+}))
 
 // Particle system
 const particleCanvas = ref<HTMLCanvasElement | null>(null)
@@ -310,10 +309,10 @@ const initializeParticles = () => {
             radius,
             config: animationConfig.value,
             tierColor: tierColor.value,
-            tier: tier.value
+            tier: tier.value ?? undefined
           })
 
-  particleSystem.start()
+  particleSystem?.start()
 }
 
 const cleanupParticles = () => {

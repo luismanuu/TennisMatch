@@ -52,8 +52,8 @@
               class="cursor-pointer"
               @mouseenter="showTooltip(bar, $event)"
               @mouseleave="hideTooltip"
-              @mouseover="(e) => { e.currentTarget.style.opacity = '1' }"
-              @mouseout="(e) => { e.currentTarget.style.opacity = '0.9' }"
+              @mouseover="onBarMouseOver"
+              @mouseout="onBarMouseOut"
             />
           </g>
           
@@ -109,6 +109,18 @@ const tooltip = ref({
   count: 0,
   percentage: 0
 })
+
+const onBarMouseOver = (e: MouseEvent) => {
+  const el = e.currentTarget instanceof HTMLElement ? e.currentTarget : null
+  if (!el) return
+  el.style.opacity = '1'
+}
+
+const onBarMouseOut = (e: MouseEvent) => {
+  const el = e.currentTarget instanceof HTMLElement ? e.currentTarget : null
+  if (!el) return
+  el.style.opacity = '0.9'
+}
 
 const tierColors: Record<string, string> = {
   'Bronze': '#CD7F32',

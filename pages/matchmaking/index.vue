@@ -43,7 +43,7 @@
           </div>
           <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
           <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
-          <button @click="loadRecommendations" class="btn-primary text-size-3 w-full justify-center group">
+          <button @click="() => loadRecommendations()" class="btn-primary text-size-3 w-full justify-center group">
             <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
             Reintentar
           </button>
@@ -336,7 +336,7 @@
             <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
               No encontramos jugadores en tu región con un nivel similar. Intenta de nuevo más tarde o invita a más jugadores.
             </p>
-            <button @click="loadRecommendations" class="btn-primary text-size-4 mt-6 group">
+            <button @click="() => loadRecommendations()" class="btn-primary text-size-4 mt-6 group">
               <Icon name="heroicons:arrow-path" class="w-4 h-4 mr-2 group-hover:rotate-180 transition-transform duration-500" />
               Buscar de nuevo
             </button>
@@ -394,7 +394,9 @@ const getInitials = (name: string) => {
   if (!name) return '?'
   const parts = name.trim().split(' ')
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    const first = parts[0]?.[0] || ''
+    const last = parts[parts.length - 1]?.[0] || ''
+    return (first + last || '?').toUpperCase()
   }
   return name.substring(0, 2).toUpperCase()
 }

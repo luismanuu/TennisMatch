@@ -2,28 +2,15 @@ import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { checkIsAdmin } from '~/server/utils/admin'
-import type { CreateMatchMessagePayload } from '~/types'
+import { createMatchMessageBodySchema, matchIdSchema, validateBody, validateParam } from '~/server/utils/validation'
 
 export default defineEventHandler(async (event) => {
   try {
-    const matchId = getRouterParam(event, 'id')
-    
-    if (!matchId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Match ID is required'
-      })
-    }
-    
-    const body = await readBody<CreateMatchMessagePayload & { clerk_id: string }>(event)
-    const { clerk_id, message } = body
-    
-    if (!clerk_id || !message || !message.trim()) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id and message are required'
-      })
-    }
+    const matchId = validateParam(matchIdSchema, getRouterParam(event, 'id'))
+
+    const body = validateBody(createMatchMessageBodySchema, await readBody(event))
+    const clerk_id = body.clerk_id
+    const message = body.message.trim()
     
     // Verify Clerk user exists
     await getClerkUser(clerk_id)
@@ -53,7 +40,7 @@ export default defineEventHandler(async (event) => {
         pending_player2_id, 
         tournament_id,
         pending_player2:pending_players(id, invited_by_player_id),
-        tournament:tournaments(id, organizer_id, created_by)
+        tournament:tournaments(id)
       `)
       .eq('id', matchId)
       .single()
@@ -68,8 +55,10 @@ export default defineEventHandler(async (event) => {
     // Verify user is part of the match
     const isPlayer1 = match.player1_id === currentPlayer.id
     const isPlayer2 = match.player2_id === currentPlayer.id
-    const isPendingPlayerInviter = match.pending_player2_id && 
-      (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
+    const invitedByPlayerId = (
+      match as unknown as { pending_player2?: { invited_by_player_id?: string | null } | null }
+    ).pending_player2?.invited_by_player_id
+    const isPendingPlayerInviter = Boolean(match.pending_player2_id) && invitedByPlayerId === currentPlayer.id
     
     // Check if user is admin
     const isAdmin = await checkIsAdmin(clerk_id)
@@ -95,15 +84,19 @@ export default defineEventHandler(async (event) => {
     }
     
     // Create message
-    const { data: newMessage, error: createError } = await supabase
+    const { data: newMessage, error: insertError } = await supabase
       .from('match_messages')
       .insert({
         match_id: matchId,
         player_id: currentPlayer.id,
-        message: message.trim()
+        message
       })
       .select(`
-        *,
+        id,
+        match_id,
+        player_id,
+        message,
+        created_at,
         player:players(
           id,
           name,
@@ -112,20 +105,17 @@ export default defineEventHandler(async (event) => {
       `)
       .single()
     
-    if (createError) {
+    if (insertError) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create message',
-        data: createError
+        data: insertError,
       })
     }
     
     return newMessage
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/matches/[id]/messages')
   }
 })
 

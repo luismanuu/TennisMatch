@@ -123,14 +123,14 @@ if (process.client) {
       
       // Target the specific badge element
       const badge = clerkWrapper.querySelector('.cl-lastAuthenticationStrategyBadge')
-      if (badge) {
+      if (badge instanceof HTMLElement) {
         badge.style.display = 'none'
         badge.style.visibility = 'hidden'
       }
       
       // Also target by data attribute as fallback
       const badgeByAttr = clerkWrapper.querySelector('[data-localization-key="lastAuthenticationStrategy"]')
-      if (badgeByAttr) {
+      if (badgeByAttr instanceof HTMLElement) {
         badgeByAttr.style.display = 'none'
         badgeByAttr.style.visibility = 'hidden'
       }

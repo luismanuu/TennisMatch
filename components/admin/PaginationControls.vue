@@ -142,20 +142,20 @@ const visiblePages = computed(() => {
 })
 
 const showFirstPage = computed(() => {
-  return visiblePages.value[0] > 2
+  return (visiblePages.value[0] ?? 0) > 2
 })
 
 const showFirstEllipsis = computed(() => {
-  return visiblePages.value[0] > 2
+  return (visiblePages.value[0] ?? 0) > 2
 })
 
 const showLastPage = computed(() => {
-  const lastVisible = visiblePages.value[visiblePages.value.length - 1]
+  const lastVisible = visiblePages.value[visiblePages.value.length - 1] ?? 0
   return lastVisible < props.totalPages - 1
 })
 
 const showLastEllipsis = computed(() => {
-  const lastVisible = visiblePages.value[visiblePages.value.length - 1]
+  const lastVisible = visiblePages.value[visiblePages.value.length - 1] ?? 0
   return lastVisible < props.totalPages - 1
 })
 </script>

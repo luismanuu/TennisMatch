@@ -1,34 +1,12 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { adminPlacementActionBodySchema, clerkIdQuerySchema, playerIdSchema, validateBody, validateParam, validateQuery } from '~/server/utils/validation'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const body = await readBody(event)
-    const clerkId = query.clerk_id as string
-    const playerId = getRouterParam(event, 'id')
-    const action = body.action as 'reset' | 'complete'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
-
-    if (!action || !['reset', 'complete'].includes(action)) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Invalid action. Must be "reset" or "complete"'
-      })
-    }
+    const { clerk_id: clerkId } = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
+    const { action } = validateBody(adminPlacementActionBodySchema, await readBody(event))
 
     await requireAdmin(clerkId)
 
@@ -103,11 +81,7 @@ export default defineEventHandler(async (event) => {
         }
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/admin/rankings/placement/[id]')
   }
 })

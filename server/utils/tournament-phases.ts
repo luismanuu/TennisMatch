@@ -5,7 +5,9 @@ import {
   generatePlayoffBracket,
   recalculateGroupStandings 
 } from './tournament-brackets'
+import { logger } from './logger'
 import type { Tournament } from '~/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Check if group stage is complete (all matches completed)
@@ -15,7 +17,7 @@ import type { Tournament } from '~/types'
  */
 export async function checkGroupStageComplete(
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<{ isComplete: boolean; totalMatches: number; completedMatches: number; pendingMatches: number }> {
   // Get all group matches for this tournament
   const { data: groupMatches, error } = await supabase
@@ -39,9 +41,8 @@ export async function checkGroupStageComplete(
   }
 
   const totalMatches = groupMatches?.length || 0
-  const completedMatches = groupMatches?.filter((tm: any) => 
-    tm.match?.status === 'completed' && tm.match?.winner_id
-  ).length || 0
+  const typedGroupMatches = (groupMatches || []) as unknown as Array<{ match?: { status?: string | null; winner_id?: string | null } | null }>
+  const completedMatches = typedGroupMatches.filter((tm) => tm.match?.status === 'completed' && !!tm.match?.winner_id).length
   const pendingMatches = totalMatches - completedMatches
 
   return {
@@ -62,7 +63,7 @@ export async function checkGroupStageComplete(
 export async function checkPlayoffsComplete(
   tournamentId: string,
   bracketType: 'main' | 'backdraw',
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<{ isComplete: boolean; totalMatches: number; completedMatches: number; pendingMatches: number }> {
   // Get all playoff matches for this tournament and bracket type
   const { data: playoffMatches, error } = await supabase
@@ -86,9 +87,8 @@ export async function checkPlayoffsComplete(
   }
 
   const totalMatches = playoffMatches?.length || 0
-  const completedMatches = playoffMatches?.filter((tm: any) => 
-    tm.match?.status === 'completed' && tm.match?.winner_id
-  ).length || 0
+  const typedPlayoffMatches = (playoffMatches || []) as unknown as Array<{ match?: { status?: string | null; winner_id?: string | null } | null }>
+  const completedMatches = typedPlayoffMatches.filter((tm) => tm.match?.status === 'completed' && !!tm.match?.winner_id).length
   const pendingMatches = totalMatches - completedMatches
 
   return {
@@ -107,7 +107,7 @@ export async function checkPlayoffsComplete(
  */
 export async function getTournamentPhaseStatus(
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<{
   currentPhase: string
   groupStageStatus?: { isComplete: boolean; totalMatches: number; completedMatches: number; pendingMatches: number }
@@ -184,7 +184,7 @@ export async function getTournamentPhaseStatus(
  */
 export async function advanceTournamentPhase(
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<string> {
   // Get current tournament phase
   const phaseStatus = await getTournamentPhaseStatus(tournamentId, supabase)
@@ -271,7 +271,7 @@ export async function advanceTournamentPhase(
  */
 async function generatePlayoffBracketsFromGroups(
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
   // Get tournament info
   const { data: tournament, error: tournamentError } = await supabase
@@ -352,18 +352,22 @@ async function generatePlayoffBracketsFromGroups(
       .eq('bracket_type', 'group')
 
     if (matchesError) {
-      console.error(`Error fetching matches for group ${group.id}:`, matchesError)
+      logger.error('Error fetching matches for group', matchesError, { groupId: group.id, tournamentId })
       continue
     }
 
     // Calculate standings with head-to-head
     const completedMatches = (groupMatches || [])
-      .filter((tm: any) => tm.matches && tm.matches.status === 'completed' && tm.matches.winner_id)
-      .map((tm: any) => ({
-        player1_id: tm.matches.player1_id,
-        player2_id: tm.matches.player2_id,
-        winner_id: tm.matches.winner_id,
-        score: tm.matches.score
+      .map((tm) => (tm && typeof tm === 'object' ? (tm as Record<string, unknown>) : null))
+      .filter((tm): tm is Record<string, unknown> => !!tm)
+      .map((tm) => (tm['matches'] && typeof tm['matches'] === 'object') ? (tm['matches'] as Record<string, unknown>) : null)
+      .filter((m): m is Record<string, unknown> => !!m)
+      .filter((m) => m['status'] === 'completed' && typeof m['winner_id'] === 'string')
+      .map((m) => ({
+        player1_id: String(m['player1_id']),
+        player2_id: String(m['player2_id']),
+        winner_id: String(m['winner_id']),
+        score: typeof m['score'] === 'string' ? m['score'] : undefined
       }))
 
     const calculatedStandings = calculateGroupStandings(
@@ -401,8 +405,10 @@ async function generatePlayoffBracketsFromGroups(
   const shuffleArray = <T>(array: T[]): T[] => {
     const shuffled = [...array]
     for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+      const j = Math.floor(Math.random() * (i + 1))
+      const temp = shuffled[i]!
+      shuffled[i] = shuffled[j]!
+      shuffled[j] = temp
     }
     return shuffled
   }
@@ -440,9 +446,16 @@ async function createPlayoffMatches(
     is_bye: boolean
   }>,
   bracketType: 'main' | 'backdraw',
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
-  const tournamentMatchRecords: any[] = []
+  const tournamentMatchRecords: Array<{
+    tournament_id: string
+    match_id: string
+    bracket_type: 'main' | 'backdraw'
+    round_number: number
+    bracket_position: number
+    is_bye: boolean
+  }> = []
 
   for (const bracketMatch of bracket) {
     // Skip bye matches (they don't need actual match records)
@@ -480,7 +493,7 @@ async function createPlayoffMatches(
       .single()
 
     if (matchError || !matchRecord) {
-      console.error('Error creating playoff match:', matchError)
+      logger.error('Error creating playoff match', matchError, { tournamentId, bracketType })
       continue
     }
 

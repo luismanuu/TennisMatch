@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { createGroups, generateGroupMatches, generatePlayoffBracket } from '~/server/utils/tournament-brackets'
 
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event) => {
     // Get tournament details
     const { data: tournament, error: tournamentError } = await supabase
       .from('tournaments')
-      .select('*')
+      .select('id, name, min_players, max_players, format, group_size, group_stage_config')
       .eq('id', tournamentId)
       .single()
 
@@ -121,9 +122,16 @@ export default defineEventHandler(async (event) => {
     }
 
     // Step 2: Assign players to groups
-    const groupPlayerRecords: any[] = []
+    const groupPlayerRecords: Array<{
+      tournament_id: string
+      group_id: string
+      player_id: string
+      seed_position: number
+    }> = []
     createdGroups.forEach((group, index) => {
-      groups[index].players.forEach((playerId, playerIndex) => {
+      const originalGroup = groups[index]
+      if (!originalGroup) return
+      originalGroup.players.forEach((playerId, playerIndex) => {
         groupPlayerRecords.push({
           tournament_id: tournamentId,
           group_id: group.id,
@@ -148,10 +156,19 @@ export default defineEventHandler(async (event) => {
     }
 
     // Step 3: Generate group stage matches
-    const tournamentMatchRecords: any[] = []
+    const tournamentMatchRecords: Array<{
+      tournament_id: string
+      match_id: string
+      bracket_type: 'group'
+      round_number: number
+      group_id: string
+      is_bye: boolean
+    }> = []
 
     for (const group of createdGroups) {
-      const groupPlayers = groups[group.group_number - 1].players
+      const originalGroup = groups[group.group_number - 1]
+      if (!originalGroup) continue
+      const groupPlayers = originalGroup.players
       const matches = generateGroupMatches(groupPlayers)
 
       for (const match of matches) {
@@ -169,7 +186,7 @@ export default defineEventHandler(async (event) => {
           .single()
 
         if (matchError || !matchRecord) {
-          console.error('Error creating match:', matchError)
+          logger.error('Error creating match', matchError, { tournamentId })
           continue
         }
 
@@ -210,7 +227,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', tournamentId)
 
     if (phaseError) {
-      console.error('Error updating tournament phase:', phaseError)
+      logger.error('Error updating tournament phase', phaseError, { tournamentId })
       // Don't fail the request, just log the error
     }
 
@@ -220,11 +237,8 @@ export default defineEventHandler(async (event) => {
       groups: createdGroups.length,
       groupMatches: tournamentMatchRecords.length
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/organizer/tournaments/[id]/generate-brackets')
   }
 })
 

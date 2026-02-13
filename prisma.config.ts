@@ -11,7 +11,9 @@ export default defineConfig({
   datasource: {
     url: process.env["DATABASE_URL"],
   },
-  // Disable shadow database to avoid advisory lock issues with Supabase
-  // This skips migration validation but allows migrations to run
-  shadowDatabaseUrl: undefined,
+  // NOTE: shadowDatabaseUrl is not yet in PrismaConfig typings.
+  // It is still supported at runtime, so we cast the config to any.
+  // Disable shadow database to avoid advisory lock issues with Supabase.
+  // This skips migration validation but allows migrations to run.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 });

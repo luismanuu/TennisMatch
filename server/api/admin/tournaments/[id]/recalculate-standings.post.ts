@@ -1,26 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { recalculateGroupStandings } from '~/server/utils/tournament-brackets'
+import { clerkIdQuerySchema, tournamentIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const tournamentId = validateParam(tournamentIdSchema, getRouterParam(event, 'id'))
 
     await requireAdmin(clerkId)
 
@@ -55,13 +43,14 @@ export default defineEventHandler(async (event) => {
     }
 
     // Recalculate standings for each group
-    const results = []
+    const results: Array<{ groupId: string; success: boolean; error?: string }> = []
     for (const group of groups || []) {
       try {
         await recalculateGroupStandings(tournamentId, group.id, supabase)
         results.push({ groupId: group.id, success: true })
-      } catch (error: any) {
-        results.push({ groupId: group.id, success: false, error: error.message })
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        results.push({ groupId: group.id, success: false, error: message })
       }
     }
 
@@ -70,11 +59,8 @@ export default defineEventHandler(async (event) => {
       message: 'Standings recalculated successfully',
       results
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/tournaments/[id]/recalculate-standings')
   }
 })
 

@@ -1,28 +1,36 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
+import { headToHeadQuerySchema, playerIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const playerId = getRouterParam(event, 'id')
-    const opponentId = getRouterParam(event, 'opponentId')
-    const query = getQuery(event)
-    const period = (query.period as string) || 'all' // month, year, all
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
-    
-    if (!opponentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Opponent ID is required'
-      })
-    }
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
+    const opponentId = validateParam(playerIdSchema, getRouterParam(event, 'opponentId'))
+    const query = validateQuery(headToHeadQuerySchema, getQuery(event))
+    const period = query.period || 'all' // month, year, all
     
     const supabase = getSupabaseAdmin()
     
+    type MatchRow = {
+      id: string
+      played_at: string | null
+      scheduled_at: string | null
+      score: string | null
+      winner_id: string | null
+    }
+
+    type RatingHistoryRow = {
+      id: string
+      match_id: string | null
+      elo_before: number | null
+      elo_after: number | null
+      elo_change: number
+      was_winner: boolean
+      created_at: string
+      match?: MatchRow | null
+    }
+
     // Calculate date filter based on period
     let dateFilter: Date | null = null
     if (period === 'month') {
@@ -55,12 +63,14 @@ export default defineEventHandler(async (event) => {
       h2hQuery = h2hQuery.gte('created_at', dateFilter.toISOString())
     }
     
-    const { data: h2hHistory, error: h2hError } = await h2hQuery
+    const { data: rawH2hHistory, error: h2hError } = await h2hQuery
       .order('created_at', { ascending: false })
     
     // If we have history, fetch match dates separately
+    let h2hHistory: RatingHistoryRow[] | null = rawH2hHistory as unknown as RatingHistoryRow[] | null
+
     if (h2hHistory && h2hHistory.length > 0) {
-      const matchIds = [...new Set(h2hHistory.map(h => h.match_id).filter(Boolean))]
+      const matchIds = [...new Set(h2hHistory.map((h) => h.match_id).filter((id): id is string => Boolean(id)))]
       
       if (matchIds.length > 0) {
         const { data: matches, error: matchesError } = await supabase
@@ -70,19 +80,18 @@ export default defineEventHandler(async (event) => {
         
         if (!matchesError && matches) {
           // Create a map for quick lookup
-          const matchMap = new Map(matches.map(m => [m.id, m]))
-          
-          // Attach match data to history entries
-          h2hHistory.forEach(entry => {
-            entry.match = matchMap.get(entry.match_id) || null
-          })
+          const matchMap = new Map((matches as unknown as MatchRow[]).map((m) => [m.id, m]))
+
+          h2hHistory = h2hHistory.map((entry) => ({
+            ...entry,
+            match: entry.match_id ? (matchMap.get(entry.match_id) ?? null) : null
+          }))
         }
       }
     }
     
     if (h2hError) {
-      console.error('Error fetching head-to-head history:', {
-        message: h2hError.message,
+      logger.error('Error fetching head-to-head history', h2hError, {
         details: h2hError.details,
         hint: h2hError.hint,
         code: h2hError.code
@@ -108,7 +117,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Helper function to get match date
-    const getMatchDate = (entry: any): Date => {
+    const getMatchDate = (entry: RatingHistoryRow): Date => {
       try {
         if (entry.match?.played_at) {
           const date = new Date(entry.match.played_at)
@@ -123,7 +132,7 @@ export default defineEventHandler(async (event) => {
           }
         }
       } catch (err) {
-        console.warn('Error parsing match date:', err)
+        logger.warn('Error parsing match date', { error: err, matchId: entry.match?.id })
       }
       // Fallback to created_at
       try {
@@ -132,7 +141,7 @@ export default defineEventHandler(async (event) => {
           return date
         }
       } catch (err) {
-        console.warn('Error parsing created_at date:', err)
+        logger.warn('Error parsing created_at date', { error: err, matchId: entry.match?.id })
       }
       // Ultimate fallback
       return new Date()
@@ -166,7 +175,8 @@ export default defineEventHandler(async (event) => {
     }
     
     // Get last match date (safely handle empty array)
-    const lastMatchDate = h2hHistory.length > 0 ? getMatchDate(h2hHistory[0]) : new Date()
+    const firstEntry = h2hHistory[0]
+    const lastMatchDate = firstEntry ? getMatchDate(firstEntry) : new Date()
     
     // Calculate ELO stats
     const winsOnly = h2hHistory.filter(h => h.was_winner)
@@ -261,18 +271,7 @@ export default defineEventHandler(async (event) => {
         period
       }
     }
-  } catch (error: any) {
-    console.error('Error in head-to-head endpoint:', {
-      message: error.message,
-      statusCode: error.statusCode,
-      statusMessage: error.statusMessage,
-      data: error.data,
-      stack: error.stack
-    })
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || { originalError: error.message }
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/[id]/head-to-head/[opponentId]')
   }
 })

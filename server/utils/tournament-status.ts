@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from './supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Check if registration is allowed based on tournament status
@@ -8,7 +9,7 @@ import { getSupabaseAdmin } from './supabase'
  */
 export async function checkRegistrationAllowed(
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<{ allowed: boolean; reason?: string }> {
   const { data: tournament, error } = await supabase
     .from('tournaments')
@@ -50,7 +51,7 @@ export async function checkRegistrationAllowed(
  */
 export async function checkSelfRegistrationAllowed(
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<boolean> {
   const { data: tournament, error } = await supabase
     .from('tournaments')
@@ -77,9 +78,9 @@ export async function updateTournamentStatus(
   tournamentId: string,
   status: 'upcoming' | 'active' | 'completed',
   autoTransition: boolean,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
-  const updateData: any = { status }
+  const updateData: Record<string, unknown> = { status }
 
   // If automatic transition to active, check start_date
   if (autoTransition && status === 'active') {
@@ -123,7 +124,7 @@ export async function updateTournamentStatus(
  */
 export async function getTournamentStatus(
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<'upcoming' | 'active' | 'completed'> {
   const { data: tournament, error } = await supabase
     .from('tournaments')
@@ -139,7 +140,10 @@ export async function getTournamentStatus(
   }
 
   const now = new Date()
-  let currentStatus = tournament.status as 'upcoming' | 'active' | 'completed'
+  const status = tournament.status
+  const isTournamentStatus = (s: unknown): s is 'upcoming' | 'active' | 'completed' =>
+    s === 'upcoming' || s === 'active' || s === 'completed'
+  let currentStatus: 'upcoming' | 'active' | 'completed' = isTournamentStatus(status) ? status : 'upcoming'
 
   // Auto-transition to active if start_date has passed
   if (currentStatus === 'upcoming' && tournament.start_date) {

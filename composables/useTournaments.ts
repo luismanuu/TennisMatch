@@ -13,20 +13,41 @@ export const useTournaments = () => {
   const adminTournamentsPageSize = ref(50)
   const adminTournamentsTotal = ref(0)
 
+  // Public pagination (shared across tabs)
+  const publicTournamentsPage = ref(1)
+  const publicTournamentsPageSize = ref(50)
+  const publicTournamentsTotal = ref(0)
+  const publicTournamentsHasMore = computed(() => {
+    return publicTournamentsPage.value * publicTournamentsPageSize.value < publicTournamentsTotal.value
+  })
+
+  const setTournaments = (next: Tournament[]) => {
+    tournaments.value = next
+  }
+
+  const toError = (err: unknown): Error =>
+    err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+
   // Fetch tournaments (public)
   const fetchTournaments = async (filters?: {
     status?: string
-    category_id?: string
+    category_id?: string | null
     organizer_id?: string
     start_date_from?: string
     start_date_to?: string
     search?: string
-  }) => {
+  }, page?: number, pageSize?: number, append?: boolean) => {
+    if (page !== undefined) publicTournamentsPage.value = page
+    if (pageSize !== undefined) publicTournamentsPageSize.value = pageSize
+
     loading.value = true
     error.value = null
 
     try {
+      const offset = (publicTournamentsPage.value - 1) * publicTournamentsPageSize.value
       const queryParams = new URLSearchParams()
+      queryParams.append('limit', publicTournamentsPageSize.value.toString())
+      queryParams.append('offset', offset.toString())
       if (filters?.status) queryParams.append('status', filters.status)
       if (filters?.category_id !== undefined) {
         // Allow null to filter for open tournaments
@@ -37,15 +58,14 @@ export const useTournaments = () => {
       if (filters?.start_date_to) queryParams.append('start_date_to', filters.start_date_to)
       if (filters?.search) queryParams.append('search', filters.search)
 
-      const url = queryParams.toString() 
-        ? `/api/tournaments?${queryParams.toString()}`
-        : '/api/tournaments'
-
-      const data = await $fetch<Tournament[]>(url)
-      tournaments.value = data
-      return data
-    } catch (err: any) {
-      error.value = err
+      const data = await $fetch<{ data: Tournament[]; total: number; page: number; page_size: number }>(
+        `/api/tournaments?${queryParams.toString()}`
+      )
+      tournaments.value = append ? [...tournaments.value, ...(data.data || [])] : (data.data || [])
+      publicTournamentsTotal.value = data.total || 0
+      return data.data || []
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -57,12 +77,18 @@ export const useTournaments = () => {
     category_id?: string | null
     organizer_id?: string
     search?: string
-  }) => {
+  }, page?: number, pageSize?: number, append?: boolean) => {
+    if (page !== undefined) publicTournamentsPage.value = page
+    if (pageSize !== undefined) publicTournamentsPageSize.value = pageSize
+
     loading.value = true
     error.value = null
 
     try {
+      const offset = (publicTournamentsPage.value - 1) * publicTournamentsPageSize.value
       const queryParams = new URLSearchParams()
+      queryParams.append('limit', publicTournamentsPageSize.value.toString())
+      queryParams.append('offset', offset.toString())
       if (filters?.category_id !== undefined) {
         // Allow null to filter for open tournaments
         queryParams.append('category_id', filters.category_id === null ? 'null' : filters.category_id)
@@ -70,15 +96,14 @@ export const useTournaments = () => {
       if (filters?.organizer_id) queryParams.append('organizer_id', filters.organizer_id)
       if (filters?.search) queryParams.append('search', filters.search)
 
-      const url = queryParams.toString()
-        ? `/api/tournaments/past?${queryParams.toString()}`
-        : '/api/tournaments/past'
-
-      const data = await $fetch<Tournament[]>(url)
-      tournaments.value = data
-      return data
-    } catch (err: any) {
-      error.value = err
+      const data = await $fetch<{ data: Tournament[]; total: number; page: number; page_size: number }>(
+        `/api/tournaments/past?${queryParams.toString()}`
+      )
+      tournaments.value = append ? [...tournaments.value, ...(data.data || [])] : (data.data || [])
+      publicTournamentsTotal.value = data.total || 0
+      return data.data || []
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -94,8 +119,8 @@ export const useTournaments = () => {
       const data = await $fetch<Tournament>(`/api/tournaments/${tournamentId}`)
       currentTournament.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -108,10 +133,10 @@ export const useTournaments = () => {
     error.value = null
 
     try {
-      const data = await $fetch<any>(`/api/tournaments/${tournamentId}/bracket`)
+      const data = await $fetch<Record<string, unknown>>(`/api/tournaments/${tournamentId}/bracket`)
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -143,8 +168,8 @@ export const useTournaments = () => {
       await getTournament(tournamentId)
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -154,7 +179,7 @@ export const useTournaments = () => {
   // Admin functions
   const fetchAdminTournaments = async (filters?: {
     status?: string
-    category_id?: string
+    category_id?: string | null
     organizer_id?: string
     start_date_from?: string
     start_date_to?: string
@@ -177,7 +202,10 @@ export const useTournaments = () => {
       queryParams.append('limit', adminTournamentsPageSize.value.toString())
       queryParams.append('offset', offset.toString())
       if (filters?.status) queryParams.append('status', filters.status)
-      if (filters?.category_id) queryParams.append('category_id', filters.category_id)
+      if (filters?.category_id !== undefined) {
+        // `null` means: tournaments without category (open tournaments)
+        queryParams.append('category_id', filters.category_id === null ? 'null' : filters.category_id)
+      }
       if (filters?.organizer_id) queryParams.append('organizer_id', filters.organizer_id)
       if (filters?.start_date_from) queryParams.append('start_date_from', filters.start_date_from)
       if (filters?.start_date_to) queryParams.append('start_date_to', filters.start_date_to)
@@ -187,8 +215,8 @@ export const useTournaments = () => {
       tournaments.value = data.data
       adminTournamentsTotal.value = data.total || 0
       return data.data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -217,8 +245,8 @@ export const useTournaments = () => {
 
       await fetchAdminTournaments()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -255,8 +283,8 @@ export const useTournaments = () => {
       }
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -284,8 +312,8 @@ export const useTournaments = () => {
 
       await fetchAdminTournaments()
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -315,8 +343,8 @@ export const useTournaments = () => {
       await getTournament(tournamentId)
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -347,8 +375,8 @@ export const useTournaments = () => {
       await getTournament(tournamentId)
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -379,8 +407,8 @@ export const useTournaments = () => {
       await getTournament(tournamentId)
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -408,8 +436,8 @@ export const useTournaments = () => {
       )
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -442,8 +470,8 @@ export const useTournaments = () => {
       )
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -469,8 +497,8 @@ export const useTournaments = () => {
       )
 
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -484,6 +512,11 @@ export const useTournaments = () => {
     error: readonly(error),
     fetchTournaments,
     fetchPastTournaments,
+    setTournaments,
+    publicTournamentsPage: readonly(publicTournamentsPage),
+    publicTournamentsPageSize: readonly(publicTournamentsPageSize),
+    publicTournamentsTotal: readonly(publicTournamentsTotal),
+    publicTournamentsHasMore,
     getTournament,
     getBracket,
     registerForTournament,

@@ -1,5 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
+import { clerkIdBodySchema, notificationIdSchema, validateBody, validateParam } from '~/server/utils/validation'
 
 /**
  * POST /api/notifications/[id]/read
@@ -7,25 +9,11 @@ import { getClerkUser } from '~/server/utils/clerk'
  * Mark a notification as read
  */
 export default defineEventHandler(async (event) => {
+  let notificationId: string | undefined
   try {
-    const notificationId = getRouterParam(event, 'id')
-    
-    if (!notificationId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Notification ID is required'
-      })
-    }
-    
-    const body = await readBody<{ clerk_id: string }>(event)
-    const { clerk_id } = body
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
+    notificationId = validateParam(notificationIdSchema, getRouterParam(event, 'id'))
+
+    const { clerk_id } = validateBody(clerkIdBodySchema, await readBody(event))
     
     // Verify Clerk user exists
     await getClerkUser(clerk_id)
@@ -59,7 +47,7 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (updateError) {
-      console.error('[API] Mark notification as read error:', updateError)
+      logger.error('Mark notification as read error', updateError, { notificationId, playerId: currentPlayer.id })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to mark notification as read',
@@ -78,11 +66,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       notification
     }
-  } catch (error: any) {
-    console.error('[API] Mark as read error:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/notifications/[id]/read')
   }
 })

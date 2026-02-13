@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { CATEGORY_SELECT_FULL, PLAYER_SELECT_MIN_WITH_CLERK, TOURNAMENT_SELECT_CORE } from '~/server/utils/supabase-selects'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -16,25 +17,53 @@ export default defineEventHandler(async (event) => {
     const { data: tournament, error } = await supabase
       .from('tournaments')
       .select(`
-        *,
-        category:categories(*),
-        created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*),
+        ${TOURNAMENT_SELECT_CORE},
+        category:categories(${CATEGORY_SELECT_FULL}),
+        created_by_player:players!tournaments_created_by_fkey(${PLAYER_SELECT_MIN_WITH_CLERK}),
+        organizer:players!tournaments_organizer_id_fkey(${PLAYER_SELECT_MIN_WITH_CLERK}),
         registrations:tournament_registrations(
-          *,
+          id,
+          tournament_id,
+          player_id,
+          status,
+          registered_at,
+          withdrawn_at,
+          confirmed_at,
+          check_in_status,
+          check_in_at,
           player:players(
-            *,
-            category:categories(*)
+            id,
+            name,
+            category_id,
+            category:categories(${CATEGORY_SELECT_FULL})
           )
         ),
         groups:tournament_groups(
-          *,
+          id,
+          tournament_id,
+          group_name,
+          group_number,
+          created_at,
           players:tournament_group_players(
-            *,
-            player:players(*)
+            id,
+            tournament_id,
+            group_id,
+            player_id,
+            seed_position,
+            player:players(id, name)
           )
         ),
-        rounds:tournament_rounds(*)
+        rounds:tournament_rounds(
+          id,
+          tournament_id,
+          round_number,
+          round_name,
+          bracket_type,
+          deadline,
+          status,
+          created_at,
+          updated_at
+        )
       `)
       .eq('id', tournamentId)
       .single()
@@ -47,11 +76,8 @@ export default defineEventHandler(async (event) => {
     }
 
     return tournament
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/tournaments/[id]')
   }
 })
 

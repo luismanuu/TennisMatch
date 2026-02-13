@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     const supabase = getSupabaseAdmin()
 
     // Build update object
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name.trim()
     if (start_date !== undefined) updateData.start_date = start_date
     if (end_date !== undefined) updateData.end_date = end_date || null
@@ -104,11 +104,8 @@ export default defineEventHandler(async (event) => {
       message: 'Tournament updated successfully',
       tournament
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/admin/tournaments/[id]')
   }
 })
 

@@ -443,8 +443,9 @@ const parsePlayerScores = (score: string, playerNumber: number): Array<{ mainSco
     }
     
     // Parse games, handling tiebreak format like "7-6(5)"
-    const p1ScoreStr = parts[0].trim()
-    const p2ScoreStr = parts[1].trim()
+    const p1ScoreStr = (parts[0] || '').trim()
+    const p2ScoreStr = (parts[1] || '').trim()
+    if (!p1ScoreStr || !p2ScoreStr) return
     
     // Extract main score (remove tiebreak info)
     const p1MainScore = p1ScoreStr.replace(/\(.*\)/, '').replace(/[^0-9]/g, '')
@@ -454,7 +455,8 @@ const parsePlayerScores = (score: string, playerNumber: number): Array<{ mainSco
     let subscore: number | undefined
     const tiebreakMatch = p1ScoreStr.match(/\((\d+)\)/) || p2ScoreStr.match(/\((\d+)\)/)
     if (tiebreakMatch) {
-      subscore = parseInt(tiebreakMatch[1], 10)
+      const raw = tiebreakMatch[1]
+      if (raw) subscore = parseInt(raw, 10)
     }
     
     const p1Games = parseInt(p1MainScore, 10) || 0
@@ -889,7 +891,7 @@ const getCurrentRoundDeadline = (matches: any[], roundsToCreate: number): { roun
   const sortedRounds = Array.from(roundDeadlines.keys()).sort((a, b) => a - b)
   if (sortedRounds.length === 0) return null
   
-  const currentRoundNumber = sortedRounds[0]
+  const currentRoundNumber = sortedRounds[0] ?? 1
   const deadline = roundDeadlines.get(currentRoundNumber)
   if (!deadline) return null
   

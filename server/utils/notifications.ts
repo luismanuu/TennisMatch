@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from './logger'
 
 /**
  * Notification types for match-related events
@@ -21,7 +22,7 @@ export async function createMatchNotification(
   playerId: string,
   matchId: string,
   type: NotificationType,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ) {
   try {
     // First, check if notification already exists and is not dismissed
@@ -36,7 +37,7 @@ export async function createMatchNotification(
     
     // If notification exists and is not dismissed, return it (no need to create)
     if (existing) {
-      console.log(`[Notifications] Notification ${type} already exists for player ${playerId}, match ${matchId}`)
+      logger.debug('Notification already exists', { type, playerId, matchId })
       return existing
     }
     
@@ -67,24 +68,24 @@ export async function createMatchNotification(
         
         if (existingNotification) {
           // Successfully handled duplicate - not an error, just a race condition
-          console.log(`[Notifications] Notification ${type} already exists (race condition handled), returning existing for player ${playerId}`)
+          logger.debug('Notification already exists (race condition handled)', { type, playerId, matchId })
           return existingNotification
         }
         
         // If we can't find it, log as warning (shouldn't happen)
-        console.warn(`[Notifications] Duplicate key error but couldn't find existing notification for player ${playerId}, match ${matchId}, type ${type}`)
+        logger.warn('Duplicate key error but could not find existing notification', { type, playerId, matchId })
         return null
       }
       
       // Other errors are actual problems
-      console.error(`[Notifications] Failed to create ${type} notification:`, error)
+      logger.error('Failed to create notification', error, { type, playerId, matchId })
       return null
     }
     
-    console.log(`[Notifications] Created ${type} notification for player ${playerId}`)
+    logger.debug('Created notification', { type, playerId, matchId, notificationId: data.id })
     return data
   } catch (err) {
-    console.error('[Notifications] Exception creating notification:', err)
+    logger.error('Exception creating notification', err, { type, playerId, matchId })
     return null
   }
 }
@@ -112,14 +113,14 @@ export async function dismissExistingNotifications(
       .eq('is_dismissed', false) // Only dismiss non-dismissed notifications
     
     if (error) {
-      console.error(`[Notifications] Failed to dismiss notifications:`, error)
+      logger.error('Failed to dismiss notifications', error, { playerId, matchId, types })
       return false
     }
     
-    console.log(`[Notifications] Dismissed ${types.join(', ')} notifications for player ${playerId}`)
+    logger.debug('Dismissed notifications', { playerId, matchId, types })
     return true
   } catch (err) {
-    console.error('[Notifications] Exception dismissing notifications:', err)
+    logger.error('Exception dismissing notifications', err, { playerId, matchId, types })
     return false
   }
 }
@@ -145,14 +146,14 @@ export async function dismissMatchNotifications(
       .eq('is_dismissed', false)
     
     if (error) {
-      console.error(`[Notifications] Failed to dismiss match notifications:`, error)
+      logger.error('Failed to dismiss match notifications', error, { matchId, types })
       return false
     }
     
-    console.log(`[Notifications] Dismissed all ${types.join(', ')} notifications for match ${matchId}`)
+    logger.debug('Dismissed all match notifications', { matchId, types })
     return true
   } catch (err) {
-    console.error('[Notifications] Exception dismissing match notifications:', err)
+    logger.error('Exception dismissing match notifications', err, { matchId, types })
     return false
   }
 }

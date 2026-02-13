@@ -61,13 +61,16 @@ export function detectMatchFormatFromScore(score: string | null | undefined): Ma
   
   // Single set - check if it's a pro set or super tiebreak
   if (numSets === 1) {
-    const set = sets[0]
+    const set = sets[0] || ''
+    if (!set) return 'unknown'
     const cleanedSet = set.trim().replace(/\s*-\s*/g, '-')
     const parts = cleanedSet.split('-')
     
     if (parts.length === 2) {
-      const p1Games = parseInt(parts[0].replace(/\(.*\)/, '').replace(/[^0-9]/g, ''), 10) || 0
-      const p2Games = parseInt(parts[1].replace(/\(.*\)/, '').replace(/[^0-9]/g, ''), 10) || 0
+      const left = parts[0] || ''
+      const right = parts[1] || ''
+      const p1Games = parseInt(left.replace(/\(.*\)/, '').replace(/[^0-9]/g, ''), 10) || 0
+      const p2Games = parseInt(right.replace(/\(.*\)/, '').replace(/[^0-9]/g, ''), 10) || 0
       const totalGames = p1Games + p2Games
       
       // Super tiebreak: 10-point tiebreak format (usually 10-7, 10-8, etc.)
@@ -120,8 +123,8 @@ export function parseGamesFromScore(score: string | null | undefined, playerNumb
     
     if (parts.length !== 2) return
     
-    const p1ScoreStr = parts[0].trim()
-    const p2ScoreStr = parts[1].trim()
+    const p1ScoreStr = (parts[0] || '').trim()
+    const p2ScoreStr = (parts[1] || '').trim()
     
     // Extract main score (remove tiebreak info)
     const p1MainScore = p1ScoreStr.replace(/\(.*\)/, '').replace(/[^0-9]/g, '')

@@ -3,7 +3,6 @@
  * Uses OpenRouter API to calculate ELO changes based on match context
  */
 
-import type { Player } from '~/types'
 import type { MatchFormat } from './utr-rating-system'
 
 export interface LlmEloCalculationRequest {
@@ -66,13 +65,31 @@ export interface MatchContext {
   formatDetected: MatchFormat
 }
 
+type PlayerForLlmContext = {
+  name: string
+  utr_rating?: number | null
+  win_streak?: number | null
+  loss_streak?: number | null
+  recentMatches?: Array<{
+    opponent?: { name?: string | null } | null
+    score?: unknown
+    was_winner?: boolean | null
+    created_at?: string | null
+  }>
+  headToHead?: Array<{
+    score?: unknown
+    was_winner?: boolean | null
+    created_at?: string | null
+  }>
+}
+
 /**
  * Build comprehensive match context for LLM
  */
 export function buildMatchContext(
   request: LlmEloCalculationRequest,
-  player1: Player & { recentMatches?: any[], headToHead?: any[] },
-  player2: Player & { recentMatches?: any[], headToHead?: any[] },
+  player1: PlayerForLlmContext,
+  player2: PlayerForLlmContext,
   matchWeightFactors: {
     formatWeight: number
     competitivenessWeight: number
@@ -82,17 +99,30 @@ export function buildMatchContext(
   formatDetected: MatchFormat,
   tournamentName?: string
 ): MatchContext {
+  const scoreToString = (score: unknown): string => {
+    if (typeof score === 'string') return score
+    if (Array.isArray(score)) {
+      const first = score[0] as { score?: unknown } | undefined
+      return typeof first?.score === 'string' ? first.score : ''
+    }
+    if (score && typeof score === 'object') {
+      const maybe = score as { score?: unknown }
+      return typeof maybe.score === 'string' ? maybe.score : ''
+    }
+    return ''
+  }
+
   return {
     player1: {
       id: request.player1Id,
       name: player1.name,
       elo: request.player1Elo,
-      utrRating: (player1 as any).utr_rating,
-      winStreak: (player1 as any).win_streak || 0,
-      lossStreak: (player1 as any).loss_streak || 0,
+      utrRating: player1.utr_rating ?? undefined,
+      winStreak: player1.win_streak ?? 0,
+      lossStreak: player1.loss_streak ?? 0,
       recentMatches: (player1.recentMatches || []).slice(0, 5).map(m => ({
         opponentName: m.opponent?.name || 'Unknown',
-        score: m.score || '',
+        score: scoreToString(m.score),
         won: m.was_winner || false,
         playedAt: m.created_at || ''
       }))
@@ -101,18 +131,18 @@ export function buildMatchContext(
       id: request.player2Id,
       name: player2.name,
       elo: request.player2Elo,
-      utrRating: (player2 as any).utr_rating,
-      winStreak: (player2 as any).win_streak || 0,
-      lossStreak: (player2 as any).loss_streak || 0,
+      utrRating: player2.utr_rating ?? undefined,
+      winStreak: player2.win_streak ?? 0,
+      lossStreak: player2.loss_streak ?? 0,
       recentMatches: (player2.recentMatches || []).slice(0, 5).map(m => ({
         opponentName: m.opponent?.name || 'Unknown',
-        score: m.score || '',
+        score: scoreToString(m.score),
         won: m.was_winner || false,
         playedAt: m.created_at || ''
       }))
     },
     headToHead: (player1.headToHead || []).slice(0, 5).map(m => ({
-      score: m.score || '',
+      score: scoreToString(m.score),
       winner: m.was_winner ? player1.name : player2.name,
       playedAt: m.created_at || ''
     })),

@@ -3,56 +3,46 @@ import { getClerkUser } from '~/server/utils/clerk'
 import { validateAndSetMatchScheduling } from '~/server/utils/tournament-scheduling'
 import { createMatchNotification } from '~/server/utils/notifications'
 import { datetimeLocalToISO, isDateInPast } from '~/server/utils/timezone'
+import { validateBody, createMatchCreateBodySchema } from '~/server/utils/validation'
 import type { CreateMatchPayload } from '~/types'
+import { ValidationError, ForbiddenError, InternalServerError, handleApiError } from '~/server/utils/errors'
+import { logger } from '~/server/utils/logger'
 
 export default defineEventHandler(async (event) => {
   try {
-    const body = await readBody<CreateMatchPayload & { clerk_id: string }>(event)
-    const { clerk_id, player1_id, player2_id, pending_player2_id, scheduled_at, location, is_competitive } = body
+    const body = await readBody(event)
     
-    if (!clerk_id || !player1_id || !scheduled_at) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, player1_id, scheduled_at'
-      })
-    }
+    // Validate request body with Zod
+    const validatedBody = validateBody(createMatchCreateBodySchema, body)
+    const {
+      clerk_id,
+      player1_id,
+      player2_id,
+      pending_player2_id,
+      scheduled_at,
+      location,
+      is_competitive,
+      tournament_id,
+    } = validatedBody
     
     // Convert datetime-local to ISO (treating input as Ecuador time)
     let scheduledAtISO: string
     try {
       scheduledAtISO = datetimeLocalToISO(scheduled_at)
-    } catch (error: any) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: `Invalid date format: ${error.message}`
-      })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Invalid date'
+      throw new ValidationError(`Invalid date format: ${message}`)
     }
     
     // Validate scheduled_at is not in the past
     if (isDateInPast(scheduledAtISO)) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Cannot schedule a match in the past'
-      })
+      throw new ValidationError('Cannot schedule a match in the past')
     }
     
     // Check if this is a tournament match and validate round deadline
     // Note: tournament_id will be set when bracket is generated, so we check after match creation
     
-    // Validate that either player2_id or pending_player2_id is provided, but not both
-    if (!player2_id && !pending_player2_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Either player2_id or pending_player2_id must be provided'
-      })
-    }
-    
-    if (player2_id && pending_player2_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Cannot provide both player2_id and pending_player2_id'
-      })
-    }
+    // Note: Validation of player2_id vs pending_player2_id is handled by Zod schema
     
     // Verify Clerk user exists
     await getClerkUser(clerk_id)
@@ -68,10 +58,7 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (player1Error || !player1) {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Unauthorized: player1_id does not match authenticated user'
-      })
+      throw new ForbiddenError('player1_id does not match authenticated user', { player1_id })
     }
     
     // If player2_id is provided, verify it exists
@@ -83,10 +70,7 @@ export default defineEventHandler(async (event) => {
         .single()
       
       if (player2Error || !player2) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'Invalid player2_id'
-        })
+        throw new ValidationError('Invalid player2_id', { player2_id })
       }
       
       // Validate: if competitive match, check if players already played 4+ times this month
@@ -122,10 +106,10 @@ export default defineEventHandler(async (event) => {
         
         // Check for errors in queries
         if (matchesAsPlayer1.error) {
-          console.error('Error fetching matches as player1:', matchesAsPlayer1.error)
+          logger.error('Error fetching matches as player1', matchesAsPlayer1.error, { player1_id })
         }
         if (matchesAsPlayer2.error) {
-          console.error('Error fetching matches as player2:', matchesAsPlayer2.error)
+          logger.error('Error fetching matches as player2', matchesAsPlayer2.error, { player2_id })
         }
         
         // If there are errors, don't block match creation but log them
@@ -137,10 +121,7 @@ export default defineEventHandler(async (event) => {
           ]
           
           if (monthlyMatches.length >= 4) {
-            throw createError({
-              statusCode: 400,
-              statusMessage: 'No puedes programar más de 4 partidos competitivos con el mismo jugador en un mes. Puedes programar un partido amistoso en su lugar.'
-            })
+            throw new ValidationError('No puedes programar más de 4 partidos competitivos con el mismo jugador en un mes. Puedes programar un partido amistoso en su lugar.', { player1_id, player2_id })
           }
         }
       }
@@ -155,18 +136,12 @@ export default defineEventHandler(async (event) => {
         .single()
       
       if (pendingPlayerError || !pendingPlayer) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'Invalid pending_player2_id'
-        })
+        throw new ValidationError('Invalid pending_player2_id', { pending_player2_id })
       }
       
       // Verify the pending player was invited by the current user
       if (pendingPlayer.invited_by_player_id !== player1_id) {
-        throw createError({
-          statusCode: 403,
-          statusMessage: 'Unauthorized: pending player was not invited by you'
-        })
+        throw new ForbiddenError('Pending player was not invited by you', { pending_player2_id, player1_id })
       }
     }
     
@@ -176,7 +151,7 @@ export default defineEventHandler(async (event) => {
     // Tournament matches don't require acceptance - they're assigned by admin/organizer
     
     // scheduledAtISO is already converted above using datetimeLocalToISO
-    const matchData: any = {
+    const matchData: Record<string, unknown> = {
       player1_id,
       scheduled_at: scheduledAtISO,
       status: 'scheduled',
@@ -186,8 +161,7 @@ export default defineEventHandler(async (event) => {
     
     // Only set match_proposed_by for non-tournament matches
     // Tournament matches are assigned by admin/organizer and don't need acceptance
-    const bodyWithTournament = body as CreateMatchPayload & { clerk_id: string; tournament_id?: string }
-    if (!bodyWithTournament.tournament_id) {
+    if (!tournament_id) {
       matchData.match_proposed_by = player1_id // The creator proposes the match
     }
     
@@ -255,11 +229,7 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (matchInsertError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to create match',
-        data: matchInsertError
-      })
+      throw new InternalServerError('Failed to create match', { matchInsertError })
     }
     
     // If this is a tournament match, validate round deadline
@@ -339,13 +309,8 @@ export default defineEventHandler(async (event) => {
     }
     
     return match
-  } catch (error: any) {
-    console.error('Error in matches POST endpoint:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/matches')
   }
 })
 

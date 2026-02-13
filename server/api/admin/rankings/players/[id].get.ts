@@ -1,26 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getRatingTier, getNextTierProgress, getMonthlyDecayStatus } from '~/server/utils/rating-system'
+import { clerkIdQuerySchema, playerIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const playerId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
 
     await requireAdmin(clerkId)
 
@@ -126,9 +114,9 @@ export default defineEventHandler(async (event) => {
       if (allHistoryEntries.data) {
         // Group by date and calculate rankings
         const dateGroups: Record<string, Record<string, number>> = {}
-        
-        allHistoryEntries.data.forEach(entry => {
-          const dateKey = new Date(entry.created_at).toISOString().split('T')[0]
+
+        ;(allHistoryEntries.data as unknown as Array<{ player_id: string; elo_after: number; created_at: string }>).forEach((entry) => {
+          const dateKey = new Date(entry.created_at).toISOString().split('T')[0] as string
           if (!dateGroups[dateKey]) {
             dateGroups[dateKey] = {}
           }
@@ -136,13 +124,13 @@ export default defineEventHandler(async (event) => {
         })
 
         // Calculate rank for each date where player had a change
-        ratingHistory.forEach(entry => {
-          const dateKey = new Date(entry.created_at).toISOString().split('T')[0]
+        ;(ratingHistory as unknown as Array<{ created_at: string; elo_after: number }>).forEach((entry) => {
+          const dateKey = new Date(entry.created_at).toISOString().split('T')[0] as string
           const elosOnDate = dateGroups[dateKey] || {}
           
           // Sort players by ELO on this date
-          const sortedPlayers = Object.entries(elosOnDate)
-            .sort((a, b) => b[1] - a[1])
+          const sortedPlayers = Object.entries(elosOnDate as Record<string, number>)
+            .sort(([, a], [, b]) => (b as number) - (a as number))
           
           const playerRank = sortedPlayers.findIndex(([id]) => id === playerId) + 1
           
@@ -234,11 +222,7 @@ export default defineEventHandler(async (event) => {
       recent_match_impact: recentMatchDetails,
       rating_history: ratingHistory || []
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/rankings/players/[id]')
   }
 })

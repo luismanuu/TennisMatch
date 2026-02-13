@@ -1,26 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getRatingTier } from '~/server/utils/rating-system'
+import { clerkIdQuerySchema, matchIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const matchId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!matchId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Match ID is required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const matchId = validateParam(matchIdSchema, getRouterParam(event, 'id'))
 
     await requireAdmin(clerkId)
 
@@ -104,6 +92,8 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    type PlayerEloRow = { id: string; elo: number | null }
+
     // Get ranking positions before match (approximate - would need historical snapshot)
     // For now, we'll calculate based on ELO
     const { data: allPlayersBefore } = await supabase
@@ -113,22 +103,40 @@ export default defineEventHandler(async (event) => {
       .order('elo', { ascending: false })
 
     // Calculate approximate ranks
-    const getRankForElo = (elo: number, players: any[]) => {
-      return players.filter(p => p.elo > elo).length + 1
+    const getRankForElo = (elo: number, players: PlayerEloRow[]) => {
+      return players.filter((p) => (p.elo ?? 0) > elo).length + 1
     }
 
+    const basePlayers = (allPlayersBefore ?? []) as unknown as PlayerEloRow[]
+    const p1EloBefore = player1History.elo_before ?? 0
+    const p1EloAfter = player1History.elo_after ?? 0
+    const p2EloBefore = player2History.elo_before ?? 0
+    const p2EloAfter = player2History.elo_after ?? 0
+
     const player1RankBefore = allPlayersBefore 
-      ? getRankForElo(player1History.elo_before, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player1_id ? player1History.elo_before : p.elo })))
+      ? getRankForElo(
+          p1EloBefore,
+          basePlayers.map((p) => ({ ...p, elo: p.id === match.player1_id ? p1EloBefore : p.elo }))
+        )
       : null
     const player1RankAfter = allPlayersBefore
-      ? getRankForElo(player1History.elo_after, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player1_id ? player1History.elo_after : p.elo })))
+      ? getRankForElo(
+          p1EloAfter,
+          basePlayers.map((p) => ({ ...p, elo: p.id === match.player1_id ? p1EloAfter : p.elo }))
+        )
       : null
 
     const player2RankBefore = allPlayersBefore
-      ? getRankForElo(player2History.elo_before, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player2_id ? player2History.elo_before : p.elo })))
+      ? getRankForElo(
+          p2EloBefore,
+          basePlayers.map((p) => ({ ...p, elo: p.id === match.player2_id ? p2EloBefore : p.elo }))
+        )
       : null
     const player2RankAfter = allPlayersBefore
-      ? getRankForElo(player2History.elo_after, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player2_id ? player2History.elo_after : p.elo })))
+      ? getRankForElo(
+          p2EloAfter,
+          basePlayers.map((p) => ({ ...p, elo: p.id === match.player2_id ? p2EloAfter : p.elo }))
+        )
       : null
 
     // Check tier changes
@@ -225,11 +233,7 @@ export default defineEventHandler(async (event) => {
         placement_matches: (player1History.is_placement_match ? 1 : 0) + (player2History.is_placement_match ? 1 : 0)
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/rankings/matches/[id]/impact')
   }
 })

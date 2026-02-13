@@ -611,7 +611,7 @@ const filteredRegistrations = computed(() => {
 const uniqueCategories = computed(() => {
   if (!tournament.value?.registrations) return []
   const categories = new Set<string>()
-  tournament.value.registrations.forEach(reg => {
+  tournament.value.registrations.forEach((reg: any) => {
     if (reg.player?.category?.name) {
       categories.add(reg.player.category.name)
     }
@@ -703,7 +703,7 @@ const loadTournament = async () => {
       const defaultDateTime = `${defaultYear}-${defaultMonth}-${defaultDay}T00:00`
       
       // Load main bracket deadlines
-      mainPlayoffRounds.value.forEach(round => {
+      mainPlayoffRounds.value.forEach((round: any) => {
         // Main bracket
         const mainDeadline = getPlayoffDeadline('main', round.round_number)
         if (mainDeadline) {
@@ -736,7 +736,7 @@ const loadTournament = async () => {
       })
       
       // Load backdraw bracket deadlines
-      backdrawPlayoffRounds.value.forEach(round => {
+      backdrawPlayoffRounds.value.forEach((round: any) => {
         const backdrawDeadline = getPlayoffDeadline('backdraw', round.round_number)
         if (backdrawDeadline) {
           const deadlineDate = new Date(backdrawDeadline)
@@ -939,9 +939,9 @@ const calculateRoundsForBracket = (bracketType: 'main' | 'backdraw') => {
   
   // Convert to bracketry format to get roundIndex (same as TournamentBracket)
   // roundIndex = (round_number || 1) - 1 (0-based)
-  const uniqueRoundIndexes = [...new Set(
-    matches.map((m: any) => (m.round_number || 1) - 1)
-  )].sort((a, b) => a - b)
+  const uniqueRoundIndexes: number[] = Array.from(
+    new Set<number>(matches.map((m: any) => (m.round_number || 1) - 1))
+  ).sort((a, b) => a - b)
   
   const maxRoundIndex = Math.max(...uniqueRoundIndexes, 0)
   
@@ -1060,7 +1060,7 @@ const playoffRounds = computed(() => mainPlayoffRounds.value)
 
 // Get round name for display (uses playoffRounds)
 const getRoundName = (roundNumber: number) => {
-  const round = playoffRounds.value.find(r => r.round_number === roundNumber)
+  const round = playoffRounds.value.find((r: any) => r.round_number === roundNumber)
   return round?.round_name || `${roundNumber}ª Ronda`
 }
 
@@ -1080,9 +1080,9 @@ const hasValidPlayoffDeadlines = (bracketType: 'main' | 'backdraw') => {
     return false
   }
   const deadlines = playoffDeadlines.value[bracketType]
-  return rounds.some(round => {
+  return rounds.some((round: any) => {
     const deadlineValue = deadlines[round.round_number]
-    return deadlineValue && deadlineValue.trim() !== ''
+    return typeof deadlineValue === 'string' && deadlineValue.trim() !== ''
   })
 }
 
@@ -1093,12 +1093,18 @@ const handleSetPlayoffDeadlines = async (bracketType: 'main' | 'backdraw') => {
   const rounds = bracketType === 'main' ? mainPlayoffRounds.value : backdrawPlayoffRounds.value
   const deadlines = playoffDeadlines.value[bracketType]
   const roundsToSave = rounds
-    .filter(round => deadlines[round.round_number] && deadlines[round.round_number].trim() !== '')
-    .map(round => ({
-      round_number: round.round_number,
-      round_name: round.round_name,
-      deadline: deadlines[round.round_number]
-    }))
+    .filter((round: any) => {
+      const d = deadlines[round.round_number]
+      return typeof d === 'string' && d.trim() !== ''
+    })
+    .map((round: any) => {
+      const deadline = deadlines[round.round_number] ?? ''
+      return {
+        round_number: round.round_number,
+        round_name: round.round_name,
+        deadline
+      }
+    })
   
   if (roundsToSave.length === 0) {
     const toast = useToastNotifications()
@@ -1147,7 +1153,8 @@ const formatDate = (dateString: string) => {
   })
 }
 
-const formatDeadline = (dateString: string) => {
+const formatDeadline = (dateString: string | null) => {
+  if (!dateString) return ''
   // Use Ecuador timezone for display
   return new Date(dateString).toLocaleDateString('es-ES', {
     timeZone: 'America/Guayaquil',

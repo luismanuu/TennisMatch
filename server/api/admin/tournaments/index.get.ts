@@ -1,21 +1,16 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { adminTournamentsListQuerySchema, validateQuery } from '~/server/utils/validation'
+import { PLAYER_SELECT_MIN, TOURNAMENT_SELECT_LIST } from '~/server/utils/supabase-selects'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
+    const query = validateQuery(adminTournamentsListQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
     
     // Pagination parameters
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const limit = query.limit ?? 50
+    const offset = query.offset ?? 0
 
     await requireAdmin(clerkId)
 
@@ -30,10 +25,10 @@ export default defineEventHandler(async (event) => {
     let queryBuilder = supabase
       .from('tournaments')
       .select(`
-        *,
-        category:categories(*),
-        created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*)
+        ${TOURNAMENT_SELECT_LIST},
+        category:categories(id, name),
+        created_by_player:players!tournaments_created_by_fkey(${PLAYER_SELECT_MIN}),
+        organizer:players!tournaments_organizer_id_fkey(${PLAYER_SELECT_MIN})
       `)
       .order('created_at', { ascending: false })
 
@@ -43,7 +38,7 @@ export default defineEventHandler(async (event) => {
     }
 
     if (query.category_id !== undefined) {
-      if (query.category_id === null || query.category_id === 'null') {
+      if (query.category_id === 'null') {
         // Filter for tournaments without category (open to all)
         queryBuilder = queryBuilder.is('category_id', null)
       } else {
@@ -118,11 +113,8 @@ export default defineEventHandler(async (event) => {
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/tournaments/index')
   }
 })
 

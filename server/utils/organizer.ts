@@ -1,4 +1,6 @@
 import { getClerkUser } from './clerk'
+import { logger } from './logger'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Check if a user has tournament organizer role in Clerk metadata
@@ -11,7 +13,7 @@ export async function checkIsOrganizer(clerkId: string): Promise<boolean> {
     const role = clerkUser.publicMetadata?.role as string | undefined
     return role === 'tournament_organizer'
   } catch (error) {
-    console.error('Error checking organizer status:', error)
+    logger.error('Error checking organizer status', error, { clerkId })
     return false
   }
 }
@@ -50,7 +52,7 @@ export async function checkIsAdminOrOrganizer(clerkId: string): Promise<boolean>
     const role = clerkUser.publicMetadata?.role as string | undefined
     return role === 'admin' || role === 'tournament_organizer'
   } catch (error) {
-    console.error('Error checking admin/organizer status:', error)
+    logger.error('Error checking admin/organizer status', error, { clerkId })
     return false
   }
 }
@@ -65,7 +67,7 @@ export async function checkIsAdminOrOrganizer(clerkId: string): Promise<boolean>
 export async function verifyOrganizerOwnsTournament(
   organizerId: string,
   tournamentId: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
   const { data: tournament, error } = await supabase
     .from('tournaments')

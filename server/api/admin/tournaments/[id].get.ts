@@ -1,25 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { clerkIdQuerySchema, tournamentIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import { CATEGORY_SELECT_FULL, PLAYER_SELECT_MIN_WITH_CLERK, TOURNAMENT_SELECT_CORE } from '~/server/utils/supabase-selects'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const tournamentId = validateParam(tournamentIdSchema, getRouterParam(event, 'id'))
 
     await requireAdmin(clerkId)
 
@@ -28,22 +17,53 @@ export default defineEventHandler(async (event) => {
     const { data: tournament, error } = await supabase
       .from('tournaments')
       .select(`
-        *,
-        category:categories(*),
-        created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*),
+        ${TOURNAMENT_SELECT_CORE},
+        category:categories(${CATEGORY_SELECT_FULL}),
+        created_by_player:players!tournaments_created_by_fkey(${PLAYER_SELECT_MIN_WITH_CLERK}),
+        organizer:players!tournaments_organizer_id_fkey(${PLAYER_SELECT_MIN_WITH_CLERK}),
         registrations:tournament_registrations(
-          *,
-          player:players(*)
-        ),
-        groups:tournament_groups(
-          *,
-          players:tournament_group_players(
-            *,
-            player:players(*)
+          id,
+          tournament_id,
+          player_id,
+          status,
+          registered_at,
+          withdrawn_at,
+          confirmed_at,
+          check_in_status,
+          check_in_at,
+          player:players(
+            id,
+            name,
+            category_id,
+            category:categories(${CATEGORY_SELECT_FULL})
           )
         ),
-        rounds:tournament_rounds(*)
+        groups:tournament_groups(
+          id,
+          tournament_id,
+          group_name,
+          group_number,
+          created_at,
+          players:tournament_group_players(
+            id,
+            tournament_id,
+            group_id,
+            player_id,
+            seed_position,
+            player:players(id, name)
+          )
+        ),
+        rounds:tournament_rounds(
+          id,
+          tournament_id,
+          round_number,
+          round_name,
+          bracket_type,
+          deadline,
+          status,
+          created_at,
+          updated_at
+        )
       `)
       .eq('id', tournamentId)
       .single()
@@ -56,11 +76,8 @@ export default defineEventHandler(async (event) => {
     }
 
     return tournament
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/tournaments/[id]')
   }
 })
 

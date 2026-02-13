@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -39,8 +40,7 @@ export default defineEventHandler(async (event) => {
       .order('id', { ascending: true })
 
     if (tmError) {
-      console.error('Error fetching tournament matches:', {
-        message: tmError.message,
+      logger.error('Error fetching tournament matches', tmError, {
         details: tmError.details,
         hint: tmError.hint,
         code: tmError.code,
@@ -86,8 +86,7 @@ export default defineEventHandler(async (event) => {
       .in('id', matchIds)
 
     if (matchesError) {
-      console.error('Error fetching matches:', {
-        message: matchesError.message,
+      logger.error('Error fetching matches', matchesError, {
         details: matchesError.details,
         hint: matchesError.hint,
         code: matchesError.code
@@ -109,11 +108,8 @@ export default defineEventHandler(async (event) => {
     })
 
     return result
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/tournaments/[id]/group/[groupId]/matches')
   }
 })
 

@@ -1,7 +1,18 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getClerkClient, createInvitation } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
 import { randomUUID } from 'crypto'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function getStringProp(obj: unknown, key: string): string | undefined {
+  const r = asRecord(obj)
+  const v = r ? r[key] : undefined
+  return typeof v === 'string' ? v : undefined
+}
 
 export default defineEventHandler(async (event) => {
   try {
@@ -40,9 +51,9 @@ export default defineEventHandler(async (event) => {
         emailAddress: [email]
       })
 
-      if (existingUsers.data.length > 0) {
-        const existingUser = existingUsers.data[0]
-        const role = existingUser.publicMetadata?.role as string | undefined
+      if (Array.isArray(existingUsers) && existingUsers.length > 0) {
+        const existingUser = existingUsers[0]!
+        const role = getStringProp((existingUser as unknown as { publicMetadata?: unknown }).publicMetadata, 'role')
 
         if (role === 'tournament_organizer') {
           throw createError({
@@ -57,8 +68,9 @@ export default defineEventHandler(async (event) => {
           statusMessage: `User with email ${email} already exists with a different role`
         })
       }
-    } catch (checkError: any) {
-      if (checkError.statusCode) {
+    } catch (checkError: unknown) {
+      const err = typeof checkError === 'object' && checkError !== null ? (checkError as Record<string, unknown>) : null
+      if (err && typeof err['statusCode'] === 'number') {
         throw checkError
       }
       // User doesn't exist, continue with invitation
@@ -108,18 +120,25 @@ export default defineEventHandler(async (event) => {
           name: name
         }
       }
-    } catch (invitationError: any) {
-      console.error('Error creating organizer invitation:', invitationError)
+    } catch (invitationError: unknown) {
+      const err = typeof invitationError === 'object' && invitationError !== null ? (invitationError as Record<string, unknown>) : null
+      logger.error('Error creating organizer invitation', invitationError, { email, name })
       throw createError({
-        statusCode: invitationError.statusCode || 500,
-        statusMessage: invitationError.errors?.[0]?.message || invitationError.message || 'Failed to create invitation'
+        statusCode: err && typeof err['statusCode'] === 'number' ? (err['statusCode'] as number) : 500,
+        statusMessage:
+          (() => {
+            const errorsValue = err ? err['errors'] : undefined
+            if (Array.isArray(errorsValue) && errorsValue.length > 0) {
+              const first = asRecord(errorsValue[0])
+              const msg = first && typeof first['message'] === 'string' ? (first['message'] as string) : undefined
+              if (msg) return msg
+            }
+            return (err && typeof err['message'] === 'string' ? (err['message'] as string) : undefined) || 'Failed to create invitation'
+          })()
       })
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/organizers/index')
   }
 })
 

@@ -183,7 +183,7 @@ const groupedByDate = computed(() => {
   
   return Array.from(groups.entries()).map(([dateKey, entries]) => ({
     dateKey,
-    date: entries[0].created_at,
+    date: (entries[0]?.created_at ?? `${dateKey}T00:00:00.000Z`),
     entries: entries.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }))
 })
@@ -261,7 +261,8 @@ const dataPoints = computed(() => {
 const getOriginalDataIndex = (dayIndex: number, entryIndex: number) => {
   let currentIndex = 0
   for (let i = 0; i < dayIndex; i++) {
-    currentIndex += groupedByDate.value[i].entries.length
+    const g = groupedByDate.value[i]
+    if (g) currentIndex += g.entries.length
   }
   return currentIndex + entryIndex
 }
@@ -301,9 +302,12 @@ const areaPath = computed(() => {
   })
   
   if (allEntries.length === 0) return ''
-  const start = `M ${allEntries[0].x} ${height - padding.bottom}`
+  const first = allEntries[0]
+  const last = allEntries[allEntries.length - 1]
+  if (!first || !last) return ''
+  const start = `M ${first.x} ${height - padding.bottom}`
   const line = allEntries.map(p => `L ${p.x} ${p.y}`).join(' ')
-  const end = `L ${allEntries[allEntries.length - 1].x} ${height - padding.bottom} Z`
+  const end = `L ${last.x} ${height - padding.bottom} Z`
   return `${start} ${line} ${end}`
 })
 
@@ -321,6 +325,7 @@ const showTooltip = (pointIndex: number, event: MouseEvent) => {
   
   // Get the actual entry from grouped data
   const group = groupedByDate.value[point.dayIndex]
+  if (!group) return
   const entry = group.entries[point.entryIndex]
   if (!entry) return
   

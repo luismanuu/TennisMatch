@@ -49,7 +49,7 @@
           </div>
           <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
           <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error }}</p>
-          <button @click="loadData" class="btn-primary text-size-3 w-full justify-center group">
+          <button @click="() => loadData()" class="btn-primary text-size-3 w-full justify-center group">
             <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
             Reintentar
           </button>
@@ -372,8 +372,9 @@ const loadData = async (page?: number) => {
         offset: offset
       }
     })
-    segments.value = (segmentsResponse as any).segments || []
-    segmentsTotal.value = (segmentsResponse as any).total || 0
+    const typedSegmentsResponse = segmentsResponse as unknown as { segments?: CitySegment[]; total?: number }
+    segments.value = typedSegmentsResponse.segments || []
+    segmentsTotal.value = typedSegmentsResponse.total || 0
     
     // Load cities
     const citiesResponse = await $fetch('/api/cities')

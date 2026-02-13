@@ -29,9 +29,9 @@ export function useMonthlyDecay() {
       lastDecayApplied.value = response.decay_applied
       
       return response
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching decay status:', err)
-      error.value = err
+      error.value = err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
       throw err
     } finally {
       loading.value = false

@@ -238,7 +238,7 @@
                 <h3 class="text-size-3 font-semibold text-foreground mb-3">{{ group.group_name }}</h3>
                 <div class="space-y-2">
                   <div
-                    v-for="groupPlayer in group.players"
+                    v-for="groupPlayer in (group.players || [])"
                     :key="groupPlayer.id"
                     class="flex items-center justify-between p-2 rounded-lg bg-background"
                   >

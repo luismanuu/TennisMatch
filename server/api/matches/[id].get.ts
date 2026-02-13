@@ -1,26 +1,20 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { logger } from '~/server/utils/logger'
 import { getClerkUser } from '~/server/utils/clerk'
 import { checkIsAdmin } from '~/server/utils/admin'
+import { clerkIdQuerySchema, matchIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import type { MatchRow } from '~/server/services/matches/apply-match-action'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
 
 export default defineEventHandler(async (event) => {
   try {
-    const matchId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
-    
-    if (!matchId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Match ID is required'
-      })
-    }
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const matchId = validateParam(matchIdSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerk_id = query.clerk_id
     
     // Verify Clerk user exists
     await getClerkUser(clerk_id)
@@ -145,11 +139,11 @@ export default defineEventHandler(async (event) => {
     
     if (matchError) {
       // Log the error for debugging
-      console.error('Match fetch error:', matchError)
+      logger.error('Match fetch error', matchError, { matchId: getRouterParam(event, 'id') })
       // Try a simpler query without optional relations
       const { data: simpleMatch, error: simpleError } = await supabase
         .from('matches')
-        .select('*')
+        .select('id, player1_id, player2_id, status, tournament_id, pending_player2_id, scheduled_at, played_at, winner_id, score, is_competitive')
         .eq('id', matchId)
         .single()
       
@@ -182,7 +176,7 @@ export default defineEventHandler(async (event) => {
     const isPlayer1 = match.player1_id === currentPlayer.id
     const isPlayer2 = match.player2_id === currentPlayer.id
     const isPendingPlayerInviter = match.pending_player2_id && 
-      (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
+      (asRecord(match.pending_player2)?.['invited_by_player_id'] === currentPlayer.id)
     
     // Check if user is organizer of the tournament (if match belongs to a tournament)
     let isTournamentOrganizer = false
@@ -210,7 +204,11 @@ export default defineEventHandler(async (event) => {
     const { data: messages, error: messagesError } = await supabase
       .from('match_messages')
       .select(`
-        *,
+        id,
+        match_id,
+        player_id,
+        message,
+        created_at,
         player:players(
           id,
           name,
@@ -229,56 +227,58 @@ export default defineEventHandler(async (event) => {
     }
     
     // Fetch schedule-related players separately if needed (in case FK constraints don't exist)
-    if ((match as any).schedule_proposed_by) {
+    const matchRow = match as unknown as MatchRow
+    const enrichedMatch: Record<string, unknown> = { ...(match as unknown as Record<string, unknown>) }
+
+    if (typeof matchRow.schedule_proposed_by === 'string' && matchRow.schedule_proposed_by) {
       const { data: scheduleProposer } = await supabase
         .from('players')
         .select('id, name')
-        .eq('id', (match as any).schedule_proposed_by)
+        .eq('id', matchRow.schedule_proposed_by)
         .single()
       if (scheduleProposer) {
-        (match as any).schedule_proposed_by_player = scheduleProposer
+        enrichedMatch['schedule_proposed_by_player'] = scheduleProposer
       }
     }
     
-    if ((match as any).schedule_approved_by) {
+    if (typeof matchRow.schedule_approved_by === 'string' && matchRow.schedule_approved_by) {
       const { data: scheduleApprover } = await supabase
         .from('players')
         .select('id, name')
-        .eq('id', (match as any).schedule_approved_by)
+        .eq('id', matchRow.schedule_approved_by)
         .single()
       if (scheduleApprover) {
-        (match as any).schedule_approved_by_player = scheduleApprover
+        enrichedMatch['schedule_approved_by_player'] = scheduleApprover
       }
     }
     
-    if ((match as any).schedule_rejected_by) {
+    if (typeof matchRow.schedule_rejected_by === 'string' && matchRow.schedule_rejected_by) {
       const { data: scheduleRejecter } = await supabase
         .from('players')
         .select('id, name')
-        .eq('id', (match as any).schedule_rejected_by)
+        .eq('id', matchRow.schedule_rejected_by)
         .single()
       if (scheduleRejecter) {
-        (match as any).schedule_rejected_by_player = scheduleRejecter
+        enrichedMatch['schedule_rejected_by_player'] = scheduleRejecter
       }
     }
     
     // Flatten tournament_match if it exists
-    const enrichedMatch: any = { ...match }
-    if (match.tournament_match && Array.isArray(match.tournament_match) && match.tournament_match.length > 0) {
-      enrichedMatch.tournament_match = match.tournament_match[0]
-    } else if (match.tournament_match && !Array.isArray(match.tournament_match)) {
-      enrichedMatch.tournament_match = match.tournament_match
+    if ('tournament_match' in (match as unknown as Record<string, unknown>)) {
+      const tm = (match as unknown as Record<string, unknown>)['tournament_match']
+      if (Array.isArray(tm) && tm.length > 0) {
+        enrichedMatch['tournament_match'] = tm[0]
+      } else if (tm && !Array.isArray(tm)) {
+        enrichedMatch['tournament_match'] = tm
+      }
     }
     
     return {
       ...enrichedMatch,
       messages: messages || []
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/matches/[id]')
   }
 })
 

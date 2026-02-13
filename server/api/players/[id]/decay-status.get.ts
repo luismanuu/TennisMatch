@@ -1,19 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getMonthlyDecayStatus, checkAndApplyMonthlyDecay } from '~/server/utils/rating-system'
 import type { MonthlyDecayStatus } from '~/types'
+import { playerDecayStatusQuerySchema, playerIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const playerId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const applyDecay = query.apply_decay === 'true'
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(playerDecayStatusQuerySchema, getQuery(event))
+    const applyDecay = query.apply_decay === true
     
     const supabase = getSupabaseAdmin()
     
@@ -59,10 +54,7 @@ export default defineEventHandler(async (event) => {
       is_unrated: player.total_matches_played === 0,
       is_in_placement: (player.placement_matches_completed ?? 0) < 3,
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/[id]/decay-status')
   }
 })

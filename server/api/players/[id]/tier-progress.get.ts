@@ -1,16 +1,10 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getNextTierProgress } from '~/server/utils/rating-system'
+import { playerIdSchema, validateParam } from '~/server/utils/validation'
 
 export default defineEventHandler(async (event) => {
   try {
-    const playerId = getRouterParam(event, 'id')
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
     
     const supabase = getSupabaseAdmin()
     
@@ -34,10 +28,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       progress
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/players/[id]/tier-progress')
   }
 })

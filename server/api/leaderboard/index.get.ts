@@ -1,7 +1,66 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getRatingTier, getNextTierProgress } from '~/server/utils/rating-system'
+import { logger } from '~/server/utils/logger'
+import { RATING_TIERS, getRatingTier, getNextTierProgress } from '~/server/utils/rating-system'
 import type { RatingTier } from '~/types'
 import type { LeaderboardPlayer, LeaderboardResponse, BadgeType } from '~/types/leaderboard'
+import type { City, Category } from '~/types'
+import { leaderboardQuerySchema, validateQuery } from '~/server/utils/validation'
+
+type PlayerRow = {
+  id: string
+  name: string | null
+  elo: number
+  total_matches_played: number
+  placement_matches_completed: number | null
+  win_streak: number
+  loss_streak: number
+  previous_rank: number | null
+  city: unknown
+  category: unknown
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function toCity(value: unknown): City | undefined {
+  const r = asRecord(value)
+  if (!r) return undefined
+  return typeof r.id === 'string' &&
+    typeof r.name === 'string' &&
+    typeof r.order === 'number' &&
+    typeof r.created_at === 'string' &&
+    typeof r.updated_at === 'string'
+    ? {
+        id: r.id,
+        name: r.name,
+        order: r.order,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      }
+    : undefined
+}
+
+function toCategory(value: unknown): Category | undefined {
+  const r = asRecord(value)
+  if (!r) return undefined
+  return typeof r.id === 'string' &&
+    typeof r.name === 'string' &&
+    typeof r.order === 'number' &&
+    typeof r.default_elo === 'number' &&
+    typeof r.created_at === 'string' &&
+    typeof r.updated_at === 'string'
+    ? {
+        id: r.id,
+        name: r.name,
+        description: typeof r.description === 'string' ? r.description : undefined,
+        order: r.order,
+        default_elo: r.default_elo,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      }
+    : undefined
+}
 
 // Helper to calculate badges for a player (disabled for now)
 function getPlayerBadges(
@@ -14,23 +73,53 @@ function getPlayerBadges(
 
 export default defineEventHandler(async (event): Promise<LeaderboardResponse> => {
   try {
-    const query = getQuery(event)
+    const query = validateQuery(leaderboardQuerySchema, getQuery(event))
     
-    // Parse query params
+    // Parse query params (validated)
     const tier = query.tier as RatingTier | undefined
-    const cityId = query.city_id as string | undefined
-    const search = query.search as string | undefined
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 100)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
-    const currentPlayerId = query.current_player_id as string | undefined
-    const centerAroundPlayer = query.center_around_player === 'true' // New param to center around current player
+    const cityId = query.city_id
+    const search = query.search
+    const limit = query.limit ?? 50
+    const offset = query.offset ?? 0
+    const currentPlayerId = query.current_player_id
+    const centerAroundPlayer = query.center_around_player ?? false
     
     const supabase = getSupabaseAdmin()
-    
-    // Build the query - include all players (rated and in placement)
+
+    // Determine additional filters
+    let minElo: number | null = null
+    let maxElo: number | null = null
+
+    if (tier) {
+      const tierInfo = RATING_TIERS.find(t => t.tier === tier)
+      if (tierInfo) {
+        minElo = tierInfo.minElo
+        maxElo = Number.isFinite(tierInfo.maxElo) ? tierInfo.maxElo : null
+      }
+    }
+
+    // If centering around player without a tier filter, constrain by ELO range (±200) using the current user's ELO
+    let currentUserElo: number | null = null
+    if (!tier && centerAroundPlayer && currentPlayerId) {
+      const { data: currentPlayerRow, error: currentPlayerError } = await supabase
+        .from('players')
+        .select('id, elo')
+        .eq('id', currentPlayerId)
+        .eq('status', 'active')
+        .single()
+
+      if (!currentPlayerError && currentPlayerRow && typeof currentPlayerRow.elo === 'number') {
+        currentUserElo = currentPlayerRow.elo
+        minElo = currentPlayerRow.elo - 200
+        maxElo = currentPlayerRow.elo + 200
+      }
+    }
+
+    // Build base query (with DB-side pagination)
     let queryBuilder = supabase
       .from('players')
-      .select(`
+      .select(
+        `
         id,
         name,
         elo,
@@ -39,44 +128,57 @@ export default defineEventHandler(async (event): Promise<LeaderboardResponse> =>
         win_streak,
         loss_streak,
         previous_rank,
-        city:cities(id, name),
-        category:categories(id, name)
-      `)
+        city:cities(id, name, order, created_at, updated_at),
+        category:categories(id, name, description, order, default_elo, created_at, updated_at)
+      `
+      )
       .eq('status', 'active')
-      // Include all players, not just rated ones
-    
-    // Apply city filter
-    if (cityId) {
-      queryBuilder = queryBuilder.eq('city_id', cityId)
-    }
-    
-    // Apply search filter (case-insensitive name search)
-    if (search && search.trim()) {
-      queryBuilder = queryBuilder.ilike('name', `%${search.trim()}%`)
-    }
-    
-    // Order by ELO descending
+
+    if (cityId) queryBuilder = queryBuilder.eq('city_id', cityId)
+    if (search && search.trim()) queryBuilder = queryBuilder.ilike('name', `%${search.trim()}%`)
+
+    if (minElo !== null) queryBuilder = queryBuilder.gte('elo', minElo)
+    if (maxElo !== null) queryBuilder = queryBuilder.lte('elo', maxElo)
+
+    // Order by ELO descending (stable enough for now)
     queryBuilder = queryBuilder.order('elo', { ascending: false })
-    
-    // Get total count for pagination (before applying tier filter which happens client-side)
+
+    // Count query (same filters)
     let countQuery = supabase
       .from('players')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'active')
-      // Include all players
-    
-    if (cityId) {
-      countQuery = countQuery.eq('city_id', cityId)
+
+    if (cityId) countQuery = countQuery.eq('city_id', cityId)
+    if (search && search.trim()) countQuery = countQuery.ilike('name', `%${search.trim()}%`)
+    if (minElo !== null) countQuery = countQuery.gte('elo', minElo)
+    if (maxElo !== null) countQuery = countQuery.lte('elo', maxElo)
+
+    const { count: totalCount, error: countError } = await countQuery
+    if (countError) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to count leaderboard players',
+        data: countError
+      })
     }
-    
-    if (search && search.trim()) {
-      countQuery = countQuery.ilike('name', `%${search.trim()}%`)
+
+    // If centering around player, compute an offset that centers them in the page (best-effort)
+    let effectiveOffset = offset
+    if (!tier && centerAroundPlayer && currentPlayerId && currentUserElo !== null) {
+      const { count: higherCount, error: higherCountError } = await supabase
+        .from('players')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .gt('elo', currentUserElo)
+
+      if (!higherCountError && typeof higherCount === 'number') {
+        const half = Math.floor(limit / 2)
+        effectiveOffset = Math.max(0, higherCount - half)
+      }
     }
-    
-    const { count: totalCount } = await countQuery
-    
-    // Execute main query
-    const { data: players, error } = await queryBuilder
+
+    const { data: players, error } = await queryBuilder.range(effectiveOffset, effectiveOffset + limit - 1)
     
     if (error) {
       throw createError({
@@ -90,17 +192,18 @@ export default defineEventHandler(async (event): Promise<LeaderboardResponse> =>
       return {
         success: true,
         rankings: [],
-        total: 0,
-        page: Math.floor(offset / limit) + 1,
+        total: totalCount || 0,
+        page: Math.floor(effectiveOffset / limit) + 1,
         page_size: limit,
-        filters: { tier, city_id: cityId, search, limit, offset },
+        filters: { tier, city_id: cityId, search, limit, offset: effectiveOffset },
         current_user_position: null
       }
     }
     
-    // Calculate tiers for all players - use ELO-based tier for all players (including those in placement)
-    let allRankings: LeaderboardPlayer[] = players.map((player, index) => {
-      const tierInfo = getRatingTier(player.elo)
+    // Map players → leaderboard rows
+    const typedPlayers = (players || []) as unknown as PlayerRow[]
+    const allRankings: LeaderboardPlayer[] = typedPlayers.map((player, index) => {
+      const tierInfo = getRatingTier(player.elo || 0)
       const isInPlacement = player.total_matches_played === 0 || (player.placement_matches_completed || 0) < 3
       // Use ELO-based tier for all players, regardless of placement status
       const playerTier = tierInfo.tier
@@ -109,119 +212,54 @@ export default defineEventHandler(async (event): Promise<LeaderboardResponse> =>
       // This works for both rated players and players in placement
       let isNearPromotion = false
       let nextTierName: string | null = null
-      const tierProgress = getNextTierProgress(player.elo)
+      const tierProgress = getNextTierProgress(player.elo || 0)
       if (!tierProgress.isMaxTier && tierProgress.eloNeeded <= 100) {
         isNearPromotion = true
         nextTierName = tierProgress.nextTier?.tier || null
       }
       
+      const currentRank = effectiveOffset + index + 1
+      const previousRank = player.previous_rank
+      let rankChange: number | undefined = undefined
+      if (previousRank !== null && previousRank !== undefined) {
+        rankChange = previousRank - currentRank
+      }
+
       return {
         id: player.id,
         name: player.name,
-        elo: player.elo,
-        rank: index + 1, // Temporary rank, will be recalculated after filtering
+        elo: player.elo || 0,
+        rank: currentRank,
+        previous_rank: previousRank,
+        rank_change: rankChange,
         rating_tier: playerTier,
         total_matches_played: player.total_matches_played,
         win_streak: player.win_streak,
         loss_streak: player.loss_streak,
         placement_matches_completed: player.placement_matches_completed,
-        city: player.city as any,
-        category: player.category as any,
-        badges: getPlayerBadges(index + 1, player.win_streak, player.total_matches_played),
+        city: toCity(player.city),
+        category: toCategory(player.category),
+        badges: getPlayerBadges(currentRank, player.win_streak, player.total_matches_played),
         is_current_user: currentPlayerId ? player.id === currentPlayerId : false,
         // Add promotion info
         near_promotion: isNearPromotion,
         next_tier: nextTierName
       } as LeaderboardPlayer & { near_promotion?: boolean; next_tier?: string | null }
     })
-    
-    // Find current user BEFORE filtering to get their ELO
-    let currentUserElo: number | null = null
-    if (currentPlayerId) {
-      const userBeforeFilter = allRankings.find(p => p.id === currentPlayerId)
-      if (userBeforeFilter) {
-        currentUserElo = userBeforeFilter.elo
-      }
-    }
-    
-    // Apply tier filter BEFORE finding user position and recalculating ranks
-    if (tier) {
-      // Filter by specific tier (all players are now assigned tiers based on ELO)
-      allRankings = allRankings.filter(p => p.rating_tier === tier)
-    } else if (centerAroundPlayer && currentUserElo !== null) {
-      // If no tier filter and centering around player, filter by ELO range (±200 ELO)
-      // This ensures players see similar ELO players
-      const eloRange = 200
-      allRankings = allRankings.filter(p => {
-        const eloDiff = Math.abs(p.elo - currentUserElo!)
-        return eloDiff <= eloRange
-      })
-    }
-    
-    // Recalculate ranks after filtering (so ranks are 1, 2, 3... within the filtered results)
-    // Also calculate rank_change (positive = moved up, negative = moved down)
-    allRankings = allRankings.map((player, index) => {
-      const currentRank = index + 1
-      const previousRank = (player as any).previous_rank
-      let rankChange: number | undefined = undefined
-      
-      // Calculate rank change if previous_rank exists
-      if (previousRank !== null && previousRank !== undefined) {
-        // rank_change = previous_rank - current_rank
-        // Positive = moved up (previous rank was higher, e.g., 10 -> 5 = +5)
-        // Negative = moved down (previous rank was lower, e.g., 5 -> 10 = -5)
-        rankChange = previousRank - currentRank
-      }
-      
-      return {
-        ...player,
-        rank: currentRank,
-        previous_rank: previousRank,
-        rank_change: rankChange
-      }
-    })
-    
-    // Find current user's position AFTER filtering
-    let currentUserPosition: LeaderboardPlayer | null = null
-    if (currentPlayerId) {
-      currentUserPosition = allRankings.find(p => p.id === currentPlayerId) || null
-    }
-    
-    // If centerAroundPlayer is true and we have a current player, center the view around them
-    let paginatedRankings: LeaderboardPlayer[] = []
-    if (centerAroundPlayer && currentUserPosition && currentPlayerId) {
-      const playerIndex = allRankings.findIndex(p => p.id === currentPlayerId)
-      if (playerIndex !== -1) {
-        // Calculate range around the player
-        const halfRange = Math.floor(limit / 2)
-        const startIndex = Math.max(0, playerIndex - halfRange)
-        const endIndex = Math.min(allRankings.length, startIndex + limit)
-        const adjustedStartIndex = Math.max(0, endIndex - limit) // Adjust if we're near the end
-        
-        paginatedRankings = allRankings.slice(adjustedStartIndex, endIndex)
-      } else {
-        // Player not found in filtered results (wrong tier), return empty or first page
-        paginatedRankings = allRankings.slice(0, limit)
-      }
-    } else {
-      // Normal pagination
-      paginatedRankings = allRankings.slice(offset, offset + limit)
-    }
+
+    const currentUserPosition =
+      currentPlayerId ? allRankings.find(p => p.id === currentPlayerId) || null : null
     
     return {
       success: true,
-      rankings: paginatedRankings,
-      total: tier ? allRankings.length : (totalCount || 0),
-      page: Math.floor(offset / limit) + 1,
+      rankings: allRankings,
+      total: totalCount || 0,
+      page: Math.floor(effectiveOffset / limit) + 1,
       page_size: limit,
-      filters: { tier, city_id: cityId, search, limit, offset },
+      filters: { tier, city_id: cityId, search, limit, offset: effectiveOffset },
       current_user_position: currentUserPosition
     }
-  } catch (error: any) {
-    console.error('Leaderboard error:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/leaderboard/index')
   }
 })

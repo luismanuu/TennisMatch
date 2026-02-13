@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Build update object
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name.trim()
     if (description !== undefined) updateData.description = description?.trim() || null
     if (order !== undefined) updateData.order = order
@@ -83,11 +83,8 @@ export default defineEventHandler(async (event) => {
       message: 'Category updated successfully',
       category
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/admin/categories/[id]')
   }
 })
 

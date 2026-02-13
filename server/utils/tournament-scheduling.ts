@@ -1,4 +1,6 @@
 import { getSupabaseAdmin } from './supabase'
+import { logger } from './logger'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Create group stage deadline (one deadline for all group matches)
@@ -9,7 +11,7 @@ import { getSupabaseAdmin } from './supabase'
 export async function createGroupStageDeadline(
   tournamentId: string,
   deadline: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
   // Check if group stage round already exists
   const { data: existingRound } = await supabase
@@ -67,7 +69,7 @@ export async function createGroupStageDeadline(
     .eq('bracket_type', 'group')
 
   if (updateError) {
-    console.error('Error updating group match deadlines:', updateError)
+    logger.error('Error updating group match deadlines', updateError, { tournamentId })
   }
 }
 
@@ -86,7 +88,7 @@ export async function createPlayoffRoundDeadlines(
     round_name: string
     deadline: string
   }>,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
   for (const round of rounds) {
     // Check if round already exists
@@ -147,7 +149,11 @@ export async function createPlayoffRoundDeadlines(
       .eq('round_number', round.round_number)
 
     if (updateError) {
-      console.error(`Error updating ${bracketType} round ${round.round_number} match deadlines:`, updateError)
+      logger.error('Error updating match deadlines', updateError, {
+        tournamentId,
+        bracketType,
+        roundNumber: round.round_number
+      })
     }
   }
 }
@@ -163,7 +169,7 @@ export async function extendRoundDeadline(
   tournamentId: string,
   roundId: string,
   newDeadline: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<void> {
   // Get round info
   const { data: round, error: roundError } = await supabase
@@ -206,7 +212,7 @@ export async function extendRoundDeadline(
     .eq('round_number', round.round_number)
 
   if (matchUpdateError) {
-    console.error('Error updating match deadlines:', matchUpdateError)
+    logger.error('Error updating match deadlines', matchUpdateError, { tournamentId, roundId })
   }
 }
 
@@ -218,8 +224,8 @@ export async function extendRoundDeadline(
  */
 export async function getUnscheduledMatches(
   tournamentId: string,
-  supabase: any
-): Promise<any[]> {
+  supabase: SupabaseClient
+): Promise<Array<Record<string, unknown>>> {
   const { data: matches, error } = await supabase
     .from('tournament_matches')
     .select(`
@@ -258,7 +264,7 @@ async function getRoundDeadline(
   tournamentId: string,
   bracketType: 'group' | 'main' | 'backdraw',
   roundNumber: number,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<string | null> {
   const { data: round, error } = await supabase
     .from('tournament_rounds')
@@ -312,7 +318,7 @@ function validateMatchScheduling(
 export async function validateAndSetMatchScheduling(
   matchId: string,
   scheduledAt: string,
-  supabase: any
+  supabase: SupabaseClient
 ): Promise<boolean> {
   // Get tournament match info
   const { data: tournamentMatch, error: tmError } = await supabase
@@ -326,13 +332,22 @@ export async function validateAndSetMatchScheduling(
     return true
   }
 
+  const tm = tournamentMatch as unknown as {
+    tournament_id: string
+    bracket_type: 'group' | 'main' | 'backdraw'
+    round_number: number | null
+    round_deadline: string | null
+  }
+
   // Validate against deadline
-  const deadline = tournamentMatch.round_deadline || await getRoundDeadline(
-    tournamentMatch.tournament_id,
-    tournamentMatch.bracket_type,
-    tournamentMatch.round_number || 1,
-    supabase
-  )
+  const deadline =
+    tm.round_deadline ||
+    (await getRoundDeadline(
+      tm.tournament_id,
+      tm.bracket_type,
+      tm.round_number || 1,
+      supabase
+    ))
 
   validateMatchScheduling(scheduledAt, deadline)
 

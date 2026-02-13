@@ -1,6 +1,10 @@
 import type { RatingTier } from '~/types'
 import type { LeaderboardPlayer, LeaderboardResponse, NearbyPlayersResponse, LeaderboardFilters } from '~/types/leaderboard'
 
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
+
 export const useLeaderboard = () => {
   // State
   const rankings = ref<LeaderboardPlayer[]>([])
@@ -83,8 +87,8 @@ export const useLeaderboard = () => {
       }
       
       return response
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       console.error('Error fetching leaderboard:', err)
       throw err
     } finally {
@@ -111,8 +115,8 @@ export const useLeaderboard = () => {
       }
       
       return response
-    } catch (err: any) {
-      nearbyError.value = err
+    } catch (err: unknown) {
+      nearbyError.value = toError(err)
       console.error('Error fetching nearby players:', err)
       throw err
     } finally {
@@ -135,8 +139,8 @@ export const useLeaderboard = () => {
       }
       
       return response
-    } catch (err: any) {
-      topError.value = err
+    } catch (err: unknown) {
+      topError.value = toError(err)
       console.error('Error fetching top players:', err)
       throw err
     } finally {
@@ -232,7 +236,7 @@ export const useLeaderboard = () => {
   
   return {
     // State
-    rankings: readonly(rankings),
+    rankings,
     loading: readonly(loading),
     error: readonly(error),
     total: readonly(total),
@@ -247,7 +251,7 @@ export const useLeaderboard = () => {
     nearbyError: readonly(nearbyError),
     
     // Top players
-    topPlayers: readonly(topPlayers),
+    topPlayers,
     topLoading: readonly(topLoading),
     topError: readonly(topError),
     

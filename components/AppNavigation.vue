@@ -147,7 +147,7 @@
                 :notifications="notifications || []"
                 :unread-count="unreadCount || 0"
                 :count="count"
-                :loading="loading"
+                :loading="!!loading"
                 @close="notificationDropdownOpen = false"
                 @mark-as-read="markAsRead"
                 @dismiss="dismiss"

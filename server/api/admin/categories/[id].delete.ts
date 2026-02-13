@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -41,7 +42,7 @@ export default defineEventHandler(async (event) => {
       .limit(1)
 
     if (playersError) {
-      console.error('Error checking players:', playersError)
+      logger.error('Error checking players', playersError, { categoryId: getRouterParam(event, 'id') })
     }
 
     if (playersUsingCategory && playersUsingCategory.length > 0) {
@@ -73,11 +74,8 @@ export default defineEventHandler(async (event) => {
         name: category.name
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'DELETE /api/admin/categories/[id]')
   }
 })
 

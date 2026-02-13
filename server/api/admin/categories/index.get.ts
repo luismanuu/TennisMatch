@@ -1,17 +1,15 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { adminCategoriesListQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import { CATEGORY_SELECT_FULL } from '~/server/utils/supabase-selects'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminCategoriesListQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const limit = query.limit ?? 500
+    const offset = query.offset ?? 0
 
     await requireAdmin(clerkId)
 
@@ -19,8 +17,9 @@ export default defineEventHandler(async (event) => {
 
     const { data: categories, error: fetchError } = await supabase
       .from('categories')
-      .select('*')
+      .select(CATEGORY_SELECT_FULL)
       .order('order', { ascending: true })
+      .range(offset, offset + limit - 1)
 
     if (fetchError) {
       throw createError({
@@ -31,11 +30,8 @@ export default defineEventHandler(async (event) => {
     }
 
     return categories || []
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/categories/index')
   }
 })
 

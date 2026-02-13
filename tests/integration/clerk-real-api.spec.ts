@@ -67,7 +67,7 @@ describe('Clerk Real API Integration Tests', () => {
         expect(user.id).toBeDefined()
         expect(user.emailAddresses).toBeDefined()
         expect(user.emailAddresses.length).toBeGreaterThan(0)
-        expect(user.emailAddresses[0].emailAddress).toBe(testEmail)
+        expect(user.emailAddresses[0]?.emailAddress).toBe(testEmail)
         expect(user.firstName).toBe('Test')
         expect(user.lastName).toBe('User')
 
@@ -180,7 +180,7 @@ describe('Clerk Real API Integration Tests', () => {
         const retrievedUser = await clerkClient.users.getUser(user.id)
         expect(retrievedUser).toBeDefined()
         expect(retrievedUser.id).toBe(user.id)
-        expect(retrievedUser.emailAddresses[0].emailAddress).toBe(testEmail)
+        expect(retrievedUser.emailAddresses[0]?.emailAddress).toBe(testEmail)
 
         // Cleanup
         await clerkClient.users.deleteUser(user.id)

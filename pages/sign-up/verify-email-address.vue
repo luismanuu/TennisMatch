@@ -92,6 +92,7 @@ const userEmail = computed(() => {
 // Control whether to show verification component (prevents auto-send on reload)
 const shouldShowVerification = ref(false)
 const verificationKey = ref<string>('')
+const router = useRouter()
 
 onMounted(() => {
   if (process.client) {

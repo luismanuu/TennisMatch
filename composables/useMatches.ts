@@ -19,6 +19,11 @@ export const useMatches = () => {
     skip_24h_filter?: boolean
     opponent_id?: string
   }
+
+  const toError = (err: unknown): Error => {
+    if (err instanceof Error) return err
+    return new Error(typeof err === 'string' ? err : 'Unknown error')
+  }
   
   const fetchMatches = async (clerkId?: string, page: number = 1, limit: number = 10, filters?: MatchFilters) => {
     loading.value = true
@@ -34,7 +39,7 @@ export const useMatches = () => {
         clerkId = userId.value
       }
       
-      const queryParams: any = { clerk_id: clerkId, page, limit }
+      const queryParams: Record<string, string | number> = { clerk_id: clerkId, page, limit }
       if (filters?.status) queryParams.status = filters.status
       if (filters?.start_date) queryParams.start_date = filters.start_date
       if (filters?.end_date) queryParams.end_date = filters.end_date
@@ -58,8 +63,8 @@ export const useMatches = () => {
       pagination.value = response.pagination
       
       return response.matches
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -81,8 +86,8 @@ export const useMatches = () => {
       // Add the new match to the beginning of the list
       matches.value = [data, ...matches.value]
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -112,8 +117,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -139,8 +144,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -166,8 +171,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -192,8 +197,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -218,8 +223,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -244,8 +249,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -260,8 +265,8 @@ export const useMatches = () => {
       const allMatches = await fetchMatches()
       // Filter for scheduled matches
       return allMatches.filter(m => m.status === 'scheduled')
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -287,8 +292,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -313,8 +318,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -339,8 +344,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -366,8 +371,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -392,8 +397,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -418,8 +423,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -445,8 +450,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -472,8 +477,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -498,8 +503,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -524,8 +529,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false
@@ -550,8 +555,8 @@ export const useMatches = () => {
         matches.value[index] = data
       }
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false

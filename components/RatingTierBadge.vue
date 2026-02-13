@@ -78,7 +78,7 @@ const tierInfo = computed<RatingTierInfo>(() => {
       return tier
     }
   }
-  return RATING_TIERS[0]
+  return RATING_TIERS[0]!
 })
 
 const displayText = computed(() => {

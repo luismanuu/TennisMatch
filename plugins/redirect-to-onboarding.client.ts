@@ -23,8 +23,14 @@ export default defineNuxtPlugin(() => {
       return
     }
     
-    // Wait a bit for Clerk to fully initialize
+    // Wait a bit for Clerk to fully initialize and let other components load first
     await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Check if player is already loaded (might have been loaded by another component)
+    if (player.value) {
+      hasCheckedOnboarding = true
+      return
+    }
     
     // Check if user has a player profile
     try {
@@ -53,8 +59,14 @@ export default defineNuxtPlugin(() => {
   router.afterEach(async (to) => {
     // Only check if going to home page and user is authenticated
     if (to.path === '/' && isAuthenticated.value && userId.value && !hasCheckedOnboarding) {
-      // Wait a bit for any pending operations
+      // Wait a bit for any pending operations (page might load player first)
       await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Check if player is already loaded (might have been loaded by the page)
+      if (player.value) {
+        hasCheckedOnboarding = true
+        return
+      }
       
       // Check if user has a player profile
       try {

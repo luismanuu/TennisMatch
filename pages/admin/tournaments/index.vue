@@ -146,7 +146,7 @@
                     Puntos por Victoria - Fase de Grupos
                   </label>
                   <input
-                    v-model.number="tournamentForm.points_config.group_stage"
+                    v-model.number="tournamentForm.points_config!.group_stage"
                     type="number"
                     min="1"
                     class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
@@ -161,7 +161,7 @@
                     Puntos por Victoria - Playoffs
                   </label>
                   <input
-                    v-model.number="tournamentForm.points_config.playoffs"
+                    v-model.number="tournamentForm.points_config!.playoffs"
                     type="number"
                     min="1"
                     class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
@@ -465,7 +465,7 @@ const handleCreateTournament = async () => {
 const loadTournaments = async (page?: number) => {
   try {
     // Handle "open" filter (tournaments without category)
-    let categoryFilter = filters.value.category_id || undefined
+    let categoryFilter: string | null | undefined = filters.value.category_id || undefined
     if (categoryFilter === 'open') {
       categoryFilter = null // Pass null to filter for tournaments without category
     }

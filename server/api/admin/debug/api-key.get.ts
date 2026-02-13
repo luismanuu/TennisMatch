@@ -1,4 +1,6 @@
 import { requireAdmin } from '~/server/utils/admin'
+import { clerkIdQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 /**
  * Debug endpoint to check if API key is configured
@@ -6,15 +8,8 @@ import { requireAdmin } from '~/server/utils/admin'
  */
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     await requireAdmin(clerkId)
 
@@ -30,11 +25,7 @@ export default defineEventHandler(async (event) => {
       envVarName: 'OPENROUTER_API_KEY',
       note: 'Check that OPENROUTER_API_KEY is set in Vercel environment variables'
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error',
-      data: error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/debug/api-key')
   }
 })

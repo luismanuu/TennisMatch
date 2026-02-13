@@ -1,25 +1,15 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { adminTournamentMatchesListQuerySchema, tournamentIdSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const query = validateQuery(adminTournamentMatchesListQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const limit = query.limit ?? 5000
+    const offset = query.offset ?? 0
+    const tournamentId = validateParam(tournamentIdSchema, getRouterParam(event, 'id'))
 
     await requireAdmin(clerkId)
 
@@ -42,6 +32,10 @@ export default defineEventHandler(async (event) => {
         )
       `)
       .eq('tournament_id', tournamentId)
+      .order('bracket_type', { ascending: true })
+      .order('round_number', { ascending: true })
+      .order('bracket_position', { ascending: true })
+      .range(offset, offset + limit - 1)
 
     if (tmError) {
       throw createError({
@@ -52,11 +46,8 @@ export default defineEventHandler(async (event) => {
     }
 
     return tournamentMatches || []
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/tournaments/[id]/matches')
   }
 })
 

@@ -1,5 +1,9 @@
 import type { Category } from '~/types'
 
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(typeof err === 'string' ? err : 'Unknown error')
+}
+
 export const useCategories = () => {
   const categories = ref<Category[]>([])
   const loading = ref(false)
@@ -17,8 +21,8 @@ export const useCategories = () => {
       const data = await $fetch<Category[]>('/api/categories')
       categories.value = data
       return data
-    } catch (err: any) {
-      error.value = err
+    } catch (err: unknown) {
+      error.value = toError(err)
       throw err
     } finally {
       loading.value = false

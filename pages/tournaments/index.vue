@@ -164,6 +164,19 @@
               <Icon name="heroicons:chevron-right" class="w-6 h-6 text-foreground-muted flex-shrink-0" />
             </div>
           </div>
+
+          <!-- Load More -->
+          <div
+            v-if="!isPlayerView && activeTab !== 'all' && publicTournamentsHasMore"
+            class="flex justify-center pt-4"
+          >
+            <button
+              @click="loadMore()"
+              class="px-6 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 font-semibold hover:border-accent/50 hover-lift transition-all"
+            >
+              Cargar más
+            </button>
+          </div>
         </div>
 
           <!-- Empty State -->
@@ -191,7 +204,15 @@ const { isOrganizer } = useOrganizer()
 const isStaff = computed(() => isAdmin.value || isOrganizer.value)
 const isPlayerView = computed(() => !isStaff.value)
 
-const { tournaments, loading, fetchTournaments, fetchPastTournaments } = useTournaments()
+const {
+  tournaments,
+  loading,
+  fetchTournaments,
+  fetchPastTournaments,
+  setTournaments,
+  publicTournamentsHasMore,
+  publicTournamentsPageSize
+} = useTournaments()
 const { categories, fetchCategories } = useCategories()
 
 const activeTab = ref<'all' | 'upcoming' | 'active' | 'past'>('all')
@@ -199,6 +220,8 @@ const filters = ref({
   search: '',
   category_id: ''
 })
+
+const listPage = ref(1)
 
 const filteredTournaments = computed(() => {
   let filtered = tournaments.value
@@ -230,7 +253,7 @@ const formatDate = (dateString: string) => {
   })
 }
 
-const getConfirmedRegistrationsCount = (tournament: Tournament) => {
+const getConfirmedRegistrationsCount = (tournament: Tournament | any) => {
   if (!tournament.registrations || tournament.registrations.length === 0) return 0
   // Count only confirmed registrations that haven't been withdrawn
   return tournament.registrations.filter(
@@ -238,45 +261,67 @@ const getConfirmedRegistrationsCount = (tournament: Tournament) => {
   ).length
 }
 
+const buildTournamentFilters = () => {
+  // Handle "open" filter (tournaments without category)
+  let categoryFilter: string | null | undefined = filters.value.category_id || undefined
+  if (categoryFilter === 'open') {
+    categoryFilter = null
+  }
+
+  return {
+    category_id: categoryFilter,
+    search: filters.value.search || undefined
+  }
+}
+
 const loadTournaments = async () => {
   try {
-    // Handle "open" filter (tournaments without category)
-    let categoryFilter: string | null | undefined = filters.value.category_id || undefined
-    if (categoryFilter === 'open') {
-      categoryFilter = null // Pass null to filter for tournaments without category
-    }
+    listPage.value = 1
+    const baseFilters = buildTournamentFilters()
     
     if (activeTab.value === 'past') {
       await fetchPastTournaments({
-        category_id: categoryFilter,
-        search: filters.value.search || undefined
-      })
+        ...baseFilters
+      }, 1, publicTournamentsPageSize.value)
     } else if (activeTab.value === 'all') {
       // Load all tournaments including completed ones
       // First get upcoming and active (this updates tournaments.value)
       const activeData = await fetchTournaments({
         status: undefined, // Don't filter by status to get both upcoming and active
-        category_id: categoryFilter,
-        search: filters.value.search || undefined
-      })
-      // Save the active data before fetchPastTournaments overwrites it
-      const activeTournaments = [...activeData]
+        ...baseFilters
+      }, 1, publicTournamentsPageSize.value)
       // Then get completed tournaments (this will overwrite tournaments.value)
       const completedData = await fetchPastTournaments({
-        category_id: categoryFilter,
-        search: filters.value.search || undefined
-      })
+        ...baseFilters
+      }, 1, publicTournamentsPageSize.value)
       // Combine both lists
-      tournaments.value = [...activeTournaments, ...completedData]
+      setTournaments([...activeData, ...completedData])
     } else {
       await fetchTournaments({
         status: activeTab.value,
-        category_id: categoryFilter,
-        search: filters.value.search || undefined
-      })
+        ...baseFilters
+      }, 1, publicTournamentsPageSize.value)
     }
   } catch (err) {
     console.error('Error loading tournaments:', err)
+  }
+}
+
+const loadMore = async () => {
+  if (activeTab.value === 'all' || !publicTournamentsHasMore.value) return
+
+  const nextPage = listPage.value + 1
+  listPage.value = nextPage
+  const baseFilters = buildTournamentFilters()
+
+  try {
+    if (activeTab.value === 'past') {
+      await fetchPastTournaments({ ...baseFilters }, nextPage, publicTournamentsPageSize.value, true)
+    } else {
+      await fetchTournaments({ status: activeTab.value, ...baseFilters }, nextPage, publicTournamentsPageSize.value, true)
+    }
+  } catch (err) {
+    console.error('Error loading more tournaments:', err)
   }
 }
 

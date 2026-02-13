@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
     // Get registration
     const { data: registration, error: regError } = await supabase
       .from('tournament_registrations')
-      .select('*')
+      .select('id, tournament_id, player_id, status')
       .eq('tournament_id', tournamentId)
       .eq('player_id', player_id)
       .single()
@@ -136,11 +136,11 @@ export default defineEventHandler(async (event) => {
       // Walkover: mark all matches as completed with opponent winning
       const { data: matches } = await supabase
         .from('tournament_matches')
-        .select('match_id, match:matches(*)')
+        .select('match_id, match:matches(id, player1_id, player2_id)')
         .eq('tournament_id', tournamentId)
 
       for (const tm of matches || []) {
-        const match = tm.match as any
+        const match = (tm as unknown as { match?: { id: string; player1_id: string; player2_id: string } | null }).match
         if (match && (match.player1_id === player_id || match.player2_id === player_id)) {
           const winnerId = match.player1_id === player_id ? match.player2_id : match.player1_id
           await supabase
@@ -168,11 +168,8 @@ export default defineEventHandler(async (event) => {
       success: true,
       message: `Player withdrawal handled with ${option} option`
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/tournaments/[id]/withdraw')
   }
 })
 

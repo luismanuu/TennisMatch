@@ -55,6 +55,10 @@ const authState = computed(() => ({
 
 const userObject = computed(() => {
   if (!user.value) return null
+
+  const u = user.value as unknown as Record<string, unknown>
+  const hasPrivateMetadata = 'privateMetadata' in u && u.privateMetadata != null
+
   return {
     id: user.value.id,
     firstName: user.value.firstName,
@@ -62,7 +66,7 @@ const userObject = computed(() => {
     emailAddresses: user.value.emailAddresses,
     publicMetadata: user.value.publicMetadata,
     unsafeMetadata: user.value.unsafeMetadata,
-    privateMetadata: user.value.privateMetadata ? '[REDACTED]' : null,
+    privateMetadata: hasPrivateMetadata ? '[REDACTED]' : null,
     // Get all keys
     allKeys: Object.keys(user.value)
   }
@@ -98,9 +102,11 @@ const checkServerAdmin = async () => {
       query: { clerk_id: clerkUserId.value }
     })
     serverIsAdmin.value = result.isAdmin
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to check admin status'
     console.error('Error checking server admin:', error)
-    alert(`Error: ${error.message || 'Failed to check admin status'}`)
+    alert(`Error: ${message}`)
   }
 }
 

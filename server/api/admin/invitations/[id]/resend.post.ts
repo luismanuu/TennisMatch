@@ -1,5 +1,16 @@
 import { requireAdmin } from '~/server/utils/admin'
 import { getClerkClient, revokePendingInvitationsByEmail, getAllClerkInvitations } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function getStringProp(obj: unknown, key: string): string | undefined {
+  const r = asRecord(obj)
+  const v = r ? r[key] : undefined
+  return typeof v === 'string' ? v : undefined
+}
 
 export default defineEventHandler(async (event) => {
   try {
@@ -25,12 +36,20 @@ export default defineEventHandler(async (event) => {
     let invitation
     try {
       const { invitations } = await getAllClerkInvitations()
-      invitation = invitations.find((inv: any) => inv.id === invitationId)
-    } catch (getError: any) {
-      console.error('Error fetching invitation from Clerk:', getError)
+      const typedInvitations = invitations as unknown as Array<{
+        id: string
+        emailAddress?: string | null
+        revoked?: boolean
+        status?: string | null
+        publicMetadata?: unknown
+      }>
+      invitation = typedInvitations.find((inv) => inv.id === invitationId)
+    } catch (getError: unknown) {
+      logger.error('Error fetching invitation from Clerk', getError, { invitationId })
+      const message = getError instanceof Error ? getError.message : 'Unknown error'
       throw createError({
         statusCode: 404,
-        statusMessage: `Invitation not found in Clerk: ${getError?.message || 'Unknown error'}`,
+        statusMessage: `Invitation not found in Clerk: ${message}`,
         data: getError
       })
     }
@@ -49,10 +68,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const metadata = (invitation.publicMetadata as any) || {}
+    const metadata = (asRecord(invitation.publicMetadata) ?? {}) as Record<string, unknown>
     const email = invitation.emailAddress
-    const name = metadata.name || email?.split('@')[0] || 'Unknown'
-    const invitationToken = metadata.invitationToken || ''
+    const name = (getStringProp(metadata, 'name') || email?.split('@')[0] || 'Unknown') as string
+    const invitationToken = getStringProp(metadata, 'invitationToken') || ''
     
     if (!email) {
       throw createError({
@@ -74,14 +93,18 @@ export default defineEventHandler(async (event) => {
       if (!invitation.revoked) {
         try {
           await client.invitations.revokeInvitation(invitationId)
-        } catch (revokeError: any) {
+        } catch (revokeError: unknown) {
           // If it's already revoked or doesn't exist, that's okay
-          console.warn('Could not revoke invitation (may already be revoked):', revokeError?.message)
+          const message = revokeError instanceof Error ? revokeError.message : 'Unknown error'
+          logger.warn('Could not revoke invitation (may already be revoked)', { 
+            error: message, 
+            invitationId 
+          })
         }
       }
       
       // Create a new invitation with the same data
-      const newInvitationPayload: any = {
+      const newInvitationPayload = {
         emailAddress: email,
         publicMetadata: {
           ...metadata,
@@ -91,12 +114,14 @@ export default defineEventHandler(async (event) => {
       }
       
       if (invitationUrl) {
-        newInvitationPayload.redirectUrl = invitationUrl
+        ;(newInvitationPayload as { redirectUrl?: string }).redirectUrl = invitationUrl
       }
 
-      const newInvitation = await client.invitations.createInvitation(newInvitationPayload)
+      const newInvitation = await client.invitations.createInvitation(
+        newInvitationPayload as Parameters<typeof client.invitations.createInvitation>[0]
+      )
 
-      console.log('Invitation resent successfully:', {
+      logger.info('Invitation resent successfully', {
         oldId: invitationId,
         newId: newInvitation.id,
         email: email
@@ -108,40 +133,41 @@ export default defineEventHandler(async (event) => {
         invitation_id: newInvitation.id,
         invitation_status: newInvitation.status
       }
-    } catch (resendError: any) {
-      console.error('Error resending invitation:', {
-        message: resendError?.message,
-        statusCode: resendError?.statusCode,
-        status: resendError?.status,
-        errors: resendError?.errors,
-        clerkError: resendError?.clerkError
+    } catch (resendError: unknown) {
+      const err = typeof resendError === 'object' && resendError !== null ? (resendError as Record<string, unknown>) : null
+      logger.error('Error resending invitation', resendError, {
+        invitationId,
+        statusCode: err?.['statusCode'],
+        status: err?.['status'],
+        errors: err?.['errors'],
+        clerkError: err?.['clerkError']
       })
       
       // Extract more specific error message
-      let errorMessage = resendError?.message || 'Unknown error'
-      if (resendError?.errors && Array.isArray(resendError.errors) && resendError.errors.length > 0) {
-        const firstError = resendError.errors[0]
-        errorMessage = firstError?.longMessage || firstError?.message || errorMessage
+      let errorMessage = (err && typeof err['message'] === 'string' ? (err['message'] as string) : '') || 'Unknown error'
+      const errorsValue = err ? err['errors'] : undefined
+      if (Array.isArray(errorsValue) && errorsValue.length > 0) {
+        const firstError = errorsValue[0]
+        const firstErrorRecord = asRecord(firstError)
+        errorMessage =
+          (firstErrorRecord && typeof firstErrorRecord['longMessage'] === 'string'
+            ? (firstErrorRecord['longMessage'] as string)
+            : undefined) ||
+          (firstErrorRecord && typeof firstErrorRecord['message'] === 'string' ? (firstErrorRecord['message'] as string) : undefined) ||
+          errorMessage
       }
       
       throw createError({
-        statusCode: resendError?.statusCode || resendError?.status || 500,
+        statusCode:
+          (err && typeof err['statusCode'] === 'number' ? (err['statusCode'] as number) : undefined) ||
+          (err && typeof err['status'] === 'number' ? (err['status'] as number) : undefined) ||
+          500,
         statusMessage: `Failed to resend invitation: ${errorMessage}`,
         data: resendError
       })
     }
-  } catch (error: any) {
-    // If it's already a createError, re-throw it
-    if (error.statusCode) {
-      throw error
-    }
-    
-    console.error('Unexpected error in resend invitation endpoint:', error)
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/invitations/[id]/resend')
   }
 })
 

@@ -1,30 +1,55 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
-import { getRatingTier } from '~/server/utils/rating-system'
+import { getRatingTier, RATING_TIERS } from '~/server/utils/rating-system'
 import type { RatingTier } from '~/types'
+import { adminRankingsLeaderboardsQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+
+type CityRef = { id: string; name: string }
+type CategoryRef = { id: string; name: string }
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function toCityRef(value: unknown): CityRef | null {
+  const r = asRecord(value)
+  if (!r) return null
+  return typeof r.id === 'string' && typeof r.name === 'string' ? { id: r.id, name: r.name } : null
+}
+
+function toCategoryRef(value: unknown): CategoryRef | null {
+  const r = asRecord(value)
+  if (!r) return null
+  return typeof r.id === 'string' && typeof r.name === 'string' ? { id: r.id, name: r.name } : null
+}
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const cityId = query.city_id as string | undefined
-    const categoryId = query.category_id as string | undefined
+    const query = validateQuery(adminRankingsLeaderboardsQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const cityId = query.city_id
+    const categoryId = query.category_id
     const tier = query.tier as RatingTier | undefined
-    const search = query.search as string | undefined
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 100, 500)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
-    const exportFormat = query.export as string | undefined // 'csv' or 'json'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const search = query.search
+    const limit = query.limit ?? 100
+    const offset = query.offset ?? 0
+    const exportFormat = query.export
 
     await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
+
+    // Push tier filter down into DB via ELO range (so totals match)
+    let minElo: number | null = null
+    let maxElo: number | null = null
+    if (tier) {
+      const tierInfo = RATING_TIERS.find(t => t.tier === tier)
+      if (tierInfo) {
+        minElo = tierInfo.minElo
+        maxElo = Number.isFinite(tierInfo.maxElo) ? tierInfo.maxElo : null
+      }
+    }
 
     // Build query
     let queryBuilder = supabase
@@ -56,6 +81,9 @@ export default defineEventHandler(async (event) => {
       queryBuilder = queryBuilder.ilike('name', `%${search.trim()}%`)
     }
 
+    if (minElo !== null) queryBuilder = queryBuilder.gte('elo', minElo)
+    if (maxElo !== null) queryBuilder = queryBuilder.lte('elo', maxElo)
+
     // Get total count
     let countQuery = supabase
       .from('players')
@@ -71,6 +99,9 @@ export default defineEventHandler(async (event) => {
     if (search && search.trim()) {
       countQuery = countQuery.ilike('name', `%${search.trim()}%`)
     }
+
+    if (minElo !== null) countQuery = countQuery.gte('elo', minElo)
+    if (maxElo !== null) countQuery = countQuery.lte('elo', maxElo)
 
     const { count: totalCount } = await countQuery
 
@@ -104,7 +135,21 @@ export default defineEventHandler(async (event) => {
     }
 
     // Calculate ranks and add tier information
-    let rankings = players.map((player, index) => {
+    const rankings: Array<{
+      id: string
+      name: string | null
+      elo: number
+      rank: number
+      rating_tier: string
+      tier_color: string
+      total_matches_played: number
+      win_streak: number
+      loss_streak: number
+      placement_matches_completed: number
+      is_in_placement: boolean
+      city: CityRef | null
+      category: CategoryRef | null
+    }> = players.map((player, index) => {
       const tierInfo = getRatingTier(player.elo || 0)
       const isInPlacement = (player.total_matches_played || 0) === 0 || 
         ((player.placement_matches_completed || 0) < 3)
@@ -121,15 +166,10 @@ export default defineEventHandler(async (event) => {
         loss_streak: player.loss_streak || 0,
         placement_matches_completed: player.placement_matches_completed || 0,
         is_in_placement: isInPlacement,
-        city: player.city as any,
-        category: player.category as any
+        city: toCityRef(player.city),
+        category: toCategoryRef(player.category)
       }
     })
-
-    // Apply tier filter after ranking calculation
-    if (tier) {
-      rankings = rankings.filter(r => r.rating_tier === tier)
-    }
 
     // Handle export
     if (exportFormat === 'csv') {
@@ -141,8 +181,8 @@ export default defineEventHandler(async (event) => {
         r.rating_tier,
         r.total_matches_played,
         r.win_streak,
-        (r.city as any)?.name || 'N/A',
-        (r.category as any)?.name || 'N/A'
+        r.city?.name || 'N/A',
+        r.category?.name || 'N/A'
       ])
 
       const csvContent = [
@@ -187,11 +227,7 @@ export default defineEventHandler(async (event) => {
         search
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/rankings/leaderboards')
   }
 })

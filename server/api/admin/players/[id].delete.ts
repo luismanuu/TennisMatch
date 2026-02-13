@@ -68,11 +68,8 @@ export default defineEventHandler(async (event) => {
         status: 'deleted'
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'DELETE /api/admin/players/[id]')
   }
 })
 

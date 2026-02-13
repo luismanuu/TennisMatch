@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { createClerkClient } from '@clerk/clerk-sdk-node'
+import { logger } from '~/server/utils/logger'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -39,9 +40,13 @@ export default defineEventHandler(async (event) => {
         const config = useRuntimeConfig()
         const client = createClerkClient({ secretKey: config.clerkSecretKey })
         await client.invitations.revokeInvitation(pendingPlayer.clerk_invitation_id)
-        console.log('Revoked Clerk invitation:', pendingPlayer.clerk_invitation_id)
-      } catch (clerkError: any) {
-        console.warn('Warning: Could not revoke Clerk invitation (may not exist):', clerkError?.message)
+        logger.info('Revoked Clerk invitation', { invitationId: pendingPlayer.clerk_invitation_id })
+      } catch (clerkError: unknown) {
+        const err = typeof clerkError === 'object' && clerkError !== null ? (clerkError as Record<string, unknown>) : null
+        logger.warn('Could not revoke Clerk invitation (may not exist)', { 
+          error: err && typeof err['message'] === 'string' ? (err['message'] as string) : 'Unknown error', 
+          invitationId: pendingPlayer.clerk_invitation_id 
+        })
         // Continue with deletion even if Clerk revocation fails
       }
     }
@@ -69,11 +74,8 @@ export default defineEventHandler(async (event) => {
         email: pendingPlayer.email
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'DELETE /api/admin/pending-players/[id]')
   }
 })
 

@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     // Fetch pending player
     const { data: pendingPlayer, error: fetchError } = await supabase
       .from('pending_players')
-      .select('*')
+      .select('id, status, invitation_token, clerk_invitation_id, email, name')
       .eq('id', pendingPlayerId)
       .single()
     
@@ -81,11 +81,8 @@ export default defineEventHandler(async (event) => {
       invitation_id: invitation.id,
       invitation_status: invitation.status
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/pending-players/[id]/resend')
   }
 })
 

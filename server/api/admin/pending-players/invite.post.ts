@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { revokePendingInvitationsByEmail, getClerkClient, createInvitation } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
 import { randomUUID } from 'crypto'
 
 export default defineEventHandler(async (event) => {
@@ -56,12 +57,16 @@ export default defineEventHandler(async (event) => {
     
     // Create Clerk invitation using the existing utility function
     try {
-      console.log('Admin creating Clerk invitation for:', { email, name, invitationToken })
+      logger.info('Admin creating Clerk invitation', { email, name })
 
       // Use the existing createInvitation function which has proper error handling
       const invitation = await createInvitation(email, name, invitationToken)
 
-      console.log('Clerk invitation created successfully:', { id: invitation.id, email: invitation.emailAddress, status: invitation.status })
+      logger.info('Clerk invitation created successfully', { 
+        id: invitation.id, 
+        email: invitation.emailAddress, 
+        status: invitation.status 
+      })
 
       // Return success - we no longer store invitations in DB, only in Clerk
       return {
@@ -74,15 +79,12 @@ export default defineEventHandler(async (event) => {
           name: name
         }
       }
-    } catch (invitationError: any) {
+    } catch (invitationError: unknown) {
       // The createInvitation function already handles error logging and formatting
       throw invitationError
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/pending-players/invite')
   }
 })
 

@@ -147,9 +147,9 @@
             </div>
 
             <!-- Error Message -->
-            <div v-if="error" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50 flex items-center gap-3">
+            <div v-if="formError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50 flex items-center gap-3">
               <Icon name="heroicons:exclamation-circle" class="w-5 h-5 text-red-400 flex-shrink-0" />
-              <p class="text-size-4 font-regular text-red-400">{{ error.message }}</p>
+              <p class="text-size-4 font-regular text-red-400">{{ formError.message }}</p>
             </div>
 
             <!-- Success Message -->
@@ -209,6 +209,7 @@ const formData = ref({
 })
 
 const success = ref(false)
+const formError = ref<Error | null>(null)
 
 const selectedCategory = computed(() => {
   if (!formData.value.category_id || !categories.value) return null
@@ -250,7 +251,7 @@ const handleSubmit = async () => {
   if (!userId.value) return
 
   success.value = false
-  error.value = null
+  formError.value = null
 
   try {
     if (player.value) {
@@ -278,8 +279,8 @@ const handleSubmit = async () => {
       navigateTo('/profile')
     }, 1500)
   } catch (err: any) {
-    // Error is handled by the composable
     console.error('Error updating profile:', err)
+    formError.value = err instanceof Error ? err : new Error('Error al actualizar el perfil')
   }
 }
 

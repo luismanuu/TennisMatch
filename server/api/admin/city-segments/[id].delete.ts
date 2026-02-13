@@ -1,28 +1,17 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
+import { clerkIdQuerySchema, uuidSchema, validateParam, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const segmentId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    if (!segmentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Segment ID is required'
-      })
-    }
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
+    const segmentId = validateParam(uuidSchema, getRouterParam(event, 'id'))
+    const query = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
     
     // Verify admin
-    await checkIsAdmin(clerkId)
+    await requireAdmin(clerkId)
     
     const supabase = getSupabaseAdmin()
     
@@ -33,7 +22,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', segmentId)
     
     if (deleteError) {
-      console.error('Error deleting city segment:', deleteError)
+      logger.error('Error deleting city segment', deleteError, { segmentId: getRouterParam(event, 'id') })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to delete city segment'
@@ -44,10 +33,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       message: 'City segment deleted successfully',
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'DELETE /api/admin/city-segments/[id]')
   }
 })

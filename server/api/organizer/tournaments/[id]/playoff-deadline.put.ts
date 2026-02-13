@@ -71,11 +71,8 @@ export default defineEventHandler(async (event) => {
       success: true,
       message: `${bracket_type} bracket deadlines set successfully`
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'PUT /api/organizer/tournaments/[id]/playoff-deadline')
   }
 })
 

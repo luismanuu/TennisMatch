@@ -125,7 +125,7 @@ const emit = defineEmits<{
 
 // Define navigation items
 const navItems = computed(() => {
-  const items = [
+  const items: Array<{ to: string; label: string; icon: string; isActive: boolean; badge?: number }> = [
     {
       to: '/',
       label: 'Dashboard',
@@ -136,7 +136,8 @@ const navItems = computed(() => {
       to: '/matches',
       label: 'Partidos',
       icon: 'heroicons:calendar',
-      isActive: props.currentPath.startsWith('/matches')
+      isActive: props.currentPath.startsWith('/matches'),
+      badge: props.notificationCount ?? 0
     },
     {
       to: '/my-ranking',

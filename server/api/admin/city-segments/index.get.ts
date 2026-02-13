@@ -1,24 +1,17 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
+import { adminListPaginationSchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
+    const query = validateQuery(adminListPaginationSchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const limit = query.limit ?? 50
+    const offset = query.offset ?? 0
     
-    // Pagination parameters
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify admin
-    await checkIsAdmin(clerkId)
+    await requireAdmin(clerkId)
     
     const supabase = getSupabaseAdmin()
     
@@ -58,7 +51,7 @@ export default defineEventHandler(async (event) => {
       .range(offset, offset + limit - 1)
     
     if (segmentsError) {
-      console.error('Error fetching city segments:', segmentsError)
+      logger.error('Error fetching city segments', segmentsError)
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch city segments'
@@ -66,6 +59,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Transform data to include cities array directly
+    type CityRef = { id: string; name: string; order: number | null }
     const transformedSegments = segments?.map(segment => ({
       id: segment.id,
       name: segment.name,
@@ -73,9 +67,12 @@ export default defineEventHandler(async (event) => {
       created_at: segment.created_at,
       updated_at: segment.updated_at,
       cities: segment.city_segment_cities
-        ?.map((csc: any) => csc.city)
-        .filter(Boolean)
-        .sort((a: any, b: any) => a.order - b.order) ?? [],
+        ?.map((csc: unknown) => {
+          const row = csc as { city?: CityRef | null } | null
+          return row?.city ?? null
+        })
+        .filter((c): c is CityRef => Boolean(c))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) ?? [],
     })) ?? []
     
     return {
@@ -85,10 +82,7 @@ export default defineEventHandler(async (event) => {
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/city-segments/index')
   }
 })

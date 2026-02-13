@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { getClerkUser } from '~/server/utils/clerk'
 import { createInvitation } from '~/server/utils/clerk'
+import { logger } from '~/server/utils/logger'
 import { randomUUID } from 'crypto'
 import type { CreatePendingPlayerPayload } from '~/types'
 
@@ -87,30 +88,38 @@ export default defineEventHandler(async (event) => {
     // Create Clerk invitation
     let clerkInvitationId: string | undefined
     try {
-      console.log('Creating Clerk invitation for:', { email, name, invitationToken })
+      logger.info('Creating Clerk invitation', { email, name })
       const invitation = await createInvitation(email, name, invitationToken)
       clerkInvitationId = invitation.id
-      console.log('Clerk invitation created successfully:', { id: invitation.id, email: invitation.emailAddress, status: invitation.status })
-    } catch (invitationError: any) {
-      console.error('Error creating Clerk invitation:', {
-        error: invitationError,
-        message: invitationError?.message,
-        statusCode: invitationError?.statusCode,
-        statusMessage: invitationError?.statusMessage,
+      logger.info('Clerk invitation created successfully', { 
+        id: invitation.id, 
+        email: invitation.emailAddress, 
+        status: invitation.status 
+      })
+    } catch (invitationError: unknown) {
+      const err = typeof invitationError === 'object' && invitationError !== null ? (invitationError as Record<string, unknown>) : null
+      logger.error('Error creating Clerk invitation', invitationError, { 
         email,
-        name
+        name,
+        message: err && typeof err['message'] === 'string' ? (err['message'] as string) : undefined,
+        statusCode: err && typeof err['statusCode'] === 'number' ? (err['statusCode'] as number) : undefined,
+        statusMessage: err && typeof err['statusMessage'] === 'string' ? (err['statusMessage'] as string) : undefined
       })
       // Throw error to prevent creating pending player without invitation
       // This ensures the user knows the invitation failed
       throw createError({
         statusCode: 500,
-        statusMessage: `Failed to send invitation email: ${invitationError?.message || invitationError?.statusMessage || 'Unknown error'}. Please check your Clerk configuration and try again.`,
+        statusMessage: `Failed to send invitation email: ${
+          (err && typeof err['message'] === 'string' ? (err['message'] as string) : undefined) ||
+          (err && typeof err['statusMessage'] === 'string' ? (err['statusMessage'] as string) : undefined) ||
+          'Unknown error'
+        }. Please check your Clerk configuration and try again.`,
         data: invitationError
       })
     }
     
     // Create pending player record
-    const { data: pendingPlayer, error: createError } = await supabase
+    const { data: pendingPlayer, error: insertError } = await supabase
       .from('pending_players')
       .insert({
         name,
@@ -128,20 +137,17 @@ export default defineEventHandler(async (event) => {
       `)
       .single()
     
-    if (createError) {
+    if (insertError) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create pending player',
-        data: createError
+        data: insertError
       })
     }
     
     return pendingPlayer
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/pending-players/index')
   }
 })
 

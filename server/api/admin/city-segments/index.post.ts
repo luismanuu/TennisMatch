@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { checkIsAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
 import type { CreateCitySegmentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -37,7 +38,7 @@ export default defineEventHandler(async (event) => {
       .single()
     
     if (segmentError) {
-      console.error('Error creating city segment:', segmentError)
+      logger.error('Error creating city segment', segmentError)
       if (segmentError.code === '23505') {
         throw createError({
           statusCode: 400,
@@ -62,7 +63,7 @@ export default defineEventHandler(async (event) => {
         .insert(citySegmentCities)
       
       if (citiesError) {
-        console.error('Error adding cities to segment:', citiesError)
+        logger.error('Error adding cities to segment', citiesError, { segmentId: segment.id })
         // Don't fail the request, segment was created successfully
       }
     }
@@ -97,6 +98,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Transform data
+    type CityRef = { id: string; name: string; order: number | null }
     const transformedSegment = {
       id: completeSegment.id,
       name: completeSegment.name,
@@ -104,19 +106,19 @@ export default defineEventHandler(async (event) => {
       created_at: completeSegment.created_at,
       updated_at: completeSegment.updated_at,
       cities: completeSegment.city_segment_cities
-        ?.map((csc: any) => csc.city)
-        .filter(Boolean)
-        .sort((a: any, b: any) => a.order - b.order) ?? [],
+        ?.map((csc: unknown) => {
+          const row = csc as { city?: CityRef | null } | null
+          return row?.city ?? null
+        })
+        .filter((c): c is CityRef => Boolean(c))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) ?? [],
     }
     
     return {
       success: true,
       segment: transformedSegment,
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/city-segments/index')
   }
 })

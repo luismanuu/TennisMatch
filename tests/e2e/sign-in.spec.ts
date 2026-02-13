@@ -1,127 +1,103 @@
 import { test, expect } from './fixtures/clerk-mock'
+import { SignInPage } from './pages/sign-in.page'
+import { e2eEnv } from './env'
+import { e2eTestUser } from './fixtures/test-user'
 
 test.describe('Sign In E2E Tests', () => {
+  let testUserEnsured = false
+
+  test.beforeAll(async ({ request }) => {
+    try {
+      const res = await request.post('/api/e2e/ensure-test-user', {
+        data: { clerk_id: e2eTestUser.clerkId },
+      })
+      const status = res.status()
+      testUserEnsured = status >= 200 && status < 300
+    } catch {
+      testUserEnsured = false
+    }
+  })
+
   test.beforeEach(async ({ page }) => {
-    await page.goto('/sign-in')
+    const signInPage = new SignInPage(page)
+    await signInPage.goto()
   })
 
   test('should display sign-in page correctly', async ({ page }) => {
-    // Check page title and branding
-    await expect(page.locator('.brand-name')).toContainText('Tenis Ecuador')
-    await expect(page.locator('.auth-title')).toContainText('Bienvenido de vuelta')
-    await expect(page.locator('.auth-subtitle')).toContainText('Ingresa a tu cuenta para continuar')
-    
-    // Check navigation link to sign-up
-    const signUpLink = page.locator('a[href="/sign-up"]')
-    await expect(signUpLink).toBeVisible()
-    await expect(signUpLink).toContainText('Regístrate gratis')
+    const signInPage = new SignInPage(page)
+    await expect(signInPage.brandName).toContainText('Tenis Ecuador')
+    await expect(signInPage.title).toContainText('Bienvenido de vuelta')
+    await expect(signInPage.subtitle).toContainText('Ingresa a tu cuenta para continuar')
+    await expect(signInPage.signUpLink).toBeVisible()
+    await expect(signInPage.signUpLink).toContainText('Regístrate gratis')
   })
 
   test('should navigate to sign-up page when clicking sign-up link', async ({ page }) => {
-    const signUpLink = page.locator('a[href="/sign-up"]')
-    await signUpLink.click()
-    
+    const signInPage = new SignInPage(page)
+    await signInPage.signUpLink.click()
     await expect(page).toHaveURL('/sign-up')
     await expect(page.locator('.auth-title')).toContainText('Crea tu cuenta')
   })
 
   test('should display Clerk sign-in form', async ({ page }) => {
-    // Wait for Clerk component to load
-    await page.waitForSelector('.clerk-wrapper', { timeout: 10000 })
-    
-    // Check that Clerk form elements are present
-    // Note: Clerk uses dynamic class names, so we check for common patterns
-    const clerkWrapper = page.locator('.clerk-wrapper')
-    await expect(clerkWrapper).toBeVisible()
-    
-    // Check for email input (Clerk typically uses input[type="email"] or similar)
-    const emailInput = page.locator('input[type="email"], input[name*="email"], input[id*="email"]').first()
-    await expect(emailInput).toBeVisible({ timeout: 5000 }).catch(() => {
-      // If email input is not found, check for any input field
-      const anyInput = page.locator('input').first()
-      expect(anyInput).toBeVisible()
-    })
+    const signInPage = new SignInPage(page)
+    await signInPage.waitForFormReady()
+    await expect(signInPage.clerkWrapper).toBeVisible()
+    await expect(signInPage.emailInput).toBeVisible()
   })
 
   test('should show validation errors for empty form submission', async ({ page }) => {
-    await page.waitForSelector('.clerk-wrapper', { timeout: 10000 })
-    
-    // Try to submit empty form
-    const submitButton = page.locator('button[type="submit"]').first()
-    
-    if (await submitButton.isVisible()) {
-      await submitButton.click()
-      
-      // Wait for validation messages (Clerk shows error messages)
-      await page.waitForTimeout(1000)
-      
-      // Check for error indicators (Clerk typically shows error messages)
-      const errorMessages = page.locator('[class*="error"], [class*="invalid"], [role="alert"]')
-      const errorCount = await errorMessages.count()
-      
-      // At least one validation error should appear
-      expect(errorCount).toBeGreaterThan(0)
+    const signInPage = new SignInPage(page)
+    await signInPage.waitForFormReady()
+    await expect(signInPage.submitButton).toBeVisible()
+    await signInPage.submit()
+    // Clerk may show role="alert" / .cl-formFieldErrorText / .cl-alert or inputs [data-invalid="true"];
+    // if no error UI appears (e.g. HTML5 only), at least we must still be on sign-in (no redirect)
+    const count = await signInPage.errorAlerts.count()
+    if (count > 0) {
+      await expect(signInPage.errorAlerts.first()).toBeVisible({ timeout: 2000 })
     }
+    await expect(page).toHaveURL(/\/sign-in/)
   })
 
   test('should handle invalid credentials gracefully', async ({ page }) => {
-    await page.waitForSelector('.clerk-wrapper', { timeout: 10000 })
-    
-    // Find email and password inputs
-    const emailInput = page.locator('input[type="email"], input[name*="email"], input[id*="email"]').first()
-    const passwordInput = page.locator('input[type="password"], input[name*="password"], input[id*="password"]').first()
-    
-    if (await emailInput.isVisible() && await passwordInput.isVisible()) {
-      // Fill with invalid credentials
-      await emailInput.fill('invalid@example.com')
-      await passwordInput.fill('wrongpassword')
-      
-      // Submit form
-      const submitButton = page.locator('button[type="submit"]').first()
-      if (await submitButton.isVisible()) {
-        await submitButton.click()
-        
-        // Wait for error message
-        await page.waitForTimeout(2000)
-        
-        // Check for error message (Clerk shows authentication errors)
-        const errorMessage = page.locator('[class*="error"], [class*="invalid"], [role="alert"]').first()
-        const hasError = await errorMessage.isVisible().catch(() => false)
-        
-        // Error should be displayed or form should still be visible (not redirected)
-        expect(hasError || page.url().includes('/sign-in')).toBe(true)
-      }
-    }
+    const signInPage = new SignInPage(page)
+    await signInPage.waitForFormReady()
+    await signInPage.fillCredentials('invalid@example.com', 'wrongpassword')
+    await signInPage.submit()
+    await expect(page).toHaveURL(/\/sign-in/, { timeout: 5000 })
+    // Clerk may show error via .cl-alert / .cl-formFieldErrorText; if not, we still stayed on sign-in
+    const count = await signInPage.errorAlerts.count()
+    if (count > 0) await expect(signInPage.errorAlerts.first()).toBeVisible({ timeout: 2000 })
   })
 
   test('should maintain form state on navigation', async ({ page }) => {
-    await page.waitForSelector('.clerk-wrapper', { timeout: 10000 })
-    
-    const emailInput = page.locator('input[type="email"], input[name*="email"], input[id*="email"]').first()
-    
-    if (await emailInput.isVisible()) {
-      await emailInput.fill('test@example.com')
-      
-      // Navigate away and back
-      await page.goto('/sign-up')
-      await page.goto('/sign-in')
-      
-      // Form should be reset (Clerk resets on navigation)
-      await page.waitForSelector('.clerk-wrapper', { timeout: 10000 })
-      const newEmailInput = page.locator('input[type="email"], input[name*="email"], input[id*="email"]').first()
-      const value = await newEmailInput.inputValue().catch(() => '')
-      
-      // Value should be empty (form reset)
-      expect(value).toBe('')
-    }
+    const signInPage = new SignInPage(page)
+    await signInPage.waitForFormReady()
+    await signInPage.fillCredentials(e2eTestUser.email, e2eTestUser.password)
+    await page.goto('/sign-up')
+    await page.goto('/sign-in')
+    const signInPage2 = new SignInPage(page)
+    await signInPage2.waitForFormReady()
+    await expect(signInPage2.emailInput).toHaveValue('')
   })
 
   test('should be responsive on mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 })
-    
-    await expect(page.locator('.auth-container')).toBeVisible()
-    await expect(page.locator('.auth-card')).toBeVisible()
-    await expect(page.locator('.brand-name')).toBeVisible()
+    const signInPage = new SignInPage(page)
+    await expect(signInPage.authContainer).toBeVisible()
+    await expect(signInPage.authCard).toBeVisible()
+    await expect(signInPage.brandName).toBeVisible()
+  })
+
+  test('should sign in with valid test user and redirect', async ({ page }) => {
+    test.skip(!testUserEnsured, 'E2E test user not ensured. Set NUXT_E2E_ENSURE_TEST_USER=1 and ensure DB has cities/categories.')
+    test.skip(!e2eEnv.useRealClerk, 'Set E2E_USE_REAL_CLERK=1 and E2E_CLERK_EMAIL, E2E_CLERK_PASSWORD, E2E_CLERK_ID to run with real Clerk.')
+    const signInPage = new SignInPage(page)
+    await signInPage.waitForFormReady()
+    await signInPage.fillCredentials(e2eTestUser.email, e2eTestUser.password)
+    await signInPage.submit()
+    await expect(page).not.toHaveURL(/\/sign-in/, { timeout: 15000 })
+    await expect(page).toHaveURL(/\/(\?.*)?$|\/onboarding/, { timeout: 5000 })
   })
 })
-

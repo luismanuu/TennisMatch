@@ -7,22 +7,17 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
+import { adminProcessMissingRatingHistoryQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const playerId = query.player_id as string | undefined
-    const matchId = query.match_id as string | undefined
-    const limit = parseInt(query.limit as string) || 100
-    const dryRun = query.dry_run === 'true'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminProcessMissingRatingHistoryQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const playerId = query.player_id
+    const matchId = query.match_id
+    const limit = query.limit ?? 100
+    const dryRun = query.dry_run ?? false
 
     // Verify admin access
     await requireAdmin(clerkId)
@@ -143,11 +138,11 @@ export default defineEventHandler(async (event) => {
             message: 'updateRatingsAfterMatch returned null (check logs for details)'
           })
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         results.push({
           match_id: match.id,
           status: 'error',
-          message: error.message || 'Unknown error'
+          message: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -163,10 +158,7 @@ export default defineEventHandler(async (event) => {
       total: matchesToProcess.length,
       results
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.message || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/matches/process-missing-rating-history')
   }
 })

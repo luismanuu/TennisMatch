@@ -229,10 +229,10 @@ const ANIMATION_CONFIGS: Record<string, RankAnimationConfig> = {
  */
 export function useRankAnimation(tier: RatingTier | string | null | undefined): RankAnimationConfig {
   if (!tier) {
-    return ANIMATION_CONFIGS['Unrated']
+    return ANIMATION_CONFIGS['Unrated']!
   }
 
-  return ANIMATION_CONFIGS[tier] || ANIMATION_CONFIGS['Bronze']
+  return ANIMATION_CONFIGS[tier] || ANIMATION_CONFIGS['Bronze']!
 }
 
 /**

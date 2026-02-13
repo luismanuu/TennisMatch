@@ -206,15 +206,15 @@ const groupedNotifications = computed(() => {
     const notifDay = new Date(notifDate.getFullYear(), notifDate.getMonth(), notifDate.getDate())
     
     if (notifDay.getTime() === today.getTime()) {
-      groups['Hoy'].push(notification)
+      groups['Hoy']!.push(notification)
     } else if (notifDay.getTime() === yesterday.getTime()) {
-      groups['Ayer'].push(notification)
+      groups['Ayer']!.push(notification)
     } else if (notifDate >= weekAgo) {
-      groups['Esta Semana'].push(notification)
+      groups['Esta Semana']!.push(notification)
     } else if (notifDate >= monthAgo) {
-      groups['Este Mes'].push(notification)
+      groups['Este Mes']!.push(notification)
     } else {
-      groups['Anteriores'].push(notification)
+      groups['Anteriores']!.push(notification)
     }
   })
   
@@ -250,15 +250,15 @@ const displayedNotifications = computed(() => {
     const notifDay = new Date(notifDate.getFullYear(), notifDate.getMonth(), notifDate.getDate())
     
     if (notifDay.getTime() === today.getTime()) {
-      groups['Hoy'].push(notification)
+      groups['Hoy']!.push(notification)
     } else if (notifDay.getTime() === yesterday.getTime()) {
-      groups['Ayer'].push(notification)
+      groups['Ayer']!.push(notification)
     } else if (notifDate >= weekAgo) {
-      groups['Esta Semana'].push(notification)
+      groups['Esta Semana']!.push(notification)
     } else if (notifDate >= monthAgo) {
-      groups['Este Mes'].push(notification)
+      groups['Este Mes']!.push(notification)
     } else {
-      groups['Anteriores'].push(notification)
+      groups['Anteriores']!.push(notification)
     }
   })
   

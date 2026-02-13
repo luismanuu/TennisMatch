@@ -88,11 +88,8 @@ export default defineEventHandler(async (event) => {
       message: 'Category created successfully',
       category
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/categories/index')
   }
 })
 

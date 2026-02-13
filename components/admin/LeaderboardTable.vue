@@ -115,7 +115,7 @@ interface Column {
 }
 
 interface Props {
-  data: any[]
+  data: readonly any[]
   columns: Column[]
   loading?: boolean
   showActions?: boolean

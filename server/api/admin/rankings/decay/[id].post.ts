@@ -1,35 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { checkAndApplyMonthlyDecay, applyDecay, calculateDecayAmount, ELO_DECAY_FLOOR, MATCHES_REQUIRED_PER_MONTH } from '~/server/utils/rating-system'
+import { adminDecayActionBodySchema, clerkIdQuerySchema, playerIdSchema, validateBody, validateParam, validateQuery } from '~/server/utils/validation'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const body = await readBody(event)
-    const clerkId = query.clerk_id as string
-    const playerId = getRouterParam(event, 'id')
-    const action = body.action as 'trigger' | 'exempt'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
-    }
-
-    if (!action || !['trigger', 'exempt'].includes(action)) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Invalid action. Must be "trigger" or "exempt"'
-      })
-    }
+    const { clerk_id: clerkId } = validateQuery(clerkIdQuerySchema, getQuery(event))
+    const playerId = validateParam(playerIdSchema, getRouterParam(event, 'id'))
+    const { action } = validateBody(adminDecayActionBodySchema, await readBody(event))
 
     await requireAdmin(clerkId)
 
@@ -122,11 +100,7 @@ export default defineEventHandler(async (event) => {
         }
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/rankings/decay/[id]')
   }
 })

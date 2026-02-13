@@ -1,26 +1,12 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { advanceTournamentPhase } from '~/server/utils/tournament-phases'
+import { clerkIdBodySchema, tournamentIdSchema, validateBody, validateQuery } from '~/server/utils/validation'
 
 export default defineEventHandler(async (event) => {
   try {
-    const body = await readBody(event)
-    const clerkId = body.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    if (!tournamentId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Tournament ID is required'
-      })
-    }
+    const { clerk_id: clerkId } = validateBody(clerkIdBodySchema, await readBody(event))
+    const tournamentId = validateQuery(tournamentIdSchema, getRouterParam(event, 'id'))
 
     await requireOrganizer(clerkId)
 
@@ -51,11 +37,8 @@ export default defineEventHandler(async (event) => {
       newPhase,
       message: `Tournament advanced to ${newPhase} phase`
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/organizer/tournaments/[id]/advance-phase')
   }
 })
 

@@ -189,9 +189,12 @@ const linePath = computed(() => {
 const areaPath = computed(() => {
   if (dataPoints.value.length === 0) return ''
   const points = dataPoints.value
+  const first = points[0]
+  const last = points[points.length - 1]
+  if (!first || !last) return ''
   const { min } = range.value
   const bottomY = scaleY(min)
-  return `${points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} L ${points[points.length - 1].x} ${bottomY} L ${points[0].x} ${bottomY} Z`
+  return `${points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} L ${last.x} ${bottomY} L ${first.x} ${bottomY} Z`
 })
 
 const filteredXLabels = computed(() => {

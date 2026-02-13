@@ -1,6 +1,8 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { requireAdmin } from '~/server/utils/admin'
+import { adminMatchRecalculateQuerySchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
 
 /**
  * Admin endpoint to force recalculate a match
@@ -9,26 +11,12 @@ import { requireAdmin } from '~/server/utils/admin'
  */
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const matchId = query.match_id as string | undefined
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminMatchRecalculateQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const matchId = query.match_id
 
     // Verify admin access
     await requireAdmin(clerkId)
-
-    if (!matchId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Match ID is required'
-      })
-    }
 
     const supabase = getSupabaseAdmin()
 
@@ -60,11 +48,24 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    type RatingHistoryRow = {
+      id: string
+      player_id: string
+      rating_reversed: boolean
+      elo_change: number
+      mmr_change: number | string | null
+      uncertainty_before: number | string | null
+      uncertainty_after: number | string | null
+      is_placement_match: boolean | null
+    }
+
     // Step 1: Get rating history for this match (including reversed entries)
     // We need to reverse any existing entries, whether they're reversed or not
     const { data: ratingHistory, error: historyError } = await supabase
       .from('rating_history')
-      .select('*')
+      .select(
+        'id, player_id, rating_reversed, elo_change, mmr_change, uncertainty_before, uncertainty_after, is_placement_match'
+      )
       .eq('match_id', matchId)
       // Get all entries, but prioritize non-reversed ones
       .order('rating_reversed', { ascending: true })
@@ -78,8 +79,9 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check if we have any rating history (reversed or not)
-    const hasReversedEntries = ratingHistory && ratingHistory.some((h: any) => h.rating_reversed)
-    const hasNonReversedEntries = ratingHistory && ratingHistory.some((h: any) => !h.rating_reversed)
+    const typedHistory = (ratingHistory ?? []) as unknown as RatingHistoryRow[]
+    const hasReversedEntries = typedHistory.some((h) => h.rating_reversed)
+    const hasNonReversedEntries = typedHistory.some((h) => !h.rating_reversed)
 
     if (!ratingHistory || ratingHistory.length === 0) {
       // No rating history at all - just recalculate directly
@@ -106,7 +108,7 @@ export default defineEventHandler(async (event) => {
     // Step 2: Reverse rating history entries (only if not already reversed)
     const playerIds = new Set<string>()
 
-    for (const entry of ratingHistory) {
+    for (const entry of typedHistory) {
       playerIds.add(entry.player_id)
 
       // Only mark as reversed if not already reversed
@@ -140,18 +142,22 @@ export default defineEventHandler(async (event) => {
         }
 
         // Find the non-reversed rating history entry for this player (use original values)
-        const playerHistory = ratingHistory.find((h: any) => h.player_id === playerId && !h.rating_reversed)
+        const playerHistory = typedHistory.find((h) => h.player_id === playerId && !h.rating_reversed)
         if (!playerHistory) continue
 
         // Calculate new ELO (subtract the change)
         const newElo = Math.max(1000, player.elo - playerHistory.elo_change)
         
         // Revert MMR (subtract the change)
-        const newMmr = Math.max(0, parseFloat(player.mmr.toString()) - parseFloat(playerHistory.mmr_change.toString()))
+        const mmrChange = Number(playerHistory.mmr_change ?? 0)
+        const newMmr = Math.max(0, parseFloat(player.mmr.toString()) - (Number.isFinite(mmrChange) ? mmrChange : 0))
         
         // Revert uncertainty (subtract the change)
-        const newUncertainty = Math.max(0, parseFloat(player.mmr_uncertainty.toString()) - 
-          (parseFloat(playerHistory.uncertainty_after.toString()) - parseFloat(playerHistory.uncertainty_before.toString())))
+        const uncertaintyAfter = Number(playerHistory.uncertainty_after ?? 0)
+        const uncertaintyBefore = Number(playerHistory.uncertainty_before ?? 0)
+        const uncertaintyDelta =
+          (Number.isFinite(uncertaintyAfter) ? uncertaintyAfter : 0) - (Number.isFinite(uncertaintyBefore) ? uncertaintyBefore : 0)
+        const newUncertainty = Math.max(0, parseFloat(player.mmr_uncertainty.toString()) - uncertaintyDelta)
 
         // Revert total matches
         const newTotalMatches = Math.max(0, player.total_matches_played - 1)
@@ -213,11 +219,7 @@ export default defineEventHandler(async (event) => {
         match_id: matchId
       }
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error',
-      data: error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'POST /api/admin/matches/recalculate')
   }
 })

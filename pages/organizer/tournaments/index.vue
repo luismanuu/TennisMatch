@@ -157,7 +157,7 @@
                     Puntos por Victoria - Fase de Grupos
                   </label>
                   <input
-                    v-model.number="tournamentForm.points_config.group_stage"
+                  v-model.number="tournamentForm.points_config!.group_stage"
                     type="number"
                     min="1"
                     class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
@@ -172,7 +172,7 @@
                     Puntos por Victoria - Playoffs
                   </label>
                   <input
-                    v-model.number="tournamentForm.points_config.playoffs"
+                  v-model.number="tournamentForm.points_config!.playoffs"
                     type="number"
                     min="1"
                     class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
@@ -273,6 +273,15 @@
               <Icon name="heroicons:chevron-right" class="w-6 h-6 text-foreground-muted flex-shrink-0" />
             </div>
           </div>
+
+          <div v-if="organizerTournamentsHasMore" class="flex justify-center pt-4">
+            <button
+              @click="loadMore()"
+              class="px-6 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 font-semibold hover:border-accent/50 hover-lift transition-all"
+            >
+              Cargar más
+            </button>
+          </div>
         </div>
 
         <!-- Empty State -->
@@ -302,11 +311,19 @@ definePageMeta({
   middleware: ['organizer']
 })
 
-const { tournaments, loading, fetchOrganizerTournaments, createTournament } = useOrganizer()
+const {
+  tournaments,
+  loading,
+  fetchOrganizerTournaments,
+  createTournament,
+  organizerTournamentsHasMore,
+  organizerTournamentsPageSize
+} = useOrganizer()
 const { categories, fetchCategories } = useCategories()
 
 const showCreateForm = ref(false)
 const creating = ref(false)
+const listPage = ref(1)
 
 const tournamentForm = ref<CreateTournamentPayload & { registration_open: boolean }>({
   name: '',
@@ -404,9 +421,22 @@ const handleCreateTournament = async () => {
 
 const loadTournaments = async () => {
   try {
-    await fetchOrganizerTournaments()
+    listPage.value = 1
+    await fetchOrganizerTournaments(1, organizerTournamentsPageSize.value)
   } catch (err) {
     console.error('Error loading tournaments:', err)
+  }
+}
+
+const loadMore = async () => {
+  if (!organizerTournamentsHasMore.value) return
+
+  const nextPage = listPage.value + 1
+  listPage.value = nextPage
+  try {
+    await fetchOrganizerTournaments(nextPage, organizerTournamentsPageSize.value, true)
+  } catch (err) {
+    console.error('Error loading more tournaments:', err)
   }
 }
 

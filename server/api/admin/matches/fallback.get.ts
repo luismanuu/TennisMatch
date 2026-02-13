@@ -1,21 +1,17 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
+import { logger } from '~/server/utils/logger'
+import { adminListPaginationSchema, validateQuery } from '~/server/utils/validation'
+import { getQuery } from 'h3'
+import type { PaginatedResponse } from '~/types'
+import { handleApiError } from '~/server/utils/errors'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<PaginatedResponse<unknown>> => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    // Pagination parameters
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminListPaginationSchema, getQuery(event))
+    const clerkId = query.clerk_id
+    const limit = query.limit ?? 50
+    const offset = query.offset ?? 0
 
     await requireAdmin(clerkId)
 
@@ -69,7 +65,7 @@ export default defineEventHandler(async (event) => {
 
     let matchesWithRatingIds: string[] = []
     if (allFallbackMatchIds && allFallbackMatchIds.length > 0) {
-      const allMatchIds = allFallbackMatchIds.map((m: any) => m.id)
+      const allMatchIds = (allFallbackMatchIds as unknown as Array<{ id: string }>).map((m) => m.id)
       const { data: ratingHistoryForAll } = await supabase
         .from('rating_history')
         .select('match_id')
@@ -77,9 +73,9 @@ export default defineEventHandler(async (event) => {
         .eq('rating_reversed', false)
       
       if (ratingHistoryForAll && Array.isArray(ratingHistoryForAll)) {
-        matchesWithRatingIds = ratingHistoryForAll
-          .map((entry: any) => entry.match_id)
-          .filter((id: string) => id) // Remove null/undefined
+        matchesWithRatingIds = (ratingHistoryForAll as unknown as Array<{ match_id: string | null }>)
+          .map((entry) => entry.match_id)
+          .filter((id): id is string => Boolean(id)) // Remove null/undefined
       }
     }
 
@@ -114,13 +110,13 @@ export default defineEventHandler(async (event) => {
 
     // Filter out matches that already have active rating
     const matchesWithRatingSet = new Set(matchesWithRatingIds)
-    let matchesWithoutRating = matches.filter((match: any) => !matchesWithRatingSet.has(match.id))
+    const matchesWithoutRating = (matches as unknown as Array<{ id: string }>).filter((match) => !matchesWithRatingSet.has(match.id))
     
     // Apply pagination after filtering
     const paginatedMatches = matchesWithoutRating.slice(offset, offset + limit)
 
     // Get rating history for remaining matches to check reprocessed status
-    const matchIds = paginatedMatches.map((m: any) => m.id)
+    const matchIds = paginatedMatches.map((m) => m.id)
     const { data: ratingHistory, error: historyError } = await supabase
       .from('rating_history')
       .select('match_id, rating_reversed')
@@ -128,41 +124,40 @@ export default defineEventHandler(async (event) => {
       .eq('rating_reversed', true) // Only get reprocessed ones
 
     if (historyError) {
-      console.error('Error fetching rating history for reprocessed status:', historyError)
+      logger.error('Error fetching rating history for reprocessed status', historyError)
     }
 
     // Create set of match IDs that have been reprocessed
     const reprocessedMatchIds = new Set<string>()
     if (ratingHistory && Array.isArray(ratingHistory)) {
-      ratingHistory.forEach((entry: any) => {
-        if (entry.match_id) {
-          reprocessedMatchIds.add(entry.match_id)
-        }
+      ;(ratingHistory as unknown as Array<{ match_id: string | null }>).forEach((entry) => {
+        if (entry.match_id) reprocessedMatchIds.add(entry.match_id)
       })
     }
 
     // Enrich matches with reprocessed status and fallback reason
-    const enrichedMatches = paginatedMatches.map((match: any) => {
+    const enrichedMatches = (paginatedMatches as unknown as Array<Record<string, unknown> & { id: string }>).map((match) => {
       const isReprocessed = reprocessedMatchIds.has(match.id)
       
       // Determine fallback reason
-      let fallbackReason = match.llm_calculation_reasoning || null
+      let fallbackReason = (typeof match['llm_calculation_reasoning'] === 'string' ? (match['llm_calculation_reasoning'] as string) : null) || null
       
       // If no reasoning stored, determine based on match state
       if (!fallbackReason) {
-        if (match.llm_calculation_failed === true) {
+        if (match['llm_calculation_failed'] === true) {
           fallbackReason = 'LLM calculation failed (error details not available)'
-        } else if (match.llm_elo_calculated === false && match.llm_calculation_failed === false) {
+        } else if (match['llm_elo_calculated'] === false && match['llm_calculation_failed'] === false) {
           // Check if it's a walkover
-          const isWalkover = match.score?.trim().toUpperCase() === 'WO'
+          const score = typeof match['score'] === 'string' ? (match['score'] as string) : null
+          const isWalkover = score?.trim().toUpperCase() === 'WO'
           if (isWalkover) {
             fallbackReason = 'Walkover (WO) match - using standard ELO calculation (no LLM needed)'
-          } else if (!match.score) {
+          } else if (!score) {
             fallbackReason = 'Match score not available. LLM calculation requires a score to analyze.'
           } else {
             fallbackReason = 'LLM calculation was not attempted - likely no API key configured (check OPENROUTER_API_KEY environment variable)'
           }
-        } else if (match.llm_elo_calculated === true) {
+        } else if (match['llm_elo_calculated'] === true) {
           fallbackReason = 'LLM calculation succeeded (this should not appear in fallback list)'
         } else {
           fallbackReason = 'Unknown reason - match may not have been processed yet'
@@ -182,11 +177,7 @@ export default defineEventHandler(async (event) => {
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/matches/fallback')
   }
 })

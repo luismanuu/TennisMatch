@@ -1,18 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/admin'
 import { getClerkClient } from '~/server/utils/clerk'
+import { adminPlayersListQuerySchema, validateQuery } from '~/server/utils/validation'
+import { logger } from '~/server/utils/logger'
 
 export default defineEventHandler(async (event) => {
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const query = validateQuery(adminPlayersListQuerySchema, getQuery(event))
+    const clerkId = query.clerk_id
 
     await requireAdmin(clerkId)
 
@@ -20,11 +15,11 @@ export default defineEventHandler(async (event) => {
     const clerkClient = getClerkClient()
 
     // Check if we should include deleted players
-    const includeDeleted = query.include_deleted === 'true'
+    const includeDeleted = query.include_deleted ?? false
     
     // Pagination parameters
-    const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
-    const offset = query.offset ? parseInt(query.offset as string) : 0
+    const limit = query.limit ?? 50
+    const offset = query.offset ?? 0
 
     // Build count query for total
     let countQuery = supabase
@@ -96,7 +91,7 @@ export default defineEventHandler(async (event) => {
           }
         } catch (err) {
           // Skip if user doesn't exist in Clerk
-          console.warn(`Could not fetch Clerk user for ${player.clerk_id}:`, err)
+          logger.warn('Could not fetch Clerk user', { error: err, clerkId: player.clerk_id, playerId: player.id })
           return {
             ...player,
             email: '',
@@ -112,11 +107,8 @@ export default defineEventHandler(async (event) => {
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  } catch (error: unknown) {
+    handleApiError(error, 'GET /api/admin/players')
   }
 })
 
