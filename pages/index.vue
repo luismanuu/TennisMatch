@@ -637,20 +637,27 @@
               class="glass-card p-6 text-center hover-lift group"
             >
               <div 
-                class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center border-2 transition-all group-hover:scale-110"
+                class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center border-2 transition-all group-hover:scale-110 overflow-hidden"
                 :style="{ 
                   backgroundColor: `${tier.color}20`,
                   borderColor: `${tier.color}40`,
                   color: tier.color
                 }"
               >
-                <Icon name="heroicons:trophy" class="w-8 h-8" />
+                <img
+                  v-if="getRankIcon(tier.tier)"
+                  :src="getRankIcon(tier.tier)"
+                  :alt="`${tier.tier} tier`"
+                  class="w-full h-full object-contain"
+                />
+                <Icon v-else name="heroicons:trophy" class="w-8 h-8" />
               </div>
               <h3 class="text-size-2 font-bold mb-2" :style="{ color: tier.color }">
-                {{ tier.tier }}
+                {{ tier.displayName ?? tier.tier }}
               </h3>
               <p class="text-size-4 text-foreground-muted">
-                {{ tier.minElo.toLocaleString() }} - {{ tier.maxElo === Infinity ? '∞' : tier.maxElo.toLocaleString() }} SR
+                <template v-if="tier.rangeLabel">{{ tier.rangeLabel }}</template>
+                <template v-else>{{ tier.minElo.toLocaleString() }} - {{ tier.maxElo === Infinity ? '∞' : tier.maxElo.toLocaleString() }} SR</template>
               </p>
             </div>
           </div>
@@ -662,56 +669,127 @@
         <div class="container-medium px-6">
           <div class="text-center mb-16">
             <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-              <Icon name="heroicons:question-mark-circle" class="w-4 h-4 text-accent" />
+              <Icon name="heroicons:rocket-launch" class="w-4 h-4 text-accent" />
               <span class="text-size-4 font-semibold text-accent">Cómo Funciona</span>
             </div>
             <h2 class="text-size-1 font-semibold text-foreground mb-4">
-              Comienza en 3 simples pasos
+              Comienza en 3 pasos y accede a todo
             </h2>
             <p class="text-size-3 font-regular text-foreground-muted max-w-2xl mx-auto">
-              Únete a la comunidad de tenistas más grande de Ecuador en menos de un minuto
+              Ranking SR, matchmaking inteligente, torneos, leaderboards y estadísticas. Todo en una sola plataforma.
             </p>
           </div>
-          
-          <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            <div class="glass-card-elevated p-8 text-center hover-lift">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-accent/80 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
-                1
+
+          <div class="relative max-w-5xl mx-auto">
+            <!-- Connecting line (desktop only) -->
+            <div class="hidden md:block absolute top-[4.5rem] left-[calc(16.67%+1rem)] right-[calc(16.67%+1rem)] h-0.5 bg-gradient-to-r from-accent via-accent-secondary to-purple-500 opacity-40"></div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+              <!-- Step 1 -->
+              <div class="group relative">
+                <div class="glass-card-elevated p-8 text-center hover-lift h-full flex flex-col relative overflow-hidden">
+                  <!-- Subtle top accent bar -->
+                  <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent to-accent/60"></div>
+
+                  <!-- Step number + icon -->
+                  <div class="relative mx-auto mb-6">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
+                      <Icon name="heroicons:user-plus" class="w-9 h-9 text-background" />
+                    </div>
+                    <div class="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-background border-2 border-accent flex items-center justify-center">
+                      <span class="text-xs font-bold text-accent">1</span>
+                    </div>
+                  </div>
+
+                  <h3 class="text-size-2 font-semibold text-foreground mb-3">Crea tu cuenta</h3>
+                  <p class="text-size-4 font-regular text-foreground-muted mb-5 flex-1">
+                    Regístrate en segundos con tu email y accede a la plataforma completa
+                  </p>
+
+                  <div class="space-y-2 pt-4 border-t border-border-subtle">
+                    <div class="flex items-center gap-2 text-size-5 text-foreground-muted">
+                      <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <span>Verificación instantánea</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-size-5 text-foreground-muted">
+                      <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <span>100% gratis, sin tarjeta</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Crea tu cuenta</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Regístrate en menos de 30 segundos con tu email
-              </p>
-              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
-                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
-                <span>Verificación instantánea</span>
+
+              <!-- Step 2 -->
+              <div class="group relative">
+                <div class="glass-card-elevated p-8 text-center hover-lift h-full flex flex-col relative overflow-hidden">
+                  <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent-secondary to-accent-secondary/60"></div>
+
+                  <div class="relative mx-auto mb-6">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-accent-secondary to-accent-secondary/70 flex items-center justify-center shadow-lg shadow-accent-secondary/20 group-hover:scale-110 transition-transform">
+                      <Icon name="heroicons:identification" class="w-9 h-9 text-background" />
+                    </div>
+                    <div class="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-background border-2 border-accent-secondary flex items-center justify-center">
+                      <span class="text-xs font-bold text-accent-secondary">2</span>
+                    </div>
+                  </div>
+
+                  <h3 class="text-size-2 font-semibold text-foreground mb-3">Completa tu perfil</h3>
+                  <p class="text-size-4 font-regular text-foreground-muted mb-5 flex-1">
+                    Configura tu ciudad, categoría y nivel para desbloquear todas las funciones
+                  </p>
+
+                  <div class="space-y-2 pt-4 border-t border-border-subtle">
+                    <div class="flex items-center gap-2 text-size-5 text-foreground-muted">
+                      <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <span>Ranking, matchmaking y torneos</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-size-5 text-foreground-muted">
+                      <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <span>Un perfil para todo</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 3 -->
+              <div class="group relative">
+                <div class="glass-card-elevated p-8 text-center hover-lift h-full flex flex-col relative overflow-hidden">
+                  <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-purple-500/60"></div>
+
+                  <div class="relative mx-auto mb-6">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20 group-hover:scale-110 transition-transform">
+                      <Icon name="heroicons:trophy" class="w-9 h-9 text-background" />
+                    </div>
+                    <div class="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-background border-2 border-purple-500 flex items-center justify-center">
+                      <span class="text-xs font-bold text-purple-400">3</span>
+                    </div>
+                  </div>
+
+                  <h3 class="text-size-2 font-semibold text-foreground mb-3">Comienza a competir</h3>
+                  <p class="text-size-4 font-regular text-foreground-muted mb-5 flex-1">
+                    Juega partidos de colocación, enfrenta rivales de tu tier y escala en el ranking
+                  </p>
+
+                  <div class="space-y-2 pt-4 border-t border-border-subtle">
+                    <div class="flex items-center gap-2 text-size-5 text-foreground-muted">
+                      <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <span>Matchmaking inteligente</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-size-5 text-foreground-muted">
+                      <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <span>Torneos y leaderboards</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="glass-card-elevated p-8 text-center hover-lift">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
-                2
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Completa tu perfil</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Agrega tu ciudad, categoría y nivel de juego
+
+            <!-- Bottom CTA hint -->
+            <div class="text-center mt-10">
+              <p class="text-size-4 text-foreground-muted mb-4">
+                <Icon name="heroicons:clock" class="w-4 h-4 inline text-accent" />
+                Todo el proceso toma menos de 2 minutos
               </p>
-              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
-                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
-                <span>Configuración rápida</span>
-              </div>
-            </div>
-            <div class="glass-card-elevated p-8 text-center hover-lift">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
-                3
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Comienza a competir</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Juega 3 partidos de colocación y obtén tu ranking inicial
-              </p>
-              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
-                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
-                <span>Matchmaking automático</span>
-              </div>
             </div>
           </div>
         </div>
@@ -986,7 +1064,10 @@ watch(() => player.value?.id, (newId) => {
   }
 }, { immediate: true })
 
-// Rating tiers for display
+// Rank icon helper for tier images (same as RankingSystemInfo / leaderboard)
+const getRankIcon = (tier: string) => useRankIconAsset(tier) || ''
+
+// Rating tiers for display (includes Top 100)
 const ratingTiers = [
   { tier: 'Bronze', minElo: 1, maxElo: 1499, color: '#CD7F32' },
   { tier: 'Silver', minElo: 1500, maxElo: 1999, color: '#C0C0C0' },
@@ -995,5 +1076,6 @@ const ratingTiers = [
   { tier: 'Diamond', minElo: 3000, maxElo: 3499, color: '#B9F2FF' },
   { tier: 'Master', minElo: 3500, maxElo: 3999, color: '#9932CC' },
   { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity, color: '#FF4500' },
+  { tier: 'Top100', minElo: 0, maxElo: Infinity, color: '#87CEEB', rangeLabel: 'Mejores 100', displayName: 'Top 100' },
 ]
 </script>

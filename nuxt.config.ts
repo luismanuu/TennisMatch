@@ -50,7 +50,6 @@ export default defineNuxtConfig({
 
   typescript: {
     strict: true,
-    // Disable dev typeCheck when E2E_RUNNING=1 to avoid vite-plugin-checker overlay blocking clicks
     typeCheck: process.env.E2E_RUNNING === '1' ? false : true,
   },
 })

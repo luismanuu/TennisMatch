@@ -1,0 +1,19 @@
+diff --git a/dist/checkers/vueTsc/prepareVueTsc.js b/dist/checkers/vueTsc/prepareVueTsc.js
+index a1271c849568c735578f884567193859e508afe0..6140a816c29fc40019502898a82b8bf9858dcf7a 100644
+--- a/dist/checkers/vueTsc/prepareVueTsc.js
++++ b/dist/checkers/vueTsc/prepareVueTsc.js
+@@ -40,7 +40,13 @@ async function prepareVueTsc() {
+   if (shouldBuildFixture) {
+     await rm(targetTsDir, { force: true, recursive: true });
+     await mkdir(targetTsDir, { recursive: true });
+-    const sourceTsDir = path.resolve(_require.resolve("typescript"), "../..");
++    let sourceTsDir;
++    try {
++      const projectRequire = createRequire(path.join(process.cwd(), "package.json"));
++      sourceTsDir = path.resolve(path.dirname(projectRequire.resolve("typescript")), "..");
++    } catch {
++      sourceTsDir = path.resolve(_require.resolve("typescript"), "../..");
++    }
+     await cp(sourceTsDir, targetTsDir, { recursive: true });
+     await writeFile(vueTscFlagFile, proxyApiPath);
+     await overrideTscJs(

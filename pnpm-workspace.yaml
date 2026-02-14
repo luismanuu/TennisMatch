@@ -1,0 +1,2 @@
+patchedDependencies:
+  vite-plugin-checker@0.12.0: patches/vite-plugin-checker@0.12.0.patch
