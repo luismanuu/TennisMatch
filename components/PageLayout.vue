@@ -1,13 +1,13 @@
 <template>
   <div class="page-container">
-    <!-- Ambient Background Effects -->
+    <!-- Ambient Background (quiet, theme-colored) -->
     <div class="page-ambient-bg">
       <div class="grid-pattern"></div>
     </div>
 
     <!-- Navigation -->
     <AppNavigation />
-    
+
     <!-- Spacer for fixed nav -->
     <div class="h-16"></div>
 
@@ -35,8 +35,6 @@ const containerClass = computed(() => {
     medium: 'container-medium',
     wide: 'container-wide'
   }
-  return `${sizeMap[props.containerSize]} px-6`
+  return `${sizeMap[props.containerSize]} px-4 sm:px-6`
 })
 </script>
-
-

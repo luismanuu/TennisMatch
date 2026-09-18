@@ -48,12 +48,8 @@
         <!-- Menu Header -->
         <div class="flex items-center justify-between p-6 border-b border-border-subtle">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center border-2 border-accent/30 shadow-lg shadow-accent/20">
-              <span class="text-lg">🎾</span>
-            </div>
-            <span class="text-size-3 font-semibold text-foreground">
-              Tenis Ecuador
-            </span>
+            <span class="brand-mark"><BrandMark /></span>
+            <span class="wordmark">Tenis Ecuador</span>
           </div>
           <button
             @click="emit('close')"
@@ -93,6 +89,10 @@
 
         <!-- Menu Footer -->
         <div class="p-4 border-t border-border-subtle mt-4">
+          <div class="flex items-center justify-between px-4 py-3 mb-2">
+            <span class="eyebrow">Tema</span>
+            <ThemeSwitcher show-label />
+          </div>
           <slot name="footer">
             <SignOutButton>
               <button class="flex items-center gap-3 px-4 py-3 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group w-full">

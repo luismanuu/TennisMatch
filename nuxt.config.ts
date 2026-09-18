@@ -15,8 +15,8 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: {
-        lang: 'es',
-        class: 'dark'
+        lang: 'es'
+        // data-theme + dark/light class are set by composables/useTheme.ts
       }
     },
     pageTransition: { name: 'page', mode: 'out-in' }
@@ -26,6 +26,14 @@ export default defineNuxtConfig({
     '@nuxt/ui',
     '@clerk/nuxt'
   ],
+
+  // Nuxt UI ships @nuxtjs/color-mode; the active theme drives dark/light (see useTheme)
+  colorMode: {
+    preference: 'dark',
+    fallback: 'dark',
+    classSuffix: '',
+    storageKey: 'te-color-mode'
+  },
 
   clerk: {
     publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY,

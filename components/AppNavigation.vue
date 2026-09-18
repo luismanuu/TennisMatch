@@ -1,6 +1,6 @@
 <template>
   <ClientOnly>
-    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
+    <nav class="nav-island">
       <div class="container-wide px-6">
         <div class="flex justify-between items-center h-16">
           <!-- Mobile Menu Button (Left Side) -->
@@ -17,13 +17,8 @@
             
             <!-- Logo -->
             <NuxtLink to="/" class="flex items-center gap-3 group">
-              <div class="relative w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center hover-bounce overflow-hidden border-2 border-accent/30 shadow-lg shadow-accent/20">
-                <span class="text-lg relative z-10">🎾</span>
-                <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-              </div>
-              <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors">
-                Tenis Ecuador
-              </span>
+              <span class="brand-mark group-hover:border-accent transition-colors"><BrandMark /></span>
+              <span class="wordmark group-hover:text-accent transition-colors">Tenis Ecuador</span>
             </NuxtLink>
           </div>
 
@@ -154,6 +149,7 @@
                 @mark-all-read="markAllRead"
               />
               
+              <ThemeSwitcher class="hidden md:inline-flex mx-1" />
               <SignOutButton>
                 <button class="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group">
                   <Icon name="heroicons:arrow-right-on-rectangle" class="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -163,6 +159,7 @@
             </template>
             <!-- Show guest navigation if not authenticated (only show after auth is loaded) -->
             <template v-else-if="authLoaded">
+              <ThemeSwitcher class="hidden md:inline-flex mr-1" />
               <NuxtLink 
                 to="/sign-in" 
                 class="flex items-center gap-2 px-3 py-2 rounded-xl text-size-4 font-regular text-foreground-muted hover:text-foreground hover:bg-surface-elevated transition-all group flex-shrink-0"
@@ -172,7 +169,7 @@
               </NuxtLink>
               <NuxtLink 
                 to="/sign-up" 
-                class="btn-primary text-size-4 !py-2 !px-3 sm:!px-4 group flex-shrink-0"
+                class="btn-primary !min-h-0 !py-2 !px-3 sm:!px-4 group flex-shrink-0"
               >
                 <Icon name="heroicons:sparkles" class="w-4 h-4 mr-1 sm:mr-2 group-hover:scale-110 transition-transform" />
                 <span class="hidden sm:inline">Comenzar Gratis</span>
@@ -188,17 +185,12 @@
       </div>
     </nav>
     <template #fallback>
-      <nav class="fixed top-0 left-0 right-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
+      <nav class="nav-island">
         <div class="container-wide px-6">
           <div class="flex justify-between items-center h-16">
             <NuxtLink to="/" class="flex items-center gap-3 group">
-              <div class="relative w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center hover-bounce overflow-hidden border-2 border-accent/30 shadow-lg shadow-accent/20">
-                <span class="text-lg relative z-10">🎾</span>
-                <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-              </div>
-              <span class="text-size-3 font-semibold text-foreground">
-                Tenis Ecuador
-              </span>
+              <span class="brand-mark group-hover:border-accent transition-colors"><BrandMark /></span>
+              <span class="wordmark group-hover:text-accent transition-colors">Tenis Ecuador</span>
             </NuxtLink>
             <div class="flex items-center gap-4">
               <div class="w-20 h-6 bg-surface rounded animate-pulse"></div>

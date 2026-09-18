@@ -1,11 +1,5 @@
 <template>
-  <div :class="headerClass">
-    <!-- Badge (optional) -->
-    <div v-if="badge" class="page-header-badge animate-fade-up">
-      <Icon v-if="badgeIcon" :name="badgeIcon" class="w-4 h-4 text-accent" />
-      <span class="text-size-4 font-semibold text-accent">{{ badge }}</span>
-    </div>
-
+  <header :class="headerClass">
     <!-- Back Link (optional) -->
     <NuxtLink
       v-if="backTo"
@@ -16,20 +10,32 @@
       <span>{{ backLabel || 'Volver' }}</span>
     </NuxtLink>
 
-    <!-- Title and Subtitle -->
-    <div :class="titleContainerClass">
-      <h1 class="page-header-title">{{ title }}</h1>
-      <p v-if="subtitle" class="page-header-subtitle">{{ subtitle }}</p>
-    </div>
+    <div :class="layout === 'split' ? 'flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4' : ''">
+      <div :class="titleContainerClass">
+        <!-- Eyebrow (optional) -->
+        <div v-if="badge" class="page-header-badge animate-fade-up">
+          <Icon v-if="badgeIcon" :name="badgeIcon" class="w-3.5 h-3.5" />
+          <span>{{ badge }}</span>
+        </div>
 
-    <!-- Action Button (optional) -->
-    <div v-if="$slots.actions" class="flex items-center gap-3 animate-fade-up animate-delay-1">
-      <slot name="actions" />
+        <!-- Title and Subtitle -->
+        <h1 class="page-header-title">{{ title }}</h1>
+        <p v-if="subtitle" class="page-header-subtitle">{{ subtitle }}</p>
+      </div>
+
+      <!-- Actions (optional) -->
+      <div v-if="$slots.actions" class="flex flex-wrap items-center gap-3 animate-fade-up animate-delay-1 sm:flex-shrink-0">
+        <slot name="actions" />
+      </div>
     </div>
-  </div>
+  </header>
 </template>
 
 <script setup lang="ts">
+/**
+ * Editorial page header: eyebrow · display title · subtitle, left-aligned.
+ * `layout="split"` places the actions slot to the right on ≥ sm screens.
+ */
 interface Props {
   title: string
   subtitle?: string
@@ -44,19 +50,6 @@ const props = withDefaults(defineProps<Props>(), {
   layout: 'centered'
 })
 
-const headerClass = computed(() => {
-  if (props.layout === 'split') {
-    return 'page-header-with-back flex items-start justify-between mb-8'
-  }
-  return 'page-header'
-})
-
-const titleContainerClass = computed(() => {
-  if (props.layout === 'split') {
-    return 'flex-1'
-  }
-  return ''
-})
+const headerClass = computed(() => (props.layout === 'split' ? 'page-header-with-back' : 'page-header'))
+const titleContainerClass = computed(() => (props.layout === 'split' ? 'flex-1 min-w-0' : ''))
 </script>
-
-
