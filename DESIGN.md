@@ -1,343 +1,127 @@
-# Tenis Ecuador · Design handoff
+# Tenis Ecuador · Design proposal
 
-Decision (2026-09-18, Luis): **Graphite theme, court-green accent, iOS glass
-system, photo-forward profile language.** This document is the complete brief
-for implementing that design in the Nuxt app. It stands alone; the class
-reference lives in `DESIGN_SYSTEM.md`.
+Revised 2026-09-18. **Graphite, court green, selective glass, and readable tennis photography.** This is the proposed revamp, not a claim that the Nuxt application has been migrated. This revision supersedes the earlier all-glass, capsule-heavy proposal.
 
-Where to look:
+## 1. Review and source of truth
 
-| What | Where |
-| --- | --- |
-| Interactive mock, every screen, all four accent explorations | `design/mock/index.html` (open in a browser; boards link to each other) |
-| Same mock on the shared canvas | https://claude.ai/artifact/U4VpbeqdkVKP9MoHMZKhGr (rows: cobalt, optic, clay, court) |
-| Mock generator (exact CSS values for every element) | `design/mock/generate.mjs` |
-| Token and class reference | `DESIGN_SYSTEM.md` |
-| Tokens, glass material, primitives (already in the app) | `assets/css/design-system.css` |
-| Tailwind bridge (semantic colors, fonts, radii) | `tailwind.config.ts` |
-| Theme runtime, fonts | `composables/useTheme.ts`, `app.config.ts` |
-| Placeholder photos + credits | `public/images/photos/`, `design/mock/photos/CREDITS.md` |
+- Open `design/mock/index.html` for the chosen direction and internal accent comparisons.
+- `design/mock/court-Inicio.html` and `court-Escritorio.html` render the same responsive home composition. Resize either; desktop is not a separate product.
+- `design/mock/generate.mjs` generates the standalone HTML directly. Run `node design/mock/generate.mjs` after editing screen markup or photo metadata.
+- `design/mock/mock.css` defines shared proposal tokens, components, responsive rules, and accessibility fallbacks. `mock.js` handles local appearance, example home states, and explanatory prototype dialogs.
+- `DESIGN_SYSTEM.md` specifies the reusable system and the future Nuxt/Tailwind bridge.
+- Existing application CSS, theme composables, and components are scaffolding. They are unchanged by this design-only revision.
+- The previously shared external canvas is a historical reference; it has not been updated. Local standalone screens are authoritative.
 
-The chosen screens are the `court-*.html` files. The other accents are
-explorations Luis compared; they stay switchable with `<html data-accent>` but
-are not the direction.
+The mock uses fictional player/match data. Theme controls, home-state selection, and profile statistics expansion work locally. Confirmation buttons open explanatory dialogs without saving data. Scheduling, rival search, tournaments, editing, and historical-match detail have clearly labeled destination placeholders. They are not completed product flows. Ranking currently demonstrates the national list and the player's neighborhood, not functioning geographic filters.
 
----
+## 2. Product principles
 
-## 1. Design read
+1. **The next action leads.** A player should immediately understand what needs attention, when they play next, and how to organize another match.
+2. **Photography establishes place.** Use it in one meaningful hero or result card. Dense rankings and schedules remain quiet and readable.
+3. **Glass expresses elevation.** Navigation floats; panels organize; lists support scanning. These surfaces have different visual weight.
+4. **One identity, two appearances.** Geist, the tennis-ball mark, and court green remain recognizable in dark and light modes.
+5. **Content determines height.** Names, scores, translated labels, and enlarged text must fit without clipping.
 
-Product UI for competitive amateur tennis players in Ecuador (Spanish copy).
-Premium consumer, Apple-adjacent, photo-forward like a fitness social app.
-Dials from the taste-skill preset "premium consumer / luxury / brand":
-`DESIGN_VARIANCE 8`, `MOTION_INTENSITY 6`, `VISUAL_DENSITY 3`.
+## 3. Brand and appearance
 
-Three ideas carry the whole thing:
+Graphite is the default: green-black `#0B1210`, foreground `#ECEEF0`, muted `#B5BEB8`, court green `#3FBA78`, and dark button text `#07150E`.
 
-1. **Real light behind glass.** Every surface is frosted glass sitting on an
-   ink background with grain and, where the page has a photo, that photo
-   blurred underneath. No gradient blobs, no flat cards.
-2. **Photography is content.** Profile headers, match cards and section
-   headers are photos with a dark scrim. Text sits on the photo.
-3. **One accent, used like a signal.** Court green on the primary button, the
-   active tab, links, the ranked-position badge. Nothing else is green.
+The light counterpart uses background `#F0F4F1`, foreground `#17271E`, muted `#4B6255`, and darker court green `#17673D` with white button text. The green is darkened for readability, not replaced by a different brand hue. Photo text stays white in both modes.
 
----
+The mock's Appearance page uses labeled native radios, with swatches inside 56px rows. Appearance belongs in settings, not a row of color samples competing with the main navigation. Its local preference is separate from the application's `te-theme` cookie. For implementation, retain SSR-safe persistence with a single authority for the theme and color-mode class.
 
-## 2. Color
+Cobalt, optic, and clay remain internal comparisons under a collapsed section of the mock index. Forest and Slate are not proposed customer-facing identities. The existing Phosphor tennis-ball mark is retained; the wordmark uses tighter tracking and a stronger “Ecuador.” Bespoke logo development is not part of this revision.
 
-All values are also defined as OKLCH channel tokens in `design-system.css`
-(`--accent-ch`, `--background-ch`, …) and exposed to Tailwind as
-`bg-accent`, `text-foreground-muted`, `border-glass-edge`, etc.
+## 4. Surface hierarchy
 
-### Base (Graphite, court accent)
-| Role | Hex | Notes |
+| Level | Usage | Treatment |
 | --- | --- | --- |
-| Ink (page background) | `#0B1210` | green-black; never pure black |
-| Text | `#ECEEF0` | |
-| Text muted | `#A5ABB3` | captions, mono meta |
-| Text subtle | `#6B7079` | disabled, dividers text |
-| Accent | `#3FBA78` | court green |
-| Accent hover | `#4FC886` | |
-| Text on accent | `#07150E` | dark, never white |
-| Success | `#7FC58F` | wins, positive deltas |
-| Danger | `#E08A7E` | losses, negative deltas |
-| Warning | `#D8B467` | pending, streaks |
-| Info | `#8FA9E6` | scheduled |
+| Floating glass | Top navigation and mobile tab island | 24px blur, restrained highlight, one subtle shadow, translucent fill |
+| Quiet panel | Rating, supporting statistics, match coordination | High-opacity surface, low-contrast edge, no backdrop blur; no decorative glow |
+| List surface | Rankings and upcoming matches | Solid surface, inset or row separators, no highlight gradient or shadow |
+| Photo | Identity, pending result, match context | Real image, dedicated dark scrim, white foreground, explicit reference credit |
 
-### Glass material (dark)
-| Layer | Value |
-| --- | --- |
-| Fill | `rgba(11,18,16,0.50)` (ink at 50%) |
-| Highlight gradient over the fill | `linear-gradient(135deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 55%, rgba(255,255,255,0.03) 100%)` |
-| Backdrop | `blur(28px) saturate(170%)` (islands: `blur(30px) saturate(180%)`; small pills: `blur(20px) saturate(160%)`) |
-| Edge | `1px solid rgba(255,255,255,0.16)` |
-| Specular line | `inset 0 1px 0 rgba(255,255,255,0.32)` plus `inset 0 -1px 0 rgba(255,255,255,0.04)` |
-| Shadow | `0 28px 70px -30px rgba(0,0,0,0.70)` |
-| Lens (active state fill, chips) | `rgba(255,255,255,0.10)` |
-| Divider inside glass | `rgba(255,255,255,0.08)` |
-| Accent tint (own row in ranking, action panel) | `rgba(63,186,120,0.26)` |
-| Solid fallback (`prefers-reduced-transparency`) | `#1B1E22` |
+Do not apply the navigation glass recipe to every box. At most one double bezel may be used for a genuine focal component; the current mock deliberately uses none, so the pending action remains dominant. Large tier artwork must fit inside its panel and remain secondary to meaningful content.
 
-### Tier colors (badges)
-Gold ring `rgba(226,196,106,0.55)` with label `#E2C46A`; platinum ring
-`rgba(200,205,215,0.35)`. Tier art is the existing PNG set in
-`public/images/ranks/`.
+Base backgrounds are plain ink or the light counterpart. Full-page blurred wallpaper and grain are optional future art direction, not default requirements. No gradient blobs, looping effects, or decorative progress bars.
 
-### Alternate accents (kept for comparison only)
-`data-accent="cobalt"` `#4B72D9` on `#0B0E15`; `optic` `#D4E24A` on `#0E100E`;
-`clay` `#D9643E` on `#120F0E`. Defined in `design-system.css`.
+## 5. Typography, spacing, and motion
 
----
+- Geist throughout, weights 400/500/600/700. Use Geist Mono only where a score or identifier benefits; ordinary labels stay readable sans-serif.
+- Large title: fluid 30–46px, line height 1.12, tracking −0.035em. Section heading: 20–22px. Body: 16px/1.5. Metadata: 13–14px. Photo credits: 12px with a 44px link target. Mobile tab labels: 11px, supported by familiar icons.
+- Numbers use tabular numerals. No essential 9.5px uppercase labels. Spell out “Victorias seguidas” and “SR este mes.”
+- Containers: 24px corners. Buttons and floating islands: pills. Inputs: 12–16px corners. This is a deliberate shape hierarchy, not a requirement that every element have the same radius.
+- Phone gutter: 16px. Tablet: 28px. Desktop: 48px inside a centered 1280px maximum container. Section gaps: 20–24px phone, 24–32px desktop.
+- Interactive targets: at least 44px; primary/secondary buttons use a 48px minimum and grow when text wraps.
+- Page-heading entrance: 350ms, 8px rise, no staggered content delays. Press feedback: scale .98 for 150ms. No loops. Reduced motion removes animations and transitions entirely.
 
-## 3. Background
+## 6. Responsive shell and content
 
-Composition, bottom to top, on every page:
+| Width | Content | Navigation |
+| --- | --- | --- |
+| 320–767px | Single column, natural document scrolling | Compact top brand/settings island and five labeled bottom tabs |
+| 768–899px | Two columns when useful; rankings remain one column | Compact top island and bottom tabs |
+| 900–1099px | Two columns, 24px gaps | Labeled desktop navigation; no bottom tabs |
+| 1100px+ | Centered layout, generous 32px gaps | Desktop island aligned with the content region |
 
-1. Ink `#0B1210` (`var(--background)`).
-2. If the page has a photo: the same photo as wallpaper. `position:absolute;
-   inset:-12%; width:124%; height:124%; object-fit:cover; filter: blur(44px)
-   saturate(1.35) brightness(0.55); opacity:0.55`. Desktop uses `blur(60px)`,
-   `opacity:0.5`.
-3. Scrim over the wallpaper: `linear-gradient(180deg, rgba(ink,0.10) 0%,
-   rgba(ink,0.55) 42%, rgba(ink,0.94) 100%)`.
-4. Film grain: SVG `feTurbulence` (`baseFrequency 0.85`, 3 octaves) at
-   `opacity 0.09`, `mix-blend-mode: overlay`, fixed, `pointer-events: none`.
-   In the app this is `.noise-overlay` in `app.vue` (`--noise-opacity: 0.07`).
+The bottom island respects `safe-area-inset-bottom`. Content reserves 112–116px plus the safe area so the final action/footer can scroll completely above it. Top offsets and content padding both include the top safe area. Do not use generic `.h-16:first-of-type` overrides to reserve shell space.
 
-Pages without a photo use steps 1 and 4 only. Never a radial or mesh gradient.
+Cards use minimum heights and in-flow text. Never fix the page to 390×844 or 1280×800, hide document overflow, or position all card copy absolutely. Allow names and metadata to wrap. The desktop and mobile DOM keep the same reading order: urgent action, persistent shortcuts, next match, supporting rating/statistics.
 
-Wallpaper per screen in the mock: Perfil = floodlit clay court (`hero.jpg`),
-Inicio = blue stadium (`bluenight.jpg`), Ranking = aerial club (`aerial.jpg`),
-Partido = court under lights (`claynight.jpg`), Escritorio = `claynight.jpg`.
-
----
-
-## 4. Typography
-
-- **Geist** for everything readable. Weights 400, 500, 600, 700.
-- **Geist Mono** (500) for meta: handle, location, dates, captions under
-  numbers, badge labels, status words. This is the only place uppercase,
-  letter-spaced text is allowed (badge labels at 9.5px, `0.06em`; the curved
-  name at 13px, `letter-spacing 4.5`).
-- Both load from Google Fonts in `useTheme.ts`; self-host before launch.
-
-| Style | Size / line | Weight | Tracking |
-| --- | --- | --- | --- |
-| Large title (phone) | 34 / 40 | 700 | -0.025em |
-| Desktop greeting | 48 / 52 | 700 | -0.03em |
-| Big stat (hero number) | 56 to 72 / 1 | 700 | -0.035em, tabular numerals |
-| Photo-card stat | 30 / 1 | 700 | -0.035em |
-| Title 2 (section) | 22 / 28 | 600 | -0.02em |
-| Card title | 19 / 26 | 600 | -0.015em |
-| Row title | 16 to 17 / 1.4 | 600 | -0.01em |
-| Body | 15 to 17 / 1.4 | 400 | |
-| Mono meta | 12 to 13 / 1.4 | 500 | |
-
----
-
-## 5. Shape, spacing, motion
-
-- **Shape rule:** containers 26px (mock) / `--radius-xl` 24px (app); inner
-  bezel core = container minus 6px; inputs 16px; every interactive element a
-  full pill; avatars are circles; photo-card corners 26px.
-- **Spacing:** 16px page gutter on phones, 56px on desktop. 18px between
-  sections on phones (16 on the profile), 20 to 32px on desktop. 8pt grid.
-- **Touch:** 44px minimum. Icon buttons 44 to 46px circles.
-- **Motion:** each section rises in once, `translateY(22px) scale(.985)` to
-  identity, 900ms `cubic-bezier(0.16, 1, 0.3, 1)`, staggered 90ms. Hover lifts
-  1px; press scales to 0.97. Everything off under `prefers-reduced-motion`.
-  No loops (retire the rank-icon scan lines and chromatic effects).
-
----
-
-## 6. Components
-
-Measurements are from the mock; exact CSS is in `design/mock/generate.mjs`.
-
-**Nav island (desktop)** `.nav-island`: floating glass pill, 60px tall, 16px
-from the top, inset 56px each side. Brand mark + wordmark left, links as pills
-(active = lens fill), search field pill 200px, bell, avatar ring.
-
-**Tab island (phone)** `.tabbar`: glass pill 70px tall, 14px from the edges
-and bottom, 5 tabs. Active tab gets the lens fill and the accent color; labels
-10.5px sentence case. Content scrolls under it.
-
-**Photo header** `.photo-header`: full-bleed image, `object-position: center
-40%`, scrim to ink. Contents: glass "Editar" pill top-right; curved name; avatar
-ring 104px (3px gradient ring, dark disc, initials 34px); handle in mono;
-one-line bio 15px centered, max 30ch; location row with the
-`navigation-arrow` glyph in mono.
-
-**Curved name**: inline SVG, `viewBox 0 0 260 84`, path
-`M 14 82 A 150 150 0 0 1 246 82`, `<textPath startOffset="50%"
-text-anchor="middle">` in Geist Mono 13px, letter-spacing 4.5, uppercase.
-Keep a visually hidden `<h1>` with the plain name for accessibility.
-
-**Badge capsules** `.capsule-row` / `.capsule`: 58×74px glass pills in a
-horizontal scroller with an edge fade and a round arrow button on the right.
-Content: tier PNG 30px or a Phosphor glyph 24px, plus a 9.5px uppercase mono
-label. Order on the profile: tier, ranked position, win streak, monthly SR
-gain, next tier, matches played, percentile.
-
-**Photo card** `.photo-card`: 204 to 224px tall on phones, 336px on desktop.
-Image, ink scrim (`0.55 → 0.10 at 38% → 0.30 at 60% → 0.90`), then a second
-gradient of accent at 18% over the bottom 45%. Top-left: 24px glyph + 30px
-stat. Bottom-left: title 19px + mono subtitle 12px, optional pill button.
-Bottom-right: avatar stack (30px circles, 35% overlap, ink ring) + a dark
-mono pill (`chats-circle` + count, or `clock` + "2 días").
-
-**Rating hero (double bezel)** `.glass-card` shell with 6px padding wrapping an
-inner core (`rgba(0,0,0,0.10)` + top highlight, radius 20px). Inside: mono
-label "Skill Rating", 56px number + mono "SR", chips (Oro, #12 de 184), tier
-PNG 88px right. Desktop adds a 2×2 grid of small stats separated by a divider.
-
-**Small stat tile**: glass, 128 to 150px tall, glyph top-left, 34 to 38px
-number, mono caption. Two per row.
-
-**Action panel**: glass with accent tint, mono label, title 2, sub, then a
-primary pill button and a text link. Only one per screen.
-
-**Grouped list**: glass container with rows (`padding 11px 16px`), 40px avatar
-circles, 16px title, mono city, right-aligned SR with tier PNG 18px and a
-mono delta (green up / coral down / "=" for none), caret. Dividers are inset
-78px. The user's own row gets the accent tint and an accent ring on the
-avatar; the first row can be a "big" row (48px avatar, 30px rank numeral).
-
-**Segmented control**: glass pill container, 38px segments, active segment =
-lens fill + inner highlight + soft shadow.
-
-**Primary button** `.btn-primary`: accent pill, 46 to 54px tall, text 15 to
-16px 600, dark text, a trailing 38px circular capsule holding the glyph
-(`rgba(0,0,0,0.14)` fill, inner highlight), soft accent shadow
-`0 10px 30px -14px accent`.
-
-**Secondary button**: glass pill with glyph + label. **Text link**: accent,
-15px 600, 44px hit area. Never pair a filled button with a ghost button on
-every row; prefer filled + text link.
-
-**Icons**: one family, one weight. Mock uses Phosphor Regular. In the app
-either keep Heroicons outline everywhere or add Phosphor via
-`@iconify-json/ph` and use `ph:` names with `<Icon>`. Do not mix.
-
----
+Validate 320, 390, 768, 900, 1024, 1280, and 1440px widths; short phone landscapes; keyboard navigation; and 200% text enlargement. Test long Spanish names, multi-line venues, missing images, and loading/error/empty states before production. The current mock is a design artifact, not a completed cross-device acceptance suite.
 
 ## 7. Screens
 
-### Perfil (`pages/profile/index.vue`)
-Data: `usePlayer()` (player, elo, tier, rank), `useAuth/useUser` (handle,
-name), match history for the cards, `useMonthlyDecay` for the warning.
-Layout, top to bottom: photo header (352px) with Editar, curved name, avatar,
-handle, bio, location; capsule row; photo card for the last result
-("+28 SR", "Victoria contra …", venue and score in mono, avatar stack, chat
-count); photo card for the next match ("Sáb 21", "Próximo: …", venue and
-time). Tab island with Perfil active. The second card is allowed to run under
-the tab island.
+### Inicio
 
-### Inicio (`pages/index.vue`, authenticated state)
-Data: `usePlayer`, `useNotifications` (pending actions), `useMatches`.
-Layout: mono date + bell (44px glass circle); large title "Buenas tardes,
-{nombre}"; rating hero (double bezel) with chips; photo card for the single
-most urgent pending action (score as the stat, "Confirma el resultado con …",
-pill "Confirmar", opponent avatar); two small stat tiles (streak, SR this
-month). Tab island with Inicio active. Guest state: keep the existing hero copy
-but restyle with the same shell; not in the mock.
+Greeting followed by the pending result in the dominant column. The pending card names the action and opponent before the score, and uses “Revisar resultado” to reach a dedicated review view. Scheduling and rival search remain directly below in both phone and desktop layouts. The next scheduled match follows. Rating and recent statistics support the main content, moving below it on phones.
 
-### Ranking (`pages/leaderboard/index.vue`)
-Data: `useLeaderboard`, `useCities`. Layout: photo header 190px (aerial club)
-with mono count and large title "Ranking", filter glass circle; segmented
-control Ecuador / Quito / Cerca de mí; grouped list with the top three (first
-row big); second grouped list starting with a "Ver puestos 4 a 10" link row
-and the rows around the user. No podium cards.
+An explicit prototype selector switches between “Resultado pendiente” and “Sin pendientes.” With no pending result, the lead panel invites scheduling and references the next match. Production should derive this priority from real notifications/match state, then handle no upcoming match and new-player states. Never invent urgency or completed activity.
 
-### Partido (`pages/matches/[id].vue`)
-Data: `useMatches`, rating impact from `/api/matches/[id]/rating-history` or
-the ELO preview endpoint. Layout: photo header 250px with back circle, title,
-mono status, venue in mono and the big date-time stat; players bezel pulled up
-40px over the photo (two 72px avatars, "vs" in mono, meta, divider, venue and
-format rows); two glass tiles "Si ganas +28" / "Si pierdes -19" (1.3fr 1fr);
-primary pill "Registrar resultado" with check capsule; two glass pills
-"WhatsApp" and "Otra fecha". Tab island with Partidos active.
+### Perfil
 
-### Escritorio (desktop Inicio)
-Nav island; 12-column grid, 32px gutters, content inset 56px, starting 96px
-from the top. Left 7 columns: greeting + primary pill + glass pill, rating
-bezel with 72px number, chips, 2×2 stats and the tier PNG; "Próximos
-partidos" grouped list. Right 4 columns (9 to 12): photo card (336px) for the
-pending action, "Ranking en Quito" grouped list. Everything on the blurred
-wallpaper.
+Photo hero with a normal, wrapping name; avatar; handle; short bio; location; and Editar. The curved name is optional future decoration, not the only readable identity, and is omitted in this revision. Three labeled stats are visible: tier, national rank, win streak. Native “Ver estadísticas” disclosure reveals monthly SR, matches played, and percentile. No horizontal capsule scroller hides essential information.
 
----
+Latest confirmed result and next match follow on phones and occupy the second column on desktop. The confirmed example is against Lucía Mora; Diego's result remains pending on Inicio. Each example has a distinct destination and status.
 
-## 8. Implementation plan (Nuxt 4, Nuxt UI 2, Tailwind 3)
+### Ranking
 
-Already in the repo, build passes:
+Restrained aerial header followed by quiet grouped lists. Top three have normal list rows; own position gets a subtle tint and leading edge. No podium cards. Names wrap and numeric SR remains right-aligned. National filtering is the mock's current scope; city and nearby filters need real availability, permission, and empty-state rules before implementation.
 
-- Tokens for Graphite (court default) and the accent variants, glass material
-  tokens, `--font-mono`; `tailwind.config.ts` maps them (`bg-accent`,
-  `text-foreground-muted`, `font-mono`, `rounded-xl`, …) and remaps the raw
-  hues the old pages use so they stay legible.
-- `useTheme()` sets `data-theme`, dark class, theme-color, fonts.
-- Shell: `AppNavigation.vue` renders as `.nav-island`; `BottomTabBar.vue`
-  renders as the glass `.tabbar`; `app.vue` adds `.has-tabbar` padding and the
-  `.noise-overlay` grain.
-- CSS primitives: `.glass-card`, `.glass-card-elevated`, `.btn-primary`
-  (pill), `.btn-secondary` (glass pill), `.photo-header`, `.avatar-ring`,
-  `.capsule-row`, `.capsule`, `.capsule-label`, `.photo-card` (+ `-body`,
-  `-stat`, `-title`, `-sub`), `.photo-pill`, `.avatar-stack`, `.meta-mono`,
-  `.page-ambient-bg > img.wallpaper`.
+### Partido and Resultado
 
-To build, in this order:
+Scheduled match: photo date/venue, two players, format and court, estimated rating impact, coordination actions. Desktop separates context from actions; phones retain the same order in one column. The estimated outcome is labeled as an estimate.
 
-1. **Components** (`components/ui/`): `GlassPanel.vue` (props: tint, bezel),
-   `PillButton.vue` (trailing glyph capsule, variants primary/glass/text),
-   `PhotoCard.vue` (props: src, alt, stat, icon, title, sub, people, pill,
-   to), `PhotoHeader.vue`, `CurvedName.vue` (SVG textPath + sr-only h1),
-   `BadgeCapsules.vue` (items: icon or tier, label, color), `StatTile.vue`,
-   `GlassSegmented.vue`, `RankRow.vue`, `AvatarRing.vue`, `AvatarStack.vue`.
-   Match the measurements in section 6; read `design/mock/generate.mjs` for
-   exact values.
-2. **Perfil** page with real data. Photos: use the player's club or city photo
-   when available, otherwise `public/images/photos/hero.jpg` (placeholder,
-   credited).
-3. **Inicio** authenticated state, then the guest state with the same shell.
-4. **Ranking**, replacing the podium with the grouped lists.
-5. **Partido**.
-6. Migrate remaining pages to `PageLayout` + `PageHeader` so they get the
-   shell for free; remove hand-rolled orbs, grid patterns, centered eyebrow
-   pills, glow classes.
+Pending-result review is a separate page with the correct opponent, date, proposed score, confirm, and correction actions. No prototype button sends a message or changes a match. Buttons outside this visual scope explain that the flow remains to be designed.
 
-Constraints: keep routes, composables and API calls as they are; do not
-rename form fields; keep Spanish copy in sentence case; no emoji as icons
-(replace the medal emoji in the leaderboard tier filter with the tier PNGs);
-no em dashes; no uppercase tracked labels outside the mono badge labels and
-the curved name.
+### Apariencia and photo credits
 
----
+Settings contains Graphite and Claro native radio choices with one typography/brand system. Photo credit pages expose authors, source links, license links, and display modifications. A “Foto de referencia” link appears on every generic photo panel.
 
-## 9. Review checklist
+## 8. Photography contract
 
-- Background is ink + grain (+ blurred photo when the page has one). No
-  gradient blobs anywhere.
-- Every surface uses the glass recipe: fill, highlight gradient, edge,
-  specular line, blur. Solid fallback present.
-- One accent (court green) on primary actions, active tab, links, own
-  position. Success/danger/warning/info only for state.
-- Photo cards have real photos with the two scrims; text passes 4.5:1 on them.
-- Mono only for meta; titles in Geist 600/700 with negative tracking.
-- Pills for all interactive elements; 26px cards; 44px targets.
-- Motion: staggered rise-in once, press feedback, nothing looping,
-  reduced-motion respected.
-- Sentence case, no dots as separators, no em dashes, no decorative status
-  dots, no progress bars with filled tracks.
-- Photos credited (`public/images/photos/CREDITS.md`) until replaced.
+`design/mock/photos/credits.json` is the mock's asset registry: author, license, source page, description, focal point, usage `reference`, and null `verifiedVenueId`. These placeholders are not photos of the named Ecuadorian venues. Decorative image elements use empty alt text because adjacent text communicates the content; the credits page supplies descriptive image text.
 
----
+Use `--on-photo`, `--on-photo-muted`, and `--photo-scrim` independently of page appearance. The scrim has at least 68% dark coverage everywhere, becoming 94% at the bottom. Text stays in normal flow and does not depend on a particular dark patch of the image. Photo focus indicators must also remain visible.
 
-## 10. Assets
+Before production, obtain club/player photos and verify venue association. Keep source, rights, focal point, description, and verified venue ID together. Provide appropriately sized AVIF/WebP with fallback, width/height metadata, responsive sources, lazy loading below the fold, and a plain surface fallback for unavailable photography. Current JPEG placeholders are retained without recompression; no local-venue authenticity or complete license audit is claimed.
 
-- `public/images/ranks/*.png`: tier badges (existing).
-- `public/images/photos/`: `hero.jpg`, `clayday.jpg`, `bluenight.jpg`,
-  `claynight.jpg`, `aerial.jpg`, 1600px, Wikimedia Commons CC BY-SA
-  placeholders. Attribution in `CREDITS.md`. Replace with club photography.
-- `design/mock/icons/`: the Phosphor Regular glyphs the mock uses.
-- Fonts: Geist and Geist Mono (Google Fonts today; self-host for launch).
+## 9. Implementation handoff, after design approval
+
+1. Centralize the semantic/material/photo tokens and fix the Tailwind subtle-opacity bridge described in `DESIGN_SYSTEM.md`.
+2. Build shell and layout components with explicit safe-area space and breakpoint ownership. Page headers expose plain, photo, and detail variants.
+3. Build Panel (quiet/list/floating), PhotoCard, PhotoHeader, StatGroup, RankRow, and Button. Prefer native details/radios for these interactions.
+4. Implement Inicio, Perfil, Ranking, and Partido with existing APIs and routes. Derive all displayed states from actual data; preserve API/form contracts.
+5. Add skeletons, inline retry errors, empty states, permission boundaries, loading buttons, and missing-image fallbacks in the same layouts.
+6. Migrate remaining screens; retire old orbs, loops, duplicate layout rules, and raw palette names incrementally. Self-host fonts before launch.
+
+## 10. Review gates
+
+- The urgent action is first and core actions survive on mobile.
+- Shell glass is stronger than content surfaces; dense lists remain quiet.
+- Text over photos is readable in both appearances; verify normal text at 4.5:1 and large text at 3:1.
+- All essential labels are explicit; color is not the only status cue.
+- No horizontal page scrolling at supported widths, clipped long names, or bottom actions hidden by navigation.
+- Native radio/disclosure behavior, visible focus, keyboard-accessible links, and reduced-motion/transparency fallbacks work.
+- Photos are marked as references, credited visibly, and never silently associated with unrelated venues.
+- State changes do not imply backend actions in the mock. Unimplemented destinations are honest placeholders.

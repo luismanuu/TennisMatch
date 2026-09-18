@@ -1,32 +1,52 @@
 {
- "hero": {
-  "file": "File:Club Esportiu Laietà - Tennis 01.JPG",
-  "author": "Jordiferrer",
-  "license": "CC BY-SA 4.0",
-  "page": "https://commons.wikimedia.org/wiki/File:Club_Esportiu_Laiet%C3%A0_-_Tennis_01.JPG"
- },
- "clayday": {
-  "file": "File:Empty clay tennis court in Melbourne Australia looking down the middle.jpg",
-  "author": "KeepActive Australia from Melbourne, VIC, Australia",
-  "license": "CC BY-SA 4.0",
-  "page": "https://commons.wikimedia.org/wiki/File:Empty_clay_tennis_court_in_Melbourne_Australia_looking_down_the_middle.jpg"
- },
- "bluenight": {
-  "file": "File:RK Khanna Tennis Complex New Delhi - Centre Court at Night.jpg",
-  "author": "Vssun",
-  "license": "CC BY-SA 3.0",
-  "page": "https://commons.wikimedia.org/wiki/File:RK_Khanna_Tennis_Complex_New_Delhi_-_Centre_Court_at_Night.jpg"
- },
- "claynight": {
-  "file": "File:Tennis court at Tennis Club Silchar.jpg",
-  "author": "Sandydessert",
-  "license": "CC BY-SA 3.0",
-  "page": "https://commons.wikimedia.org/wiki/File:Tennis_court_at_Tennis_Club_Silchar.jpg"
- },
- "aerial": {
-  "file": "File:Aerial View of Tennis Courts in Büsingen 15.07.2008 16-56-14.JPG",
-  "author": "Hansueli Krapf",
-  "license": "CC BY-SA 3.0",
-  "page": "https://commons.wikimedia.org/wiki/File:Aerial_View_of_Tennis_Courts_in_B%C3%BCsingen_15.07.2008_16-56-14.JPG"
- }
+  "hero": {
+    "file": "File:Club Esportiu Laietà - Tennis 01.JPG",
+    "author": "Jordiferrer",
+    "license": "CC BY-SA 4.0",
+    "page": "https://commons.wikimedia.org/wiki/File:Club_Esportiu_Laiet%C3%A0_-_Tennis_01.JPG",
+    "focalPoint": "50% 40%",
+    "description": "Cancha de arcilla del Club Esportiu Laietà bajo luces.",
+    "usage": "reference",
+    "verifiedVenueId": null
+  },
+  "clayday": {
+    "file": "File:Empty clay tennis court in Melbourne Australia looking down the middle.jpg",
+    "author": "KeepActive Australia from Melbourne, VIC, Australia",
+    "license": "CC BY-SA 4.0",
+    "page": "https://commons.wikimedia.org/wiki/File:Empty_clay_tennis_court_in_Melbourne_Australia_looking_down_the_middle.jpg",
+    "focalPoint": "50% 55%",
+    "description": "Cancha de arcilla vacía en Melbourne.",
+    "usage": "reference",
+    "verifiedVenueId": null
+  },
+  "bluenight": {
+    "file": "File:RK Khanna Tennis Complex New Delhi - Centre Court at Night.jpg",
+    "author": "Vssun",
+    "license": "CC BY-SA 3.0",
+    "page": "https://commons.wikimedia.org/wiki/File:RK_Khanna_Tennis_Complex_New_Delhi_-_Centre_Court_at_Night.jpg",
+    "focalPoint": "50% 45%",
+    "description": "Cancha central del complejo RK Khanna de noche.",
+    "usage": "reference",
+    "verifiedVenueId": null
+  },
+  "claynight": {
+    "file": "File:Tennis court at Tennis Club Silchar.jpg",
+    "author": "Sandydessert",
+    "license": "CC BY-SA 3.0",
+    "page": "https://commons.wikimedia.org/wiki/File:Tennis_court_at_Tennis_Club_Silchar.jpg",
+    "focalPoint": "50% 45%",
+    "description": "Cancha del Tennis Club Silchar bajo luces.",
+    "usage": "reference",
+    "verifiedVenueId": null
+  },
+  "aerial": {
+    "file": "File:Aerial View of Tennis Courts in Büsingen 15.07.2008 16-56-14.JPG",
+    "author": "Hansueli Krapf",
+    "license": "CC BY-SA 3.0",
+    "page": "https://commons.wikimedia.org/wiki/File:Aerial_View_of_Tennis_Courts_in_B%C3%BCsingen_15.07.2008_16-56-14.JPG",
+    "focalPoint": "50% 50%",
+    "description": "Vista aérea de canchas de tenis en Büsingen.",
+    "usage": "reference",
+    "verifiedVenueId": null
+  }
 }
