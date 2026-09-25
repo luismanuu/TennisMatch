@@ -182,3 +182,57 @@ describe('relations', () => {
   })
 })
 
+
+describe('Bugbot regressions (PR #12)', () => {
+  async function tournamentWithMatches() {
+    await client.query(`insert into "user"(id, name, email) values ('bb1','Ana','ana@x.ec'),('bb2','Beto','beto@x.ec')`)
+    const [ana, beto] = (
+      await rows<{ id: string }>(`insert into players(user_id, name) values ('bb1','Ana'),('bb2','Beto') returning id`)
+    ).map((r) => r.id)
+    const [t] = await rows<{ id: string }>(
+      `insert into tournaments(name, start_date, created_by) values ('Copa Bugbot', now(), $1) returning id`,
+      [ana],
+    )
+    const [unplayed] = await rows<{ id: string }>(
+      `insert into matches(tournament_id, player1_id, player2_id, status) values ($1, null, $2, 'scheduled') returning id`,
+      [t.id, beto],
+    )
+    const [played] = await rows<{ id: string }>(
+      `insert into matches(tournament_id, player1_id, player2_id, winner_id, score, status)
+       values ($1, $2, $3, $2, '6-4 6-3', 'completed') returning id`,
+      [t.id, ana, beto],
+    )
+    return { tournament: t.id, unplayed: unplayed.id, played: played.id, ana, beto }
+  }
+
+  it('21ae5d59: deleting a tournament with an unplayed single-player bracket match succeeds', async () => {
+    const ids = await tournamentWithMatches()
+    await client.query(`delete from tournaments where id = $1`, [ids.tournament])
+    expect(await rows(`select 1 from tournaments where id = $1`, [ids.tournament])).toHaveLength(0)
+    expect(await rows(`select 1 from matches where id = $1`, [ids.unplayed])).toHaveLength(0)
+    const [kept] = await rows<{ tournament_id: string | null; winner_id: string }>(
+      `select tournament_id, winner_id from matches where id = $1`,
+      [ids.played],
+    )
+    expect(kept).toEqual({ tournament_id: null, winner_id: ids.ana })
+  })
+
+  it('109069a8: schedule proposer/approver/rejecter embed as players like the other proposal fields', async () => {
+    const [m] = await rows<{ id: string }>(
+      `update matches set schedule_proposed_by = player1_id, schedule_approved_by = player2_id, schedule_rejected_by = player1_id
+       where tournament_id is null and player1_id is not null and player2_id is not null
+       returning id`,
+    )
+    const match = (await db.query.matches.findFirst({
+      where: (t, { eq }) => eq(t.id, m.id),
+      with: {
+        schedule_proposed_by_player: { columns: { name: true } },
+        schedule_approved_by_player: { columns: { name: true } },
+        schedule_rejected_by_player: { columns: { name: true } },
+      },
+    }))!
+    expect(match.schedule_proposed_by_player?.name).toBe('A')
+    expect(match.schedule_approved_by_player?.name).toBe('B')
+    expect(match.schedule_rejected_by_player?.name).toBe('A')
+  })
+})

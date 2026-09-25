@@ -37,6 +37,7 @@ statements disagree, the later one wins. The order runs from `schema.sql` and `s
 | 15 | `numeric` columns are read as JavaScript numbers (`mode: 'number'`). | PostgREST returned JSON numbers, and the rating code does arithmetic on `mmr`. Drizzle's default would return strings, which would turn `mmr + x` into string concatenation. |
 | 16 | Timestamps are read as `Date` objects. | They serialise to ISO strings in API responses, as before. Code that did string operations on timestamps is caught by the type checker during the data-layer port. |
 | 17 | Drizzle property names equal the column names (snake_case). Relation names equal the PostgREST embed aliases (`player1`, `winner`, `created_by_player`, ...). | The Vue pages read snake_case keys and those aliases. Keeping them means the API response shapes do not change. |
+| 18 | Deleting a tournament deletes its matches that are not `completed`. Completed matches keep their rating history and get `tournament_id = null`. This is a `BEFORE DELETE` trigger (migration `0002`). | `matches.tournament_id` was `on delete set null` in the SQL files too, so an unplayed bracket match with one participant failed the participant check and aborted the delete (found by Cursor Bugbot on PR #12). Unplayed matches only make sense inside their tournament. |
 
 ## Removed on purpose
 
