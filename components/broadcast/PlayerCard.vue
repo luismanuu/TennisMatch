@@ -73,15 +73,17 @@ const ratingEl = ref<HTMLElement | null>(null)
 const titleId = useId()
 useSheen(face)
 
-// Armed only when the card mounts still loading: then the reveal plays once the data lands
+// Armed only when the card mounts before its numbers: the reveal then plays the moment they land.
+// Keyed on the numbers themselves, not a loading flag (the fetch may not have started at mount).
+const hasNumbers = computed(() => props.stats.some(st => st.value !== null))
 const armed = ref(false)
 const revealed = ref(false)
 onMounted(() => {
-  if (props.loading) armed.value = true
-  else revealed.value = true
+  if (hasNumbers.value) revealed.value = true
+  else armed.value = true
 })
-watch(() => props.loading, (l) => {
-  if (!l) requestAnimationFrame(() => { revealed.value = true })
+watch(hasNumbers, (h) => {
+  if (h) requestAnimationFrame(() => { revealed.value = true })
 })
 
 defineExpose({ rating: ratingEl })
