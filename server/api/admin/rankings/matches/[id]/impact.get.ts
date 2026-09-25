@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, asc, desc, eq, isNull } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, players, rating_history } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
 import { getRatingTier } from '~/server/utils/rating-system'
 
@@ -11,115 +13,111 @@ export default defineEventHandler(async (event) => {
     if (!matchId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Match ID is required'
+        statusMessage: 'Match ID is required',
       })
     }
 
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Get match data
-    const { data: match, error: matchError } = await supabase
-      .from('matches')
-      .select(`
-        id,
-        player1_id,
-        player2_id,
-        winner_id,
-        score,
-        played_at,
-        status,
-        player1:players!matches_player1_id_fkey(id, name, elo),
-        player2:players!matches_player2_id_fkey(id, name, elo)
-      `)
-      .eq('id', matchId)
-      .single()
+    const match = await db.query.matches.findFirst({
+      where: eq(matches.id, matchId),
+      columns: { id: true, player1_id: true, player2_id: true, winner_id: true, score: true, played_at: true, status: true },
+      with: {
+        player1: { columns: { id: true, name: true, elo: true } },
+        player2: { columns: { id: true, name: true, elo: true } },
+      },
+    })
 
-    if (matchError || !match) {
+    if (!match) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Match not found',
-        data: matchError
       })
     }
 
     if (match.status !== 'completed' || !match.winner_id) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Match must be completed with a winner to analyze impact'
+        statusMessage: 'Match must be completed with a winner to analyze impact',
       })
     }
 
     // Get rating history for both players for this match
-    const { data: ratingHistory, error: historyError } = await supabase
-      .from('rating_history')
-      .select(`
-        id,
-        player_id,
-        elo_before,
-        elo_after,
-        elo_change,
-        mmr_before,
-        mmr_after,
-        mmr_change,
-        win_streak_bonus,
-        was_winner,
-        is_placement_match,
-        created_at
-      `)
-      .eq('match_id', matchId)
-      .order('created_at', { ascending: true })
+    const matchHistory = await db.query.rating_history.findMany({
+      where: eq(rating_history.match_id, matchId),
+      orderBy: [asc(rating_history.created_at)],
+      columns: {
+        id: true,
+        player_id: true,
+        elo_before: true,
+        elo_after: true,
+        elo_change: true,
+        mmr_before: true,
+        mmr_after: true,
+        mmr_change: true,
+        win_streak_bonus: true,
+        was_winner: true,
+        is_placement_match: true,
+        created_at: true,
+      },
+    })
 
-    if (historyError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch rating history',
-        data: historyError
-      })
-    }
-
-    if (!ratingHistory || ratingHistory.length === 0) {
+    if (!matchHistory || matchHistory.length === 0) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'No rating history found for this match'
+        statusMessage: 'No rating history found for this match',
       })
     }
 
     // Get player data before and after match
-    const player1History = ratingHistory.find(h => h.player_id === match.player1_id)
-    const player2History = ratingHistory.find(h => h.player_id === match.player2_id)
+    const player1History = matchHistory.find((h) => h.player_id === match.player1_id)
+    const player2History = matchHistory.find((h) => h.player_id === match.player2_id)
 
     if (!player1History || !player2History) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Rating history incomplete for this match'
+        statusMessage: 'Rating history incomplete for this match',
       })
     }
 
     // Get ranking positions before match (approximate - would need historical snapshot)
     // For now, we'll calculate based on ELO
-    const { data: allPlayersBefore } = await supabase
-      .from('players')
-      .select('id, elo')
-      .eq('status', 'active')
-      .order('elo', { ascending: false })
+    const allPlayersBefore = await db.query.players.findMany({
+      where: and(eq(players.status, 'active'), isNull(players.deleted_at)),
+      orderBy: [desc(players.elo)],
+      columns: { id: true, elo: true },
+    })
 
     // Calculate approximate ranks
-    const getRankForElo = (elo: number, players: any[]) => {
-      return players.filter(p => p.elo > elo).length + 1
+    const getRankForElo = (elo: number, list: Array<{ id: string; elo: number }>) => {
+      return list.filter((p) => p.elo > elo).length + 1
     }
 
-    const player1RankBefore = allPlayersBefore 
-      ? getRankForElo(player1History.elo_before, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player1_id ? player1History.elo_before : p.elo })))
+    const player1RankBefore = allPlayersBefore
+      ? getRankForElo(
+          player1History.elo_before,
+          allPlayersBefore.map((p) => ({ ...p, elo: p.id === match.player1_id ? player1History.elo_before : p.elo })),
+        )
       : null
     const player1RankAfter = allPlayersBefore
-      ? getRankForElo(player1History.elo_after, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player1_id ? player1History.elo_after : p.elo })))
+      ? getRankForElo(
+          player1History.elo_after,
+          allPlayersBefore.map((p) => ({ ...p, elo: p.id === match.player1_id ? player1History.elo_after : p.elo })),
+        )
       : null
 
     const player2RankBefore = allPlayersBefore
-      ? getRankForElo(player2History.elo_before, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player2_id ? player2History.elo_before : p.elo })))
+      ? getRankForElo(
+          player2History.elo_before,
+          allPlayersBefore.map((p) => ({ ...p, elo: p.id === match.player2_id ? player2History.elo_before : p.elo })),
+        )
       : null
     const player2RankAfter = allPlayersBefore
-      ? getRankForElo(player2History.elo_after, allPlayersBefore.map(p => ({ ...p, elo: p.id === match.player2_id ? player2History.elo_after : p.elo })))
+      ? getRankForElo(
+          player2History.elo_after,
+          allPlayersBefore.map((p) => ({ ...p, elo: p.id === match.player2_id ? player2History.elo_after : p.elo })),
+        )
       : null
 
     // Check tier changes
@@ -132,30 +130,26 @@ export default defineEventHandler(async (event) => {
     const player2TierChanged = player2TierBefore.tier !== player2TierAfter.tier
 
     // Get win/loss streak impact
-    const { data: player1Before } = await supabase
-      .from('players')
-      .select('win_streak, loss_streak')
-      .eq('id', match.player1_id)
-      .single()
+    const player1Before = await db.query.players.findFirst({
+      where: eq(players.id, match.player1_id!),
+      columns: { win_streak: true, loss_streak: true },
+    })
 
-    const { data: player2Before } = await supabase
-      .from('players')
-      .select('win_streak, loss_streak')
-      .eq('id', match.player2_id)
-      .single()
+    const player2Before = await db.query.players.findFirst({
+      where: eq(players.id, match.player2_id!),
+      columns: { win_streak: true, loss_streak: true },
+    })
 
     // Get current streaks (after match)
-    const { data: player1After } = await supabase
-      .from('players')
-      .select('win_streak, loss_streak')
-      .eq('id', match.player1_id)
-      .single()
+    const player1After = await db.query.players.findFirst({
+      where: eq(players.id, match.player1_id!),
+      columns: { win_streak: true, loss_streak: true },
+    })
 
-    const { data: player2After } = await supabase
-      .from('players')
-      .select('win_streak, loss_streak')
-      .eq('id', match.player2_id)
-      .single()
+    const player2After = await db.query.players.findFirst({
+      where: eq(players.id, match.player2_id!),
+      columns: { win_streak: true, loss_streak: true },
+    })
 
     return {
       match: {
@@ -164,7 +158,7 @@ export default defineEventHandler(async (event) => {
         player2: match.player2,
         winner_id: match.winner_id,
         score: match.score,
-        played_at: match.played_at
+        played_at: match.played_at,
       },
       player1_impact: {
         player: match.player1,
@@ -186,7 +180,7 @@ export default defineEventHandler(async (event) => {
         win_streak_before: player1Before?.win_streak || 0,
         win_streak_after: player1After?.win_streak || 0,
         loss_streak_before: player1Before?.loss_streak || 0,
-        loss_streak_after: player1After?.loss_streak || 0
+        loss_streak_after: player1After?.loss_streak || 0,
       },
       player2_impact: {
         player: match.player2,
@@ -208,19 +202,19 @@ export default defineEventHandler(async (event) => {
         win_streak_before: player2Before?.win_streak || 0,
         win_streak_after: player2After?.win_streak || 0,
         loss_streak_before: player2Before?.loss_streak || 0,
-        loss_streak_after: player2After?.loss_streak || 0
+        loss_streak_after: player2After?.loss_streak || 0,
       },
       summary: {
         total_elo_change: Math.abs(player1History.elo_change) + Math.abs(player2History.elo_change),
         tier_changes: (player1TierChanged ? 1 : 0) + (player2TierChanged ? 1 : 0),
-        placement_matches: (player1History.is_placement_match ? 1 : 0) + (player2History.is_placement_match ? 1 : 0)
-      }
+        placement_matches: (player1History.is_placement_match ? 1 : 0) + (player2History.is_placement_match ? 1 : 0),
+      },
     }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
       statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
+      data: error.data || error,
     })
   }
 })
