@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 export interface Notification {
   id: string
@@ -70,6 +70,8 @@ export const useNotifications = () => {
   
   const loading = ref(false)
   const error = ref<string | null>(null)
+  // True once a fetch has succeeded: until then an empty list means "unknown", not "nothing pending"
+  const loaded = ref(false)
   
   let pollInterval: NodeJS.Timeout | null = null
   let previousCount = 0
@@ -116,6 +118,9 @@ export const useNotifications = () => {
         
         count.value = response.count
         previousCount = newCount
+        loaded.value = true
+      } else {
+        error.value = 'Error fetching notifications'
       }
     } catch (err: any) {
       console.error('[Notifications] Fetch error:', err)
@@ -249,14 +254,14 @@ export const useNotifications = () => {
     console.log('[Notifications] Tab active:', isTabActive)
   }
   
-  // Setup polling on mount
+  // Setup polling on mount, or as soon as the Clerk user id arrives after mount
+  // (otherwise the first fetch never runs and consumers wait on it forever)
   onMounted(() => {
-    if (authState.userId.value) {
-      startPolling()
-      
-      // Listen for visibility changes
-      document.addEventListener('visibilitychange', handleVisibilityChange)
-    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    if (authState.userId.value) startPolling()
+  })
+  watch(() => authState.userId.value, (id) => {
+    if (id && import.meta.client) startPolling()
   })
   
   // Cleanup on unmount
@@ -271,6 +276,7 @@ export const useNotifications = () => {
     count,
     loading,
     error,
+    loaded,
     hasNotifications,
     unreadCount,
     fetchNotifications,
