@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournaments } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { getAccountsByIds } from '~/server/utils/users'
@@ -16,39 +18,27 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
     // Verify organizer owns this tournament
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
-    const { data: tournament, error } = await supabase
-      .from('tournaments')
-      .select(`
-        *,
-        category:categories(*),
-        registrations:tournament_registrations(
-          *,
-          player:players(
-            id,
-            name,
-            phone_number,
-            user_id,
-            category:categories(id, name, description, order)
-          )
-        ),
-        groups:tournament_groups(
-          *,
-          players:tournament_group_players(
-            *,
-            player:players(*)
-          )
-        ),
-        rounds:tournament_rounds(*)
-      `)
-      .eq('id', tournamentId)
-      .single()
+    const tournament = await useDb().query.tournaments.findFirst({
+      where: eq(tournaments.id, tournamentId),
+      with: {
+        category: true,
+        registrations: {
+          with: {
+            player: {
+              columns: { id: true, name: true, phone_number: true, user_id: true },
+              with: { category: { columns: { id: true, name: true, description: true, order: true } } },
+            },
+          },
+        },
+        groups: { with: { players: { with: { player: true } } } },
+        rounds: true,
+      },
+    })
 
-    if (error || !tournament) {
+    if (!tournament) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Tournament not found'
@@ -56,25 +46,15 @@ export default defineEventHandler(async (event) => {
     }
 
     // Enrich registrations with the account email
-    if (tournament.registrations && tournament.registrations.length > 0) {
-      const accounts = await getAccountsByIds(
-        tournament.registrations.map((reg: any) => reg.player?.user_id).filter(Boolean)
-      )
-      tournament.registrations = tournament.registrations.map((reg: any) => {
-        if (!reg.player?.user_id) {
-          return reg
-        }
-        return {
-          ...reg,
-          player: {
-            ...reg.player,
-            email: accounts.get(reg.player.user_id)?.email ?? null
-          }
-        }
-      })
-    }
+    const accounts = await getAccountsByIds(tournament.registrations.map((reg) => reg.player.user_id))
 
-    return tournament
+    return {
+      ...tournament,
+      registrations: tournament.registrations.map((reg) => ({
+        ...reg,
+        player: { ...reg.player, email: accounts.get(reg.player.user_id)?.email ?? null },
+      })),
+    }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -82,4 +62,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

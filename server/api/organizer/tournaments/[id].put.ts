@@ -1,14 +1,17 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { categories, tournament_groups, tournament_matches, tournaments } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { tournamentUpdateFromPayload } from '~/server/utils/tournament-status'
 import type { UpdateTournamentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
   const { player: organizer } = await requirePlayer(event, 'organizer')
 
   try {
-    const body = await readBody<UpdateTournamentPayload>(event)
-    const { name, category_id, start_date, end_date, status, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
+    const body = (await readBody<UpdateTournamentPayload>(event)) ?? {}
+    const { category_id, status } = body
     const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
@@ -18,103 +21,70 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Verify organizer owns this tournament
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
     // If status is being changed to 'active', verify brackets are generated
     if (status === 'active') {
-      const { data: tournament } = await supabase
-        .from('tournaments')
-        .select('groups:tournament_groups(id)')
-        .eq('id', tournamentId)
-        .single()
+      const group = await db.query.tournament_groups.findFirst({
+        columns: { id: true },
+        where: eq(tournament_groups.tournament_id, tournamentId),
+      })
 
-      // Check if groups exist (brackets generated)
-      const { data: groups } = await supabase
-        .from('tournament_groups')
-        .select('id')
-        .eq('tournament_id', tournamentId)
-        .limit(1)
-
-      if (!groups || groups.length === 0) {
+      if (!group) {
         throw createError({
           statusCode: 400,
           statusMessage: 'Cannot start tournament: brackets must be generated first'
         })
       }
 
-      // Verify that matches exist for the groups
-      const { data: groupMatches } = await supabase
-        .from('tournament_matches')
-        .select('id')
-        .eq('tournament_id', tournamentId)
-        .eq('bracket_type', 'group')
-        .limit(1)
+      const groupMatch = await db.query.tournament_matches.findFirst({
+        columns: { id: true },
+        where: and(eq(tournament_matches.tournament_id, tournamentId), eq(tournament_matches.bracket_type, 'group')),
+      })
 
-      if (!groupMatches || groupMatches.length === 0) {
-        // Matches don't exist, but groups do - this shouldn't happen if brackets were generated correctly
-        // But we'll allow it and let the organizer generate brackets manually
+      if (!groupMatch) {
+        // Groups without matches should not happen after a generation; allowed, the organizer can regenerate
         console.warn(`Tournament ${tournamentId} has groups but no matches. Organizer should generate brackets.`)
       }
     }
 
-    // Build update object
-    const updateData: any = {}
-    if (name !== undefined) updateData.name = name.trim()
-    if (start_date !== undefined) updateData.start_date = start_date
-    if (end_date !== undefined) updateData.end_date = end_date || null
-    if (status !== undefined) updateData.status = status
-    if (group_size !== undefined) updateData.group_size = group_size
-    if (players_per_group_advance !== undefined) updateData.players_per_group_advance = players_per_group_advance
-    if (registration_open !== undefined) updateData.registration_open = registration_open
-    if (registration_deadline !== undefined) updateData.registration_deadline = registration_deadline || null
-    if (max_players !== undefined) updateData.max_players = max_players || null
-    if (min_players !== undefined) updateData.min_players = min_players
-    if (description !== undefined) updateData.description = description?.trim() || null
-    if (rules !== undefined) updateData.rules = rules?.trim() || null
-    if (location !== undefined) updateData.location = location?.trim() || null
-    if (points_config !== undefined) updateData.points_config = points_config || null
+    const updateData = tournamentUpdateFromPayload(body)
 
     // Verify category if updating (allow null for open tournaments)
     if (category_id !== undefined && category_id !== null) {
-      const { data: category, error: categoryError } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('id', category_id)
-        .single()
+      const category = await db.query.categories.findFirst({
+        columns: { id: true },
+        where: eq(categories.id, category_id),
+      })
 
-      if (categoryError || !category) {
+      if (!category) {
         throw createError({
           statusCode: 404,
           statusMessage: 'Category not found'
         })
       }
     }
-    
+
     // Allow setting category_id to null
     if (category_id !== undefined) {
       updateData.category_id = category_id || null
     }
 
-    // Update tournament
-    const { data: tournament, error: updateError } = await supabase
-      .from('tournaments')
-      .update(updateData)
-      .eq('id', tournamentId)
-      .select(`
-        *,
-        category:categories(*),
-        organizer:players!tournaments_organizer_id_fkey(*)
-      `)
-      .single()
-
-    if (updateError) {
+    let tournament
+    try {
+      await db.update(tournaments).set(updateData).where(eq(tournaments.id, tournamentId))
+      tournament = await db.query.tournaments.findFirst({
+        where: eq(tournaments.id, tournamentId),
+        with: { category: true, organizer: true },
+      })
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to update tournament',
-        data: updateError
+        data: error
       })
     }
 
@@ -130,4 +100,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-
