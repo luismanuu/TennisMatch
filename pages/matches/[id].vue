@@ -1,393 +1,143 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
+  <PageLayout>
+    <div v-if="loading" class="panel loading-state" aria-busy="true">
+      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+      <p class="loading-text">Cargando partido…</p>
     </div>
 
-    <!-- Navigation -->
-    <AppNavigation />
+    <div v-else-if="error" class="panel empty-state" role="alert">
+      <Icon name="heroicons:lock-closed" class="empty-state-icon text-danger" aria-hidden="true" />
+      <h1 class="empty-state-title">{{ error.statusCode === 403 ? 'Acceso denegado' : 'No pudimos cargar el partido' }}</h1>
+      <p class="empty-state-description">
+        {{ error.statusCode === 403
+          ? 'No tienes permiso para ver este partido. Solo puedes ver los partidos en los que participas.'
+          : error.message || 'Error al cargar el partido' }}
+      </p>
+      <NuxtLink :to="getBackUrl()" class="btn-secondary">
+        <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+        {{ getBackLabel() }}
+      </NuxtLink>
+    </div>
 
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <!-- Loading State -->
-        <div v-if="loading" class="max-w-4xl mx-auto">
-          <div class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-            <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-              <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
-            </div>
-            <p class="text-size-3 text-foreground-muted">Cargando partido...</p>
-          </div>
+    <!-- Partido / Resultado (DESIGN.md §7, design/mock/court-Partido.html, court-Resultado.html) -->
+    <div v-else-if="match">
+      <header class="page-heading">
+        <NuxtLink :to="getBackUrl()" class="text-link">
+          <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+          {{ getBackLabel() }}
+        </NuxtLink>
+        <h1>{{ isPlayerInMatch ? 'Tu partido' : 'Partido' }}</h1>
+        <div class="match-tags">
+          <MatchTournamentBadge :match="match" />
+          <span class="badge">{{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}</span>
         </div>
+      </header>
 
-        <!-- Error State -->
-        <div v-else-if="error" class="max-w-4xl mx-auto">
-          <div class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
-            <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
-              <Icon name="heroicons:lock-closed" class="w-10 h-10 text-red-400" />
-            </div>
-            <h2 class="text-size-2 font-semibold text-foreground mb-3 text-center">
-              Acceso Denegado
-            </h2>
-            <p class="text-size-4 text-foreground-muted mb-8 text-center leading-relaxed">
-              {{ error.statusCode === 403 
-                ? 'No tienes permiso para ver este partido. Solo puedes ver los partidos en los que participas.' 
-                : error.message || 'Error al cargar el partido' }}
-            </p>
-            <NuxtLink 
-              :to="getBackUrl()" 
-              class="btn-secondary text-size-3 w-full justify-center group"
-            >
-              <Icon name="heroicons:arrow-left" class="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-              {{ getBackLabel() }}
-            </NuxtLink>
-          </div>
-        </div>
+      <div class="split-grid even">
+        <div class="flow-stack">
+          <PhotoPanel photo="claynight" variant="priority" eager>
+            <template #decor><CourtLines :rally="match.status === 'completed'" /></template>
+            <span class="status-pill"><Icon :name="statusIcon" class="w-4 h-4" aria-hidden="true" />{{ statusLabel }}</span>
+            <h2>{{ heroDate }}</h2>
+            <p v-if="heroTime" class="score">{{ heroTime }}</p>
+            <p v-if="match.location">{{ match.location }}</p>
+            <p v-else-if="!match.scheduled_at">Los jugadores deben programar este partido.</p>
+          </PhotoPanel>
 
-        <!-- Match Content -->
-        <div v-else-if="match" class="max-w-5xl mx-auto space-y-8 animate-fade-up">
-          <!-- Header with Back Button and Status -->
-          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 animate-fade-up animate-delay-1">
-            <NuxtLink 
-              :to="getBackUrl()" 
-              class="group flex items-center gap-2 text-size-3 text-foreground-muted hover:text-foreground transition-all"
-            >
-              <Icon name="heroicons:arrow-left" class="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-              <span>{{ getBackLabel() }}</span>
-            </NuxtLink>
-            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-              <MatchTournamentBadge :match="match" />
-              <div class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full border backdrop-blur-sm" :class="statusBadgeClass">
-                <Icon :name="statusIcon" class="w-4 h-4 flex-shrink-0" />
-                <span class="text-size-4 font-semibold whitespace-nowrap">{{ statusLabel }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Main Match Card -->
-          <div class="glass-card-elevated p-8 md:p-10 animate-fade-up animate-delay-2 hover-lift">
-            <!-- Title -->
-            <div class="mb-8">
-              <h1 class="text-size-1 font-semibold text-foreground mb-2">Detalles del Partido</h1>
-              <div class="h-1 w-20 bg-gradient-to-r from-accent to-transparent rounded-full"></div>
-            </div>
-            
-            <!-- Players Section -->
-            <div class="mb-10">
-              <div class="flex flex-col sm:flex-row items-center sm:items-center justify-center gap-4 sm:gap-6 md:gap-12 mb-8">
-                <!-- Player 1 -->
-                <div class="w-full sm:flex-1 sm:max-w-xs">
-                  <div class="group relative p-6 rounded-2xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 transition-all hover-lift">
-                    <div class="flex flex-col items-center text-center">
-                      <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                        <span class="text-2xl font-bold text-accent">
-                          {{ getPlayerInitials(match.player1?.name || 'Jugador 1') }}
-                        </span>
-                      </div>
-                      <div v-if="match.player1" class="flex flex-col items-center mb-2">
-                        <NuxtLink
-                          :to="`/players/${match.player1.id}`"
-                          class="text-size-2 font-semibold text-foreground hover:text-accent transition-all group-hover:underline"
-                        >
-                          {{ match.player1.name }}
-                        </NuxtLink>
-                        <span 
-                          v-if="match.player1.status === 'deleted'"
-                          class="mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
-                        >
-                          Eliminado
-                        </span>
-                        <!-- WhatsApp Contact Button for Player 1 (if opponent) -->
-                        <a
-                          v-if="match.player1_id !== currentPlayerId && match.player1?.phone_number"
-                          :href="getWhatsAppLink(match.player1.phone_number, `Hola ${match.player1.name}, te contacto desde la plataforma de Tenis Ecuador sobre nuestro partido`)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 text-green-400 transition-all group/wa"
-                          title="Contactar por WhatsApp"
-                        >
-                          <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4 group-hover/wa:scale-110 transition-transform" />
-                          <span class="text-size-5 font-semibold">WhatsApp</span>
-                        </a>
-                      </div>
-                      <p v-else class="text-size-2 font-semibold text-foreground mb-2">
-                        Jugador 1
-                      </p>
-                      <div v-if="getPlayerTier(match.player1)" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border-subtle">
-                        <img
-                          v-if="getPlayerRankIcon(match.player1)"
-                          :src="getPlayerRankIcon(match.player1)"
-                          :alt="`${getPlayerTier(match.player1)} tier icon`"
-                          class="w-5 h-5 object-contain"
-                        >
-                        <p class="text-size-4 text-foreground-muted">
-                          {{ getTierNameInSpanish(getPlayerTier(match.player1)) }}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- VS Divider -->
-                <div class="flex flex-row sm:flex-col items-center justify-center gap-2 sm:gap-0">
-                  <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-surface border-2 border-border-subtle flex items-center justify-center flex-shrink-0">
-                    <span class="text-size-4 sm:text-size-3 font-bold text-foreground-muted">VS</span>
-                  </div>
-                  <div class="hidden sm:block w-px h-24 bg-gradient-to-b from-border-subtle via-accent/50 to-border-subtle mt-4"></div>
-                </div>
-
-                <!-- Player 2 -->
-                <div class="w-full sm:flex-1 sm:max-w-xs">
-                  <div class="group relative p-6 rounded-2xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 transition-all hover-lift">
-                    <div class="flex flex-col items-center text-center">
-                      <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-accent-secondary/20 to-accent-secondary/5 border-2 border-accent-secondary/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                        <span class="text-2xl font-bold text-accent-secondary">
-                          {{ getPlayerInitials(match.player2?.name || match.pending_player2?.name || 'Oponente') }}
-                        </span>
-                      </div>
-                      <div v-if="match.player2" class="flex flex-col items-center mb-2">
-                        <NuxtLink
-                          :to="`/players/${match.player2.id}`"
-                          class="text-size-2 font-semibold text-foreground hover:text-accent-secondary transition-all group-hover:underline"
-                        >
-                          {{ match.player2.name }}
-                        </NuxtLink>
-                        <span 
-                          v-if="match.player2.status === 'deleted'"
-                          class="mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
-                        >
-                          Eliminado
-                        </span>
-                        <!-- WhatsApp Contact Button for Player 2 (if opponent) -->
-                        <a
-                          v-if="match.player2_id !== currentPlayerId && match.player2?.phone_number"
-                          :href="getWhatsAppLink(match.player2.phone_number, `Hola ${match.player2.name}, te contacto desde la plataforma de Tenis Ecuador sobre nuestro partido`)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 text-green-400 transition-all group/wa"
-                          title="Contactar por WhatsApp"
-                        >
-                          <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4 group-hover/wa:scale-110 transition-transform" />
-                          <span class="text-size-5 font-semibold">WhatsApp</span>
-                        </a>
-                      </div>
-                      <NuxtLink
-                        v-else-if="match.pending_player2"
-                        :to="`/players/${match.pending_player2.id}`"
-                        class="text-size-2 font-semibold text-foreground hover:text-accent-secondary transition-all mb-2 group-hover:underline"
-                      >
-                        {{ match.pending_player2.name }}
-                      </NuxtLink>
-                      <p v-else class="text-size-2 font-semibold text-foreground mb-2">
-                        Oponente
-                      </p>
-                      <div v-if="getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border-subtle mb-2">
-                        <img
-                          v-if="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
-                          :src="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
-                          :alt="`${getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)} tier icon`"
-                          class="w-5 h-5 object-contain"
-                        >
-                        <p class="text-size-4 text-foreground-muted">
-                          {{ getTierNameInSpanish(getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)) }}
-                        </p>
-                      </div>
-                      <div v-if="match.pending_player2" class="px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30">
-                        <p class="text-size-4 text-yellow-400 font-semibold">
-                          Pendiente
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Match Details Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
-              <!-- Scheduled Time -->
-              <div class="p-4 sm:p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-start sm:items-center gap-3 mb-3">
-                  <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center flex-shrink-0">
-                    <Icon name="heroicons:calendar" class="w-5 h-5 text-accent" />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-size-4 font-semibold text-foreground-muted mb-1">Fecha y Hora</p>
-                    <p v-if="match.scheduled_at" class="text-size-3 text-foreground font-semibold break-words">
-                      {{ formatDateTime(match.scheduled_at) }}
-                    </p>
-                    <p v-else class="text-size-4 sm:text-size-3 text-yellow-400 font-semibold flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                      <Icon name="heroicons:clock" class="w-5 h-5 flex-shrink-0" />
-                      <span class="break-words">Sin agendar - Los jugadores deben programar este partido</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Location -->
-              <div v-if="match.location" class="p-4 sm:p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-start sm:items-center gap-3 mb-3">
-                  <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center flex-shrink-0">
-                    <Icon name="heroicons:map-pin" class="w-5 h-5 text-accent-secondary" />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-size-4 font-semibold text-foreground-muted mb-1">Ubicación</p>
-                    <p class="text-size-3 text-foreground font-semibold break-words">{{ match.location }}</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Competitive Status -->
-              <div class="p-4 sm:p-5 rounded-xl bg-surface border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-start sm:items-center gap-3 mb-3">
-                  <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" :class="match.is_competitive !== false ? 'bg-green-500/20' : 'bg-gray-500/20'">
-                    <Icon 
-                      :name="match.is_competitive !== false ? 'heroicons:trophy' : 'heroicons:hand-raised'" 
-                      class="w-5 h-5" 
-                      :class="match.is_competitive !== false ? 'text-green-400' : 'text-gray-400'"
-                    />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-size-4 font-semibold text-foreground-muted mb-1">Tipo de Partido</p>
-                    <div class="flex items-center gap-2 mb-2">
-                      <span 
-                        class="text-size-3 font-semibold px-3 py-1 rounded-full whitespace-nowrap"
-                        :class="match.is_competitive !== false 
-                          ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'"
-                      >
-                        {{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}
-                      </span>
-                    </div>
-                    <p class="text-size-5 text-foreground-muted break-words">
-                      {{ match.is_competitive !== false 
-                        ? 'Cuenta para rankings y placement' 
-                        : 'No cuenta para rankings' }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Score Section - Only show if score is approved (completed match or score_approved_by exists) -->
-            <div v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="mb-8 p-6 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
-                <p class="text-size-3 font-semibold text-foreground">Resultado</p>
-              </div>
-              <p class="text-size-2 font-bold text-foreground mb-3">{{ match.score }}</p>
-              <div v-if="match.winner" class="flex items-center gap-2 mb-4">
-                <span class="text-size-4 text-foreground-muted">Ganador:</span>
-                <div class="flex items-center gap-2">
-                  <NuxtLink
-                    :to="`/players/${match.winner.id}`"
-                    class="text-size-4 font-semibold text-accent hover:underline transition-all"
-                  >
-                    {{ match.winner.name }}
-                  </NuxtLink>
-                  <span 
-                    v-if="match.winner.status === 'deleted'"
-                    class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
-                  >
-                    Eliminado
-                  </span>
-                </div>
-              </div>
-              
-              <!-- SR Changes - Only show for competitive matches -->
-              <!-- Show loading state when SR is being calculated -->
-              <div v-if="match.is_competitive && isEloCalculating" class="pt-4 border-t border-accent/20">
-                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de SR</p>
-                <div class="flex items-center gap-3 p-4 rounded-lg bg-surface/50 border border-border-subtle">
-                  <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" />
-                  <div class="flex-1">
-                    <p class="text-size-4 font-semibold text-foreground">Calculando SR...</p>
-                    <p class="text-size-5 text-foreground-muted">La AI está procesando los cambios de rating</p>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Show SR changes when ready -->
-              <div v-else-if="match.is_competitive && ratingHistory && (ratingHistory.player1 || ratingHistory.player2)" class="pt-4 border-t border-accent/20">
-                <p class="text-size-4 font-semibold text-foreground-muted mb-3">Cambio de SR</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <!-- Player 1 SR Change -->
-                  <div v-if="ratingHistory.player1 && match.player1" class="p-3 rounded-lg bg-surface/50 border border-border-subtle">
-                    <div class="flex items-center gap-2 mb-1">
-                      <NuxtLink
-                        :to="`/players/${match.player1.id}`"
-                        class="text-size-4 font-semibold text-foreground hover:text-accent transition-all"
-                      >
-                        {{ match.player1.name }}
-                      </NuxtLink>
-                    </div>
-                    <div 
-                      class="text-size-2 font-bold"
-                      :class="ratingHistory.player1.elo_change > 0 ? 'text-green-400' : ratingHistory.player1.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
-                    >
-                      {{ ratingHistory.player1.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player1.elo_change }} SR
-                    </div>
-                    <div class="text-size-5 text-foreground-muted mt-1">
-                      {{ ratingHistory.player1.elo_before }} → {{ ratingHistory.player1.elo_after }}
-                    </div>
-                  </div>
-                  
-                  <!-- Player 2 SR Change -->
-                  <div v-if="ratingHistory.player2 && match.player2" class="p-3 rounded-lg bg-surface/50 border border-border-subtle">
-                    <div class="flex items-center gap-2 mb-1">
-                      <NuxtLink
-                        :to="`/players/${match.player2.id}`"
-                        class="text-size-4 font-semibold text-foreground hover:text-accent transition-all"
-                      >
-                        {{ match.player2.name }}
-                      </NuxtLink>
-                    </div>
-                    <div 
-                      class="text-size-2 font-bold"
-                      :class="ratingHistory.player2.elo_change > 0 ? 'text-green-400' : ratingHistory.player2.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
-                    >
-                      {{ ratingHistory.player2.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player2.elo_change }} SR
-                    </div>
-                    <div class="text-size-5 text-foreground-muted mt-1">
-                      {{ ratingHistory.player2.elo_before }} → {{ ratingHistory.player2.elo_after }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Score Proposal Status - Only show if score is proposed but not approved yet -->
-            <div v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="mb-8 p-6 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
-                <p class="text-size-3 font-semibold text-foreground">
-                  Puntuación Propuesta
-                </p>
-              </div>
-              <p class="text-size-4 text-foreground-muted mb-2">
-                <span class="font-semibold text-foreground">{{ match.score_proposed_by_player?.name }}</span> propuso: 
-                <span class="font-semibold text-foreground">{{ match.score }}</span>
-              </p>
-              <div v-if="match.winner" class="flex items-center gap-2 mt-3">
-                <span class="text-size-4 text-foreground-muted">Ganador:</span>
-                <NuxtLink
-                  :to="`/players/${match.winner.id}`"
-                  class="text-size-4 font-semibold text-accent hover:underline transition-all"
+          <section class="panel" aria-label="Jugadores">
+            <div class="players">
+              <div class="player">
+                <span class="avatar player__avatar" aria-hidden="true">{{ getPlayerInitials(match.player1?.name || 'Jugador 1') }}</span>
+                <h2 v-if="match.player1"><NuxtLink :to="`/players/${match.player1.id}`">{{ match.player1.name }}</NuxtLink></h2>
+                <h2 v-else>Jugador 1</h2>
+                <span v-if="match.player1?.status === 'deleted'" class="status-badge status-badge-danger">Eliminado</span>
+                <span v-if="getPlayerTier(match.player1)" class="badge">
+                  <img v-if="getPlayerRankIcon(match.player1)" :src="getPlayerRankIcon(match.player1)" alt="" class="w-4 h-4 object-contain">
+                  {{ getTierNameInSpanish(getPlayerTier(match.player1)) }}<template v-if="match.player1?.elo"> · {{ match.player1.elo.toLocaleString('es-EC') }} SR</template>
+                </span>
+                <a
+                  v-if="match.player1 && match.player1_id !== currentPlayerId && match.player1?.phone_number"
+                  :href="getWhatsAppLink(match.player1.phone_number, `Hola ${match.player1.name}, te contacto desde la plataforma de Tenis Ecuador sobre nuestro partido`)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-link"
                 >
-                  {{ match.winner.name }}
-                </NuxtLink>
+                  WhatsApp
+                  <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4" aria-hidden="true" />
+                </a>
+              </div>
+              <span class="meta players__vs">vs</span>
+              <div class="player">
+                <span class="avatar player__avatar" aria-hidden="true">{{ getPlayerInitials(match.player2?.name || match.pending_player2?.name || 'Oponente') }}</span>
+                <h2 v-if="match.player2"><NuxtLink :to="`/players/${match.player2.id}`">{{ match.player2.name }}</NuxtLink></h2>
+                <h2 v-else-if="match.pending_player2"><NuxtLink :to="`/players/${match.pending_player2.id}`">{{ match.pending_player2.name }}</NuxtLink></h2>
+                <h2 v-else>Oponente</h2>
+                <span v-if="match.player2?.status === 'deleted'" class="status-badge status-badge-danger">Eliminado</span>
+                <span v-if="getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)" class="badge">
+                  <img v-if="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)" :src="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)" alt="" class="w-4 h-4 object-contain">
+                  {{ getTierNameInSpanish(getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)) }}<template v-if="match.player2?.elo"> · {{ match.player2.elo.toLocaleString('es-EC') }} SR</template>
+                </span>
+                <span v-if="match.pending_player2" class="status-badge status-badge-pending">Pendiente de registro</span>
+                <a
+                  v-if="match.player2 && match.player2_id !== currentPlayerId && match.player2?.phone_number"
+                  :href="getWhatsAppLink(match.player2.phone_number, `Hola ${match.player2.name}, te contacto desde la plataforma de Tenis Ecuador sobre nuestro partido`)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-link"
+                >
+                  WhatsApp
+                  <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4" aria-hidden="true" />
+                </a>
               </div>
             </div>
+            <p class="meta">
+              {{ match.is_competitive !== false ? 'Partido competitivo: cuenta para rankings y colocación.' : 'Partido amistoso: no cuenta para rankings.' }}
+              <template v-if="match.scheduled_at"> {{ formatDateTime(match.scheduled_at) }}.</template>
+            </p>
+          </section>
 
+          <!-- Confirmed result -->
+          <section v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="panel result" aria-labelledby="result-title">
+            <h2 id="result-title" class="panel-title">Resultado</h2>
+            <p class="score result__score">{{ formatScore(match.score) }}</p>
+            <p v-if="match.winner" class="meta">
+              Ganó <NuxtLink :to="`/players/${match.winner.id}`" class="text-accent font-semibold">{{ match.winner.name }}</NuxtLink>
+              <span v-if="match.winner.status === 'deleted'" class="status-badge status-badge-danger ml-2">Eliminado</span>
+            </p>
+            <div v-if="match.is_competitive && isEloCalculating" class="result__sr result__sr--loading" aria-busy="true">
+              <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" aria-hidden="true" />
+              <span class="meta">Calculando el cambio de SR…</span>
+            </div>
+            <div v-else-if="match.is_competitive && ratingHistory && (ratingHistory.player1 || ratingHistory.player2)" class="stats result__sr">
+              <div v-if="ratingHistory.player1 && match.player1">
+                <strong class="stat-value sr-spark" :class="ratingHistory.player1.elo_change > 0 ? 'text-success' : ratingHistory.player1.elo_change < 0 ? 'text-danger' : ''">{{ ratingHistory.player1.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player1.elo_change }} SR</strong>
+                <span class="meta"><NuxtLink :to="`/players/${match.player1.id}`">{{ match.player1.name }}</NuxtLink> · {{ ratingHistory.player1.elo_before }} → {{ ratingHistory.player1.elo_after }}</span>
+              </div>
+              <div v-if="ratingHistory.player2 && match.player2">
+                <strong class="stat-value sr-spark" :class="ratingHistory.player2.elo_change > 0 ? 'text-success' : ratingHistory.player2.elo_change < 0 ? 'text-danger' : ''">{{ ratingHistory.player2.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player2.elo_change }} SR</strong>
+                <span class="meta"><NuxtLink :to="`/players/${match.player2.id}`">{{ match.player2.name }}</NuxtLink> · {{ ratingHistory.player2.elo_before }} → {{ ratingHistory.player2.elo_after }}</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Proposed result awaiting review (Resultado) -->
+          <section v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="panel result" aria-labelledby="proposed-title">
+            <h2 id="proposed-title" class="panel-title">Marcador propuesto</h2>
+            <p class="score result__score">{{ formatScore(match.score) }}</p>
+            <p class="meta">
+              Propuesto por <strong class="text-foreground">{{ match.score_proposed_by_player?.name }}</strong><template v-if="match.winner">. Victoria propuesta para <NuxtLink :to="`/players/${match.winner.id}`" class="text-accent font-semibold">{{ match.winner.name }}</NuxtLink></template>.
+            </p>
+          </section>
+        </div>
+
+        <aside class="flow-stack">
+          <section class="panel" aria-labelledby="coord-title">
+            <h2 id="coord-title" class="panel-title">{{ match.status === 'completed' || match.status === 'cancelled' ? 'Partido' : 'Coordina tu partido' }}</h2>
             <!-- Actions Section -->
-            <div class="pt-8 border-t border-border-subtle space-y-4">
+            <div class="actions">
               <!-- Match Acceptance Section - Show when match is proposed but not accepted (only for non-tournament matches) -->
               <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_proposed_by && !match.match_accepted_by && !match.match_rejected_by && match.player2_id && isPlayerInMatch && currentPlayerId === match.player2_id && !isTournamentOrganizer" class="space-y-3 mb-4">
-                <div class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30">
+                <div class="action-card">
                   <div class="flex items-center gap-3 mb-3">
                     <Icon name="heroicons:envelope" class="w-6 h-6 text-accent flex-shrink-0" />
                     <div class="flex-1">
@@ -407,7 +157,7 @@
                       :disabled="actionLoading"
                       class="btn-primary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2" />
+                      <Icon name="heroicons:check-circle" class="w-5 h-5" />
                       Aceptar Partido
                     </button>
                     <button
@@ -415,7 +165,7 @@
                       :disabled="actionLoading"
                       class="btn-secondary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2" />
+                      <Icon name="heroicons:x-circle" class="w-5 h-5" />
                       Rechazar
                     </button>
                   </div>
@@ -426,7 +176,7 @@
               <!-- Show to player1 (who proposed the match) when player2 has proposed changes -->
               <!-- Condition: match accepted, has proposed changes, not yet approved/rejected, current user is player1 -->
               <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_accepted_by && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by && match.player1_id === currentPlayerId && match.match_accepted_by !== currentPlayerId && isPlayerInMatch && !isTournamentOrganizer" class="space-y-3 mb-4">
-                <div class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30">
+                <div class="action-card">
                   <div class="flex items-center gap-3 mb-3">
                     <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
                     <div class="flex-1">
@@ -441,12 +191,12 @@
                     </div>
                   </div>
                   <div class="pl-9 space-y-3">
-                    <div v-if="match.acceptance_proposed_scheduled_at" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                    <div v-if="match.acceptance_proposed_scheduled_at" class="action-detail">
                       <p class="text-size-5 text-foreground-muted mb-1">Nueva Fecha y Hora:</p>
                       <p class="text-size-4 font-semibold text-foreground">{{ formatDateTime(match.acceptance_proposed_scheduled_at) }}</p>
                       <p class="text-size-5 text-foreground-muted mt-1">Fecha original: {{ formatDateTime(match.scheduled_at) }}</p>
                     </div>
-                    <div v-if="match.acceptance_proposed_location !== null" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                    <div v-if="match.acceptance_proposed_location !== null" class="action-detail">
                       <p class="text-size-5 text-foreground-muted mb-1">Nueva Ubicación:</p>
                       <p class="text-size-4 font-semibold text-foreground">{{ match.acceptance_proposed_location || 'Sin ubicación' }}</p>
                       <p class="text-size-5 text-foreground-muted mt-1">Ubicación original: {{ match.location || 'Sin ubicación' }}</p>
@@ -457,7 +207,7 @@
                         :disabled="actionLoading"
                         class="btn-primary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2" />
+                        <Icon name="heroicons:check-circle" class="w-5 h-5" />
                         Aceptar Cambios
                       </button>
                       <button
@@ -465,7 +215,7 @@
                         :disabled="actionLoading"
                         class="btn-secondary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2" />
+                        <Icon name="heroicons:x-circle" class="w-5 h-5" />
                         Rechazar Cambios
                       </button>
                     </div>
@@ -474,7 +224,7 @@
               </div>
               
               <!-- Waiting for Acceptance Change Approval - Show when player2 accepted with changes and waiting for player1 to approve -->
-              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_accepted_by === currentPlayerId && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30 mb-4">
+              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_accepted_by === currentPlayerId && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="action-card mb-4">
                 <div class="flex items-center gap-3 mb-3">
                   <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
                   <div class="flex-1">
@@ -490,11 +240,11 @@
                   </div>
                 </div>
                 <div class="pl-9 space-y-3">
-                  <div v-if="match.acceptance_proposed_scheduled_at" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                  <div v-if="match.acceptance_proposed_scheduled_at" class="action-detail">
                     <p class="text-size-5 text-foreground-muted mb-1">Nueva Fecha y Hora Propuesta:</p>
                     <p class="text-size-4 font-semibold text-foreground">{{ formatDateTime(match.acceptance_proposed_scheduled_at) }}</p>
                   </div>
-                  <div v-if="match.acceptance_proposed_location !== null" class="p-3 rounded-lg bg-surface border border-border-subtle">
+                  <div v-if="match.acceptance_proposed_location !== null" class="action-detail">
                     <p class="text-size-5 text-foreground-muted mb-1">Nueva Ubicación Propuesta:</p>
                     <p class="text-size-4 font-semibold text-foreground">{{ match.acceptance_proposed_location || 'Sin ubicación' }}</p>
                   </div>
@@ -502,7 +252,7 @@
               </div>
               
               <!-- Waiting for Acceptance - Show when you proposed and waiting for response (only for non-tournament matches) -->
-              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_proposed_by === currentPlayerId && !match.match_accepted_by && !match.match_rejected_by && match.player2_id && isPlayerInMatch && !isTournamentOrganizer" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30 mb-4">
+              <div v-if="match.status === 'scheduled' && !match.tournament_id && match.match_proposed_by === currentPlayerId && !match.match_accepted_by && !match.match_rejected_by && match.player2_id && isPlayerInMatch && !isTournamentOrganizer" class="action-card mb-4">
                 <div class="flex items-center gap-3 mb-3">
                   <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
                   <div class="flex-1">
@@ -527,12 +277,12 @@
                 :disabled="actionLoading || (match.match_proposed_by && !match.match_accepted_by && !match.tournament_id)"
                 class="btn-primary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
               >
-                <Icon name="heroicons:play" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                <Icon name="heroicons:play" class="w-5 h-5" />
                 Iniciar Partido
               </button>
               
               <!-- Message when waiting for acceptance change approval -->
-              <div v-if="match.status === 'scheduled' && match.scheduled_at && !match.pending_player2_id && isPlayerInMatch && !isTournamentOrganizer && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by" class="p-4 rounded-xl bg-accent-subtle/20 border border-accent/30 text-center">
+              <div v-if="match.status === 'scheduled' && match.scheduled_at && !match.pending_player2_id && isPlayerInMatch && !isTournamentOrganizer && (match.acceptance_proposed_scheduled_at || match.acceptance_proposed_location !== null) && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by" class="action-card action-card--quiet">
                 <p class="text-size-4 text-foreground-muted">
                   <Icon name="heroicons:clock" class="w-5 h-5 inline mr-2 text-accent" />
                   Esperando aprobación de los cambios propuestos para iniciar el partido
@@ -545,12 +295,12 @@
                 @click="openScheduleForm"
                 class="btn-primary text-size-3 w-full justify-center group"
               >
-                <Icon name="heroicons:calendar" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                <Icon name="heroicons:calendar" class="w-5 h-5" />
                 Proponer Fecha
               </button>
               
               <!-- Schedule Proposal Waiting - Show when you proposed and waiting for response -->
-              <div v-if="match.status === 'scheduled' && !match.scheduled_at && match.schedule_proposed_by === currentPlayerId && !match.schedule_approved_by && !match.schedule_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30 mb-4">
+              <div v-if="match.status === 'scheduled' && !match.scheduled_at && match.schedule_proposed_by === currentPlayerId && !match.schedule_approved_by && !match.schedule_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="action-card mb-4">
                 <div class="flex items-center gap-3 mb-3">
                   <Icon name="heroicons:clock" class="w-6 h-6 text-accent flex-shrink-0" />
                   <div class="flex-1">
@@ -568,7 +318,7 @@
               
               <!-- Schedule Proposal Pending - Show when there's a pending proposal from the other player -->
               <div v-if="match.status === 'scheduled' && !match.scheduled_at && match.schedule_proposed_by && match.schedule_proposed_by !== currentPlayerId && !match.schedule_approved_by && !match.schedule_rejected_by && isPlayerInMatch && !isTournamentOrganizer" class="space-y-3 mb-4">
-                <div class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30">
+                <div class="action-card">
                   <div class="flex items-center gap-3 mb-3">
                     <Icon name="heroicons:calendar-days" class="w-6 h-6 text-accent flex-shrink-0" />
                     <div class="flex-1">
@@ -592,7 +342,7 @@
                         :disabled="actionLoading"
                         class="btn-primary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2" />
+                        <Icon name="heroicons:check-circle" class="w-5 h-5" />
                         Aceptar
                       </button>
                       <button
@@ -600,7 +350,7 @@
                         :disabled="actionLoading"
                         class="btn-secondary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2" />
+                        <Icon name="heroicons:x-circle" class="w-5 h-5" />
                         Rechazar
                       </button>
                     </div>
@@ -609,9 +359,9 @@
               </div>
 
               <!-- Organizer Info Message -->
-              <div v-if="isTournamentOrganizer && match.status === 'scheduled' && !match.scheduled_at" class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-center">
-                <Icon name="heroicons:information-circle" class="w-6 h-6 text-yellow-400 mx-auto mb-2" />
-                <p class="text-size-4 text-yellow-400 font-semibold mb-1">Partido sin agendar</p>
+              <div v-if="isTournamentOrganizer && match.status === 'scheduled' && !match.scheduled_at" class="action-card action-card--warning">
+                <Icon name="heroicons:information-circle" class="w-6 h-6 text-warning mx-auto mb-2" />
+                <p class="text-size-4 text-warning font-semibold mb-1">Partido sin agendar</p>
                 <p class="text-size-5 text-foreground-muted">Los jugadores deben programar este partido</p>
               </div>
 
@@ -621,7 +371,7 @@
                   @click="showScoreForm = true"
                   class="btn-primary text-size-3 w-full justify-center group"
                 >
-                  <Icon name="heroicons:document-text" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                  <Icon name="heroicons:document-text" class="w-5 h-5" />
                   Proponer Puntuación
                 </button>
               </div>
@@ -634,7 +384,7 @@
                     :disabled="actionLoading"
                     class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                    <Icon name="heroicons:check-circle" class="w-5 h-5" />
                     Aprobar
                   </button>
                   <button
@@ -642,7 +392,7 @@
                     :disabled="actionLoading"
                     class="btn-secondary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                    <Icon name="heroicons:x-circle" class="w-5 h-5" />
                     Rechazar
                   </button>
                 </div>
@@ -650,7 +400,7 @@
 
               <!-- Organizer Match Administration - Available in any state -->
               <div v-if="isTournamentOrganizer" class="space-y-3">
-                <div class="p-4 rounded-xl bg-accent-subtle/20 border border-accent/30">
+                <div class="action-card">
                   <div class="flex items-center gap-2 mb-3">
                     <Icon name="heroicons:shield-check" class="w-5 h-5 text-accent" />
                     <h3 class="text-size-3 font-semibold text-foreground">Administración del Partido</h3>
@@ -669,7 +419,7 @@
                   >
                     <Icon 
                       :name="match.status === 'completed' ? 'heroicons:pencil-square' : 'heroicons:document-text'" 
-                      class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" 
+                      class="w-5 h-5" 
                     />
                     {{ match.status === 'completed' ? 'Editar Resultado' : 'Establecer Resultado' }}
                   </button>
@@ -681,14 +431,14 @@
                 <button
                   v-if="!match.reschedule_proposed_by || match.reschedule_rejected_by"
                   @click="openRescheduleForm"
-                  class="btn-primary text-size-3 w-full justify-center group"
+                  class="btn-secondary text-size-3 w-full justify-center group"
                 >
-                  <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+                  <Icon name="heroicons:arrow-path" class="w-5 h-5" />
                   Reagendar Partido
                 </button>
                 
                 <!-- Reschedule proposal status (current player) -->
-                <div v-if="match.reschedule_proposed_by === currentPlayerId && !match.reschedule_approved_by && !match.reschedule_rejected_by" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30">
+                <div v-if="match.reschedule_proposed_by === currentPlayerId && !match.reschedule_approved_by && !match.reschedule_rejected_by" class="action-card">
                   <div class="flex items-center gap-3 mb-3">
                     <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
                     <p class="text-size-3 font-semibold text-foreground">
@@ -699,13 +449,13 @@
                     Nueva fecha: <span class="font-semibold text-foreground">{{ formatDateTime(match.reschedule_proposed_scheduled_at!) }}</span>
                   </p>
                   <p class="text-size-4 text-foreground-muted flex items-center gap-2">
-                    <Icon name="heroicons:arrow-path" class="w-4 h-4 animate-spin" />
+                    <Icon name="heroicons:arrow-path" class="w-4 h-4" />
                     Esperando respuesta del oponente...
                   </p>
                 </div>
                 
                 <!-- Reschedule proposal (opponent) -->
-                <div v-if="match.reschedule_proposed_by && match.reschedule_proposed_by !== currentPlayerId && !match.reschedule_approved_by && !match.reschedule_rejected_by" class="p-5 rounded-xl bg-accent-subtle/30 border border-accent/30 mb-4">
+                <div v-if="match.reschedule_proposed_by && match.reschedule_proposed_by !== currentPlayerId && !match.reschedule_approved_by && !match.reschedule_rejected_by" class="action-card mb-4">
                   <div class="flex items-center gap-3 mb-3">
                     <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
                     <p class="text-size-3 font-semibold text-foreground">
@@ -722,7 +472,7 @@
                       :disabled="actionLoading"
                       class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                      <Icon name="heroicons:check-circle" class="w-5 h-5" />
                       Aceptar
                     </button>
                     <button
@@ -730,7 +480,7 @@
                       :disabled="actionLoading"
                       class="btn-secondary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                      <Icon name="heroicons:x-circle" class="w-5 h-5" />
                       Rechazar
                     </button>
                   </div>
@@ -745,559 +495,27 @@
                 :disabled="actionLoading"
                 class="btn-danger text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Icon name="heroicons:x-mark" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                <Icon name="heroicons:x-mark" class="w-5 h-5" />
                 Cancelar Partido
               </button>
             </div>
-          </div>
-
-          <!-- Reschedule Form Modal -->
-          <Teleport to="body">
-            <Transition name="modal">
-              <div v-if="showRescheduleForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showRescheduleForm = false">
-                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
-                  <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                        <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent" />
-                      </div>
-                      <h2 class="text-size-2 font-semibold text-foreground">Reagendar Partido</h2>
-                    </div>
-                    <button
-                      @click="showRescheduleForm = false"
-                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <form @submit.prevent="handleProposeReschedule" class="space-y-6">
-                    <div>
-                      <label for="reschedule_scheduled_at" class="block text-size-4 font-semibold text-foreground mb-3">
-                        Nueva Fecha y Hora
-                      </label>
-                      <input
-                        id="reschedule_scheduled_at"
-                        v-model="rescheduleForm.scheduled_at"
-                        type="datetime-local"
-                        :min="minDateTime"
-                        required
-                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                      />
-                      <p v-if="isRescheduleDateInPast" class="text-size-4 font-regular text-red-400 mt-2 flex items-center gap-2">
-                        <Icon name="heroicons:exclamation-triangle" class="w-4 h-4" />
-                        No puedes reagendar un partido en el pasado
-                      </p>
-                    </div>
-
-                    <!-- Error Message -->
-                    <div v-if="rescheduleFormError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
-                      <p class="text-size-4 font-regular text-red-400">{{ rescheduleFormError }}</p>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                      <button
-                        type="submit"
-                        :disabled="actionLoading"
-                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:check" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        Proponer
-                      </button>
-                      <button
-                        type="button"
-                        @click="showRescheduleForm = false"
-                        class="btn-secondary text-size-3 flex-1 justify-center"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </Transition>
-          </Teleport>
-          
-          <!-- Schedule Form Modal -->
-          <Teleport to="body">
-            <Transition name="modal">
-              <div v-if="showScheduleForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showScheduleForm = false">
-                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
-                  <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                        <Icon name="heroicons:calendar" class="w-5 h-5 text-accent" />
-                      </div>
-                      <h2 class="text-size-2 font-semibold text-foreground">Programar Partido</h2>
-                    </div>
-                    <button
-                      @click="showScheduleForm = false"
-                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <form @submit.prevent="handleSchedule" class="space-y-6">
-                    <div>
-                      <label for="schedule_scheduled_at" class="block text-size-4 font-semibold text-foreground mb-3">
-                        Fecha y Hora
-                      </label>
-                      <input
-                        id="schedule_scheduled_at"
-                        v-model="scheduleForm.scheduled_at"
-                        type="datetime-local"
-                        :min="minDateTime"
-                        required
-                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                      />
-                      <p v-if="isScheduleDateInPast" class="text-size-4 font-regular text-red-400 mt-2 flex items-center gap-2">
-                        <Icon name="heroicons:exclamation-triangle" class="w-4 h-4" />
-                        No puedes programar un partido en el pasado
-                      </p>
-                    </div>
-
-                    <!-- Error Message -->
-                    <div v-if="scheduleFormError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
-                      <p class="text-size-4 font-regular text-red-400">{{ scheduleFormError }}</p>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                      <button
-                        type="submit"
-                        :disabled="actionLoading"
-                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        Programar
-                      </button>
-                      <button
-                        type="button"
-                        @click="showScheduleForm = false"
-                        class="btn-secondary text-size-3 flex-1 justify-center group"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </Transition>
-          </Teleport>
-
-          <!-- Score Proposal Form Modal -->
-          <Teleport to="body">
-            <Transition name="modal">
-              <div v-if="showScoreForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showScoreForm = false">
-                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
-                  <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                        <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" />
-                      </div>
-                      <h2 class="text-size-2 font-semibold text-foreground">Proponer Puntuación</h2>
-                    </div>
-                    <button
-                      @click="showScoreForm = false"
-                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <form @submit.prevent="handleProposeScore" class="space-y-6">
-                    <div>
-                      <label for="score" class="block text-size-4 font-semibold text-foreground mb-3">
-                        Resultado
-                      </label>
-                      <input
-                        id="score"
-                        v-model="scoreForm.score"
-                        type="text"
-                        required
-                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                        placeholder="Ej: 6-4, 6-3"
-                      />
-                    </div>
-
-                    <div>
-                      <label for="winner" class="block text-size-4 font-semibold text-foreground mb-3">
-                        Ganador
-                      </label>
-                      <select
-                        id="winner"
-                        v-model="scoreForm.winner_id"
-                        required
-                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                      >
-                        <option value="" disabled>Selecciona el ganador</option>
-                        <option :value="match.player1_id">{{ match.player1?.name }}</option>
-                        <option v-if="match.player2_id" :value="match.player2_id">{{ match.player2?.name }}</option>
-                      </select>
-                    </div>
-
-                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                      <button
-                        type="submit"
-                        :disabled="actionLoading"
-                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:check" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        Proponer
-                      </button>
-                      <button
-                        type="button"
-                        @click="showScoreForm = false"
-                        class="btn-secondary text-size-3 flex-1 justify-center"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </Transition>
-          </Teleport>
-
-          <!-- Accept Match Form Modal -->
-          <Teleport to="body">
-            <Transition name="modal">
-              <div v-if="showAcceptMatchForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showAcceptMatchForm = false">
-                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
-                  <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                        <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent" />
-                      </div>
-                      <h2 class="text-size-2 font-semibold text-foreground">Aceptar Partido</h2>
-                    </div>
-                    <button
-                      @click="showAcceptMatchForm = false"
-                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <div class="space-y-6">
-                    <div class="p-4 rounded-xl bg-accent-subtle/20 border border-accent/30">
-                      <p class="text-size-4 font-semibold text-foreground mb-2">Detalles del Partido</p>
-                      <div class="space-y-2 text-size-5 text-foreground-muted">
-                        <p><span class="font-semibold text-foreground">Fecha:</span> {{ match.scheduled_at ? formatDateTime(match.scheduled_at) : 'Sin agendar' }}</p>
-                        <p><span class="font-semibold text-foreground">Ubicación:</span> {{ match.location || 'Sin ubicación' }}</p>
-                      </div>
-                    </div>
-                    
-                    <!-- Change Proposal Form -->
-                    <form v-if="acceptMatchForm.proposeChanges" @submit.prevent="handleAcceptMatchWithChanges" class="space-y-4">
-                      <div>
-                        <label for="accept_scheduled_at" class="block text-size-4 font-semibold text-foreground mb-3">
-                          Nueva Fecha y Hora
-                        </label>
-                        <input
-                          id="accept_scheduled_at"
-                          v-model="acceptMatchForm.scheduled_at"
-                          type="datetime-local"
-                          :min="minDateTime"
-                          class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                        />
-                        <p class="text-size-5 text-foreground-muted mt-2">
-                          Deja vacío si solo quieres cambiar la ubicación
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <label for="accept_location" class="block text-size-4 font-semibold text-foreground mb-3">
-                          Nueva Ubicación
-                        </label>
-                        <input
-                          id="accept_location"
-                          v-model="acceptMatchForm.location"
-                          type="text"
-                          class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                          placeholder="Ej: Club de Tenis Quito"
-                        />
-                        <p class="text-size-5 text-foreground-muted mt-2">
-                          Deja vacío si solo quieres cambiar la fecha y hora
-                        </p>
-                      </div>
-
-                      <!-- Error Message -->
-                      <div v-if="acceptMatchFormError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
-                        <p class="text-size-4 font-regular text-red-400">{{ acceptMatchFormError }}</p>
-                      </div>
-
-                      <div class="flex gap-3 pt-2">
-                        <button
-                          type="submit"
-                          :disabled="actionLoading || (!acceptMatchForm.scheduled_at && !acceptMatchForm.location)"
-                          class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                          Aceptar y Enviar Propuesta
-                        </button>
-                        <button
-                          type="button"
-                          @click="acceptMatchForm.proposeChanges = false"
-                          class="btn-secondary text-size-3 flex-1 justify-center"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </form>
-
-                    <!-- Action buttons when not proposing changes -->
-                    <div v-else class="flex flex-col gap-3">
-                      <button
-                        type="button"
-                        @click="handleAcceptMatchDirectly"
-                        :disabled="actionLoading"
-                        class="btn-primary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        Aceptar Partido
-                      </button>
-                      <button
-                        type="button"
-                        @click="acceptMatchForm.proposeChanges = true"
-                        :disabled="actionLoading"
-                        class="btn-secondary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:clock" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        Proponer Cambios
-                      </button>
-                      <button
-                        type="button"
-                        @click="showAcceptMatchForm = false"
-                        class="btn-secondary text-size-3 w-full justify-center"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Transition>
-          </Teleport>
-          
-          <!-- Reject Match Form Modal -->
-          <Teleport to="body">
-            <Transition name="modal">
-              <div v-if="showRejectMatchForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showRejectMatchForm = false">
-                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
-                  <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-                        <Icon name="heroicons:x-circle" class="w-5 h-5 text-red-400" />
-                      </div>
-                      <h2 class="text-size-2 font-semibold text-foreground">Rechazar Partido</h2>
-                    </div>
-                    <button
-                      @click="showRejectMatchForm = false"
-                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <div class="space-y-6">
-                    <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
-                      <p class="text-size-4 font-semibold text-foreground mb-2">¿Estás seguro?</p>
-                      <p class="text-size-5 text-foreground-muted">
-                        Si rechazas este partido, se cancelará y no podrás jugarlo. Esta acción no se puede deshacer.
-                      </p>
-                    </div>
-
-                    <div class="flex gap-3 pt-2">
-                      <button
-                        @click="handleRejectMatch"
-                        :disabled="actionLoading"
-                        class="btn-danger text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:x-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        Sí, Rechazar
-                      </button>
-                      <button
-                        type="button"
-                        @click="showRejectMatchForm = false"
-                        class="btn-secondary text-size-3 flex-1 justify-center"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Transition>
-          </Teleport>
-          
-          <!-- Cancel Match Form Modal -->
-          <Teleport to="body">
-            <Transition name="modal">
-              <div v-if="showCancelMatchForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showCancelMatchForm = false">
-                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
-                  <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-                        <Icon name="heroicons:x-mark" class="w-5 h-5 text-red-400" />
-                      </div>
-                      <h2 class="text-size-2 font-semibold text-foreground">Cancelar Partido</h2>
-                    </div>
-                    <button
-                      @click="showCancelMatchForm = false"
-                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <div class="space-y-6">
-                    <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
-                      <p class="text-size-4 font-semibold text-foreground mb-2">¿Estás seguro?</p>
-                      <p class="text-size-5 text-foreground-muted">
-                        Si cancelas este partido, se cancelará permanentemente y no podrás jugarlo. Esta acción no se puede deshacer.
-                      </p>
-                    </div>
-
-                    <div class="flex gap-3 pt-2">
-                      <button
-                        @click="handleCancelMatch"
-                        :disabled="actionLoading"
-                        class="btn-danger text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:x-mark" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        Sí, Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        @click="showCancelMatchForm = false"
-                        class="btn-secondary text-size-3 flex-1 justify-center"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Transition>
-          </Teleport>
-          
-          <!-- Organizer Result Form Modal -->
-          <Teleport to="body">
-            <Transition name="modal">
-              <div v-if="showOrganizerResultForm" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showOrganizerResultForm = false">
-                <div class="glass-card-elevated p-8 max-w-md w-full animate-fade-in-scale">
-                  <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3">
-                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                        <Icon name="heroicons:shield-check" class="w-5 h-5 text-accent" />
-                      </div>
-                      <h2 class="text-size-2 font-semibold text-foreground">
-                        {{ match.status === 'completed' ? 'Editar Resultado' : 'Establecer Resultado' }}
-                      </h2>
-                    </div>
-                    <button
-                      @click="showOrganizerResultForm = false"
-                      class="w-8 h-8 rounded-lg bg-surface border border-border-subtle flex items-center justify-center text-foreground-muted hover:text-foreground hover:border-accent/50 transition-all"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <form @submit.prevent="handleOrganizerSetResult" class="space-y-6">
-                    <div>
-                      <label for="organizer_winner" class="block text-size-4 font-semibold text-foreground mb-3">
-                        Ganador
-                      </label>
-                      <select
-                        id="organizer_winner"
-                        v-model="organizerResultForm.winner_id"
-                        required
-                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                      >
-                        <option value="">Selecciona el ganador</option>
-                        <option v-if="match?.player1" :value="match.player1_id">{{ match.player1.name }}</option>
-                        <option v-if="match?.player2" :value="match.player2_id">{{ match.player2.name }}</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label class="flex items-center gap-3 cursor-pointer">
-                        <input
-                          v-model="organizerResultForm.is_wo"
-                          type="checkbox"
-                          class="w-5 h-5 rounded border-border-subtle text-accent focus:ring-accent"
-                        />
-                        <span class="text-size-4 font-semibold text-foreground">Marcar como Walkover (WO)</span>
-                      </label>
-                      <p class="text-size-5 text-foreground-muted mt-2 ml-8">
-                        Usa esta opción si el partido no se jugó (por ejemplo, por ausencia de un jugador)
-                      </p>
-                    </div>
-
-                    <div v-if="!organizerResultForm.is_wo">
-                      <label for="organizer_score" class="block text-size-4 font-semibold text-foreground mb-3">
-                        Resultado
-                      </label>
-                      <input
-                        id="organizer_score"
-                        v-model="organizerResultForm.score"
-                        type="text"
-                        required
-                        class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                        placeholder="Ej: 6-4, 6-3"
-                      />
-                      <p class="text-size-5 text-foreground-muted mt-2">
-                        Formato: sets separados por comas (ej: "6-4, 6-3" o "6-2, 4-6, 6-1")
-                      </p>
-                    </div>
-
-                    <!-- Error Message -->
-                    <div v-if="organizerResultFormError" class="p-4 rounded-xl bg-red-500/20 border border-red-500/50">
-                      <p class="text-size-4 font-regular text-red-400">{{ organizerResultFormError }}</p>
-                    </div>
-
-                    <div class="flex gap-3 pt-2">
-                      <button
-                        type="submit"
-                        :disabled="actionLoading || !organizerResultForm.winner_id || (!organizerResultForm.is_wo && !organizerResultForm.score)"
-                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Icon name="heroicons:check-circle" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                        {{ match.status === 'completed' ? 'Actualizar Resultado' : 'Establecer Resultado' }}
-                      </button>
-                      <button
-                        type="button"
-                        @click="showOrganizerResultForm = false"
-                        class="btn-secondary text-size-3 flex-1 justify-center"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </Transition>
-          </Teleport>
+          </section>
+        </aside>
+      </div>
 
           <!-- Chat Section -->
-          <div class="glass-card-elevated p-6 md:p-8 animate-fade-up animate-delay-3">
+          <section class="panel chat" aria-labelledby="chat-title">
             <div class="flex items-center justify-between mb-6">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                  <Icon name="heroicons:chat-bubble-left-right" class="w-5 h-5 text-accent" />
-                </div>
-                <h2 class="text-size-2 font-semibold text-foreground">Chat del Partido</h2>
-              </div>
+              <h2 id="chat-title" class="chat__title">Chat del partido</h2>
               <button
                 v-if="isPlayerInMatch || isTournamentOrganizer || isAdmin"
                 @click="toggleChat"
-                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface border border-border-subtle text-foreground hover:border-accent/50 hover:bg-surface-elevated transition-all group"
+                class="btn-secondary !min-h-[44px] !py-2" :aria-expanded="isChatOpen"
               >
                 <span class="text-size-4">{{ isChatOpen ? 'Ocultar' : 'Mostrar' }}</span>
                 <Icon 
                   name="heroicons:chevron-down" 
-                  :class="['w-5 h-5 transition-transform duration-300', isChatOpen ? 'rotate-180' : '']"
+                  :class="['w-5 h-5 duration-300', isChatOpen ? 'rotate-180' : '']"
                 />
               </button>
             </div>
@@ -1347,22 +565,21 @@
                     <!-- Message bubble -->
                     <div
                       :class="[
-                        'p-4 rounded-xl transition-all animate-fade-up',
+                        'chat__msg',
                         message.player_id === currentPlayerId
-                          ? 'bg-gradient-to-br from-accent-subtle/50 to-accent-subtle/20 border border-accent/30 ml-auto max-w-[85%]'
-                          : 'bg-surface border border-border-subtle max-w-[85%]',
-                        message._error ? 'border-red-500/50 bg-red-500/10' : '',
+                          ? 'chat__bubble chat__bubble--mine ml-auto max-w-[85%]'
+                          : 'chat__bubble max-w-[85%]',
+                        message._error ? 'chat__bubble--error' : '',
                         message._sending ? 'opacity-70' : ''
                       ]"
-                      :style="{ animationDelay: `${index * 0.02}s` }"
-                    >
+                                          >
                       <div class="flex items-start justify-between gap-3">
-                        <p class="text-size-3 text-foreground leading-relaxed flex-1">
+                        <p class="text-size-3 text-foreground leading-relaxed flex-1 break-words">
                           {{ message.message }}
                           <span v-if="message._sending" class="ml-2 inline-block">
                             <Icon name="heroicons:arrow-path" class="w-3 h-3 text-foreground-muted animate-spin inline" />
                           </span>
-                          <span v-if="message._error" class="ml-2 text-red-400 text-size-4">
+                          <span v-if="message._error" class="ml-2 text-danger text-size-4">
                             <Icon name="heroicons:exclamation-circle" class="w-4 h-4 inline" />
                           </span>
                         </p>
@@ -1396,7 +613,7 @@
                       @blur="resumePolling"
                       @keydown.enter.exact.prevent="handleSendMessage"
                       placeholder="Escribe un mensaje..."
-                      class="w-full px-4 py-3 pr-12 rounded-xl bg-surface border-2 border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all disabled:opacity-50"
+                      class="form-input pr-12" aria-label="Mensaje"
                     />
                     <div v-if="messageInput.trim()" class="absolute right-3 top-1/2 -translate-y-1/2">
                       <Icon name="heroicons:paper-airplane" class="w-5 h-5 text-accent" />
@@ -1405,12 +622,12 @@
                   <button
                     type="submit"
                     :disabled="sendingMessage || !messageInput.trim() || (!isPlayerInMatch && !isTournamentOrganizer && !isAdmin)"
-                    class="btn-primary text-size-3 px-6 disabled:opacity-50 disabled:cursor-not-allowed group relative"
+                    class="btn-primary px-6" aria-label="Enviar mensaje"
                   >
                     <Icon 
                       v-if="!sendingMessage"
                       name="heroicons:paper-airplane" 
-                      class="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" 
+                      class="w-5 h-5" 
                     />
                     <Icon 
                       v-else
@@ -1422,14 +639,543 @@
                 
               </div>
             </Transition>
-          </div>
-        </div>
-      </div>
+          </section>
+
+          <!-- Reschedule Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showRescheduleForm" class="te-modal" @click.self="showRescheduleForm = false">
+                <div class="te-modal__panel">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Reagendar Partido</h2>
+                    </div>
+                    <button
+                      @click="showRescheduleForm = false"
+                      class="icon-button"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <form @submit.prevent="handleProposeReschedule" class="space-y-6">
+                    <div>
+                      <label for="reschedule_scheduled_at" class="form-label">
+                        Nueva Fecha y Hora
+                      </label>
+                      <input
+                        id="reschedule_scheduled_at"
+                        v-model="rescheduleForm.scheduled_at"
+                        type="datetime-local"
+                        :min="minDateTime"
+                        required
+                        class="form-input"
+                      />
+                      <p v-if="isRescheduleDateInPast" class="text-size-4 text-danger mt-2 flex items-center gap-2">
+                        <Icon name="heroicons:exclamation-triangle" class="w-4 h-4" />
+                        No puedes reagendar un partido en el pasado
+                      </p>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div v-if="rescheduleFormError" class="form-error">
+                      <p class="text-size-4 text-danger">{{ rescheduleFormError }}</p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                      <button
+                        type="submit"
+                        :disabled="actionLoading"
+                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check" class="w-5 h-5" />
+                        Proponer
+                      </button>
+                      <button
+                        type="button"
+                        @click="showRescheduleForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
+          <!-- Schedule Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showScheduleForm" class="te-modal" @click.self="showScheduleForm = false">
+                <div class="te-modal__panel">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:calendar" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Programar Partido</h2>
+                    </div>
+                    <button
+                      @click="showScheduleForm = false"
+                      class="icon-button"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <form @submit.prevent="handleSchedule" class="space-y-6">
+                    <div>
+                      <label for="schedule_scheduled_at" class="form-label">
+                        Fecha y Hora
+                      </label>
+                      <input
+                        id="schedule_scheduled_at"
+                        v-model="scheduleForm.scheduled_at"
+                        type="datetime-local"
+                        :min="minDateTime"
+                        required
+                        class="form-input"
+                      />
+                      <p v-if="isScheduleDateInPast" class="text-size-4 text-danger mt-2 flex items-center gap-2">
+                        <Icon name="heroicons:exclamation-triangle" class="w-4 h-4" />
+                        No puedes programar un partido en el pasado
+                      </p>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div v-if="scheduleFormError" class="form-error">
+                      <p class="text-size-4 text-danger">{{ scheduleFormError }}</p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                      <button
+                        type="submit"
+                        :disabled="actionLoading"
+                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5" />
+                        Programar
+                      </button>
+                      <button
+                        type="button"
+                        @click="showScheduleForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center group"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+
+          <!-- Score Proposal Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showScoreForm" class="te-modal" @click.self="showScoreForm = false">
+                <div class="te-modal__panel">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Proponer Puntuación</h2>
+                    </div>
+                    <button
+                      @click="showScoreForm = false"
+                      class="icon-button"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <form @submit.prevent="handleProposeScore" class="space-y-6">
+                    <div>
+                      <label for="score" class="form-label">
+                        Resultado
+                      </label>
+                      <input
+                        id="score"
+                        v-model="scoreForm.score"
+                        type="text"
+                        required
+                        class="form-input"
+                        placeholder="Ej: 6-4, 6-3"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="winner" class="form-label">
+                        Ganador
+                      </label>
+                      <select
+                        id="winner"
+                        v-model="scoreForm.winner_id"
+                        required
+                        class="form-select"
+                      >
+                        <option value="" disabled>Selecciona el ganador</option>
+                        <option :value="match.player1_id">{{ match.player1?.name }}</option>
+                        <option v-if="match.player2_id" :value="match.player2_id">{{ match.player2?.name }}</option>
+                      </select>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                      <button
+                        type="submit"
+                        :disabled="actionLoading"
+                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check" class="w-5 h-5" />
+                        Proponer
+                      </button>
+                      <button
+                        type="button"
+                        @click="showScoreForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+
+          <!-- Accept Match Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showAcceptMatchForm" class="te-modal" @click.self="showAcceptMatchForm = false">
+                <div class="te-modal__panel">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Aceptar Partido</h2>
+                    </div>
+                    <button
+                      @click="showAcceptMatchForm = false"
+                      class="icon-button"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div class="space-y-6">
+                    <div class="action-card">
+                      <p class="text-size-4 font-semibold text-foreground mb-2">Detalles del Partido</p>
+                      <div class="space-y-2 text-size-5 text-foreground-muted">
+                        <p><span class="font-semibold text-foreground">Fecha:</span> {{ match.scheduled_at ? formatDateTime(match.scheduled_at) : 'Sin agendar' }}</p>
+                        <p><span class="font-semibold text-foreground">Ubicación:</span> {{ match.location || 'Sin ubicación' }}</p>
+                      </div>
+                    </div>
+                    
+                    <!-- Change Proposal Form -->
+                    <form v-if="acceptMatchForm.proposeChanges" @submit.prevent="handleAcceptMatchWithChanges" class="space-y-4">
+                      <div>
+                        <label for="accept_scheduled_at" class="form-label">
+                          Nueva Fecha y Hora
+                        </label>
+                        <input
+                          id="accept_scheduled_at"
+                          v-model="acceptMatchForm.scheduled_at"
+                          type="datetime-local"
+                          :min="minDateTime"
+                          class="form-input"
+                        />
+                        <p class="text-size-5 text-foreground-muted mt-2">
+                          Deja vacío si solo quieres cambiar la ubicación
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <label for="accept_location" class="form-label">
+                          Nueva Ubicación
+                        </label>
+                        <input
+                          id="accept_location"
+                          v-model="acceptMatchForm.location"
+                          type="text"
+                          class="form-input"
+                          placeholder="Ej: Club de Tenis Quito"
+                        />
+                        <p class="text-size-5 text-foreground-muted mt-2">
+                          Deja vacío si solo quieres cambiar la fecha y hora
+                        </p>
+                      </div>
+
+                      <!-- Error Message -->
+                      <div v-if="acceptMatchFormError" class="form-error">
+                        <p class="text-size-4 text-danger">{{ acceptMatchFormError }}</p>
+                      </div>
+
+                      <div class="flex gap-3 pt-2">
+                        <button
+                          type="submit"
+                          :disabled="actionLoading || (!acceptMatchForm.scheduled_at && !acceptMatchForm.location)"
+                          class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Icon name="heroicons:check-circle" class="w-5 h-5" />
+                          Aceptar y Enviar Propuesta
+                        </button>
+                        <button
+                          type="button"
+                          @click="acceptMatchForm.proposeChanges = false"
+                          class="btn-secondary text-size-3 flex-1 justify-center"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+
+                    <!-- Action buttons when not proposing changes -->
+                    <div v-else class="flex flex-col gap-3">
+                      <button
+                        type="button"
+                        @click="handleAcceptMatchDirectly"
+                        :disabled="actionLoading"
+                        class="btn-primary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5" />
+                        Aceptar Partido
+                      </button>
+                      <button
+                        type="button"
+                        @click="acceptMatchForm.proposeChanges = true"
+                        :disabled="actionLoading"
+                        class="btn-secondary text-size-3 w-full justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:clock" class="w-5 h-5" />
+                        Proponer Cambios
+                      </button>
+                      <button
+                        type="button"
+                        @click="showAcceptMatchForm = false"
+                        class="btn-secondary text-size-3 w-full justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
+          <!-- Reject Match Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showRejectMatchForm" class="te-modal" @click.self="showRejectMatchForm = false">
+                <div class="te-modal__panel">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                        <Icon name="heroicons:x-circle" class="w-5 h-5 text-danger" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Rechazar Partido</h2>
+                    </div>
+                    <button
+                      @click="showRejectMatchForm = false"
+                      class="icon-button"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div class="space-y-6">
+                    <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+                      <p class="text-size-4 font-semibold text-foreground mb-2">¿Estás seguro?</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        Si rechazas este partido, se cancelará y no podrás jugarlo. Esta acción no se puede deshacer.
+                      </p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                      <button
+                        @click="handleRejectMatch"
+                        :disabled="actionLoading"
+                        class="btn-danger text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:x-circle" class="w-5 h-5" />
+                        Sí, Rechazar
+                      </button>
+                      <button
+                        type="button"
+                        @click="showRejectMatchForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
+          <!-- Cancel Match Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showCancelMatchForm" class="te-modal" @click.self="showCancelMatchForm = false">
+                <div class="te-modal__panel">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                        <Icon name="heroicons:x-mark" class="w-5 h-5 text-danger" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">Cancelar Partido</h2>
+                    </div>
+                    <button
+                      @click="showCancelMatchForm = false"
+                      class="icon-button"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div class="space-y-6">
+                    <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+                      <p class="text-size-4 font-semibold text-foreground mb-2">¿Estás seguro?</p>
+                      <p class="text-size-5 text-foreground-muted">
+                        Si cancelas este partido, se cancelará permanentemente y no podrás jugarlo. Esta acción no se puede deshacer.
+                      </p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                      <button
+                        @click="handleCancelMatch"
+                        :disabled="actionLoading"
+                        class="btn-danger text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                        Sí, Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        @click="showCancelMatchForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+          
+          <!-- Organizer Result Form Modal -->
+          <Teleport to="body">
+            <Transition name="modal">
+              <div v-if="showOrganizerResultForm" class="te-modal" @click.self="showOrganizerResultForm = false">
+                <div class="te-modal__panel">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
+                        <Icon name="heroicons:shield-check" class="w-5 h-5 text-accent" />
+                      </div>
+                      <h2 class="text-size-2 font-semibold text-foreground">
+                        {{ match.status === 'completed' ? 'Editar Resultado' : 'Establecer Resultado' }}
+                      </h2>
+                    </div>
+                    <button
+                      @click="showOrganizerResultForm = false"
+                      class="icon-button"
+                    >
+                      <Icon name="heroicons:x-mark" class="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <form @submit.prevent="handleOrganizerSetResult" class="space-y-6">
+                    <div>
+                      <label for="organizer_winner" class="form-label">
+                        Ganador
+                      </label>
+                      <select
+                        id="organizer_winner"
+                        v-model="organizerResultForm.winner_id"
+                        required
+                        class="form-select"
+                      >
+                        <option value="">Selecciona el ganador</option>
+                        <option v-if="match?.player1" :value="match.player1_id">{{ match.player1.name }}</option>
+                        <option v-if="match?.player2" :value="match.player2_id">{{ match.player2.name }}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label class="flex items-center gap-3 cursor-pointer">
+                        <input
+                          v-model="organizerResultForm.is_wo"
+                          type="checkbox"
+                          class="w-5 h-5 rounded border-border-subtle text-accent focus:ring-accent"
+                        />
+                        <span class="text-size-4 font-semibold text-foreground">Marcar como Walkover (WO)</span>
+                      </label>
+                      <p class="text-size-5 text-foreground-muted mt-2 ml-8">
+                        Usa esta opción si el partido no se jugó (por ejemplo, por ausencia de un jugador)
+                      </p>
+                    </div>
+
+                    <div v-if="!organizerResultForm.is_wo">
+                      <label for="organizer_score" class="form-label">
+                        Resultado
+                      </label>
+                      <input
+                        id="organizer_score"
+                        v-model="organizerResultForm.score"
+                        type="text"
+                        required
+                        class="form-input"
+                        placeholder="Ej: 6-4, 6-3"
+                      />
+                      <p class="text-size-5 text-foreground-muted mt-2">
+                        Formato: sets separados por comas (ej: "6-4, 6-3" o "6-2, 4-6, 6-1")
+                      </p>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div v-if="organizerResultFormError" class="form-error">
+                      <p class="text-size-4 text-danger">{{ organizerResultFormError }}</p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                      <button
+                        type="submit"
+                        :disabled="actionLoading || !organizerResultForm.winner_id || (!organizerResultForm.is_wo && !organizerResultForm.score)"
+                        class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="heroicons:check-circle" class="w-5 h-5" />
+                        {{ match.status === 'completed' ? 'Actualizar Resultado' : 'Establecer Resultado' }}
+                      </button>
+                      <button
+                        type="button"
+                        @click="showOrganizerResultForm = false"
+                        class="btn-secondary text-size-3 flex-1 justify-center"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </Transition>
+          </Teleport>
+
     </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
+import { formatScore } from '~/utils/pendingAction'
 import type { Match, MatchMessage } from '~/types'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
@@ -1578,21 +1324,6 @@ const statusLabel = computed(() => {
   return labels[match.value.status] || match.value.status
 })
 
-const statusBadgeClass = computed(() => {
-  if (!match.value) return ''
-  // Si está scheduled pero sin fecha, usar estilo diferente
-  if (match.value.status === 'scheduled' && !match.value.scheduled_at) {
-    return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30 backdrop-blur-sm'
-  }
-  const classes: Record<string, string> = {
-    scheduled: 'bg-blue-500/10 text-blue-400 border-blue-500/30 backdrop-blur-sm',
-    active: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30 backdrop-blur-sm',
-    completed: 'bg-green-500/10 text-green-400 border-green-500/30 backdrop-blur-sm',
-    cancelled: 'bg-red-500/10 text-red-400 border-red-500/30 backdrop-blur-sm'
-  }
-  return classes[match.value.status] || ''
-})
-
 const statusIcon = computed(() => {
   if (!match.value) return 'heroicons:circle'
   const icons: Record<string, string> = {
@@ -1691,6 +1422,19 @@ const openScheduleForm = () => {
   scheduleForm.value.scheduled_at = `${year}-${month}-${day}T00:00`
   showScheduleForm.value = true
 }
+
+// Hero: "Sábado 19 de septiembre" + "09:00" in Ecuador time
+const heroDate = computed(() => {
+  const d = match.value?.scheduled_at ? new Date(match.value.scheduled_at) : null
+  if (!d || isNaN(d.getTime())) return 'Sin agendar'
+  const text = d.toLocaleDateString('es-EC', { timeZone: 'America/Guayaquil', weekday: 'long', day: 'numeric', month: 'long' })
+  return text.charAt(0).toUpperCase() + text.slice(1)
+})
+const heroTime = computed(() => {
+  const d = match.value?.scheduled_at ? new Date(match.value.scheduled_at) : null
+  if (!d || isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString('es-EC', { timeZone: 'America/Guayaquil', hour: '2-digit', minute: '2-digit', hour12: false })
+})
 
 const formatDateTime = (dateString: string | null | undefined) => {
   if (!dateString) return 'Sin agendar'
@@ -2569,3 +2313,27 @@ onUnmounted(() => {
 })
 </script>
 
+
+<style scoped>
+.match-tags { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.actions { display: grid; gap: 12px; }
+.actions :deep(.pl-9) { padding-left: 0; }
+.players { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.player { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.player h2 { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
+.player__avatar { width: 64px; height: 64px; font-size: 22px; }
+.players__vs { align-self: center; margin-top: -24px; }
+.result__score { font-size: clamp(30px, 4vw, 44px); }
+.result__sr { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--edge); }
+.result__sr--loading { display: flex; align-items: center; gap: 10px; }
+.chat { margin-top: 24px; }
+.chat__title { font-size: 20px; }
+.chat :deep(.chat__bubble) { padding: 12px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--edge); }
+.chat :deep(.chat__bubble--mine) { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: transparent; }
+.chat :deep(.chat__bubble--error) { border-color: var(--danger); background: var(--danger-subtle); }
+@media (prefers-reduced-motion: no-preference) {
+  .sr-spark { display: inline-block; animation: sr-spark 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s backwards; }
+}
+@keyframes sr-spark { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
+@media (max-width: 767px) { .player h2 { font-size: 16px; } }
+</style>

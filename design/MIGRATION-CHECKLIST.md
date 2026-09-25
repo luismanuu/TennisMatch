@@ -21,7 +21,7 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | Jugador `/players/:id` | `pages/players/[id].vue` | Perfil (applied) | #3 | in PR | `shots/pr3` |
 | Ranking `/leaderboard` | `pages/leaderboard/index.vue` | Ranking | #4 | in PR | `shots/pr4` |
 | Mi ranking `/my-ranking` | `pages/my-ranking/index.vue` | Ranking (applied) | #4 | in PR | `shots/pr4` |
-| Partido + Resultado `/matches/:id` | `pages/matches/[id].vue` | Partido, Resultado | #5 | todo | |
+| Partido + Resultado `/matches/:id` | `pages/matches/[id].vue` | Partido, Resultado | #5 | in PR | `shots/pr5` |
 | Historial `/matches` | `pages/matches/index.vue` | Historial | #6 | todo | |
 | Programar `/matches/new` | `pages/matches/new.vue` | Programar | #6 | todo | |
 | Buscar rival `/matchmaking` | `pages/matchmaking/index.vue` | Buscar | #6 | todo | |
@@ -48,6 +48,7 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 - [ ] Inicio "Tu próximo partido" and "Puesto N de M" (mock) need data the page doesn't load today (next scheduled match, ranking position); left out rather than adding fetches (brief: no data-fetching changes).
 - [ ] Perfil "Último resultado" / "Tu próximo partido" (mock) are not loaded by the profile page today; left out (no new fetches).
 - [x] `RankIconAnimated` + `useRankAnimation` + `useParticleSystem` (looping tier effects) removed in #4; nothing uses them.
+- [ ] Partido "Impacto estimado" (+SR si ganas / −SR si pierdes) needs an estimate the API doesn't return; left out.
 - [ ] Real club photography with verified venue IDs (DESIGN.md §8); current photos are credited references.
 
 ## Notes on spec vs. app structure
