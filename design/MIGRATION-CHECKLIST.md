@@ -34,8 +34,8 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | Onboarding `/onboarding` | `pages/onboarding.vue` | none | #8 | in PR | `shots/pr8` |
 | Invitación `/invitation/:token` | `pages/invitation/[token].vue` | none | #8 | in PR | `shots/pr8` |
 | Admin acceso `/admin/sign-in` | `pages/admin/sign-in.vue` | none | #8 | in PR | `shots/pr8` |
-| Admin panel `/admin` | `pages/admin/index.vue` | none | #9 | todo | |
-| Admin debug `/admin/debug` | `pages/admin/debug.vue` | none | #9 | todo | |
+| Admin panel `/admin` | `pages/admin/index.vue` | none | #9 | in PR | `shots/pr9` |
+| Admin debug `/admin/debug` | `pages/admin/debug.vue` | none | #9 | in PR | `shots/pr9` |
 | Admin rankings (8 routes) `/admin/rankings/**` | `pages/admin/rankings/*` | none | #10 | todo | |
 | Admin ciudades `/admin/city-segments` | `pages/admin/city-segments/index.vue` | none | #11 | todo | |
 | Admin organizadores `/admin/organizers` | `pages/admin/organizers/index.vue` | none | #11 | todo | |

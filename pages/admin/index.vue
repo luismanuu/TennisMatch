@@ -1,45 +1,18 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <!-- Navigation -->
-    <AppNavigation />
-    
-    <!-- Spacer for fixed nav -->
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div :class="['px-6', activeTab === 'fallback-matches' ? 'max-w-[1800px] mx-auto' : 'container-medium']">
-        <!-- Header -->
-        <div class="text-center mb-12 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:shield-check" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Admin Dashboard</span>
-          </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">
-            Panel de Administración
-          </h1>
-          <p class="text-size-3 font-regular text-foreground-muted">
-            Gestiona jugadores, invitaciones pendientes y administración del sistema
-          </p>
-        </div>
+  <PageLayout>
+        <PageHeader title="Panel de administración" subtitle="Jugadores, invitaciones, partidos, torneos y ranking." />
 
         <!-- Navigation Tabs - Organized in Groups -->
-        <div v-if="!loading" class="mb-8 animate-fade-up animate-delay-1">
+        <div v-if="!loading" class="mb-8">
           <!-- Primary Tab: Overview -->
           <div class="mb-4">
             <button
               @click="activeTab = 'overview'"
               :class="[
-                'flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                'admin-tab',
                 activeTab === 'overview'
-                  ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                  : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                  ? 'is-active'
+                  : ''
               ]"
             >
               <Icon name="heroicons:chart-bar-square" class="w-5 h-5 flex-shrink-0" />
@@ -52,15 +25,15 @@
             <!-- User Management Group -->
             <div class="space-y-2">
               <div class="px-2 py-1">
-                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Usuarios</p>
+                <p class="admin-tab-group">Usuarios</p>
               </div>
               <button
                 @click="activeTab = 'pending'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'pending'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:clock" class="w-4 h-4 flex-shrink-0" />
@@ -69,10 +42,10 @@
               <button
                 @click="activeTab = 'players'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'players'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:users" class="w-4 h-4 flex-shrink-0" />
@@ -83,15 +56,15 @@
             <!-- Content Management Group -->
             <div class="space-y-2">
               <div class="px-2 py-1">
-                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Contenido</p>
+                <p class="admin-tab-group">Contenido</p>
               </div>
               <button
                 @click="activeTab = 'categories'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'categories'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:tag" class="w-4 h-4 flex-shrink-0" />
@@ -100,10 +73,10 @@
               <button
                 @click="activeTab = 'city-segments'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'city-segments'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:map" class="w-4 h-4 flex-shrink-0" />
@@ -112,10 +85,10 @@
               <button
                 @click="activeTab = 'matches'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'matches'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:trophy" class="w-4 h-4 flex-shrink-0" />
@@ -124,10 +97,10 @@
               <button
                 @click="activeTab = 'fallback-matches'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'fallback-matches'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:exclamation-triangle" class="w-4 h-4 flex-shrink-0" />
@@ -136,10 +109,10 @@
               <button
                 @click="activeTab = 'missing-rating-history'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'missing-rating-history'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:clock" class="w-4 h-4 flex-shrink-0" />
@@ -150,15 +123,15 @@
             <!-- Tournament Management Group -->
             <div class="space-y-2">
               <div class="px-2 py-1">
-                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Torneos</p>
+                <p class="admin-tab-group">Torneos</p>
               </div>
               <button
                 @click="activeTab = 'tournaments'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'tournaments'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:trophy" class="w-4 h-4 flex-shrink-0" />
@@ -167,10 +140,10 @@
               <button
                 @click="activeTab = 'organizers'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'organizers'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:user-group" class="w-4 h-4 flex-shrink-0" />
@@ -181,15 +154,15 @@
             <!-- Rankings Management Group -->
             <div class="space-y-2">
               <div class="px-2 py-1">
-                <p class="text-size-5 font-semibold text-foreground-muted uppercase tracking-wide">Rankings</p>
+                <p class="admin-tab-group">Rankings</p>
               </div>
               <button
                 @click="activeTab = 'rankings'"
                 :class="[
-                  'flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-size-4 font-semibold transition-all w-full',
+                  'admin-tab',
                   activeTab === 'rankings'
-                    ? 'bg-accent-subtle/30 text-foreground border-2 border-accent/30'
-                    : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'is-active'
+                    : ''
                 ]"
               >
                 <Icon name="heroicons:chart-bar" class="w-4 h-4 flex-shrink-0" />
@@ -200,7 +173,7 @@
         </div>
 
         <!-- Global Loading State - Shows when any tab is loading -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
+        <div v-if="loading" class="panel text-center">
           <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
             <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
           </div>
@@ -210,14 +183,14 @@
         <!-- Overview Tab -->
         <div v-show="activeTab === 'overview' && !loading">
           <!-- Error State -->
-          <div v-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
+          <div v-if="error" class="panel max-w-md mx-auto">
             <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
             <button @click="loadStats" class="btn-primary text-size-3 w-full justify-center group">
-              <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+              <Icon name="heroicons:arrow-path" class="w-5 h-5" />
               Reintentar
             </button>
           </div>
@@ -226,10 +199,10 @@
           <div v-else-if="stats" class="space-y-8">
             <!-- Stat Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div class="glass-card-elevated p-6 hover-lift animate-fade-up" style="animation-delay: 0.1s">
+              <div class="panel" style="animation-delay: 0.1s">
                 <div class="flex items-center justify-between mb-4">
                   <h3 class="text-size-3 font-semibold text-foreground-muted">Jugadores Activos</h3>
-                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border-2 border-blue-500/30 flex items-center justify-center">
+                  <div class="w-12 h-12 rounded-xl bg-surface-elevated border border-blue-500/30 flex items-center justify-center">
                     <Icon name="heroicons:users" class="w-6 h-6 text-blue-400" />
                   </div>
                 </div>
@@ -237,10 +210,10 @@
                 <p class="text-size-4 text-foreground-muted">{{ stats.players.deleted }} eliminados</p>
               </div>
 
-              <div class="glass-card-elevated p-6 hover-lift animate-fade-up" style="animation-delay: 0.2s">
+              <div class="panel" style="animation-delay: 0.2s">
                 <div class="flex items-center justify-between mb-4">
                   <h3 class="text-size-3 font-semibold text-foreground-muted">Total Partidos</h3>
-                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center">
+                  <div class="w-12 h-12 rounded-xl bg-surface-elevated border border-accent/30 flex items-center justify-center">
                     <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
                   </div>
                 </div>
@@ -248,20 +221,20 @@
                 <p class="text-size-4 text-foreground-muted">{{ stats.matches.completed }} completados</p>
               </div>
 
-              <div class="glass-card-elevated p-6 hover-lift animate-fade-up" style="animation-delay: 0.3s">
+              <div class="panel" style="animation-delay: 0.3s">
                 <div class="flex items-center justify-between mb-4">
                   <h3 class="text-size-3 font-semibold text-foreground-muted">Invitaciones Pendientes</h3>
-                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500/20 to-yellow-500/5 border-2 border-yellow-500/30 flex items-center justify-center">
+                  <div class="w-12 h-12 rounded-xl bg-surface-elevated border border-yellow-500/30 flex items-center justify-center">
                     <Icon name="heroicons:envelope" class="w-6 h-6 text-yellow-400" />
                   </div>
                 </div>
                 <p class="text-size-1 font-bold text-foreground">{{ stats.players.pending }}</p>
               </div>
 
-              <div class="glass-card-elevated p-6 hover-lift animate-fade-up" style="animation-delay: 0.4s">
+              <div class="panel" style="animation-delay: 0.4s">
                 <div class="flex items-center justify-between mb-4">
                   <h3 class="text-size-3 font-semibold text-foreground-muted">Tasa de Finalización</h3>
-                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-green-500/5 border-2 border-green-500/30 flex items-center justify-center">
+                  <div class="w-12 h-12 rounded-xl bg-surface-elevated border border-green-500/30 flex items-center justify-center">
                     <Icon name="heroicons:chart-bar" class="w-6 h-6 text-green-400" />
                   </div>
                 </div>
@@ -270,34 +243,34 @@
             </div>
 
             <!-- Match Status Breakdown -->
-            <div class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-2">
+            <div class="panel">
               <div class="flex items-center gap-3 mb-6">
                 <Icon name="heroicons:chart-pie" class="w-6 h-6 text-accent" />
                 <h2 class="text-size-2 font-semibold text-foreground">Desglose de Estado de Partidos</h2>
               </div>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30 hover:bg-blue-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:calendar" class="w-5 h-5 text-blue-400" />
                     <p class="text-size-4 text-foreground-muted">Programados</p>
                   </div>
                   <p class="text-size-2 font-bold text-blue-400">{{ stats.matches.scheduled }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-yellow-500/10 border-2 border-yellow-500/30 hover:bg-yellow-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 hover:bg-yellow-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:play-circle" class="w-5 h-5 text-yellow-400" />
                     <p class="text-size-4 text-foreground-muted">En Curso</p>
                   </div>
                   <p class="text-size-2 font-bold text-yellow-400">{{ stats.matches.active }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30 hover:bg-green-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-green-500/10 border border-green-500/30 hover:bg-green-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:check-circle" class="w-5 h-5 text-green-400" />
                     <p class="text-size-4 text-foreground-muted">Completados</p>
                   </div>
                   <p class="text-size-2 font-bold text-green-400">{{ stats.matches.completed }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-red-500/10 border-2 border-red-500/30 hover:bg-red-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:x-circle" class="w-5 h-5 text-red-400" />
                     <p class="text-size-4 text-foreground-muted">Cancelados</p>
@@ -308,7 +281,7 @@
             </div>
 
             <!-- Category Distribution -->
-            <div class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-3">
+            <div class="panel">
               <div class="flex items-center gap-3 mb-6">
                 <Icon name="heroicons:tag" class="w-6 h-6 text-accent" />
                 <h2 class="text-size-2 font-semibold text-foreground">Jugadores por Categoría</h2>
@@ -317,7 +290,7 @@
                 <div 
                   v-for="(count, categoryName) in stats.categoryDistribution" 
                   :key="categoryName"
-                  class="p-4 rounded-xl bg-surface border-2 border-border-subtle hover:border-accent/50 hover:bg-surface-elevated transition-all"
+                  class="p-4 rounded-xl bg-surface border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated transition-all"
                 >
                   <p class="text-size-3 font-semibold text-foreground mb-2">{{ categoryName }}</p>
                   <div class="flex items-center gap-2">
@@ -329,34 +302,34 @@
             </div>
 
             <!-- Tournament Statistics -->
-            <div class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-4">
+            <div class="panel">
               <div class="flex items-center gap-3 mb-6">
                 <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
                 <h2 class="text-size-2 font-semibold text-foreground">Estadísticas de Torneos</h2>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30 hover:bg-blue-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:calendar-days" class="w-5 h-5 text-blue-400" />
                     <p class="text-size-4 text-foreground-muted">Próximos</p>
                   </div>
                   <p class="text-size-2 font-bold text-blue-400">{{ stats.tournaments?.upcoming || 0 }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30 hover:bg-green-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-green-500/10 border border-green-500/30 hover:bg-green-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:play-circle" class="w-5 h-5 text-green-400" />
                     <p class="text-size-4 text-foreground-muted">Activos</p>
                   </div>
                   <p class="text-size-2 font-bold text-green-400">{{ stats.tournaments?.active || 0 }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-gray-500/10 border-2 border-gray-500/30 hover:bg-gray-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-gray-500/10 border border-gray-500/30 hover:bg-gray-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:check-circle" class="w-5 h-5 text-gray-400" />
                     <p class="text-size-4 text-foreground-muted">Completados</p>
                   </div>
                   <p class="text-size-2 font-bold text-gray-400">{{ stats.tournaments?.completed || 0 }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-purple-500/10 border-2 border-purple-500/30 hover:bg-purple-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:users" class="w-5 h-5 text-purple-400" />
                     <p class="text-size-4 text-foreground-muted">Total Registrados</p>
@@ -366,15 +339,15 @@
               </div>
               <div class="mt-6 pt-6 border-t border-border-subtle">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div class="p-4 rounded-xl bg-surface border-2 border-border-subtle">
+                  <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                     <p class="text-size-4 text-foreground-muted mb-1">Total Torneos</p>
                     <p class="text-size-2 font-bold text-foreground">{{ stats.tournaments?.total || 0 }}</p>
                   </div>
-                  <div class="p-4 rounded-xl bg-surface border-2 border-border-subtle">
+                  <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                     <p class="text-size-4 text-foreground-muted mb-1">Organizadores</p>
                     <p class="text-size-2 font-bold text-foreground">{{ stats.tournaments?.organizers || 0 }}</p>
                   </div>
-                  <div class="p-4 rounded-xl bg-surface border-2 border-border-subtle">
+                  <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                     <p class="text-size-4 text-foreground-muted mb-1">Promedio por Torneo</p>
                     <p class="text-size-2 font-bold text-foreground">{{ stats.tournaments?.avgRegistrations || 0 }}</p>
                   </div>
@@ -383,20 +356,20 @@
             </div>
 
             <!-- Recent Activity -->
-            <div class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-5">
+            <div class="panel">
               <div class="flex items-center gap-3 mb-6">
                 <Icon name="heroicons:clock" class="w-6 h-6 text-accent" />
                 <h2 class="text-size-2 font-semibold text-foreground">Actividad Reciente (Últimos 7 Días)</h2>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="p-6 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border-2 border-accent/30">
+                <div class="p-6 rounded-xl bg-surface-elevated border border-accent/30">
                   <div class="flex items-center gap-3 mb-3">
                     <Icon name="heroicons:user-plus" class="w-6 h-6 text-accent" />
                     <p class="text-size-4 text-foreground-muted">Nuevos Jugadores</p>
                   </div>
                   <p class="text-size-1 font-bold text-accent">{{ stats.recentActivity.newPlayers }}</p>
                 </div>
-                <div class="p-6 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border-2 border-accent/30">
+                <div class="p-6 rounded-xl bg-surface-elevated border border-accent/30">
                   <div class="flex items-center gap-3 mb-3">
                     <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
                     <p class="text-size-4 text-foreground-muted">Partidos Completados</p>
@@ -407,34 +380,34 @@
             </div>
 
             <!-- Ranking Statistics -->
-            <div v-if="stats.rankings" class="glass-card-elevated p-6 md:p-8 hover-lift animate-fade-up animate-delay-6">
+            <div v-if="stats.rankings" class="panel">
               <div class="flex items-center gap-3 mb-6">
                 <Icon name="heroicons:chart-bar" class="w-6 h-6 text-accent" />
                 <h2 class="text-size-2 font-semibold text-foreground">Estadísticas de Rankings</h2>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="p-4 rounded-xl bg-purple-500/10 border-2 border-purple-500/30 hover:bg-purple-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:users" class="w-5 h-5 text-purple-400" />
                     <p class="text-size-4 text-foreground-muted">Jugadores Calificados</p>
                   </div>
                   <p class="text-size-2 font-bold text-purple-400">{{ stats.rankings.total_rated_players }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-orange-500/10 border-2 border-orange-500/30 hover:bg-orange-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:clock" class="w-5 h-5 text-orange-400" />
                     <p class="text-size-4 text-foreground-muted">En Placement</p>
                   </div>
                   <p class="text-size-2 font-bold text-orange-400">{{ stats.rankings.players_in_placement }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30 hover:bg-blue-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:star" class="w-5 h-5 text-blue-400" />
                     <p class="text-size-4 text-foreground-muted">SR Promedio</p>
                   </div>
                   <p class="text-size-2 font-bold text-blue-400">{{ stats.rankings.average_elo }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30 hover:bg-green-500/15 transition-colors">
+                <div class="p-4 rounded-xl bg-green-500/10 border border-green-500/30 hover:bg-green-500/15 transition-colors">
                   <div class="flex items-center gap-2 mb-2">
                     <Icon name="heroicons:arrow-trending-up" class="w-5 h-5 text-green-400" />
                     <p class="text-size-4 text-foreground-muted">Cambios (7 días)</p>
@@ -457,8 +430,8 @@
                     class="p-4 rounded-lg bg-surface border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated transition-all cursor-pointer"
                     @click="navigateTo(`/admin/rankings/players/${player.id}`)"
                   >
-                    <div class="flex items-start justify-between gap-4">
-                      <div class="flex items-start gap-4 flex-1">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                      <div class="flex items-start gap-4 flex-1 min-w-0">
                         <div class="flex flex-col items-center justify-center min-w-[60px]">
                           <span class="text-size-2 font-bold text-accent">#{{ index + 1 }}</span>
                           <span 
@@ -529,7 +502,7 @@
         <!-- Pending Players Tab -->
         <div v-show="activeTab === 'pending' && !loading">
         <!-- Invite Player Form and Sync Button -->
-        <div class="glass-card-elevated p-6 mb-8">
+        <div class="panel mb-8">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-size-2 font-semibold text-foreground">Invite New Player</h2>
             <button
@@ -538,7 +511,7 @@
               class="btn-secondary text-size-4 group disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Icon v-if="syncingInvitations" name="heroicons:arrow-path" class="w-4 h-4 mr-2 animate-spin" />
-              <Icon v-else name="heroicons:arrow-path" class="w-4 h-4 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+              <Icon v-else name="heroicons:arrow-path" class="w-4 h-4" />
               <span v-if="syncingInvitations">Sincronizando...</span>
               <span v-else>Sincronizar con Clerk</span>
             </button>
@@ -546,26 +519,26 @@
           <form @submit.prevent="handleInvite" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">
+                <label class="form-label">
                   Name *
                 </label>
                 <input
                   v-model="inviteForm.name"
                   type="text"
                   required
-                  class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                  class="form-input"
                   placeholder="Player name"
                 />
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">
+                <label class="form-label">
                   Email *
                 </label>
                 <input
                   v-model="inviteForm.email"
                   type="email"
                   required
-                  class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                  class="form-input"
                   placeholder="player@example.com"
                 />
               </div>
@@ -577,7 +550,7 @@
                 class="btn-primary text-size-4 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Icon v-if="inviting" name="heroicons:arrow-path" class="w-4 h-4 mr-2 animate-spin" />
-                <Icon v-else name="heroicons:paper-airplane" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                <Icon v-else name="heroicons:paper-airplane" class="w-4 h-4 mr-2 transition-transform" />
                 <span v-if="inviting">Enviando Invitación...</span>
                 <span v-else>Enviar Invitación</span>
               </button>
@@ -586,7 +559,7 @@
                 @click="resetInviteForm"
                 class="btn-secondary text-size-4 group"
               >
-                <Icon name="heroicons:x-mark" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                <Icon name="heroicons:x-mark" class="w-4 h-4 mr-2 transition-transform" />
                 Limpiar
               </button>
             </div>
@@ -594,30 +567,30 @@
         </div>
 
         <!-- Error State -->
-        <div v-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
+        <div v-if="error" class="panel max-w-md mx-auto">
           <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
             <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
           </div>
           <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
           <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
           <button @click="loadPendingPlayers" class="btn-primary text-size-3 w-full justify-center group">
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+            <Icon name="heroicons:arrow-path" class="w-5 h-5" />
             Reintentar
           </button>
         </div>
 
         <!-- Search for Pending Players -->
-        <div class="glass-card-elevated p-4 mb-6">
+        <div class="panel mb-6">
           <input
             v-model="pendingSearch"
             type="text"
             placeholder="Search by name or email..."
-            class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+            class="form-input"
           />
         </div>
 
         <!-- Success Message -->
-        <div v-if="successMessage" class="glass-card-elevated p-4 mb-6 bg-green-500/10 border border-green-500/20 rounded-xl animate-fade-in-scale">
+        <div v-if="successMessage" class="panel mb-6 bg-green-500/10 border border-green-500/20 rounded-xl">
           <div class="flex items-center gap-3">
             <Icon name="heroicons:check-circle" class="w-5 h-5 text-green-400 flex-shrink-0" />
             <p class="text-size-4 font-regular text-green-400">{{ successMessage }}</p>
@@ -625,7 +598,7 @@
         </div>
 
         <!-- Invite Error Message -->
-        <div v-if="inviteError" class="glass-card-elevated p-4 mb-6 bg-red-500/10 border border-red-500/20 rounded-xl animate-fade-in-scale">
+        <div v-if="inviteError" class="panel mb-6 bg-red-500/10 border border-red-500/20 rounded-xl">
           <div class="flex items-center gap-3">
             <Icon name="heroicons:exclamation-circle" class="w-5 h-5 text-red-400 flex-shrink-0" />
             <p class="text-size-4 font-regular text-red-400">{{ inviteError }}</p>
@@ -633,7 +606,7 @@
         </div>
 
         <!-- Pending Players Table -->
-        <div v-else-if="filteredPendingPlayers.length > 0" class="glass-card-elevated overflow-hidden">
+        <div v-else-if="filteredPendingPlayers.length > 0" class="panel overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full min-w-[800px]">
               <thead class="bg-surface border-b border-border-subtle">
@@ -718,11 +691,11 @@
         </div>
 
         <!-- Empty State -->
-        <div v-else class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
+        <div v-else class="panel text-center max-w-md mx-auto">
+          <div class="w-24 h-24 rounded-2xl bg-surface-elevated border border-accent/30 flex items-center justify-center mx-auto mb-6">
             <Icon name="heroicons:envelope-open" class="w-12 h-12 text-accent" />
           </div>
-          <h3 class="text-size-2 font-semibold text-foreground mb-4">
+          <h3 class="panel-title">
             {{ pendingSearch ? 'No se encontraron jugadores pendientes' : 'No hay jugadores pendientes' }}
           </h3>
           <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
@@ -736,7 +709,7 @@
         <!-- All Players Tab -->
         <div v-show="activeTab === 'players' && !loading">
           <!-- Show Deleted Players Toggle and Search -->
-          <div class="glass-card-elevated p-4 mb-6">
+          <div class="panel mb-6">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <div>
                 <h3 class="text-size-3 font-semibold text-foreground mb-1">Player Management</h3>
@@ -757,13 +730,13 @@
                 v-model="playerSearch"
                 type="text"
                 placeholder="Search by name or email..."
-                class="flex-1 px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                class="flex-1 px-4 py-2 rounded-lg bg-surface border border-border text-foreground focus:border-accent focus:outline-none"
                 @input="filterPlayers"
               />
               <select
                 v-model="playerCategoryFilter"
                 @change="filterPlayers"
-                class="px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                class="px-4 py-2 rounded-lg bg-surface border border-border text-foreground focus:border-accent focus:outline-none"
               >
                 <option value="">All Categories</option>
                 <option v-for="cat in allCategories" :key="cat.id" :value="cat.id">
@@ -773,7 +746,7 @@
               <select
                 v-model="playerRankingFilter"
                 @change="filterPlayers"
-                class="px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                class="px-4 py-2 rounded-lg bg-surface border border-border text-foreground focus:border-accent focus:outline-none"
               >
                 <option value="">All Rankings</option>
                 <option value="top10">Top 10</option>
@@ -797,40 +770,40 @@
           </div>
 
           <!-- Edit Player Modal -->
-          <div v-if="editingPlayerId" class="glass-card-elevated p-6 mb-8 border-2 border-accent/30">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Edit Player</h2>
+          <div v-if="editingPlayerId" class="panel mb-8 border border-accent/30">
+            <h2 class="panel-title">Edit Player</h2>
             <form @submit.prevent="handleUpdatePlayer" class="space-y-4">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Name *
                   </label>
                   <input
                     v-model="playerForm.name"
                     type="text"
                     required
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="Player name"
                   />
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Phone Number
                   </label>
                   <input
                     v-model="playerForm.phone_number"
                     type="tel"
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="Phone number"
                   />
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Category
                   </label>
                   <select
                     v-model="playerForm.category_id"
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-select"
                   >
                     <option value="">No Category</option>
                     <option v-for="cat in allCategories" :key="cat.id" :value="cat.id">
@@ -839,7 +812,7 @@
                   </select>
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     SR Rating
                   </label>
                   <input
@@ -847,7 +820,7 @@
                     type="number"
                     min="0"
                     required
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="1000"
                   />
                 </div>
@@ -873,20 +846,20 @@
           </div>
 
           <!-- Error State -->
-          <div v-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
+          <div v-if="error" class="panel max-w-md mx-auto">
             <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
             <button @click="loadPlayers" class="btn-primary text-size-3 w-full justify-center group">
-              <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+              <Icon name="heroicons:arrow-path" class="w-5 h-5" />
               Reintentar
             </button>
           </div>
 
           <!-- Success Message -->
-          <div v-if="successMessage" class="glass-card-elevated p-4 mb-6 bg-green-500/10 border border-green-500/20 rounded-xl animate-fade-in-scale">
+          <div v-if="successMessage" class="panel mb-6 bg-green-500/10 border border-green-500/20 rounded-xl">
             <div class="flex items-center gap-3">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-green-400 flex-shrink-0" />
               <p class="text-size-4 font-regular text-green-400">{{ successMessage }}</p>
@@ -894,7 +867,7 @@
           </div>
 
           <!-- Players Table -->
-          <div v-else-if="filteredPlayers.length > 0" class="glass-card-elevated overflow-hidden">
+          <div v-else-if="filteredPlayers.length > 0" class="panel overflow-hidden">
             <div class="overflow-x-auto">
               <table class="w-full min-w-[1000px]">
                 <thead class="bg-surface border-b border-border-subtle">
@@ -1010,11 +983,11 @@
           </div>
 
           <!-- Empty State -->
-          <div v-else class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-            <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
+          <div v-else class="panel text-center max-w-md mx-auto">
+            <div class="w-24 h-24 rounded-2xl bg-surface-elevated border border-accent/30 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:user-group" class="w-12 h-12 text-accent" />
             </div>
-            <h3 class="text-size-2 font-semibold text-foreground mb-4">
+            <h3 class="panel-title">
               {{ playerSearch || playerCategoryFilter || playerTierFilter || playerRankingFilter ? 'No se encontraron jugadores' : 'No hay jugadores' }}
             </h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 leading-relaxed">
@@ -1027,7 +1000,7 @@
               @click="clearPlayerFilters"
               class="btn-secondary text-size-4 group"
             >
-              <Icon name="heroicons:x-mark" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+              <Icon name="heroicons:x-mark" class="w-4 h-4 mr-2 transition-transform" />
               Limpiar Filtros
             </button>
           </div>
@@ -1036,49 +1009,49 @@
         <!-- Categories Tab -->
         <div v-show="activeTab === 'categories' && !loading">
           <!-- Create/Edit Category Form -->
-          <div class="glass-card-elevated p-6 mb-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">
+          <div class="panel mb-8">
+            <h2 class="panel-title">
               {{ editingCategoryId ? 'Edit Category' : 'Create New Category' }}
             </h2>
             <form @submit.prevent="editingCategoryId ? handleUpdateCategory(editingCategoryId) : handleCreateCategory" class="space-y-4">
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Name *
                   </label>
                   <input
                     v-model="categoryForm.name"
                     type="text"
                     required
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="Category name"
                   />
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Description
                   </label>
                   <input
                     v-model="categoryForm.description"
                     type="text"
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="Category description"
                   />
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Order
                   </label>
                   <input
                     v-model.number="categoryForm.order"
                     type="number"
                     min="0"
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="Auto"
                   />
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     SR Inicial
                   </label>
                   <input
@@ -1086,7 +1059,7 @@
                     type="number"
                     min="500"
                     max="4000"
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="Auto (basado en orden)"
                   />
                   <p class="text-size-5 text-foreground-muted mt-1">SR inicial para nuevos jugadores</p>
@@ -1116,20 +1089,20 @@
           </div>
 
           <!-- Error State -->
-          <div v-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
+          <div v-if="error" class="panel max-w-md mx-auto">
             <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
             <button @click="loadCategories" class="btn-primary text-size-3 w-full justify-center group">
-              <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+              <Icon name="heroicons:arrow-path" class="w-5 h-5" />
               Reintentar
             </button>
           </div>
 
           <!-- Success Message -->
-          <div v-if="successMessage" class="glass-card-elevated p-4 mb-6 bg-green-500/10 border border-green-500/20 rounded-xl animate-fade-in-scale">
+          <div v-if="successMessage" class="panel mb-6 bg-green-500/10 border border-green-500/20 rounded-xl">
             <div class="flex items-center gap-3">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-green-400 flex-shrink-0" />
               <p class="text-size-4 font-regular text-green-400">{{ successMessage }}</p>
@@ -1137,7 +1110,7 @@
           </div>
 
           <!-- Categories Table -->
-          <div v-else-if="categories.length > 0" class="glass-card-elevated overflow-hidden">
+          <div v-else-if="categories.length > 0" class="panel overflow-hidden">
             <div class="overflow-x-auto">
               <table class="w-full min-w-[600px]">
                 <thead class="bg-surface border-b border-border-subtle">
@@ -1191,11 +1164,11 @@
           </div>
 
           <!-- Empty State -->
-          <div v-else class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-            <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
+          <div v-else class="panel text-center max-w-md mx-auto">
+            <div class="w-24 h-24 rounded-2xl bg-surface-elevated border border-accent/30 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:tag" class="w-12 h-12 text-accent" />
             </div>
-            <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay categorías</h3>
+            <h3 class="panel-title">No hay categorías</h3>
             <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
               Crea tu primera categoría para comenzar.
             </p>
@@ -1205,14 +1178,14 @@
         <!-- Matches Tab -->
         <div v-show="activeTab === 'matches' && !loading">
           <!-- Filters -->
-          <div class="glass-card-elevated p-6 mb-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Filter Matches</h2>
+          <div class="panel mb-8">
+            <h2 class="panel-title">Filter Matches</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Status</label>
+                <label class="form-label">Status</label>
                 <select
                   v-model="matchFilters.status"
-                  class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                  class="form-select"
                 >
                   <option value="">All Statuses</option>
                   <option value="scheduled">Scheduled</option>
@@ -1222,19 +1195,19 @@
                 </select>
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Start Date</label>
+                <label class="form-label">Start Date</label>
                 <input
                   v-model="matchFilters.start_date"
                   type="date"
-                  class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                  class="form-input"
                 />
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">End Date</label>
+                <label class="form-label">End Date</label>
                 <input
                   v-model="matchFilters.end_date"
                   type="date"
-                  class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                  class="form-input"
                 />
               </div>
               <div class="flex items-end">
@@ -1250,7 +1223,7 @@
             <div class="mt-4 pt-4 border-t border-border-subtle">
               <div class="flex items-center justify-between">
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-1">Mostrar solo últimas 24 horas</label>
+                  <label class="form-label">Mostrar solo últimas 24 horas</label>
                   <p class="text-size-5 text-foreground-muted">Por defecto se muestran solo los partidos de las últimas 24 horas</p>
                 </div>
                 <button
@@ -1259,7 +1232,7 @@
                     'px-4 py-2 rounded-lg text-size-4 font-semibold transition-colors',
                     useDefault24HourFilter 
                       ? 'bg-accent text-white' 
-                      : 'bg-surface border-2 border-border-subtle text-foreground hover:border-accent'
+                      : 'bg-surface border border-border-subtle text-foreground hover:border-accent'
                   ]"
                 >
                   {{ useDefault24HourFilter ? 'Activado' : 'Desactivado' }}
@@ -1269,20 +1242,20 @@
           </div>
 
           <!-- Error State -->
-          <div v-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
+          <div v-if="error" class="panel max-w-md mx-auto">
             <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
             </div>
             <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
             <button @click="loadMatches" class="btn-primary text-size-3 w-full justify-center group">
-              <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+              <Icon name="heroicons:arrow-path" class="w-5 h-5" />
               Reintentar
             </button>
           </div>
 
           <!-- Matches Table -->
-          <div v-else-if="allMatches.length > 0" class="glass-card-elevated overflow-hidden">
+          <div v-else-if="allMatches.length > 0" class="panel overflow-hidden">
             <div class="overflow-x-auto">
               <table class="w-full min-w-[1000px]">
                 <thead class="bg-surface border-b border-border-subtle">
@@ -1384,11 +1357,11 @@
           </div>
 
           <!-- Empty State -->
-          <div v-else class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-            <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
+          <div v-else class="panel text-center max-w-md mx-auto">
+            <div class="w-24 h-24 rounded-2xl bg-surface-elevated border border-accent/30 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:calendar-x" class="w-12 h-12 text-accent" />
             </div>
-            <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay partidos</h3>
+            <h3 class="panel-title">No hay partidos</h3>
             <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
               No se encontraron partidos con los filtros actuales.
             </p>
@@ -1397,8 +1370,8 @@
 
         <!-- Fallback Matches Tab -->
         <div v-show="activeTab === 'fallback-matches' && !loading">
-          <div v-if="fallbackMatches.length > 0" class="space-y-6 animate-fade-up">
-            <div class="glass-card-elevated overflow-hidden">
+          <div v-if="fallbackMatches.length > 0" class="space-y-6">
+            <div class="panel overflow-hidden">
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[1400px]">
                   <thead>
@@ -1552,11 +1525,11 @@
           </div>
 
           <!-- Empty State -->
-          <div v-else class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-            <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
+          <div v-else class="panel text-center max-w-md mx-auto">
+            <div class="w-24 h-24 rounded-2xl bg-surface-elevated border border-accent/30 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:exclamation-triangle" class="w-12 h-12 text-accent" />
             </div>
-            <h3 class="text-size-2 font-semibold text-foreground mb-4">No Fallback Matches</h3>
+            <h3 class="panel-title">No Fallback Matches</h3>
             <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
               No matches found that used fallback calculation. All matches are using LLM calculation successfully.
             </p>
@@ -1565,8 +1538,8 @@
 
         <!-- Missing Rating History Tab -->
         <div v-show="activeTab === 'missing-rating-history' && !loading">
-          <div class="glass-card-elevated p-6 mb-6">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Procesar Partidos sin Rating History</h2>
+          <div class="panel mb-6">
+            <h2 class="panel-title">Procesar Partidos sin Rating History</h2>
             <p class="text-size-4 text-foreground-muted mb-6">
               Estos son partidos completados y marcados como competitivos que no tienen rating_history.
               Esto puede ocurrir si el procesamiento falló silenciosamente o si se completaron antes de que existiera el sistema.
@@ -1574,12 +1547,12 @@
             
             <div class="flex flex-col sm:flex-row gap-4 mb-6">
               <div class="flex-1">
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Player ID (opcional)</label>
+                <label class="form-label">Player ID (opcional)</label>
                 <input
                   v-model="missingRatingHistoryPlayerId"
                   type="text"
                   placeholder="Dejar vacío para todos los partidos"
-                  class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none text-size-4"
+                  class="form-input"
                 />
               </div>
               <div class="flex items-end">
@@ -1641,7 +1614,7 @@
         <!-- Tournaments Tab -->
         <div v-show="activeTab === 'tournaments' && !loading">
           <NuxtLink to="/admin/tournaments" class="block">
-            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+            <div class="panel text-center cursor-pointer">
               <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
               <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Torneos</h3>
               <p class="text-size-4 font-regular text-foreground-muted">
@@ -1654,7 +1627,7 @@
         <!-- Organizers Tab -->
         <div v-show="activeTab === 'organizers' && !loading">
           <NuxtLink to="/admin/organizers" class="block">
-            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+            <div class="panel text-center cursor-pointer">
               <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
               <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Organizadores</h3>
               <p class="text-size-4 font-regular text-foreground-muted">
@@ -1667,7 +1640,7 @@
         <!-- City Segments Tab -->
         <div v-show="activeTab === 'city-segments' && !loading">
           <NuxtLink to="/admin/city-segments" class="block">
-            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+            <div class="panel text-center cursor-pointer">
               <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
               <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Regiones de Matchmaking</h3>
               <p class="text-size-4 font-regular text-foreground-muted">
@@ -1680,7 +1653,7 @@
         <!-- Rankings Tab -->
         <div v-show="activeTab === 'rankings' && !loading">
           <NuxtLink to="/admin/rankings" class="block">
-            <div class="glass-card-elevated p-8 text-center animate-fade-in-scale hover-lift cursor-pointer">
+            <div class="panel text-center cursor-pointer">
               <Icon name="heroicons:arrow-right" class="w-8 h-8 text-accent mx-auto mb-4" />
               <h3 class="text-size-2 font-semibold text-foreground mb-2">Gestionar Rankings y Leaderboards</h3>
               <p class="text-size-4 font-regular text-foreground-muted">
@@ -1689,17 +1662,15 @@
             </div>
           </NuxtLink>
         </div>
-      </div>
-    </div>
 
     <!-- Reprocess Confirmation Dialog -->
     <div 
       v-if="showReprocessDialog && matchToReprocess"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      class="te-modal"
       @click.self="showReprocessDialog = false"
     >
-      <div class="glass-card-elevated p-6 max-w-md w-full mx-4 animate-fade-in-scale">
-        <h3 class="text-size-2 font-semibold text-foreground mb-4">Confirm Reprocess Match</h3>
+      <div class="te-modal__panel">
+        <h3 class="panel-title">Confirm Reprocess Match</h3>
         
         <div class="space-y-3 mb-6">
           <div>
@@ -1732,14 +1703,14 @@
         <div class="flex gap-3">
           <button
             @click="showReprocessDialog = false"
-            class="flex-1 px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground hover:bg-surface-elevated transition-colors text-size-4 font-semibold"
+            class="btn-secondary flex-1"
           >
             Cancel
           </button>
           <button
             @click="handleReprocessConfirm"
             :disabled="reprocessingMatchId !== null"
-            class="flex-1 px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors text-size-4 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            class="btn-primary flex-1"
           >
             <span v-if="reprocessingMatchId">Processing...</span>
             <span v-else>Reprocess</span>
@@ -1747,7 +1718,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">

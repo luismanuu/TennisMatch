@@ -574,3 +574,12 @@ a, button, summary { touch-action: manipulation; -webkit-tap-highlight-color: tr
   .auth-container { padding-top: 20px; max-width: 520px; }
   .auth-card { padding: 20px; }
 }
+
+/* ── Admin (operate mode): tab groups, tables ─────────────────────────────── */
+.admin-tab { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--edge); background: transparent; color: var(--foreground-muted); font-size: 14px; font-weight: 600; }
+.admin-tab.is-active { background: var(--accent); border-color: transparent; color: var(--accent-foreground); }
+@media (hover: hover) { .admin-tab:not(.is-active):hover { background: var(--lens); color: var(--foreground); } }
+.admin-tab-group { padding: 4px 8px; font-size: 13px; font-weight: 600; color: var(--foreground-muted); }
+.te-page table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.te-page thead th { font-size: 13px; font-weight: 600; color: var(--foreground-muted); text-align: left; }
+.te-page tbody tr + tr, .te-page thead + tbody tr:first-child { border-top: 1px solid var(--edge); }

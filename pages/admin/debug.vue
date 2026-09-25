@@ -1,25 +1,25 @@
 <template>
-  <div class="min-h-screen p-8">
-    <div class="max-w-4xl mx-auto">
-      <h1 class="text-2xl font-bold mb-4">Admin Debug - User Metadata</h1>
+  <PageLayout container-size="medium">
+    <div class="flow-stack">
+      <PageHeader title="Admin debug" subtitle="Metadatos de usuario y verificación de rol." />
       
-      <div class="bg-surface border border-border rounded-lg p-6 mb-4">
-        <h2 class="text-lg font-semibold mb-2">Auth State</h2>
-        <pre class="bg-background p-4 rounded text-sm overflow-auto">{{ JSON.stringify(authState, null, 2) }}</pre>
+      <div class="panel">
+        <h2 class="panel-title">Auth State</h2>
+        <pre class="debug-pre">{{ JSON.stringify(authState, null, 2) }}</pre>
       </div>
       
-      <div class="bg-surface border border-border rounded-lg p-6 mb-4">
-        <h2 class="text-lg font-semibold mb-2">User Object (Full)</h2>
-        <pre class="bg-background p-4 rounded text-sm overflow-auto">{{ JSON.stringify(userObject, null, 2) }}</pre>
+      <div class="panel">
+        <h2 class="panel-title">User Object (Full)</h2>
+        <pre class="debug-pre">{{ JSON.stringify(userObject, null, 2) }}</pre>
       </div>
       
-      <div class="bg-surface border border-border rounded-lg p-6 mb-4">
-        <h2 class="text-lg font-semibold mb-2">Public Metadata (Direct Access)</h2>
-        <pre class="bg-background p-4 rounded text-sm overflow-auto">{{ JSON.stringify(publicMetadata, null, 2) }}</pre>
+      <div class="panel">
+        <h2 class="panel-title">Public Metadata (Direct Access)</h2>
+        <pre class="debug-pre">{{ JSON.stringify(publicMetadata, null, 2) }}</pre>
       </div>
       
-      <div class="bg-surface border border-border rounded-lg p-6 mb-4">
-        <h2 class="text-lg font-semibold mb-2">Role Check</h2>
+      <div class="panel">
+        <h2 class="panel-title">Role Check</h2>
         <div class="space-y-2">
           <p><strong>Role from publicMetadata.role:</strong> {{ role }}</p>
           <p><strong>Is Admin (computed):</strong> {{ isAdmin }}</p>
@@ -27,13 +27,13 @@
         </div>
       </div>
       
-      <div class="bg-surface border border-border rounded-lg p-6">
-        <h2 class="text-lg font-semibold mb-2">Actions</h2>
+      <div class="panel">
+        <h2 class="panel-title">Actions</h2>
         <button @click="refreshData" class="btn-primary mb-2">Refresh Data</button>
         <button @click="checkServerAdmin" class="btn-secondary">Check Server-Side Admin Status</button>
       </div>
     </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -117,3 +117,7 @@ onMounted(() => {
 })
 </script>
 
+
+<style scoped>
+.debug-pre { padding: 16px; border-radius: 14px; background: var(--background); border: 1px solid var(--edge); font-family: var(--font-mono); font-size: 13px; overflow: auto; }
+</style>
