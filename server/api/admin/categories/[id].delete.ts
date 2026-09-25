@@ -1,5 +1,9 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { categories, players } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -8,77 +12,39 @@ export default defineEventHandler(async (event) => {
     const categoryId = getRouterParam(event, 'id')
 
     if (!categoryId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Missing required fields: category_id'
-      })
+      throw createError({ statusCode: 400, statusMessage: 'Missing required fields: category_id' })
     }
 
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
-    // Check if category exists
-    const { data: category, error: fetchError } = await supabase
-      .from('categories')
-      .select('id, name')
-      .eq('id', categoryId)
-      .single()
+    const category = UUID.test(categoryId)
+      ? await db.query.categories.findFirst({ columns: { id: true, name: true }, where: eq(categories.id, categoryId) })
+      : undefined
 
-    if (fetchError || !category) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Category not found'
-      })
+    if (!category) {
+      throw createError({ statusCode: 404, statusMessage: 'Category not found' })
     }
 
-    // Check if any players are using this category
-    const { data: playersUsingCategory, error: playersError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('category_id', categoryId)
-      .eq('status', 'active')
-      .limit(1)
+    const playerUsingCategory = await db.query.players.findFirst({
+      columns: { id: true },
+      where: and(eq(players.category_id, categoryId), eq(players.status, 'active')),
+    })
 
-    if (playersError) {
-      console.error('Error checking players:', playersError)
+    if (playerUsingCategory) {
+      throw createError({ statusCode: 400, statusMessage: 'Cannot delete category: There are active players using this category' })
     }
 
-    if (playersUsingCategory && playersUsingCategory.length > 0) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Cannot delete category: There are active players using this category'
-      })
-    }
-
-    // Delete the category
-    const { error: deleteError } = await supabase
-      .from('categories')
-      .delete()
-      .eq('id', categoryId)
-
-    if (deleteError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to delete category',
-        data: deleteError
-      })
-    }
+    await db.delete(categories).where(eq(categories.id, categoryId))
 
     return {
       success: true,
       message: `Category "${category.name}" has been deleted successfully`,
-      deletedCategory: {
-        id: category.id,
-        name: category.name
-      }
+      deletedCategory: { id: category.id, name: category.name },
     }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })
-
-
-
-
