@@ -44,7 +44,7 @@
 
       <div class="field">
         <label for="email" class="form-label">Email</label>
-        <input id="email" type="email" :value="user?.primaryEmailAddress?.emailAddress" disabled class="form-input" aria-describedby="email-hint">
+        <input id="email" type="email" :value="user?.email" disabled class="form-input" aria-describedby="email-hint">
         <p id="email-hint" class="meta">El email se cambia desde Ajustes, en Cuenta y seguridad.</p>
       </div>
 
@@ -76,15 +76,11 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const auth = useAuth()
-const { isLoaded: authLoaded } = auth
-const { isLoaded: userLoaded, user } = useUser()
+const { isLoaded, user, userId } = useAuthState()
 const { player, loading, error, fetchPlayer, updatePlayer, createPlayer } = usePlayer()
 const { categories, loading: categoriesLoading, fetchCategories } = useCategories()
 const { cities, loading: citiesLoading, fetchCities } = useCities()
 
-const isLoaded = computed(() => authLoaded.value && userLoaded.value)
-const userId = computed(() => user.value?.id || null)
 
 const formData = ref({
   name: '',
@@ -121,9 +117,9 @@ const loadData = async () => {
       category_id: player.value.category_id || ''
     }
   } else if (user.value) {
-    // If no player profile, use Clerk user data
+    // If no player profile, start from the account name
     formData.value = {
-      name: user.value.fullName || '',
+      name: user.value.name || '',
       phone_number: '',
       city_id: '',
       category_id: ''

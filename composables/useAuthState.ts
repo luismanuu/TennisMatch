@@ -1,43 +1,35 @@
-/**
- * Shared authentication state composable
- * Provides consistent auth state across all pages to prevent navigation flickering
- */
+import type { AuthUser } from '~/utils/auth-client'
+
 export const useAuthState = () => {
-  const auth = useAuth()
-  const { isLoaded: authLoaded, isSignedIn, userId: clerkUserId } = auth
-  const { isLoaded: userLoaded, user } = useUser()
+  const user = useState<AuthUser | null>('auth-user', () => null)
+  const isLoaded = useState<boolean>('auth-loaded', () => false)
 
-  // Combined isLoaded - both auth and user must be loaded
-  const isLoaded = computed(() => authLoaded.value && userLoaded.value)
+  const isAuthenticated = computed(() => user.value !== null)
+  const userId = computed(() => user.value?.id ?? null)
+  const role = computed(() => user.value?.role ?? null)
 
-  // Use userId from useAuth (preferred) or fallback to user.id
-  const userId = computed(() => clerkUserId.value || user.value?.id || null)
+  async function refresh() {
+    const data = await $fetch<{ user: AuthUser } | null>('/api/auth/get-session').catch(() => null)
+    user.value = data?.user ?? null
+    isLoaded.value = true
+    return user.value
+  }
 
-  // Consistent authentication check
-  // Use isSignedIn directly from Clerk (available immediately) to prevent flickering
-  // Once signed in, navigation should remain stable
-  const isAuthenticated = computed(() => {
-    // If auth is loaded and signed in, user is authenticated
-    if (authLoaded.value && isSignedIn.value) {
-      return true
-    }
-    // If auth is loaded but not signed in, user is not authenticated
-    if (authLoaded.value && !isSignedIn.value) {
-      return false
-    }
-    // While loading, return false to show guest navigation
-    // This prevents showing authenticated nav before we know for sure
-    return false
-  })
+  async function signOut() {
+    await authClient.signOut()
+    user.value = null
+    await navigateTo('/sign-in')
+  }
 
   return {
     isLoaded: readonly(isLoaded),
-    isAuthenticated: readonly(isAuthenticated),
-    userId: readonly(userId),
+    authLoaded: readonly(isLoaded),
+    isAuthenticated,
+    isSignedIn: isAuthenticated,
+    userId,
     user: readonly(user),
-    isSignedIn: readonly(isSignedIn),
-    authLoaded: readonly(authLoaded),
-    userLoaded: readonly(userLoaded)
+    role,
+    refresh,
+    signOut,
   }
 }
-

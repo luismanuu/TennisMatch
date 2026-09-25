@@ -1274,7 +1274,7 @@ const isPlayerInMatch = computed(() => {
 const isTournamentOrganizer = computed(() => {
   if (!match.value?.tournament_id || !currentPlayerId.value) return false
   // Check if user has organizer role
-  const role = user.value?.publicMetadata?.role as string | undefined
+  const role = user.value?.role
   if (role !== 'tournament_organizer') return false
   
   // Check if user is the organizer of this tournament
@@ -1536,7 +1536,7 @@ const loadRatingHistory = async () => {
         player2: { elo_change: number; elo_before: number; elo_after: number } | null
       } | null
     }>(`/api/matches/${matchId}/rating-history`, {
-      query: { clerk_id: userId.value }
+      query: {}
     }).catch((err) => {
       // Log error for debugging but don't throw
       console.warn('Error loading rating history:', err)

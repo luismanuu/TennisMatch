@@ -84,7 +84,7 @@ export const useNotifications = () => {
    */
   const fetchNotifications = async () => {
     if (!authState.userId.value) {
-      console.log('[Notifications] No clerk ID, skipping fetch')
+      console.log('[Notifications] No session, skipping fetch')
       return
     }
     
@@ -95,7 +95,6 @@ export const useNotifications = () => {
       const response = await $fetch<NotificationResponse>('/api/notifications/pending', {
         method: 'GET',
         params: {
-          clerk_id: authState.userId.value,
           limit: 50 // Limit to 50 for faster loading
         },
         timeout: 10000 // 10 second timeout
@@ -137,7 +136,6 @@ export const useNotifications = () => {
       await $fetch(`/api/notifications/${notificationId}/read`, {
         method: 'POST',
         body: {
-          clerk_id: authState.userId.value
         }
       })
       
@@ -164,7 +162,6 @@ export const useNotifications = () => {
       await $fetch(`/api/notifications/${notificationId}/dismiss`, {
         method: 'POST',
         body: {
-          clerk_id: authState.userId.value
         }
       })
       
@@ -197,7 +194,6 @@ export const useNotifications = () => {
       await $fetch('/api/notifications/mark-all-read', {
         method: 'POST',
         body: {
-          clerk_id: authState.userId.value
         }
       })
       

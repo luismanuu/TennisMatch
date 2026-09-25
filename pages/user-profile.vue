@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { UserProfile } from '@clerk/vue'
-
 definePageMeta({
   middleware: 'auth'
 })
 
 const { isOrganizer } = useOrganizer()
+const { signOut } = useAuthState()
 useHead({ title: 'Ajustes · Tenis Ecuador' })
 </script>
 
@@ -39,27 +38,17 @@ useHead({ title: 'Ajustes · Tenis Ecuador' })
             <span class="row-copy"><strong>Créditos de fotografías</strong><span class="meta">Autores, fuentes y licencias</span></span>
             <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
           </NuxtLink>
-          <SignOutButton>
-            <button type="button" class="list-row w-full text-left">
-              <Icon name="heroicons:arrow-right-on-rectangle" class="w-5 h-5 text-danger" aria-hidden="true" />
-              <span class="row-copy"><strong>Cerrar sesión</strong></span>
-            </button>
-          </SignOutButton>
+          <button type="button" class="list-row w-full text-left" @click="signOut">
+            <Icon name="heroicons:arrow-right-on-rectangle" class="w-5 h-5 text-danger" aria-hidden="true" />
+            <span class="row-copy"><strong>Cerrar sesión</strong></span>
+          </button>
         </div>
       </section>
 
       <section aria-labelledby="account-title">
         <div class="section-heading"><h2 id="account-title">Cuenta y seguridad</h2></div>
         <div class="user-profile-page-container">
-          <ClientOnly>
-            <UserProfile :routing="'hash'" />
-            <template #fallback>
-              <div class="panel loading-state">
-                <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
-                <p class="loading-text">Cargando tu cuenta…</p>
-              </div>
-            </template>
-          </ClientOnly>
+          <AccountSecurity />
         </div>
       </section>
     </div>
@@ -70,12 +59,4 @@ useHead({ title: 'Ajustes · Tenis Ecuador' })
 .settings-panel { display: grid; gap: 8px; }
 .settings-title { font-size: 22px; }
 .user-profile-page-container { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--edge); }
-.user-profile-page-container :deep(.cl-userProfile-root),
-.user-profile-page-container :deep(.cl-rootBox),
-.user-profile-page-container :deep(.cl-card),
-.user-profile-page-container :deep(.cl-cardBox) {
-  border-radius: var(--radius) !important;
-  width: 100%;
-  max-width: 100%;
-}
 </style>

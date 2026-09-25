@@ -7,17 +7,14 @@ export const usePendingPlayers = () => {
   const publicPendingLoading = ref(false)
   const publicPendingError = ref<Error | null>(null)
   
-  const createPendingPlayer = async (clerkId: string, payload: CreatePendingPlayerPayload) => {
+  const createPendingPlayer = async (payload: CreatePendingPlayerPayload) => {
     loading.value = true
     error.value = null
     
     try {
       const data = await $fetch<PendingPlayer>('/api/pending-players', {
         method: 'POST',
-        body: {
-          clerk_id: clerkId,
-          ...payload
-        }
+        body: payload
       })
       return data
     } catch (err: any) {
@@ -43,18 +40,15 @@ export const usePendingPlayers = () => {
     }
   }
   
-  const acceptInvitation = async (pendingPlayerId: string, clerkId: string) => {
+  const acceptInvitation = async (token: string) => {
     loading.value = true
     error.value = null
-    
+
     try {
-      const data = await $fetch<{ success: boolean; player?: any; player_id?: string; message: string }>(`/api/pending-players/${pendingPlayerId}`, {
-        method: 'PUT',
-        body: {
-          clerk_id: clerkId
-        }
+      return await $fetch<{ success: boolean; player?: any }>('/api/invitations/accept', {
+        method: 'POST',
+        body: { token }
       })
-      return data
     } catch (err: any) {
       error.value = err
       throw err
@@ -62,7 +56,7 @@ export const usePendingPlayers = () => {
       loading.value = false
     }
   }
-  
+
   const fetchPublicPendingPlayer = async (pendingPlayerId: string) => {
     if (!pendingPlayerId) {
       publicPendingPlayer.value = null

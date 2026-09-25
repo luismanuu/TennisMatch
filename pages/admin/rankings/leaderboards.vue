@@ -215,7 +215,6 @@ const clearFilters = () => {
 const exportLeaderboard = async (format: 'csv' | 'json') => {
   try {
     const params = new URLSearchParams()
-    params.append('clerk_id', useAuthState().userId.value || '')
     params.append('export', format)
     if (filters.value.city_id) params.append('city_id', filters.value.city_id)
     if (filters.value.category_id) params.append('category_id', filters.value.category_id)

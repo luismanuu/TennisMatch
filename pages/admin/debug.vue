@@ -1,122 +1,51 @@
 <template>
   <PageLayout container-size="medium">
     <div class="flow-stack">
-      <PageHeader title="Admin debug" subtitle="Metadatos de usuario y verificación de rol." />
-      
+      <PageHeader title="Admin debug" subtitle="Tu sesión y la verificación de rol en el servidor." />
+
       <div class="panel">
-        <h2 class="panel-title">Auth State</h2>
-        <pre class="debug-pre">{{ JSON.stringify(authState, null, 2) }}</pre>
+        <h2 class="panel-title">Sesión</h2>
+        <pre class="debug-pre">{{ JSON.stringify({ isLoaded, isAuthenticated, user }, null, 2) }}</pre>
       </div>
-      
+
       <div class="panel">
-        <h2 class="panel-title">User Object (Full)</h2>
-        <pre class="debug-pre">{{ JSON.stringify(userObject, null, 2) }}</pre>
-      </div>
-      
-      <div class="panel">
-        <h2 class="panel-title">Public Metadata (Direct Access)</h2>
-        <pre class="debug-pre">{{ JSON.stringify(publicMetadata, null, 2) }}</pre>
-      </div>
-      
-      <div class="panel">
-        <h2 class="panel-title">Role Check</h2>
+        <h2 class="panel-title">Verificación de rol</h2>
         <div class="space-y-2">
-          <p><strong>Role from publicMetadata.role:</strong> {{ role }}</p>
-          <p><strong>Is Admin (computed):</strong> {{ isAdmin }}</p>
-          <p><strong>Is Admin (server check):</strong> {{ serverIsAdmin !== null ? serverIsAdmin : 'Loading...' }}</p>
+          <p><strong>Rol en la sesión:</strong> {{ role ?? 'sin sesión' }}</p>
+          <p><strong>Admin según el servidor:</strong> {{ serverIsAdmin === null ? '—' : serverIsAdmin }}</p>
+          <p v-if="serverError" class="form-error">{{ serverError }}</p>
         </div>
       </div>
-      
+
       <div class="panel">
-        <h2 class="panel-title">Actions</h2>
-        <button @click="refreshData" class="btn-primary mb-2">Refresh Data</button>
-        <button @click="checkServerAdmin" class="btn-secondary">Check Server-Side Admin Status</button>
+        <button type="button" class="btn-secondary" @click="checkServerAdmin">Consultar al servidor</button>
       </div>
     </div>
   </PageLayout>
 </template>
 
 <script setup lang="ts">
-definePageMeta({
-  middleware: []
-})
+definePageMeta({ middleware: ['auth'] })
 
-const auth = useAuth()
-const { isLoaded: authLoaded, isSignedIn, userId: clerkUserId } = auth
-const { isLoaded: userLoaded, user } = useUser()
-
-const authState = computed(() => ({
-  authLoaded: authLoaded.value,
-  isSignedIn: isSignedIn.value,
-  userId: clerkUserId.value,
-  userLoaded: userLoaded.value,
-  hasUser: !!user.value
-}))
-
-const userObject = computed(() => {
-  if (!user.value) return null
-  return {
-    id: user.value.id,
-    firstName: user.value.firstName,
-    lastName: user.value.lastName,
-    emailAddresses: user.value.emailAddresses,
-    publicMetadata: user.value.publicMetadata,
-    unsafeMetadata: user.value.unsafeMetadata,
-    privateMetadata: user.value.privateMetadata ? '[REDACTED]' : null,
-    // Get all keys
-    allKeys: Object.keys(user.value)
-  }
-})
-
-const publicMetadata = computed(() => user.value?.publicMetadata || null)
-
-const role = computed(() => {
-  const metadata = user.value?.publicMetadata
-  if (!metadata) return 'No metadata'
-  if (typeof metadata === 'object' && 'role' in metadata) {
-    return metadata.role
-  }
-  return 'No role found'
-})
-
-const isAdmin = computed(() => {
-  const roleValue = user.value?.publicMetadata?.role as string | undefined
-  return roleValue === 'admin'
-})
-
+const { isLoaded, isAuthenticated, user, role } = useAuthState()
 const serverIsAdmin = ref<boolean | null>(null)
+const serverError = ref('')
 
-const checkServerAdmin = async () => {
-  if (!clerkUserId.value) {
-    alert('No user ID available')
-    return
-  }
-  
-  serverIsAdmin.value = null
+async function checkServerAdmin() {
+  serverError.value = ''
   try {
-    const result = await $fetch<{ isAdmin: boolean }>('/api/admin/check', {
-      query: { clerk_id: clerkUserId.value }
-    })
+    const result = await $fetch<{ isAdmin: boolean }>('/api/admin/check')
     serverIsAdmin.value = result.isAdmin
   } catch (error: any) {
-    console.error('Error checking server admin:', error)
-    alert(`Error: ${error.message || 'Failed to check admin status'}`)
+    if (error?.statusCode === 403) {
+      serverIsAdmin.value = false
+      return
+    }
+    serverIsAdmin.value = null
+    serverError.value = error?.data?.statusMessage || 'No se pudo consultar el servidor.'
   }
 }
-
-const refreshData = () => {
-  // Force refresh by accessing the computed values
-  console.log('Refreshing data...')
-  checkServerAdmin()
-}
-
-onMounted(() => {
-  if (clerkUserId.value) {
-    checkServerAdmin()
-  }
-})
 </script>
-
 
 <style scoped>
 .debug-pre { padding: 16px; border-radius: 14px; background: var(--background); border: 1px solid var(--edge); font-family: var(--font-mono); font-size: 13px; overflow: auto; }

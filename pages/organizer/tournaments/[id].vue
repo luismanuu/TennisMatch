@@ -1091,7 +1091,6 @@ const handleSetPlayoffDeadlines = async (bracketType: 'main' | 'backdraw') => {
     await $fetch(`/api/organizer/tournaments/${tournamentId}/playoff-deadline`, {
       method: 'PUT',
       body: {
-        clerk_id: userId.value,
         bracket_type: bracketType,
         rounds: roundsToSave
       }
@@ -1156,7 +1155,6 @@ const handleGenerateBrackets = async () => {
     await $fetch(`/api/organizer/tournaments/${tournamentId}/generate-brackets`, {
       method: 'POST',
       body: {
-        clerk_id: userId.value
       }
     })
     await loadTournament()
@@ -1176,7 +1174,6 @@ const handleRegisterPlayer = async (playerId: string) => {
     await $fetch(`/api/organizer/tournaments/${tournamentId}/register`, {
       method: 'POST',
       body: {
-        clerk_id: userId.value,
         player_id: playerId
       }
     })
@@ -1199,7 +1196,6 @@ const handleStartTournament = async () => {
     await $fetch(`/api/organizer/tournaments/${tournamentId}`, {
       method: 'PUT',
       body: {
-        clerk_id: userId.value,
         status: 'active'
       }
     })
@@ -1220,7 +1216,6 @@ const handleSetGroupDeadline = async () => {
     await $fetch(`/api/organizer/tournaments/${tournamentId}/group-deadline`, {
       method: 'PUT',
       body: {
-        clerk_id: userId.value,
         deadline: groupDeadline.value
       }
     })
@@ -1244,7 +1239,6 @@ watch(playerSearch, async (search) => {
     // Organizers can only see players registered in their tournament
     const results = await $fetch<PlayerSearchResult[]>(`/api/organizer/tournaments/${tournamentId}/players/search`, {
       query: {
-        clerk_id: userId.value,
         q: search
       }
     })

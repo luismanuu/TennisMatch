@@ -30,7 +30,7 @@ export const useMatchChat = () => {
     })
   }
   
-  const fetchMessages = async (matchId: string, clerkId: string, since?: string, retries = 3, isPolling = false): Promise<MatchMessage[]> => {
+  const fetchMessages = async (matchId: string, accountId: string, since?: string, retries = 3, isPolling = false): Promise<MatchMessage[]> => {
     // Prevent concurrent fetches
     const now = Date.now()
     if (now - lastFetchTime.value < 500) {
@@ -45,7 +45,7 @@ export const useMatchChat = () => {
     error.value = null
     
     try {
-      const query: any = { clerk_id: clerkId }
+      const query: any = {}
       if (since) {
         query.since = since
       }
@@ -92,7 +92,7 @@ export const useMatchChat = () => {
       // Retry logic for network errors
       if (retries > 0 && (err.statusCode >= 500 || !err.statusCode)) {
         await new Promise(resolve => setTimeout(resolve, 1000))
-        return fetchMessages(matchId, clerkId, since, retries - 1, isPolling)
+        return fetchMessages(matchId, accountId, since, retries - 1, isPolling)
       }
       error.value = err
       throw err
@@ -103,7 +103,7 @@ export const useMatchChat = () => {
     }
   }
   
-  const sendMessage = async (matchId: string, clerkId: string, payload: CreateMatchMessagePayload): Promise<MatchMessage> => {
+  const sendMessage = async (matchId: string, accountId: string, payload: CreateMatchMessagePayload): Promise<MatchMessage> => {
     // Create optimistic message
     const tempId = `temp-${Date.now()}-${Math.random()}`
     const optimisticMessage: OptimisticMessage = {
@@ -125,7 +125,6 @@ export const useMatchChat = () => {
       const data = await $fetch<MatchMessage>(`/api/matches/${matchId}/messages`, {
         method: 'POST',
         body: {
-          clerk_id: clerkId,
           ...payload
         }
       })

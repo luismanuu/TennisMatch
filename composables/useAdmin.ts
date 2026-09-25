@@ -3,7 +3,7 @@ import { useAuthState } from './useAuthState'
 
 export const useAdmin = () => {
   const { userId } = useAuthState()
-  const { user } = useUser()
+  const { role } = useAuthState()
   
   const loading = ref(false)
   const error = ref<Error | null>(null)
@@ -25,11 +25,10 @@ export const useAdmin = () => {
   
   // Check if current user is admin
   const isAdmin = computed(() => {
-    const role = user.value?.publicMetadata?.role as string | undefined
-    return role === 'admin'
+    return role.value === 'admin'
   })
   
-  // Fetch all pending invitations directly from Clerk (admin only)
+  // Fetch pending invitations (admin only)
   const fetchPendingPlayers = async (page?: number, pageSize?: number) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
@@ -44,7 +43,7 @@ export const useAdmin = () => {
     try {
       const offset = (pendingPlayersPage.value - 1) * pendingPlayersPageSize.value
       const data = await $fetch<{ invitations: any[], allInvitations: any[], total: number, page: number, page_size: number }>(
-        `/api/admin/invitations?clerk_id=${userId.value}&limit=${pendingPlayersPageSize.value}&offset=${offset}`
+        `/api/admin/invitations?limit=${pendingPlayersPageSize.value}&offset=${offset}`
       )
       // Transform to match PendingPlayer type for compatibility
       pendingPlayers.value = data.invitations.map(inv => ({
@@ -55,7 +54,6 @@ export const useAdmin = () => {
         category: inv.category,
         invited_by_player_id: null,
         invited_by_player: null,
-        clerk_invitation_id: inv.clerk_invitation_id,
         invitation_token: null,
         status: inv.status,
         created_at: inv.created_at,
@@ -71,7 +69,7 @@ export const useAdmin = () => {
     }
   }
   
-  // Resend invitation (using Clerk invitation ID)
+  // Resend invitation (pending player id)
   const resendInvitation = async (invitationId: string) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
@@ -81,12 +79,11 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; invitation_id: string }>(
+      const data = await $fetch<{ success: boolean; message: string; invitation_id: string; invitation_url?: string; email_sent?: boolean }>(
         `/api/admin/invitations/${invitationId}/resend`,
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value
           }
         }
       )
@@ -113,12 +110,11 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<{ success: boolean; message: string; pendingPlayer: PendingPlayer }>(
+      const data = await $fetch<{ success: boolean; message: string; pendingPlayer: PendingPlayer; invitation_url?: string; email_sent?: boolean }>(
         '/api/admin/pending-players/invite',
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -155,8 +151,8 @@ export const useAdmin = () => {
     try {
       const offset = (playersPage.value - 1) * playersPageSize.value
       const url = includeDeleted 
-        ? `/api/admin/players?clerk_id=${userId.value}&include_deleted=true&limit=${playersPageSize.value}&offset=${offset}`
-        : `/api/admin/players?clerk_id=${userId.value}&limit=${playersPageSize.value}&offset=${offset}`
+        ? `/api/admin/players?include_deleted=true&limit=${playersPageSize.value}&offset=${offset}`
+        : `/api/admin/players?limit=${playersPageSize.value}&offset=${offset}`
       const data = await $fetch<{ data: Player[], total: number, page: number, page_size: number }>(url)
       players.value = data.data
       playersTotal.value = data.total || 0
@@ -169,7 +165,7 @@ export const useAdmin = () => {
     }
   }
 
-  // Delete an invitation (using Clerk invitation ID)
+  // Revoke an invitation (pending player id)
   const deletePendingPlayer = async (invitationId: string) => {
     if (!userId.value) {
       throw new Error('User not authenticated')
@@ -184,57 +180,11 @@ export const useAdmin = () => {
         {
           method: 'DELETE',
           body: {
-            clerk_id: userId.value
           }
         }
       )
       
       // Refresh pending players list after deletion
-      await fetchPendingPlayers()
-      
-      return data
-    } catch (err: any) {
-      error.value = err
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  // Sync invitations with Clerk (admin only)
-  const syncInvitations = async () => {
-    if (!userId.value) {
-      throw new Error('User not authenticated')
-    }
-    
-    loading.value = true
-    error.value = null
-    
-    try {
-      const data = await $fetch<{
-        success: boolean
-        summary: {
-          clerkTotal: number
-          dbTotal: number
-          clerkOnly: number
-          dbOnly: number
-          mismatched: number
-          synced: number
-        }
-        details: {
-          clerkOnlyInvitations: any[]
-          dbOnlyInvitations: any[]
-          mismatchedInvitations: any[]
-        }
-        actions: any[]
-      }>('/api/admin/invitations/sync', {
-        method: 'POST',
-        body: {
-          clerk_id: userId.value
-        }
-      })
-      
-      // Refresh pending players list after sync
       await fetchPendingPlayers()
       
       return data
@@ -261,7 +211,6 @@ export const useAdmin = () => {
         {
           method: 'DELETE',
           body: {
-            clerk_id: userId.value
           }
         }
       )
@@ -293,7 +242,6 @@ export const useAdmin = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value
           }
         }
       )
@@ -322,7 +270,7 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any[]>(`/api/admin/categories?clerk_id=${userId.value}`)
+      const data = await $fetch<any[]>(`/api/admin/categories`)
       categories.value = data
       return data
     } catch (err: any) {
@@ -347,7 +295,6 @@ export const useAdmin = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -377,7 +324,6 @@ export const useAdmin = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -407,7 +353,6 @@ export const useAdmin = () => {
         {
           method: 'DELETE',
           body: {
-            clerk_id: userId.value
           }
         }
       )
@@ -436,7 +381,6 @@ export const useAdmin = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             category_orders: categoryOrders
           }
         }
@@ -467,7 +411,6 @@ export const useAdmin = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -502,7 +445,6 @@ export const useAdmin = () => {
     try {
       const offset = (matchesPage.value - 1) * matchesPageSize.value
       const queryParams = new URLSearchParams()
-      queryParams.append('clerk_id', userId.value)
       queryParams.append('limit', matchesPageSize.value.toString())
       queryParams.append('offset', offset.toString())
       if (filters?.status) queryParams.append('status', filters.status)
@@ -534,7 +476,7 @@ export const useAdmin = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/stats?clerk_id=${userId.value}`)
+      const data = await $fetch<any>(`/api/admin/stats`)
       stats.value = data
       return data
     } catch (err: any) {
@@ -566,7 +508,7 @@ export const useAdmin = () => {
     try {
       const offset = (fallbackMatchesPage.value - 1) * fallbackMatchesPageSize.value
       const data = await $fetch<{ data: any[], total: number, page: number, page_size: number }>(
-        `/api/admin/matches/fallback?clerk_id=${userId.value}&limit=${fallbackMatchesPageSize.value}&offset=${offset}`
+        `/api/admin/matches/fallback?limit=${fallbackMatchesPageSize.value}&offset=${offset}`
       )
       fallbackMatches.value = data.data
       fallbackMatchesTotal.value = data.total || 0
@@ -603,7 +545,7 @@ export const useAdmin = () => {
           error?: string
         }>
       }>(
-        `/api/admin/matches/reprocess-fallback?clerk_id=${userId.value}&match_id=${matchId}`,
+        `/api/admin/matches/reprocess-fallback?match_id=${matchId}`,
         {
           method: 'POST'
         }
@@ -644,7 +586,7 @@ export const useAdmin = () => {
     try {
       const offset = (organizersPage.value - 1) * organizersPageSize.value
       const data = await $fetch<{ organizers: any[]; pendingInvitations: any[]; total: number; total_pending: number; page: number; page_size: number }>(
-        `/api/admin/organizers?clerk_id=${userId.value}&limit=${organizersPageSize.value}&offset=${offset}`
+        `/api/admin/organizers?limit=${organizersPageSize.value}&offset=${offset}`
       )
       organizers.value = data.organizers || []
       pendingOrganizerInvitations.value = data.pendingInvitations || []
@@ -673,7 +615,6 @@ export const useAdmin = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -703,7 +644,6 @@ export const useAdmin = () => {
         {
           method: 'DELETE',
           query: {
-            clerk_id: userId.value
           }
         }
       )
@@ -750,7 +690,6 @@ export const useAdmin = () => {
     deletePlayer,
     restorePlayer,
     deletePendingPlayer,
-    syncInvitations,
     fetchCategories,
     createCategory,
     updateCategory,

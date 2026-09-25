@@ -232,7 +232,6 @@ const loadMatches = async () => {
     loading.value = true
     const data = await $fetch(`/api/admin/tournaments/${tournamentId}/matches`, {
       query: {
-        clerk_id: userId.value
       }
     })
     matches.value = data || []

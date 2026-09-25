@@ -288,7 +288,7 @@ definePageMeta({
   middleware: ['admin']
 })
 
-const { user } = useUser()
+const { user } = useAuthState()
 const toast = useToastNotifications()
 
 // State
@@ -337,8 +337,8 @@ const loadData = async (page?: number) => {
     loading.value = true
     error.value = null
     
-    const clerkId = user.value?.id
-    if (!clerkId) {
+    const accountId = user.value?.id
+    if (!accountId) {
       error.value = 'User not authenticated'
       return
     }
@@ -347,7 +347,6 @@ const loadData = async (page?: number) => {
     const offset = (segmentsPage.value - 1) * segmentsPageSize.value
     const segmentsResponse = await $fetch('/api/admin/city-segments', {
       query: { 
-        clerk_id: clerkId,
         limit: segmentsPageSize.value,
         offset: offset
       }
@@ -385,12 +384,11 @@ const handleEditSegment = (segment: CitySegment) => {
 const handleCreateSegment = async () => {
   try {
     formLoading.value = true
-    const clerkId = user.value?.id
+    const accountId = user.value?.id
     
     await $fetch('/api/admin/city-segments', {
       method: 'POST',
       body: {
-        clerk_id: clerkId,
         name: segmentForm.value.name,
         description: segmentForm.value.description || undefined,
         city_ids: selectedCityIds.value.length > 0 ? selectedCityIds.value : undefined
@@ -413,12 +411,11 @@ const handleUpdateSegment = async () => {
   
   try {
     formLoading.value = true
-    const clerkId = user.value?.id
+    const accountId = user.value?.id
     
     await $fetch(`/api/admin/city-segments/${editingSegmentId.value}`, {
       method: 'PUT',
       body: {
-        clerk_id: clerkId,
         name: segmentForm.value.name,
         description: segmentForm.value.description || undefined
       }
@@ -442,11 +439,11 @@ const handleDeleteSegment = async (segmentId: string, segmentName: string) => {
   
   try {
     deletingIds.value.add(segmentId)
-    const clerkId = user.value?.id
+    const accountId = user.value?.id
     
     await $fetch(`/api/admin/city-segments/${segmentId}`, {
       method: 'DELETE',
-      query: { clerk_id: clerkId }
+      query: {}
     })
     
     toast.success(`Región "${segmentName}" eliminada`)
@@ -485,12 +482,11 @@ const handleAddCitiesToSegment = async () => {
   
   try {
     addingCities.value = true
-    const clerkId = user.value?.id
+    const accountId = user.value?.id
     
     await $fetch(`/api/admin/city-segments/${addCitiesModal.value.segmentId}/cities`, {
       method: 'POST',
       body: {
-        clerk_id: clerkId,
         city_ids: modalSelectedCityIds.value
       }
     })
@@ -514,11 +510,11 @@ const handleRemoveCity = async (segmentId: string, cityId: string, cityName: str
   const key = `${segmentId}-${cityId}`
   try {
     removingCityIds.value.add(key)
-    const clerkId = user.value?.id
+    const accountId = user.value?.id
     
     await $fetch(`/api/admin/city-segments/${segmentId}/cities`, {
       method: 'DELETE',
-      query: { clerk_id: clerkId, city_id: cityId }
+      query: { city_id: cityId }
     })
     
     toast.success(`"${cityName}" eliminada de la región`)

@@ -501,20 +501,10 @@
 
         <!-- Pending Players Tab -->
         <div v-show="activeTab === 'pending' && !loading">
-        <!-- Invite Player Form and Sync Button -->
+        <!-- Invite Player Form -->
         <div class="panel mb-8">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-size-2 font-semibold text-foreground">Invite New Player</h2>
-            <button
-              @click="handleSyncInvitations"
-              :disabled="loading || syncingInvitations"
-              class="btn-secondary text-size-4 group disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Icon v-if="syncingInvitations" name="heroicons:arrow-path" class="w-4 h-4 mr-2 animate-spin" />
-              <Icon v-else name="heroicons:arrow-path" class="w-4 h-4" />
-              <span v-if="syncingInvitations">Sincronizando...</span>
-              <span v-else>Sincronizar con Clerk</span>
-            </button>
           </div>
           <form @submit.prevent="handleInvite" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -653,19 +643,19 @@
                     <div class="flex flex-col sm:flex-row gap-2">
                       <button
                         v-if="player.status === 'pending' && !(player as any).revoked"
-                        @click="handleResend(player.clerk_invitation_id || player.id)"
-                        :disabled="loading || resendingIds.has(player.clerk_invitation_id || player.id) || deletingPendingIds.has(player.clerk_invitation_id || player.id)"
+                        @click="handleResend(player.id)"
+                        :disabled="loading || resendingIds.has(player.id) || deletingPendingIds.has(player.id)"
                         class="btn-primary text-size-4 !py-2 !px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <span v-if="resendingIds.has(player.clerk_invitation_id || player.id)">Sending...</span>
+                        <span v-if="resendingIds.has(player.id)">Sending...</span>
                         <span v-else>Resend</span>
                       </button>
                       <button
-                        @click="handleDeletePending(player.clerk_invitation_id || player.id, player.name, player.email)"
-                        :disabled="loading || deletingPendingIds.has(player.clerk_invitation_id || player.id) || resendingIds.has(player.clerk_invitation_id || player.id)"
+                        @click="handleDeletePending(player.id, player.name, player.email)"
+                        :disabled="loading || deletingPendingIds.has(player.id) || resendingIds.has(player.id)"
                         class="btn-danger text-size-4 !py-2 !px-4 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <span v-if="deletingPendingIds.has(player.clerk_invitation_id || player.id)">Deleting...</span>
+                        <span v-if="deletingPendingIds.has(player.id)">Deleting...</span>
                         <span v-else>Delete</span>
                       </button>
                       <span v-if="player.status !== 'pending' || (player as any).revoked" class="text-size-4 font-regular text-foreground-muted flex items-center">
@@ -1761,7 +1751,6 @@ const {
   restorePlayer,
   updatePlayer,
   deletePendingPlayer,
-  syncInvitations,
   fetchCategories,
   createCategory,
   updateCategory,
@@ -1785,7 +1774,6 @@ const deletingPendingIds = ref<Set<string>>(new Set())
 const inviting = ref(false)
 const inviteError = ref<string | null>(null)
 const showDeletedPlayers = ref(false)
-const syncingInvitations = ref(false)
 
 // Fallback matches state
 const expandedMatches = ref<Set<string>>(new Set())
@@ -1838,7 +1826,7 @@ const filteredPlayers = computed(() => {
     result = result.filter((p: any) => 
       p.name.toLowerCase().includes(searchLower) ||
       (p.email && p.email.toLowerCase().includes(searchLower)) ||
-      (p.clerk_id && p.clerk_id.toLowerCase().includes(searchLower))
+      (p.user_id && p.user_id.toLowerCase().includes(searchLower))
     )
   }
 
@@ -1951,19 +1939,32 @@ const resetInviteForm = () => {
   inviteError.value = null
 }
 
+// Without an email provider the server returns the link; the admin shares it by hand.
+const announceInvitation = async (email: string, result: { invitation_url?: string; email_sent?: boolean }) => {
+  const toast = useToastNotifications()
+  if (result.email_sent || !result.invitation_url) {
+    toast.success(`Invitation sent to ${email}`)
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(result.invitation_url)
+    toast.success(`Invitation link copied. Share it with ${email}: ${result.invitation_url}`, 15000)
+  } catch {
+    toast.success(`Share this invitation link with ${email}: ${result.invitation_url}`, 15000)
+  }
+}
+
 const handleInvite = async () => {
   try {
     inviting.value = true
     inviteError.value = null
     successMessage.value = null
     
-    await invitePlayer({
+    const result = await invitePlayer({
       name: inviteForm.value.name,
       email: inviteForm.value.email
     })
-    
-    const toast = useToastNotifications()
-    toast.success(`Invitation sent successfully to ${inviteForm.value.email}!`)
+    await announceInvitation(inviteForm.value.email, result)
     resetInviteForm()
   } catch (err: any) {
     console.error('Error inviting player:', err)
@@ -1988,34 +1989,14 @@ const handlePendingPlayersPageChange = (page: number) => {
   loadPendingPlayers(page)
 }
 
-const handleSyncInvitations = async () => {
-  try {
-    syncingInvitations.value = true
-    successMessage.value = null
-    
-    const result = await syncInvitations()
-    
-    const summary = result.summary
-    const toast = useToastNotifications()
-    toast.success(`Sync completed: ${summary.synced} invitations updated. Clerk: ${summary.clerkTotal}, DB: ${summary.dbTotal}`, 10000)
-  } catch (err: any) {
-    console.error('Error syncing invitations:', err)
-    const toastErr = useToastNotifications()
-    toastErr.error(err.data?.message || err.message || 'Failed to sync invitations')
-  } finally {
-    syncingInvitations.value = false
-  }
-}
-
 const handleResend = async (pendingPlayerId: string) => {
   try {
     resendingIds.value.add(pendingPlayerId)
     successMessage.value = null
     
-    await resendInvitation(pendingPlayerId)
-    
-    const toast = useToastNotifications()
-    toast.success('Invitation email resent successfully!')
+    const result = await resendInvitation(pendingPlayerId)
+    const pending = pendingPlayers.value.find((p) => p.id === pendingPlayerId)
+    await announceInvitation(pending?.email ?? 'the player', result)
   } catch (err: any) {
     console.error('Error resending invitation:', err)
     const toastErr = useToastNotifications()
@@ -2026,7 +2007,7 @@ const handleResend = async (pendingPlayerId: string) => {
 }
 
 const handleDeletePending = async (pendingPlayerId: string, playerName: string, playerEmail: string) => {
-  if (!confirm(`Are you sure you want to delete the invitation for "${playerName}" (${playerEmail})? This will also revoke the invitation in Clerk.`)) {
+  if (!confirm(`Are you sure you want to delete the invitation for "${playerName}" (${playerEmail})?`)) {
     return
   }
 
@@ -2491,7 +2472,6 @@ const processMissingRatingHistory = async () => {
 
   try {
     const queryParams = new URLSearchParams({
-      clerk_id: userId.value,
       limit: '100'
     })
 
