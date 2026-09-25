@@ -3,27 +3,21 @@
  * Recalculates these values from rating_history to ensure accuracy
  */
 
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, desc, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players, rating_history } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
 
   try {
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Get all players
-    const { data: players, error: playersError } = await supabase
-      .from('players')
-      .select('id, name, total_matches_played, win_streak')
-
-    if (playersError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch players',
-        data: playersError
-      })
-    }
+    const allPlayers = await db
+      .select({ id: players.id, name: players.name, total_matches_played: players.total_matches_played, win_streak: players.win_streak })
+      .from(players)
 
     const results: Array<{
       player_id: string
@@ -36,40 +30,26 @@ export default defineEventHandler(async (event) => {
     }> = []
 
     // Fix each player
-    for (const player of players || []) {
-      // Get rating history for this player (non-reversed, ordered by most recent first)
-      const { data: history, error: historyError } = await supabase
-        .from('rating_history')
-        .select('was_winner, created_at')
-        .eq('player_id', player.id)
-        .eq('rating_reversed', false)
-        .order('created_at', { ascending: false })
-
-      if (historyError) {
+    for (const player of allPlayers) {
+      // Rating history for this player (non-reversed, most recent first)
+      let history: Array<{ was_winner: boolean; match_id: string }>
+      try {
+        history = await db
+          .select({ was_winner: rating_history.was_winner, match_id: rating_history.match_id })
+          .from(rating_history)
+          .where(and(eq(rating_history.player_id, player.id), eq(rating_history.rating_reversed, false)))
+          .orderBy(desc(rating_history.created_at))
+      } catch (historyError) {
         console.error(`Error fetching history for player ${player.id}:`, historyError)
         continue
       }
 
-      // Calculate total matches (count distinct match_ids)
-      // We need to get all match_ids and count unique ones
-      const { data: matchIds, error: matchIdsError } = await supabase
-        .from('rating_history')
-        .select('match_id')
-        .eq('player_id', player.id)
-        .eq('rating_reversed', false)
-
-      if (matchIdsError) {
-        console.error(`Error fetching match IDs for player ${player.id}:`, matchIdsError)
-        continue
-      }
-
-      // Count unique match_ids
-      const uniqueMatchIds = new Set(matchIds?.map(m => m.match_id) || [])
-      const newTotalMatches = uniqueMatchIds.size
+      // Total matches = distinct match ids in that history
+      const newTotalMatches = new Set(history.map(m => m.match_id)).size
 
       // Calculate current win streak from history
       let newWinStreak = 0
-      if (history && history.length > 0) {
+      if (history.length > 0) {
         // Current streak (from most recent)
         for (const entry of history) {
           if (entry.was_winner) {
@@ -88,36 +68,25 @@ export default defineEventHandler(async (event) => {
 
       // Only update if values are different
       if (oldTotalMatches !== newTotalMatches || oldWinStreak !== newWinStreak) {
-        const { error: updateError } = await supabase
-          .from('players')
-          .update({
-            total_matches_played: newTotalMatches,
-            win_streak: newWinStreak
-          })
-          .eq('id', player.id)
-
-        if (updateError) {
+        let fixed = true
+        try {
+          await db
+            .update(players)
+            .set({ total_matches_played: newTotalMatches, win_streak: newWinStreak })
+            .where(eq(players.id, player.id))
+        } catch (updateError) {
           console.error(`Error updating player ${player.id}:`, updateError)
-          results.push({
-            player_id: player.id,
-            player_name: player.name,
-            old_total_matches: oldTotalMatches,
-            new_total_matches: newTotalMatches,
-            old_win_streak: oldWinStreak,
-            new_win_streak: newWinStreak,
-            fixed: false
-          })
-        } else {
-          results.push({
-            player_id: player.id,
-            player_name: player.name,
-            old_total_matches: oldTotalMatches,
-            new_total_matches: newTotalMatches,
-            old_win_streak: oldWinStreak,
-            new_win_streak: newWinStreak,
-            fixed: true
-          })
+          fixed = false
         }
+        results.push({
+          player_id: player.id,
+          player_name: player.name,
+          old_total_matches: oldTotalMatches,
+          new_total_matches: newTotalMatches,
+          old_win_streak: oldWinStreak,
+          new_win_streak: newWinStreak,
+          fixed
+        })
       }
     }
 
