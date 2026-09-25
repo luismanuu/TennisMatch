@@ -58,8 +58,8 @@
         <!-- Gradient definition -->
         <defs>
           <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#1e40af;stop-opacity:1" />
+            <stop offset="0%" style="stop-color:var(--accent);stop-opacity:1" />
+            <stop offset="100%" style="stop-color:var(--accent);stop-opacity:0.55" />
           </linearGradient>
         </defs>
         

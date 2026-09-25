@@ -1,23 +1,12 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <AppNavigation />
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+  <PageLayout container-size="medium">
         <!-- Header -->
         <div class="mb-8">
-          <NuxtLink :to="`/matches/${matchId}`" class="btn-secondary text-size-4 mb-4 inline-flex">
-            <Icon name="heroicons:arrow-left" class="w-4 h-4 mr-2" />
+          <NuxtLink :to="`/matches/${matchId}`" class="text-link mb-2">
+            <Icon name="heroicons:arrow-left" class="w-4 h-4" />
             Volver al Partido
           </NuxtLink>
-          <div v-if="matchImpact?.match" class="glass-card-elevated p-6">
+          <div v-if="matchImpact?.match" class="panel">
             <h1 class="text-size-1 font-semibold text-foreground mb-4">Análisis de Impacto del Partido</h1>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -43,16 +32,16 @@
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center">
-          <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
-          <p class="text-size-3 text-foreground-muted">Analizando impacto...</p>
+        <div v-if="loading" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Analizando impacto…</p>
         </div>
 
         <!-- Impact Content -->
         <div v-else-if="matchImpact" class="space-y-8">
           <!-- Player 1 Impact -->
-          <div class="glass-card-elevated p-6 md:p-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">
+          <div class="panel">
+            <h2 class="panel-title">
               Impacto para {{ matchImpact.match.player1?.name }}
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -110,8 +99,8 @@
           </div>
 
           <!-- Player 2 Impact -->
-          <div class="glass-card-elevated p-6 md:p-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">
+          <div class="panel">
+            <h2 class="panel-title">
               Impacto para {{ matchImpact.match.player2?.name }}
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -169,8 +158,8 @@
           </div>
 
           <!-- Summary -->
-          <div class="glass-card-elevated p-6 md:p-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">Resumen</h2>
+          <div class="panel">
+            <h2 class="panel-title">Resumen</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                 <p class="text-size-4 text-foreground-muted mb-1">Cambio Total de SR</p>
@@ -187,9 +176,7 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">

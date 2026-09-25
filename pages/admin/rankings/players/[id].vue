@@ -1,23 +1,12 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <AppNavigation />
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+  <PageLayout container-size="medium">
         <!-- Header -->
         <div class="mb-8">
-          <NuxtLink to="/admin/rankings" class="btn-secondary text-size-4 mb-4 inline-flex">
-            <Icon name="heroicons:arrow-left" class="w-4 h-4 mr-2" />
+          <NuxtLink to="/admin/rankings" class="text-link mb-2">
+            <Icon name="heroicons:arrow-left" class="w-4 h-4" />
             Volver a Rankings
           </NuxtLink>
-          <div v-if="playerRankingDetails?.player" class="glass-card-elevated p-6">
+          <div v-if="playerRankingDetails?.player" class="panel">
             <div class="flex items-center justify-between">
               <div>
                 <h1 class="text-size-1 font-semibold text-foreground mb-2">{{ playerRankingDetails.player.name }}</h1>
@@ -40,36 +29,36 @@
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center">
-          <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
-          <p class="text-size-3 text-foreground-muted">Cargando detalles...</p>
+        <div v-if="loading" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Cargando detalles…</p>
         </div>
 
         <!-- Content -->
         <div v-else-if="playerRankingDetails" class="space-y-8">
           <!-- Overview Cards -->
           <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div class="glass-card-elevated p-6">
+            <div class="panel">
               <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Partidos Totales</h3>
               <p class="text-size-1 font-bold text-foreground">{{ playerRankingDetails.player.total_matches_played }}</p>
             </div>
-            <div class="glass-card-elevated p-6">
+            <div class="panel">
               <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Racha de Victoria</h3>
               <p class="text-size-1 font-bold text-green-400">{{ playerRankingDetails.player.win_streak }}</p>
             </div>
-            <div class="glass-card-elevated p-6">
+            <div class="panel">
               <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Racha de Derrota</h3>
               <p class="text-size-1 font-bold text-red-400">{{ playerRankingDetails.player.loss_streak }}</p>
             </div>
-            <div class="glass-card-elevated p-6">
+            <div class="panel">
               <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Partidos este Mes</h3>
               <p class="text-size-1 font-bold text-foreground">{{ playerRankingDetails.player.matches_this_month }}</p>
             </div>
           </div>
 
           <!-- Placement Status -->
-          <div v-if="playerRankingDetails.player.is_in_placement" class="glass-card-elevated p-6">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Estado de Placement</h2>
+          <div v-if="playerRankingDetails.player.is_in_placement" class="panel">
+            <h2 class="panel-title">Estado de Placement</h2>
             <AdminPlacementMatchStatus
               :completed="playerRankingDetails.player.placement_matches_completed"
               :total="3"
@@ -78,8 +67,8 @@
           </div>
 
           <!-- Decay Status -->
-          <div v-if="playerRankingDetails.decay_status" class="glass-card-elevated p-6">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Estado de Decay</h2>
+          <div v-if="playerRankingDetails.decay_status" class="panel">
+            <h2 class="panel-title">Estado de Decay</h2>
             <div class="space-y-4">
               <div class="p-4 rounded-xl bg-surface border border-border-subtle">
                 <div class="flex items-center justify-between mb-2">
@@ -99,8 +88,8 @@
           </div>
 
           <!-- ELO Progression Chart -->
-          <div v-if="playerRankingDetails.elo_progression && playerRankingDetails.elo_progression.length > 0" class="glass-card-elevated p-6">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">Progresión de SR</h2>
+          <div v-if="playerRankingDetails.elo_progression && playerRankingDetails.elo_progression.length > 0" class="panel">
+            <h2 class="panel-title">Progresión de SR</h2>
             <EloHistoryChart :history-data="playerRankingDetails.elo_progression.map((e: any) => ({
               id: e.date,
               elo_before: e.elo - e.change,
@@ -110,8 +99,8 @@
           </div>
 
           <!-- Recent Match Impact -->
-          <div v-if="playerRankingDetails.recent_match_impact && playerRankingDetails.recent_match_impact.length > 0" class="glass-card-elevated p-6">
-            <h2 class="text-size-2 font-semibold text-foreground mb-6">Impacto de Partidos Recientes</h2>
+          <div v-if="playerRankingDetails.recent_match_impact && playerRankingDetails.recent_match_impact.length > 0" class="panel">
+            <h2 class="panel-title">Impacto de Partidos Recientes</h2>
             <div class="overflow-x-auto">
               <table class="w-full">
                 <thead class="bg-surface border-b border-border-subtle">
@@ -151,9 +140,7 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
