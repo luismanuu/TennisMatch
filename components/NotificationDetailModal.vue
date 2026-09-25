@@ -424,7 +424,7 @@ const handleViewMatch = () => {
 .btn-primary:hover {
   background: var(--color-accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--color-accent-rgb), 0.3);
+  box-shadow: 0 4px 12px oklch(var(--accent-ch) / 0.3);
 }
 
 /* Animations */

@@ -198,12 +198,14 @@
         class="te-modal"
         @click.self="closeGroupMatches"
       >
-        <div class="panel max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="te-modal__panel te-modal__panel--xl">
           <div class="flex items-center justify-between mb-6">
             <h3 class="text-size-2 font-semibold text-foreground">
               Partidos del Grupo
             </h3>
             <button
+              type="button"
+              aria-label="Cerrar"
               @click="closeGroupMatches"
               class="p-2 rounded-xl hover:bg-surface transition-colors"
             >

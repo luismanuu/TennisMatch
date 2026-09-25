@@ -10,7 +10,7 @@
       <div class="split-grid">
         <div class="flow-stack">
           <!-- Lead: the most urgent real action, derived from pending notifications -->
-          <PhotoPanel v-if="leadNotification" photo="clayday" variant="priority" eager>
+          <PhotoPanel v-if="leadState === 'lead' && leadNotification" photo="clayday" variant="priority" eager>
             <template #decor><CourtLines rally /></template>
             <span class="status-pill">{{ leadCopy.status }}</span>
             <h2>{{ leadCopy.title }}</h2>
@@ -21,6 +21,27 @@
               <Icon :name="leadNotification.type === 'score_proposal' ? 'heroicons:check' : 'heroicons:arrow-right'" class="w-5 h-5" aria-hidden="true" />
             </NuxtLink>
           </PhotoPanel>
+
+          <!-- Until the first fetch succeeds an empty list is unknown, not "Todo al día" -->
+          <section v-else-if="leadState === 'loading'" class="panel lead-clear" role="status" aria-busy="true">
+            <div class="lead-clear__copy">
+              <span class="status-pill">Revisando pendientes…</span>
+              <span class="lead-skeleton lead-skeleton--title" aria-hidden="true" />
+              <span class="lead-skeleton lead-skeleton--line" aria-hidden="true" />
+            </div>
+          </section>
+
+          <section v-else-if="leadState === 'error'" class="panel lead-clear" role="alert">
+            <div class="lead-clear__copy">
+              <span class="status-pill">No disponible</span>
+              <h2>No pudimos revisar tus pendientes</h2>
+              <p class="meta">Puede que tengas partidos por confirmar. Revisa tu conexión e inténtalo de nuevo.</p>
+              <button type="button" class="btn-primary" @click="fetchNotifications">
+                Reintentar
+                <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+              </button>
+            </div>
+          </section>
 
           <section v-else class="panel lead-clear">
             <CourtLines class="lead-clear__court" />
@@ -49,7 +70,7 @@
           </section>
 
           <div class="quick-actions">
-            <NuxtLink v-if="leadNotification" to="/matches/new" class="btn-secondary">
+            <NuxtLink v-if="leadState !== 'clear'" to="/matches/new" class="btn-secondary">
               Programar partido
               <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
             </NuxtLink>
@@ -207,7 +228,7 @@
 </template>
 
 <script setup lang="ts">
-import { byUrgency, formatScore, pendingCopy } from '~/utils/pendingAction'
+import { byUrgency, formatScore, leadPanelState, pendingCopy } from '~/utils/pendingAction'
 import { tierName } from '~/utils/tiers'
 
 definePageMeta({
@@ -222,7 +243,7 @@ const { isOrganizer } = useOrganizer()
 const { isAdmin } = useAdmin()
 
 // Notifications for pending actions section
-const { notifications, count: notificationsCount } = useNotifications()
+const { notifications, count: notificationsCount, loaded: notificationsLoaded, error: notificationsError, fetchNotifications } = useNotifications()
 
 // Determine if user is staff (admin or organizer)
 const isStaff = computed(() => isAdmin.value || isOrganizer.value)
@@ -230,6 +251,11 @@ const isStaff = computed(() => isAdmin.value || isOrganizer.value)
 // Lead card + pending list: most urgent real notification first (utils/pendingAction.ts)
 const sortedNotifications = computed(() => byUrgency(notifications.value || []))
 const leadNotification = computed(() => sortedNotifications.value.find(n => n.match_id) || null)
+const leadState = computed(() => leadPanelState({
+  hasLead: !!leadNotification.value,
+  loaded: notificationsLoaded.value,
+  error: notificationsError.value
+}))
 const leadMatch = computed(() => leadNotification.value?.match || null)
 const leadCopy = computed(() => pendingCopy(leadNotification.value || {}, player.value?.id))
 const notificationCopy = (n: any) => pendingCopy(n, player.value?.id)
@@ -448,6 +474,8 @@ const featureGroups = [
 .lead-clear__copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .lead-clear__copy h2 { font-size: clamp(23px, 2.6vw, 32px); line-height: 1.2; max-width: 22ch; }
 .lead-clear__copy .btn-primary { margin-top: 8px; }
+.lead-skeleton { display: block; height: 16px; width: min(100%, 28ch); border-radius: 8px; background: var(--edge); }
+.lead-skeleton--title { height: 30px; width: min(100%, 18ch); }
 .photo .btn-primary { margin-top: 8px; }
 
 .notice { display: flex; gap: 16px; align-items: flex-start; }
