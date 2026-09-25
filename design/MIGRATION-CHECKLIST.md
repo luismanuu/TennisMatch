@@ -37,13 +37,15 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | Admin panel `/admin` | `pages/admin/index.vue` | none | #9 | in PR | `shots/pr9` |
 | Admin debug `/admin/debug` | `pages/admin/debug.vue` | none | #9 | in PR | `shots/pr9` |
 | Admin rankings (8 routes) `/admin/rankings/**` | `pages/admin/rankings/*` | none | #10 | in PR | `shots/pr10` |
-| Admin ciudades `/admin/city-segments` | `pages/admin/city-segments/index.vue` | none | #11 | todo | |
-| Admin organizadores `/admin/organizers` | `pages/admin/organizers/index.vue` | none | #11 | todo | |
-| Admin torneos (3 routes) `/admin/tournaments/**` | `pages/admin/tournaments/*` | none | #11 | todo | |
+| Admin ciudades `/admin/city-segments` | `pages/admin/city-segments/index.vue` | none | #11 | in PR | `shots/pr11` |
+| Admin organizadores `/admin/organizers` | `pages/admin/organizers/index.vue` | none | #11 | in PR | `shots/pr11` |
+| Admin torneos (3 routes) `/admin/tournaments/**` | `pages/admin/tournaments/*` | none | #11 | in PR | `shots/pr11` |
 
 ## Cross-cutting follow-ups
 
-- [ ] Remove the transitional `.h-16` shell clearance in `app.vue` once every page renders inside `<PageLayout>` (last PR).
+- [x] Transitional `.h-16` shell clearance and the inert ambient selectors removed in #11 (no page renders its own nav any more).
+- [x] Repo-wide `impeccable detect pages components assets/css app.vue`: 0 findings (staging: 37).
+- [x] Every route swept at 390 (Graphite) and 1280 (Claro): 0px horizontal overflow, 0 page errors (`shots/final`).
 - [ ] Self-host Geist before production (DESIGN_SYSTEM.md §3); Google Fonts is still linked.
 - [ ] Inicio "Tu próximo partido" and "Puesto N de M" (mock) need data the page doesn't load today (next scheduled match, ranking position); left out rather than adding fetches (brief: no data-fetching changes).
 - [ ] Perfil "Último resultado" / "Tu próximo partido" (mock) are not loaded by the profile page today; left out (no new fetches).

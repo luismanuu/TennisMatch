@@ -1,35 +1,20 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <!-- Navigation -->
-    <AppNavigation />
-    
-    <!-- Spacer for fixed nav -->
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+  <PageLayout container-size="medium">
         <!-- Header -->
-        <div class="flex items-center justify-between mb-8 animate-fade-up">
+        <div class="page-heading heading-row">
           <div>
-            <NuxtLink to="/admin" class="inline-flex items-center gap-2 text-size-4 text-foreground-muted hover:text-accent mb-4 transition-colors">
-              <Icon name="heroicons:arrow-left" class="w-4 h-4" />
-              <span>Volver al Panel</span>
-            </NuxtLink>
-            <h1 class="text-size-1 font-semibold text-foreground mb-2">Gestionar Organizadores</h1>
-            <p class="text-size-3 font-regular text-foreground-muted">
+            <NuxtLink to="/admin" class="text-link">
+            <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+            Volver al Panel
+          </NuxtLink>
+            <h1>Gestionar Organizadores</h1>
+            <p class="meta">
               Crea y administra organizadores de torneos
             </p>
           </div>
           <button
             @click="showCreateForm = !showCreateForm"
-            class="glass-card-elevated px-6 py-3 rounded-xl flex items-center gap-2 text-size-4 font-semibold text-foreground hover-lift transition-all"
+            class="btn-primary"
           >
             <Icon name="heroicons:plus" class="w-5 h-5" />
             <span>Invitar Organizador</span>
@@ -37,26 +22,26 @@
         </div>
 
         <!-- Create Organizer Form -->
-        <div v-if="showCreateForm" class="glass-card-elevated p-8 mb-8 animate-fade-in-scale">
-          <h2 class="text-size-2 font-semibold text-foreground mb-6">Invitar Nuevo Organizador</h2>
+        <div v-if="showCreateForm" class="panel mb-8">
+          <h2 class="panel-title">Invitar Nuevo Organizador</h2>
           <form @submit.prevent="handleInviteOrganizer" class="space-y-6">
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Nombre</label>
+              <label class="form-label">Nombre</label>
               <input
                 v-model="organizerForm.name"
                 type="text"
                 required
-                class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                class="form-input"
                 placeholder="Nombre del organizador"
               />
             </div>
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Email</label>
+              <label class="form-label">Email</label>
               <input
                 v-model="organizerForm.email"
                 type="email"
                 required
-                class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                class="form-input"
                 placeholder="email@ejemplo.com"
               />
             </div>
@@ -64,7 +49,7 @@
               <button
                 type="submit"
                 :disabled="inviting"
-                class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                class="btn-primary"
               >
                 <span v-if="!inviting">Enviar Invitación</span>
                 <span v-else class="flex items-center gap-2">
@@ -75,7 +60,7 @@
               <button
                 type="button"
                 @click="showCreateForm = false; resetForm()"
-                class="px-6 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 font-semibold hover-lift transition-all"
+                class="px-6 py-3 rounded-xl bg-surface border border-border-subtle text-foreground text-size-4 font-semibold transition-all"
               >
                 Cancelar
               </button>
@@ -84,21 +69,21 @@
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <Icon name="heroicons:arrow-path" class="w-12 h-12 text-accent mx-auto mb-4 animate-spin" />
-          <p class="text-size-3 font-regular text-foreground-muted">Cargando organizadores...</p>
+        <div v-if="loading" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Cargando organizadores…</p>
         </div>
 
         <!-- Organizers List -->
-        <div v-else class="space-y-8 animate-fade-up animate-delay-1">
+        <div v-else class="space-y-8">
           <!-- Active Organizers -->
           <div v-if="organizers.length > 0">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Organizadores Activos</h2>
+            <h2 class="panel-title">Organizadores Activos</h2>
             <div class="space-y-4 mb-6">
               <div
                 v-for="organizer in organizers"
                 :key="organizer.id"
-                class="glass-card-elevated p-4 sm:p-6 hover-lift transition-all"
+                class="panel transition-all"
               >
                 <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div class="flex-1">
@@ -117,7 +102,7 @@
                     <button
                       @click="handleDeleteOrganizer(organizer.id, organizer.name)"
                       :disabled="deletingIds.has(organizer.id)"
-                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 w-full sm:w-auto"
+                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold transition-all disabled:opacity-50 w-full sm:w-auto"
                     >
                       <span v-if="!deletingIds.has(organizer.id)">Eliminar</span>
                       <span v-else class="flex items-center gap-2 justify-center">
@@ -144,12 +129,12 @@
 
           <!-- Pending Invitations -->
           <div v-if="pendingInvitations.length > 0">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Invitaciones Pendientes</h2>
+            <h2 class="panel-title">Invitaciones Pendientes</h2>
             <div class="space-y-4 mb-6">
               <div
                 v-for="invitation in pendingInvitations"
                 :key="invitation.id"
-                class="glass-card-elevated p-4 sm:p-6 border-2 border-yellow-500/30"
+                class="panel border border-yellow-500/30"
               >
                 <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div class="flex-1">
@@ -171,7 +156,7 @@
                     <button
                       @click="handleResendInvitation(invitation.id)"
                       :disabled="resendingIds.has(invitation.id)"
-                      class="px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 w-full sm:w-auto"
+                      class="btn-primary w-full sm:w-auto"
                     >
                       <span v-if="!resendingIds.has(invitation.id)">Reenviar</span>
                       <span v-else class="flex items-center gap-2 justify-center">
@@ -182,7 +167,7 @@
                     <button
                       @click="handleDeleteInvitation(invitation.id)"
                       :disabled="deletingInvitationIds.has(invitation.id)"
-                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 w-full sm:w-auto"
+                      class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-size-4 font-semibold transition-all disabled:opacity-50 w-full sm:w-auto"
                     >
                       <span v-if="!deletingInvitationIds.has(invitation.id)">Eliminar</span>
                       <span v-else class="flex items-center gap-2 justify-center">
@@ -208,23 +193,21 @@
           </div>
 
           <!-- Empty State -->
-          <div v-if="organizers.length === 0 && pendingInvitations.length === 0" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
+          <div v-if="organizers.length === 0 && pendingInvitations.length === 0" class="panel text-center">
             <Icon name="heroicons:user-group" class="w-24 h-24 text-foreground-muted mx-auto mb-6 opacity-50" />
-            <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay organizadores</h3>
+            <h3 class="panel-title">No hay organizadores</h3>
             <p class="text-size-4 font-regular text-foreground-muted mb-6">
               Invita tu primer organizador para comenzar
             </p>
             <button
               @click="showCreateForm = true"
-              class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+              class="btn-primary"
             >
               Invitar Organizador
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -385,3 +368,7 @@ onMounted(() => {
   loadOrganizers()
 })
 </script>
+
+<style scoped>
+.heading-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; }
+</style>

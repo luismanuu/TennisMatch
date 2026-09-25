@@ -50,12 +50,4 @@ useHead({
 .app-root {
   isolation: isolate;
 }
-
-/* Transitional shell clearance for pages that still render <AppNavigation> + an
-   h-16 spacer themselves. Pages on <PageLayout> (.te-page) own their clearance.
-   Removed by the last migration PR (design/MIGRATION-CHECKLIST.md). */
-.app-root:not(:has(.te-page)) .h-16:first-of-type { height: 6.5rem; }
-@media (max-width: 899px) {
-  .app-root.has-tabbar:not(:has(.te-page)) { padding-bottom: var(--shell-bottom); }
-}
 </style>

@@ -1,35 +1,20 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <!-- Navigation -->
-    <AppNavigation />
-    
-    <!-- Spacer for fixed nav -->
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+  <PageLayout container-size="medium">
         <!-- Header -->
-        <div class="flex items-center justify-between mb-8 animate-fade-up">
+        <div class="page-heading heading-row">
           <div>
-            <NuxtLink to="/admin" class="inline-flex items-center gap-2 text-size-4 text-foreground-muted hover:text-accent mb-4 transition-colors">
-              <Icon name="heroicons:arrow-left" class="w-4 h-4" />
-              <span>Volver al Panel</span>
-            </NuxtLink>
-            <h1 class="text-size-1 font-semibold text-foreground mb-2">Gestionar Torneos</h1>
-            <p class="text-size-3 font-regular text-foreground-muted">
+            <NuxtLink to="/admin" class="text-link">
+            <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+            Volver al Panel
+          </NuxtLink>
+            <h1>Gestionar Torneos</h1>
+            <p class="meta">
               Crea y administra torneos del sistema
             </p>
           </div>
           <button
             @click="showCreateForm = !showCreateForm"
-            class="glass-card-elevated px-6 py-3 rounded-xl flex items-center gap-2 text-size-4 font-semibold text-foreground hover-lift transition-all"
+            class="btn-primary"
           >
             <Icon name="heroicons:plus" class="w-5 h-5" />
             <span>Nuevo Torneo</span>
@@ -37,27 +22,27 @@
         </div>
 
         <!-- Create Tournament Form -->
-        <div v-if="showCreateForm" class="glass-card-elevated p-8 mb-8 animate-fade-in-scale">
-          <h2 class="text-size-2 font-semibold text-foreground mb-6">Crear Nuevo Torneo</h2>
+        <div v-if="showCreateForm" class="panel mb-8">
+          <h2 class="panel-title">Crear Nuevo Torneo</h2>
           <form @submit.prevent="handleCreateTournament" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Nombre del Torneo</label>
+                <label class="form-label">Nombre del Torneo</label>
                 <input
                   v-model="tournamentForm.name"
                   type="text"
                   required
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-input"
                   placeholder="Ej: Torneo Primavera 2024"
                 />
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">
+                <label class="form-label">
                   Categoría <span class="text-foreground-muted text-size-5">(Opcional)</span>
                 </label>
                 <select
                   v-model="tournamentForm.category_id"
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-select"
                 >
                   <option value="">Abierto a todos (sin categoría)</option>
                   <option v-for="cat in categories" :key="cat.id" :value="cat.id">
@@ -69,67 +54,67 @@
                 </p>
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha de Inicio</label>
+                <label class="form-label">Fecha de Inicio</label>
                 <input
                   v-model="tournamentForm.start_date"
                   type="datetime-local"
                   :min="minDateTime"
                   required
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-input"
                 />
                 <p v-if="isStartDateInPast" class="text-size-4 font-regular text-red-400 mt-2">
                   No puedes crear un torneo con fecha de inicio en el pasado
                 </p>
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha de Fin (Opcional)</label>
+                <label class="form-label">Fecha de Fin (Opcional)</label>
                 <input
                   v-model="tournamentForm.end_date"
                   type="datetime-local"
                   :min="tournamentForm.start_date || minDateTime"
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-input"
                 />
                 <p v-if="isEndDateInPast" class="text-size-4 font-regular text-red-400 mt-2">
                   La fecha de fin no puede ser anterior a la fecha de inicio
                 </p>
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Tamaño de Grupo</label>
+                <label class="form-label">Tamaño de Grupo</label>
                 <input
                   v-model.number="tournamentForm.group_size"
                   type="number"
                   min="2"
                   required
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-input"
                 />
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Jugadores que Avanzan por Grupo</label>
+                <label class="form-label">Jugadores que Avanzan por Grupo</label>
                 <input
                   v-model.number="tournamentForm.players_per_group_advance"
                   type="number"
                   min="1"
                   required
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-input"
                 />
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Mínimo de Jugadores</label>
+                <label class="form-label">Mínimo de Jugadores</label>
                 <input
                   v-model.number="tournamentForm.min_players"
                   type="number"
                   min="4"
                   required
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-input"
                 />
               </div>
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Máximo de Jugadores (Opcional)</label>
+                <label class="form-label">Máximo de Jugadores (Opcional)</label>
                 <input
                   v-model.number="tournamentForm.max_players"
                   type="number"
                   min="4"
-                  class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                  class="form-input"
                 />
               </div>
             </div>
@@ -142,14 +127,14 @@
               </p>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Puntos por Victoria - Fase de Grupos
                   </label>
                   <input
                     v-model.number="tournamentForm.points_config.group_stage"
                     type="number"
                     min="1"
-                    class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                    class="form-input"
                     placeholder="3 (por defecto)"
                   />
                   <p class="text-size-5 text-foreground-muted mt-2">
@@ -157,14 +142,14 @@
                   </p>
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Puntos por Victoria - Playoffs
                   </label>
                   <input
                     v-model.number="tournamentForm.points_config.playoffs"
                     type="number"
                     min="1"
-                    class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                    class="form-input"
                     placeholder="5 (por defecto)"
                   />
                   <p class="text-size-5 text-foreground-muted mt-2">
@@ -175,11 +160,11 @@
             </div>
             
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Descripción (Opcional)</label>
+              <label class="form-label">Descripción (Opcional)</label>
               <textarea
                 v-model="tournamentForm.description"
                 rows="3"
-                class="w-full px-4 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-3 focus:border-accent focus:outline-none transition-colors"
+                class="form-textarea"
                 placeholder="Descripción del torneo..."
               />
             </div>
@@ -188,7 +173,7 @@
                 <input
                   v-model="tournamentForm.registration_open"
                   type="checkbox"
-                  class="w-5 h-5 rounded border-2 border-border-subtle text-accent focus:ring-accent"
+                  class="w-5 h-5 rounded border border-border-subtle text-accent focus:ring-accent"
                 />
                 <span class="text-size-4 font-regular text-foreground">Registro abierto</span>
               </label>
@@ -197,7 +182,7 @@
               <button
                 type="submit"
                 :disabled="creating"
-                class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                class="btn-primary"
               >
                 <span v-if="!creating">Crear Torneo</span>
                 <span v-else class="flex items-center gap-2">
@@ -208,7 +193,7 @@
               <button
                 type="button"
                 @click="showCreateForm = false; resetForm()"
-                class="px-6 py-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 font-semibold hover-lift transition-all"
+                class="px-6 py-3 rounded-xl bg-surface border border-border-subtle text-foreground text-size-4 font-semibold transition-all"
               >
                 Cancelar
               </button>
@@ -217,22 +202,22 @@
         </div>
 
         <!-- Filters -->
-        <div class="glass-card-elevated p-6 mb-8 animate-fade-up animate-delay-1">
+        <div class="panel mb-8">
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Buscar</label>
+              <label class="form-label">Buscar</label>
               <input
                 v-model="filters.search"
                 type="text"
                 placeholder="Nombre del torneo..."
-                class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none transition-colors"
+                class="form-input"
               />
             </div>
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Estado</label>
+              <label class="form-label">Estado</label>
               <select
                 v-model="filters.status"
-                class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none transition-colors"
+                class="form-select"
               >
                 <option value="">Todos</option>
                 <option value="upcoming">Próximos</option>
@@ -241,10 +226,10 @@
               </select>
             </div>
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Categoría</label>
+              <label class="form-label">Categoría</label>
               <select
                 v-model="filters.category_id"
-                class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none transition-colors"
+                class="form-select"
               >
                 <option value="">Todas</option>
                 <option value="open">Abiertos a todos</option>
@@ -256,7 +241,7 @@
             <div class="flex items-end">
               <button
                 @click="loadTournaments(1)"
-                class="w-full px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                class="btn-primary w-full"
               >
                 Filtrar
               </button>
@@ -265,17 +250,17 @@
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <Icon name="heroicons:arrow-path" class="w-12 h-12 text-accent mx-auto mb-4 animate-spin" />
-          <p class="text-size-3 font-regular text-foreground-muted">Cargando torneos...</p>
+        <div v-if="loading" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Cargando torneos…</p>
         </div>
 
         <!-- Tournaments List -->
-        <div v-else-if="tournaments.length > 0" class="space-y-4 animate-fade-up animate-delay-2 mb-6">
+        <div v-else-if="tournaments.length > 0" class="space-y-4 mb-6">
           <div
             v-for="tournament in tournaments"
             :key="tournament.id"
-            class="glass-card-elevated p-6 hover-lift transition-all cursor-pointer"
+            class="panel transition-all cursor-pointer"
             @click="navigateTo(`/admin/tournaments/${tournament.id}`)"
           >
             <div class="flex items-start justify-between">
@@ -324,22 +309,20 @@
         </div>
 
         <!-- Empty State -->
-        <div v-else class="glass-card-elevated p-12 text-center animate-fade-in-scale">
+        <div v-else class="panel text-center">
           <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted mx-auto mb-6 opacity-50" />
-          <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay torneos</h3>
+          <h3 class="panel-title">No hay torneos</h3>
           <p class="text-size-4 font-regular text-foreground-muted mb-6">
             Crea tu primer torneo para comenzar
           </p>
           <button
             @click="showCreateForm = true"
-            class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+            class="btn-primary"
           >
             Crear Torneo
           </button>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -502,3 +485,7 @@ onMounted(async () => {
 })
 </script>
 
+
+<style scoped>
+.heading-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; }
+</style>

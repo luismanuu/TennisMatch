@@ -365,9 +365,9 @@
     <!-- Empty State -->
     <div
       v-if="!loading && filteredMatches.length === 0 && matchesWithoutDate.length === 0"
-      class="glass-card-elevated p-8 sm:p-12 text-center animate-fade-in-scale"
+      class="empty-state"
     >
-      <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+      <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-4 sm:mb-6">
         <Icon name="heroicons:calendar-x" class="w-8 h-8 sm:w-12 sm:h-12 text-accent" />
       </div>
       <h2 class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-3 sm:mb-4">

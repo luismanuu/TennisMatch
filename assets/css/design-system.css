@@ -430,8 +430,6 @@ a, button, summary { touch-action: manipulation; -webkit-tap-highlight-color: tr
 .page-header-subtitle { font-size: 16px; color: var(--foreground-muted); max-width: 58ch; }
 .page-back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; font-weight: 600; color: var(--accent); }
 
-/* Retired ambient layers: kept as inert selectors while pages migrate. */
-.page-ambient-bg, .orb, .grid-pattern, .noise-overlay, .gradient-line { display: none !important; }
 
 /* ── States ───────────────────────────────────────────────────────────────── */
 .loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; }
