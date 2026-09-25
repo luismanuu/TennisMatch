@@ -1,797 +1,303 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
+  <PageLayout>
+    <PageHeader title="Mi ranking" subtitle="Tu nivel, tu progreso y lo que te falta para el siguiente tier.">
+      <template v-if="isAuthenticated" #actions>
+        <NuxtLink to="/matches/new" class="btn-primary">
+          Programar partido
+          <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
+        <NuxtLink to="/matchmaking" class="text-link">
+          Buscar rival
+          <Icon name="heroicons:magnifying-glass" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
+      </template>
+    </PageHeader>
+
+    <div v-if="loading || playerLoading" class="panel loading-state" aria-busy="true">
+      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+      <p class="loading-text">Cargando tu ranking…</p>
     </div>
 
-    <!-- Navigation -->
-    <AppNavigation />
-
-    <!-- Additional action button for this page -->
-    <div class="fixed top-16 left-0 right-0 z-40 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
-      <div class="container-wide px-4 sm:px-6 py-2 sm:py-3">
-        <div class="flex justify-end gap-2 sm:gap-3">
-          <NuxtLink 
-            v-if="isAuthenticated"
-            to="/matchmaking" 
-            class="btn-secondary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
-          >
-            <Icon name="heroicons:magnifying-glass" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
-            <span class="hidden sm:inline">Buscar Oponente</span>
-            <span class="sm:hidden">Buscar</span>
-          </NuxtLink>
-          <NuxtLink 
-            v-if="isAuthenticated"
-            to="/matches/new" 
-            class="btn-primary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
-          >
-            <Icon name="heroicons:plus" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
-            <span class="hidden sm:inline">Programar Partido</span>
-            <span class="sm:hidden">Nuevo</span>
-          </NuxtLink>
-        </div>
-      </div>
+    <div v-else-if="error" class="panel empty-state" role="alert">
+      <Icon name="heroicons:exclamation-triangle" class="empty-state-icon text-danger" aria-hidden="true" />
+      <h2 class="empty-state-title">No pudimos cargar tus estadísticas</h2>
+      <p class="empty-state-description">{{ error.message || 'Intenta de nuevo en unos segundos.' }}</p>
+      <button type="button" class="btn-primary" @click="loadAllData">
+        <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+        Reintentar
+      </button>
     </div>
 
-    <div class="h-16"></div>
-    <div v-if="isAuthenticated" class="h-12"></div>
+    <div v-else-if="!loading && !player" class="panel empty-state">
+      <Icon name="heroicons:user" class="empty-state-icon" aria-hidden="true" />
+      <h2 class="empty-state-title">Completa tu perfil</h2>
+      <p class="empty-state-description">Necesitas un perfil de jugador para ver tu ranking.</p>
+      <NuxtLink to="/onboarding" class="btn-primary">
+        Crear perfil
+        <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+      </NuxtLink>
+    </div>
 
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-4">
-        <!-- Header -->
-        <div class="text-center mb-10 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:chart-bar-square" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Mi Ranking</span>
-          </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-3">
-            Tu Clasificación y Progreso
-          </h1>
-          <p class="text-size-3 font-regular text-foreground-muted max-w-lg mx-auto">
-            Sigue tu evolución, alcanza nuevos tiers y compite por el top
-          </p>
-        </div>
-
-        <!-- Loading State -->
-        <div v-if="loading || playerLoading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
-          </div>
-          <p class="text-size-3 font-regular text-foreground-muted">Cargando tu ranking...</p>
-        </div>
-
-        <!-- Error State -->
-        <div v-else-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
-          </div>
-          <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
-          <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Error al cargar estadísticas. Por favor intenta de nuevo.' }}</p>
-          <button @click="loadAllData" class="btn-primary text-size-3 w-full justify-center group">
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
-            Reintentar
-          </button>
-        </div>
-
-        <!-- No Player State - only show when NOT loading and no player exists -->
-        <div v-else-if="!loading && !player" class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:user" class="w-12 h-12 text-accent" />
-          </div>
-          <h3 class="text-size-2 font-semibold text-foreground mb-4">Completa tu perfil</h3>
-          <p class="text-size-4 font-regular text-foreground-muted leading-relaxed mb-8">
-            Necesitas crear tu perfil de jugador para ver tu ranking.
-          </p>
-          <NuxtLink to="/onboarding" class="btn-primary text-size-4 inline-flex items-center group">
-            <Icon name="heroicons:arrow-right" class="w-4 h-4 mr-2 group-hover:translate-x-1 transition-transform" />
-            Crear Perfil
-          </NuxtLink>
-        </div>
-
-        <!-- Main Content -->
-        <template v-else>
-          <!-- Section A: Current Rating Card -->
-          <div class="glass-card-elevated px-4 pt-4 pb-2 mb-6 animate-fade-up relative overflow-hidden w-full">
-            <!-- Content -->
-            <div class="relative z-10">
-              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
-                <!-- Left: Large Rank Icon with Animation -->
-                <div class="flex justify-center lg:justify-start">
-                  <div class="relative w-full max-w-[400px] h-[400px] flex items-center justify-center overflow-visible">
-                    <!-- Rank Icon - Animated (League of Legends Style) -->
-                    <RankIconAnimated
-                      v-if="tierInfo && player && !isInPlacement && (player.total_matches_played || 0) > 0"
-                      :tier="getTop100Tier()"
-                      :elo="player.elo"
-                      :total-matches-played="player.total_matches_played || 0"
-                      size="400px"
-                      class="w-full h-full max-w-[400px] max-h-[400px]"
-                    />
-                    <!-- Unrated/Placement placeholder -->
-                    <div v-else class="w-full h-full max-w-[400px] max-h-[400px] flex items-center justify-center">
-                      <div class="w-64 h-64 rounded-2xl bg-surface-elevated border-2 border-border-subtle flex items-center justify-center">
-                        <Icon name="heroicons:trophy" class="w-32 h-32 text-foreground-muted opacity-50" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Right: SR, Tier, and Stats -->
-                <div class="flex flex-col gap-3 items-center lg:items-start">
-                  <!-- SR Display -->
-                  <div class="flex flex-col items-center lg:items-start gap-2">
-                    <div class="text-size-1 font-bold text-gradient-static text-center lg:text-left">
-                      {{ player.elo }} SR
-                    </div>
-                    <p class="text-size-5 text-foreground-muted">(Skill Rating)</p>
-                    <RatingTierBadge 
-                      :elo="player.elo" 
-                      :total-matches-played="player.total_matches_played || 0"
-                      :placement-matches-completed="player.placement_matches_completed || 0"
-                    />
-                  </div>
-
-                  <!-- Percentile and Rank (only show if not in placement and has valid data) -->
-                  <div v-if="position && !isInPlacement && position.total_players > 0 && position.percentile >= 0" class="grid grid-cols-2 gap-4">
-                    <div class="text-center lg:text-left">
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición Global</p>
-                      <p class="text-size-2 font-bold text-foreground">#{{ position.global_rank }}</p>
-                      <p class="text-size-5 text-foreground-muted">de {{ position.total_players }}</p>
-                    </div>
-                    <div class="text-center lg:text-left">
-                      <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
-                      <p class="text-size-2 font-bold text-accent">Top {{ position.percentile }}%</p>
-                      <p class="text-size-5 text-foreground-muted">de jugadores</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Placement Message (only show if in placement) -->
-                  <div v-if="isInPlacement" class="text-center lg:text-left">
-                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <Icon name="heroicons:information-circle" class="w-5 h-5 text-amber-400" />
-                      <p class="text-size-4 text-amber-400 font-semibold">SR Aproximado</p>
-                    </div>
-                    <p class="text-size-5 text-foreground-muted mt-1">
-                      Tu ranking final se establecerá después de 3 partidos
-                    </p>
-                  </div>
-                </div>
-              </div>
+    <div v-else class="split-grid even">
+      <div class="flow-stack">
+        <!-- Current rating -->
+        <section class="panel rating" aria-labelledby="rating-title">
+          <div class="rating__copy">
+            <h2 id="rating-title" class="meta rating__label">Tu nivel de juego</h2>
+            <p class="rating-number">{{ player.elo.toLocaleString('es-EC') }} <span>SR</span></p>
+            <RatingTierBadge
+              :elo="player.elo"
+              :total-matches-played="player.total_matches_played || 0"
+              :placement-matches-completed="player.placement_matches_completed || 0"
+            />
+            <div v-if="position && !isInPlacement && position.total_players > 0 && position.percentile >= 0" class="rating__facts">
+              <span><strong class="numeric">#{{ position.global_rank }}</strong> de {{ position.total_players }} en Ecuador</span>
+              <span><strong class="numeric">Top {{ position.percentile }}%</strong></span>
             </div>
+            <p v-if="isInPlacement" class="meta">SR aproximado: tu ranking final se establece después de 3 partidos.</p>
+          </div>
+          <img
+            v-if="tierInfo && !isInPlacement && (player.total_matches_played || 0) > 0"
+            :src="useRankIconAsset(getTop100Tier() || tierInfo.tier) || ''"
+            width="96" height="96" :alt="`Nivel ${tierName(getTop100Tier() || tierInfo.tier)}`" class="rating__tier"
+          >
+        </section>
 
-            <!-- Placement Progress (if in placement) -->
-            <div v-if="isInPlacement" class="mt-3 pt-3 border-t border-border-subtle">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-size-4 font-semibold text-foreground">Partidos de Colocación</span>
-                <div v-if="(player.placement_matches_completed || 0) >= 3" class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-5 h-5 text-green-400" />
-                  <span class="text-size-4 text-green-400 font-semibold">Completado</span>
-                </div>
-                <span v-else class="text-size-4 text-accent font-semibold">{{ player.placement_matches_completed || 0 }} / 3</span>
-              </div>
-              <div class="h-3 bg-surface-elevated rounded-full overflow-hidden">
-                <div 
-                  class="h-full bg-gradient-to-r from-accent to-accent/80 rounded-full transition-all duration-500"
-                  :style="{ width: `${((player.placement_matches_completed || 0) / 3) * 100}%` }"
-                ></div>
-              </div>
-              <p class="text-size-5 text-foreground-muted mt-1">
-                <span v-if="(player.placement_matches_completed || 0) >= 3">
-                  ¡Ranking definitivo establecido! Ya puedes competir en el leaderboard.
-                </span>
-                <span v-else>
-                  Completa 3 partidos para establecer tu ranking definitivo
-                </span>
-              </p>
+        <!-- Placement -->
+        <section v-if="isInPlacement" class="panel progress-panel" aria-labelledby="placement-title">
+          <div class="progress-panel__head">
+            <h2 id="placement-title">Partidos de colocación</h2>
+            <span class="numeric">{{ player.placement_matches_completed || 0 }} / 3</span>
+          </div>
+          <div class="meter" role="progressbar" :aria-valuenow="player.placement_matches_completed || 0" aria-valuemin="0" aria-valuemax="3">
+            <span :style="{ width: `${((player.placement_matches_completed || 0) / 3) * 100}%` }"></span>
+          </div>
+          <p class="meta">{{ (player.placement_matches_completed || 0) >= 3 ? 'Ranking definitivo establecido. Ya compites en la clasificación.' : 'Completa 3 partidos para establecer tu ranking definitivo.' }}</p>
+        </section>
+
+        <!-- Next tier -->
+        <section v-if="!isInPlacement && nextTierProgress && !nextTierProgress.isMaxTier" class="panel progress-panel" aria-labelledby="next-title">
+          <div class="progress-panel__head">
+            <div>
+              <h2 id="next-title">Próximo tier: {{ tierName(nextTierProgress.nextTier?.tier) }}</h2>
+              <p class="meta">Desde {{ nextTierProgress.nextTier?.minElo?.toLocaleString('es-EC') }} SR</p>
             </div>
+            <span class="progress-panel__need"><strong class="numeric">{{ nextTierProgress.eloNeeded }}</strong> SR más</span>
+          </div>
+          <div class="meter" role="progressbar" :aria-valuenow="Math.round(nextTierProgress.progressPercent)" aria-valuemin="0" aria-valuemax="100" :aria-label="`Progreso hacia ${tierName(nextTierProgress.nextTier?.tier)}`">
+            <span :style="{ width: `${nextTierProgress.progressPercent}%` }"></span>
+          </div>
+          <div class="meter__scale numeric">
+            <span>{{ nextTierProgress.currentTier.minElo.toLocaleString('es-EC') }}</span>
+            <strong>{{ player.elo.toLocaleString('es-EC') }}</strong>
+            <span>{{ nextTierProgress.currentTier.maxElo.toLocaleString('es-EC') }}</span>
+          </div>
+        </section>
+        <section v-else-if="nextTierProgress?.isMaxTier" class="panel">
+          <h2 class="panel-title">Gran Maestro</h2>
+          <p class="meta">Alcanzaste el tier más alto.</p>
+        </section>
+
+        <!-- SR history -->
+        <section v-if="!isInPlacement" class="panel" aria-labelledby="history-title">
+          <div class="section-heading">
+            <h2 id="history-title">Historial de SR</h2>
+            <span class="meta">Últimos {{ ratingHistory.length }} partidos</span>
+          </div>
+          <EloHistoryChart :history-data="ratingHistory" />
+        </section>
+
+        <!-- Advanced stats -->
+        <template v-if="!isInPlacement">
+          <div class="segmented" role="group" aria-label="Período de análisis">
+            <button
+              v-for="period in periods"
+              :key="period.value"
+              type="button"
+              :aria-pressed="selectedPeriod === period.value"
+              @click="selectedPeriod = period.value"
+            >{{ period.label }}</button>
           </div>
 
-          <!-- Section B: Next Tier Progress (hide during placement) -->
-          <div v-if="!isInPlacement && nextTierProgress && !nextTierProgress.isMaxTier" class="glass-card-elevated p-6 mb-6 animate-fade-up animate-delay-1">
-            <div class="flex items-center gap-4 mb-4">
-              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 border border-purple-500/30 flex items-center justify-center">
-                <Icon name="heroicons:arrow-trending-up" class="w-6 h-6 text-purple-400" />
-              </div>
-              <div class="flex-1">
-                <h3 class="text-size-3 font-semibold text-foreground">Próximo Tier</h3>
-                <p class="text-size-4 text-foreground-muted">
-                  <span class="font-semibold" :style="{ color: nextTierProgress.nextTier?.color }">
-                    {{ nextTierProgress.nextTier?.tier }}
-                  </span>
-                  ({{ nextTierProgress.nextTier?.minElo }} SR)
-                </p>
-              </div>
-              <div class="text-right">
-                <span class="text-size-2 font-bold text-foreground">{{ nextTierProgress.eloNeeded }}</span>
-                <span class="text-size-4 text-foreground-muted"> SR más</span>
-              </div>
+          <section v-if="advancedStats?.has_sufficient_data?.streaks" class="panel" aria-labelledby="streaks-title">
+            <h2 id="streaks-title" class="panel-title">Rachas</h2>
+            <div class="stats three">
+              <div><strong class="stat-value text-success">{{ advancedStats.current_win_streak }}</strong><span class="meta">Victorias seguidas ahora</span></div>
+              <div><strong class="stat-value">{{ advancedStats.best_win_streak }}</strong><span class="meta">Mejor racha</span></div>
+              <div v-if="advancedStats.current_losing_streak > 0"><strong class="stat-value text-danger">{{ advancedStats.current_losing_streak }}</strong><span class="meta">Derrotas seguidas</span></div>
             </div>
-            
-            <!-- Progress Bar -->
-            <div class="relative">
-              <div class="h-4 bg-surface-elevated rounded-full overflow-hidden">
-                <div 
-                  class="h-full rounded-full transition-all duration-700 ease-out"
-                  :style="{ 
-                    width: `${nextTierProgress.progressPercent}%`,
-                    backgroundColor: nextTierProgress.currentTier.color 
-                  }"
-                ></div>
-              </div>
-              <div class="flex justify-between mt-2 text-size-5 text-foreground-muted">
-                <span>{{ nextTierProgress.currentTier.minElo }}</span>
-                <span class="font-semibold text-foreground">{{ player.elo }}</span>
-                <span>{{ nextTierProgress.currentTier.maxElo }}</span>
-              </div>
+          </section>
+          <InsufficientDataMessage v-else message="Juega al menos 1 partido para ver tus rachas" />
+
+          <section v-if="advancedStats?.has_sufficient_data?.day_of_week" class="panel" aria-labelledby="dow-title">
+            <h2 id="dow-title" class="panel-title">Rendimiento por día de la semana</h2>
+            <DayOfWeekChart :data="advancedStats.win_rate_by_day_of_week" />
+          </section>
+          <InsufficientDataMessage v-else message="Necesitas partidos en al menos 3 días diferentes" />
+
+          <section v-if="advancedStats?.has_sufficient_data?.time_of_day" class="panel" aria-labelledby="tod-title">
+            <h2 id="tod-title" class="panel-title">Rendimiento por hora del día</h2>
+            <TimeOfDayChart :data="advancedStats.win_rate_by_time_of_day" />
+          </section>
+          <InsufficientDataMessage v-else message="Necesitas partidos en diferentes horarios" />
+
+          <div v-if="(advancedStats?.has_sufficient_data?.best_month && advancedStats.best_month) || advancedStats?.has_sufficient_data?.last_match" class="list-surface">
+            <div v-if="advancedStats?.has_sufficient_data?.best_month && advancedStats.best_month" class="list-row">
+              <span class="row-copy"><strong>Mejor mes: {{ advancedStats.best_month.month }}</strong><span class="meta">{{ advancedStats.best_month.matches }} partidos</span></span>
+              <span class="rank-score">{{ Math.round(advancedStats.best_month.win_rate) }}%<small>victorias</small></span>
+            </div>
+            <div v-if="advancedStats?.has_sufficient_data?.last_match" class="list-row">
+              <span class="row-copy"><strong>Última actividad</strong><span class="meta">desde tu último partido</span></span>
+              <span class="rank-score">{{ formatTimeSince(advancedStats.days_since_last_match) }}</span>
             </div>
           </div>
+          <InsufficientDataMessage v-if="!(advancedStats?.has_sufficient_data?.best_month && advancedStats?.best_month)" message="Necesitas partidos en al menos 2 meses diferentes" />
+          <InsufficientDataMessage v-if="!advancedStats?.has_sufficient_data?.last_match" message="Juega al menos 1 partido para ver tu última actividad" />
 
-          <!-- Max Tier Badge -->
-          <div v-else-if="nextTierProgress?.isMaxTier" class="glass-card-elevated p-6 mb-6 animate-fade-up animate-delay-1">
-            <div class="flex items-center gap-4">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-red-500/20 border-2 border-orange-500/40 flex items-center justify-center">
-                <Icon name="heroicons:star" class="w-8 h-8 text-orange-400" />
-              </div>
-              <div>
-                <h3 class="text-size-2 font-bold text-gradient-static">¡Grandmaster!</h3>
-                <p class="text-size-4 text-foreground-muted">Has alcanzado el tier más alto. ¡Eres un maestro!</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Section C: Stats Grid (simplified during placement) -->
-          <div v-if="!isInPlacement" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 animate-fade-up animate-delay-2">
-            <!-- Total Matches -->
-            <div class="glass-card p-5 text-center hover-lift">
-              <div class="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
-                <Icon name="heroicons:play" class="w-5 h-5 text-blue-400" />
-              </div>
-              <p class="text-size-2 font-bold text-foreground">{{ player.total_matches_played || 0 }}</p>
-              <p class="text-size-5 text-foreground-muted">Partidos</p>
-            </div>
-
-            <!-- Win Rate -->
-            <div class="glass-card p-5 text-center hover-lift">
-              <div class="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto mb-3">
-                <Icon name="heroicons:chart-pie" class="w-5 h-5 text-green-400" />
-              </div>
-              <p class="text-size-2 font-bold text-foreground">{{ winRate }}%</p>
-              <p class="text-size-5 text-foreground-muted">Win Rate</p>
-            </div>
-
-            <!-- Peak SR -->
-            <div class="glass-card p-5 text-center hover-lift">
-              <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-3">
-                <Icon name="heroicons:arrow-up-circle" class="w-5 h-5 text-amber-400" />
-              </div>
-              <p class="text-size-2 font-bold text-foreground">{{ historyStats?.peak_elo || player.elo }}</p>
-              <p class="text-size-5 text-foreground-muted">Peak SR</p>
-            </div>
-
-            <!-- Total Victories -->
-            <div class="glass-card p-5 text-center hover-lift">
-              <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
-                <Icon name="heroicons:trophy" class="w-5 h-5 text-orange-400" />
-              </div>
-              <p class="text-size-2 font-bold text-foreground">
-                {{ historyStats?.wins || 0 }}
-              </p>
-              <p class="text-size-5 text-foreground-muted">Victorias</p>
-            </div>
-          </div>
-
-          <!-- Section D: SR History Chart (hide during placement) -->
-          <div v-if="!isInPlacement" class="glass-card-elevated p-6 mb-6 animate-fade-up animate-delay-3">
-            <div class="flex items-center justify-between mb-6">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                  <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <h3 class="text-size-3 font-semibold text-foreground">Historial de SR</h3>
-                  <p class="text-size-5 text-foreground-muted">Progresión en los últimos {{ ratingHistory.length }} partidos</p>
-                </div>
-              </div>
-            </div>
-            
-            <EloHistoryChart :history-data="ratingHistory" />
-          </div>
-
-          <!-- Section C.1: Period Selector and Advanced Stats (hide during placement) -->
-          <div v-if="!isInPlacement" class="mb-6">
-            <!-- Period Selector -->
-            <div class="glass-card-elevated p-4 mb-6 animate-fade-up">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:calendar" class="w-5 h-5 text-accent" />
-                <h3 class="text-size-3 font-semibold text-foreground">Período de Análisis</h3>
-              </div>
-              <div class="flex gap-2 flex-wrap sm:flex-nowrap">
-                <button
-                  v-for="period in [
-                    { value: 'month', label: 'Último Mes' },
-                    { value: 'year', label: 'Último Año' },
-                    { value: 'all', label: 'Todo el Tiempo' }
-                  ]"
-                  :key="period.value"
-                  @click="selectedPeriod = period.value as any"
-                  class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-size-4 sm:text-size-4 font-semibold transition-all"
-                  :class="selectedPeriod === period.value
-                    ? 'bg-accent text-white'
-                    : 'bg-surface-elevated text-foreground hover:bg-surface hover:border-accent/30 border border-border-subtle'"
-                >
-                  <span class="hidden sm:inline">{{ period.label }}</span>
-                  <span class="sm:hidden">{{ period.value === 'month' ? 'Mes' : period.value === 'year' ? 'Año' : 'Todo' }}</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Streaks Card -->
-            <div v-if="advancedStats?.has_sufficient_data?.streaks" class="glass-card-elevated p-6 mb-6 animate-fade-up">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:bolt" class="w-5 h-5 text-accent" />
-                <h3 class="text-size-3 font-semibold text-foreground">Rachas</h3>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="text-center p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-                  <p class="text-size-5 text-foreground-muted mb-1">Racha Actual</p>
-                  <div class="flex items-center justify-center gap-2 mb-1">
-                    <Icon v-if="advancedStats.current_win_streak > 0" name="heroicons:fire" class="w-6 h-6 text-green-400" />
-                    <p class="text-size-1 font-bold text-green-400">{{ advancedStats.current_win_streak }}</p>
-                  </div>
-                  <p class="text-size-5 text-foreground-muted">victorias</p>
-                </div>
-                <div class="text-center p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                  <p class="text-size-5 text-foreground-muted mb-1">Mejor Racha</p>
-                  <div class="flex items-center justify-center gap-2 mb-1">
-                    <Icon v-if="advancedStats.best_win_streak > 0" name="heroicons:fire" class="w-6 h-6 text-amber-400" />
-                    <p class="text-size-1 font-bold text-amber-400">{{ advancedStats.best_win_streak }}</p>
-                  </div>
-                  <p class="text-size-5 text-foreground-muted">victorias</p>
-                </div>
-                <div v-if="advancedStats.current_losing_streak > 0" class="text-center p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-                  <p class="text-size-5 text-foreground-muted mb-1">Racha de Derrotas</p>
-                  <p class="text-size-1 font-bold text-red-400">{{ advancedStats.current_losing_streak }}</p>
-                  <p class="text-size-5 text-foreground-muted">derrotas</p>
-                </div>
-              </div>
-            </div>
-            <InsufficientDataMessage v-else message="Juega al menos 1 partido para ver tus rachas" class="mb-6" />
-
-            <!-- Day of Week Stats -->
-            <div v-if="advancedStats?.has_sufficient_data?.day_of_week" class="glass-card-elevated p-4 sm:p-6 mb-6 animate-fade-up overflow-x-hidden">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" />
-                <h3 class="text-size-3 font-semibold text-foreground">Rendimiento por Día de la Semana</h3>
-              </div>
-              <DayOfWeekChart :data="advancedStats.win_rate_by_day_of_week" />
-            </div>
-            <InsufficientDataMessage v-else message="Necesitas partidos en al menos 3 días diferentes" class="mb-6" />
-
-            <!-- Time of Day Stats -->
-            <div v-if="advancedStats?.has_sufficient_data?.time_of_day" class="glass-card-elevated p-4 sm:p-6 mb-6 animate-fade-up overflow-x-hidden">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
-                <h3 class="text-size-3 font-semibold text-foreground">Rendimiento por Hora del Día</h3>
-              </div>
-              <TimeOfDayChart :data="advancedStats.win_rate_by_time_of_day" />
-            </div>
-            <InsufficientDataMessage v-else message="Necesitas partidos en diferentes horarios" class="mb-6" />
-
-            <!-- Best Month -->
-            <div v-if="advancedStats?.has_sufficient_data?.best_month && advancedStats.best_month" class="glass-card-elevated p-6 mb-6 animate-fade-up">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:star" class="w-5 h-5 text-accent" />
-                <h3 class="text-size-3 font-semibold text-foreground">Mejor Mes</h3>
-              </div>
-              <div class="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-accent-subtle/50 to-accent-subtle/20 border border-accent/30">
-                <div>
-                  <p class="text-size-2 font-bold text-foreground">{{ advancedStats.best_month.month }}</p>
-                  <p class="text-size-4 text-foreground-muted">{{ advancedStats.best_month.matches }} partidos</p>
-                </div>
-                <div class="text-right">
-                  <p class="text-size-1 font-bold text-accent">{{ Math.round(advancedStats.best_month.win_rate) }}%</p>
-                  <p class="text-size-5 text-foreground-muted">Win Rate</p>
-                </div>
-              </div>
-            </div>
-            <InsufficientDataMessage v-else message="Necesitas partidos en al menos 2 meses diferentes" class="mb-6" />
-
-            <!-- Last Match Time -->
-            <div v-if="advancedStats?.has_sufficient_data?.last_match" class="glass-card-elevated p-6 mb-6 animate-fade-up">
-              <div class="flex items-center gap-3 mb-4">
-                <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
-                <h3 class="text-size-3 font-semibold text-foreground">Última Actividad</h3>
-              </div>
-              <div class="flex items-center gap-4 p-4 rounded-xl bg-surface-elevated border border-border-subtle">
-                <div class="w-12 h-12 rounded-lg bg-accent-subtle flex items-center justify-center">
-                  <Icon name="heroicons:calendar" class="w-6 h-6 text-accent" />
-                </div>
-                <div>
-                  <p class="text-size-2 font-bold text-foreground">{{ formatTimeSince(advancedStats.days_since_last_match) }}</p>
-                  <p class="text-size-5 text-foreground-muted">desde tu último partido</p>
-                </div>
-              </div>
-            </div>
-            <InsufficientDataMessage v-else message="Juega al menos 1 partido para ver tu última actividad" class="mb-6" />
-
-            <!-- Head to Head Section -->
-            <div class="glass-card-elevated p-6 mb-6 animate-fade-up">
-              <div class="flex items-center gap-3 mb-6">
-                <Icon name="heroicons:user-group" class="w-5 h-5 text-accent" />
-                <h3 class="text-size-3 font-semibold text-foreground">Head to Head</h3>
-              </div>
-              
-              <!-- Opponent Selector -->
-              <div class="mb-6">
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Buscar Oponente</label>
-                <div class="relative">
-                  <input
-                    v-model="searchQuery"
-                    type="text"
-                    @input="handleH2HSearch"
-                    @focus="showSearchResults = true"
-                    class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-                    placeholder="Buscar por nombre..."
-                  />
-                  <!-- Search Results -->
-                  <div v-if="showSearchResults && searchResults.length > 0" class="absolute z-10 w-full mt-2 border border-border-subtle rounded-xl bg-surface max-h-60 overflow-y-auto">
-                    <button
-                      v-for="result in searchResults"
-                      :key="result.id"
-                      type="button"
-                      @click="selectH2HOpponent(result)"
-                      class="w-full px-4 py-3 text-left hover:bg-accent-subtle/50 transition-colors border-b border-border-subtle last:border-b-0"
-                    >
-                      <div class="flex items-center gap-2">
-                        <p class="text-size-3 font-semibold text-foreground">{{ result.name }}</p>
-                        <div v-if="getPlayerTier(result)" class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-border-subtle">
-                          <img
-                            v-if="getPlayerRankIcon(result)"
-                            :src="getPlayerRankIcon(result)"
-                            :alt="`${getPlayerTier(result)} tier icon`"
-                            class="w-4 h-4 object-contain"
-                          >
-                          <p class="text-size-4 font-regular text-foreground-muted">
-                            {{ getTierNameInSpanish(getPlayerTier(result)) }}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-                <div v-if="h2hOpponent" class="mt-2 p-3 rounded-xl bg-accent-subtle/50 border border-accent/30">
-                  <p class="text-size-4 text-foreground-muted mb-1">Oponente seleccionado:</p>
-                  <p class="text-size-3 font-semibold text-foreground">{{ h2hOpponent.name }}</p>
-                </div>
-              </div>
-
-              <!-- Period Selector for H2H -->
-              <div v-if="h2hOpponent" class="mb-6">
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Período</label>
-                <div class="flex gap-2 flex-wrap sm:flex-nowrap">
-                  <button
-                    v-for="period in [
-                      { value: 'month', label: 'Último Mes' },
-                      { value: 'year', label: 'Último Año' },
-                      { value: 'all', label: 'Todo el Tiempo' }
-                    ]"
-                    :key="period.value"
-                    @click="h2hPeriod = period.value as any"
-                    class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-size-4 sm:text-size-4 font-semibold transition-all"
-                    :class="h2hPeriod === period.value
-                      ? 'bg-accent text-white'
-                      : 'bg-surface-elevated text-foreground hover:bg-surface hover:border-accent/30 border border-border-subtle'"
-                  >
-                    <span class="hidden sm:inline">{{ period.label }}</span>
-                    <span class="sm:hidden">{{ period.value === 'month' ? 'Mes' : period.value === 'year' ? 'Año' : 'Todo' }}</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- H2H Stats -->
-              <div v-if="h2hLoading" class="text-center py-12">
-                <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
-                <p class="text-size-4 text-foreground-muted">Cargando estadísticas...</p>
-              </div>
-              <div v-else-if="h2hOpponent && h2hStats">
-                <!-- Main Stats -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle">
-                    <p class="text-size-5 text-foreground-muted mb-1">Record</p>
-                    <p class="text-size-2 font-bold text-foreground">{{ h2hStats.wins }}W - {{ h2hStats.losses }}L</p>
-                  </div>
-                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle">
-                    <p class="text-size-5 text-foreground-muted mb-1">Win Rate</p>
-                    <p class="text-size-2 font-bold text-accent">{{ Math.round(h2hStats.win_rate) }}%</p>
-                  </div>
-                </div>
-
-                <!-- Advanced Stats Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
-                    <p class="text-size-5 text-foreground-muted mb-1">Racha Actual</p>
-                    <p class="text-size-2 font-bold" :class="h2hStats.is_win_streak ? 'text-green-400' : 'text-red-400'">
-                      {{ h2hStats.current_streak }}
-                    </p>
-                  </div>
-                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
-                    <p class="text-size-5 text-foreground-muted mb-1">Avg SR Ganado</p>
-                    <p class="text-size-2 font-bold text-green-400">+{{ Math.round(h2hStats.avg_elo_gain) }}</p>
-                  </div>
-                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
-                    <p class="text-size-5 text-foreground-muted mb-1">Avg SR Perdido</p>
-                    <p class="text-size-2 font-bold text-red-400">-{{ Math.round(h2hStats.avg_elo_loss) }}</p>
-                  </div>
-                  <div class="p-4 rounded-xl bg-surface-elevated border border-border-subtle text-center">
-                    <p class="text-size-5 text-foreground-muted mb-1">Tendencia</p>
-                    <p class="text-size-2 font-bold">
-                      <span v-if="h2hStats.trend === 'improving'" class="text-green-400">↑</span>
-                      <span v-else-if="h2hStats.trend === 'declining'" class="text-red-400">↓</span>
-                      <span v-else-if="h2hStats.trend === 'stable'" class="text-foreground-muted">→</span>
-                      <span v-else class="text-foreground-muted">-</span>
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Best/Worst Match -->
-                <div v-if="h2hStats.best_match || h2hStats.worst_match" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                  <div v-if="h2hStats.best_match" class="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-                    <p class="text-size-5 text-foreground-muted mb-1">Mejor Partido</p>
-                    <p class="text-size-2 font-bold text-green-400">+{{ h2hStats.best_match.elo_change }} SR</p>
-                    <p v-if="h2hStats.best_match.match?.score" class="text-size-3 font-semibold text-foreground mt-2 mb-1">
-                      {{ h2hStats.best_match.match.score }}
-                    </p>
-                    <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.best_match.created_at) }}</p>
-                  </div>
-                  <div v-if="h2hStats.worst_match" class="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-                    <p class="text-size-5 text-foreground-muted mb-1">Peor Partido</p>
-                    <p class="text-size-2 font-bold text-red-400">{{ h2hStats.worst_match.elo_change }} SR</p>
-                    <p v-if="h2hStats.worst_match.match?.score" class="text-size-3 font-semibold text-foreground mt-2 mb-1">
-                      {{ h2hStats.worst_match.match.score }}
-                    </p>
-                    <p class="text-size-5 text-foreground-muted">{{ formatMatchDate(h2hStats.worst_match.created_at) }}</p>
-                  </div>
-                </div>
-
-                <!-- View All Matches Button -->
-                <div v-if="h2hStats.matches && h2hStats.matches.length > 0" class="mt-6">
-                  <NuxtLink
-                    :to="`/matches?opponent_id=${h2hOpponent?.id}`"
-                    class="btn-secondary w-full justify-center group"
-                  >
-                    <Icon name="heroicons:list-bullet" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                    Ver Todos los Partidos ({{ h2hStats.total_matches }})
-                  </NuxtLink>
-                </div>
-              </div>
-              <div v-else-if="h2hOpponent && !h2hLoading" class="text-center py-12">
-                <Icon name="heroicons:information-circle" class="w-12 h-12 text-foreground-muted mx-auto mb-4" />
-                <p class="text-size-3 font-semibold text-foreground mb-2">No hay partidos</p>
-                <p class="text-size-4 text-foreground-muted">No has jugado contra este oponente en el período seleccionado</p>
-              </div>
-              <div v-else class="text-center py-12">
-                <Icon name="heroicons:user-group" class="w-12 h-12 text-foreground-muted mx-auto mb-4" />
-                <p class="text-size-4 text-foreground-muted">Selecciona un oponente para ver estadísticas head-to-head</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Section D.1: Recent Matches (show always, including placement) -->
-          <div class="glass-card-elevated p-6 mb-6 animate-fade-up animate-delay-3">
-            <div class="flex items-center gap-3 mb-6">
-              <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                <Icon name="heroicons:clock" class="w-5 h-5 text-accent" />
-              </div>
-              <div>
-                <h3 class="text-size-3 font-semibold text-foreground">
-                  {{ isInPlacement ? 'Historial de Partidos' : 'Últimas Partidas Competitivas' }}
-                </h3>
-                <p class="text-size-5 text-foreground-muted">
-                  {{ isInPlacement ? 'Historial de tus partidos de colocación y encuentros' : 'Historial de tus últimos encuentros' }}
-                </p>
-              </div>
-            </div>
-            
-            <!-- Matches List -->
-            <div v-if="recentMatches.length > 0" class="space-y-3">
-              <NuxtLink
-                v-for="(match, index) in recentMatches"
-                :key="match.id"
-                :to="`/matches/${match.match_id || match.id}`"
-                class="flex items-center gap-4 p-4 rounded-xl border transition-all hover:border-accent/50 hover:bg-surface-elevated cursor-pointer"
-                :class="match.was_winner 
-                  ? 'bg-green-500/5 border-green-500/20' 
-                  : 'bg-red-500/5 border-red-500/20'"
+          <!-- Head to head -->
+          <section class="panel h2h" aria-labelledby="h2h-title">
+            <h2 id="h2h-title" class="panel-title">Cara a cara</h2>
+            <div class="h2h__search">
+              <label for="h2h-search" class="form-label">Buscar rival</label>
+              <input
+                id="h2h-search"
+                v-model="searchQuery"
+                type="search"
+                class="form-input"
+                placeholder="Buscar por nombre"
+                autocomplete="off"
+                role="combobox"
+                :aria-expanded="showSearchResults && searchResults.length > 0"
+                aria-controls="h2h-results"
+                @input="handleH2HSearch"
+                @focus="showSearchResults = true"
               >
-                <!-- Result Icon -->
-                <div 
-                  class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                  :class="match.was_winner 
-                    ? 'bg-green-500/20 border border-green-500/30' 
-                    : 'bg-red-500/20 border border-red-500/30'"
-                >
-                  <Icon 
-                    :name="match.was_winner ? 'heroicons:check-circle' : 'heroicons:x-circle'" 
-                    class="w-6 h-6"
-                    :class="match.was_winner ? 'text-green-400' : 'text-red-400'"
-                  />
-                </div>
-
-                <!-- Opponent Info -->
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 mb-1">
-                    <p class="text-size-3 font-semibold text-foreground truncate">
-                      {{ match.opponent?.name || 'Oponente desconocido' }}
-                    </p>
-                    <span 
-                      v-if="match.is_placement_match"
-                      class="px-2 py-0.5 rounded-full text-size-5 font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                    >
-                      Colocación
+              <ul v-if="showSearchResults && searchResults.length > 0" id="h2h-results" class="list-surface h2h__results" role="listbox">
+                <li v-for="result in searchResults" :key="result.id" role="option" :aria-selected="h2hOpponent?.id === result.id">
+                  <button type="button" class="list-row w-full text-left" @click="selectH2HOpponent(result)">
+                    <span class="row-copy"><strong>{{ result.name }}</strong></span>
+                    <span v-if="getPlayerTier(result)" class="badge">
+                      <img v-if="getPlayerRankIcon(result)" :src="getPlayerRankIcon(result)" alt="" class="w-4 h-4 object-contain">
+                      {{ getTierNameInSpanish(getPlayerTier(result)) }}
                     </span>
-                  </div>
-                  <p class="text-size-5 text-foreground-muted">
-                    {{ formatMatchDate(match.match_date || match.created_at) }}
-                  </p>
-                </div>
+                  </button>
+                </li>
+              </ul>
+            </div>
+            <p v-if="h2hOpponent" class="meta">Rival: <strong class="text-foreground">{{ h2hOpponent.name }}</strong></p>
 
-                <!-- ELO Change -->
-                <div class="text-right flex-shrink-0">
-                  <div 
-                    class="text-size-2 font-bold"
-                    :class="match.elo_change > 0 ? 'text-green-400' : match.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
-                  >
-                    {{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }}
-                  </div>
-                  <div class="text-size-5 text-foreground-muted">
-                    SR
-                  </div>
+            <div v-if="h2hOpponent" class="segmented" role="group" aria-label="Período del cara a cara">
+              <button v-for="period in periods" :key="period.value" type="button" :aria-pressed="h2hPeriod === period.value" @click="h2hPeriod = period.value">{{ period.label }}</button>
+            </div>
+
+            <div v-if="h2hLoading" class="loading-state" aria-busy="true"><p class="loading-text">Cargando estadísticas…</p></div>
+            <template v-else-if="h2hOpponent && h2hStats">
+              <div class="stats">
+                <div><strong class="stat-value numeric">{{ h2hStats.wins }}–{{ h2hStats.losses }}</strong><span class="meta">Victorias–derrotas</span></div>
+                <div><strong class="stat-value">{{ Math.round(h2hStats.win_rate) }}%</strong><span class="meta">Porcentaje de victorias</span></div>
+                <div><strong class="stat-value" :class="h2hStats.is_win_streak ? 'text-success' : 'text-danger'">{{ h2hStats.current_streak }}</strong><span class="meta">Racha actual</span></div>
+                <div><strong class="stat-value">{{ trendLabel(h2hStats.trend) }}</strong><span class="meta">Tendencia</span></div>
+                <div><strong class="stat-value text-success">+{{ Math.round(h2hStats.avg_elo_gain) }}</strong><span class="meta">SR ganado en promedio</span></div>
+                <div><strong class="stat-value text-danger">−{{ Math.round(h2hStats.avg_elo_loss) }}</strong><span class="meta">SR perdido en promedio</span></div>
+              </div>
+              <div v-if="h2hStats.best_match || h2hStats.worst_match" class="list-surface">
+                <div v-if="h2hStats.best_match" class="list-row">
+                  <span class="row-copy"><strong>Mejor partido</strong><span class="meta">{{ h2hStats.best_match.match?.score ? formatScore(h2hStats.best_match.match.score) + ' · ' : '' }}{{ formatMatchDate(h2hStats.best_match.created_at) }}</span></span>
+                  <span class="rank-score text-success">+{{ h2hStats.best_match.elo_change }}<small>SR</small></span>
                 </div>
+                <div v-if="h2hStats.worst_match" class="list-row">
+                  <span class="row-copy"><strong>Peor partido</strong><span class="meta">{{ h2hStats.worst_match.match?.score ? formatScore(h2hStats.worst_match.match.score) + ' · ' : '' }}{{ formatMatchDate(h2hStats.worst_match.created_at) }}</span></span>
+                  <span class="rank-score text-danger">{{ h2hStats.worst_match.elo_change }}<small>SR</small></span>
+                </div>
+              </div>
+              <NuxtLink v-if="h2hStats.matches && h2hStats.matches.length > 0" :to="`/matches?opponent_id=${h2hOpponent?.id}`" class="btn-secondary">
+                Ver todos los partidos ({{ h2hStats.total_matches }})
+                <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
               </NuxtLink>
-            </div>
-
-            <!-- Empty State -->
-            <div v-else class="text-center py-12">
-              <div class="w-16 h-16 rounded-2xl bg-surface-elevated border border-border-subtle flex items-center justify-center mx-auto mb-4">
-                <Icon name="heroicons:calendar" class="w-8 h-8 text-foreground-muted" />
-              </div>
-              <p class="text-size-3 font-semibold text-foreground mb-2">Sin partidas aún</p>
-              <p class="text-size-4 text-foreground-muted mb-6">
-                {{ isInPlacement ? 'Juega partidos para ver tu historial aquí' : 'Juega partidas competitivas para ver tu historial aquí' }}
-              </p>
-              <NuxtLink to="/matchmaking" class="btn-primary text-size-4 inline-flex items-center group">
-                <Icon name="heroicons:magnifying-glass" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                Buscar Partida
-              </NuxtLink>
-            </div>
-          </div>
-
-          <!-- Section E: Monthly Decay Status -->
-          <div v-if="!isInPlacement" class="glass-card-elevated p-6 animate-fade-up animate-delay-4">
-            <div class="flex items-center gap-4 mb-4">
-              <div 
-                class="w-12 h-12 rounded-xl flex items-center justify-center"
-                :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
-                  ? 'bg-green-500/10 border border-green-500/20'
-                  : decayStatus?.days_remaining_in_month <= 7
-                    ? 'bg-red-500/10 border border-red-500/20'
-                    : 'bg-amber-500/10 border border-amber-500/20'"
-              >
-                <Icon 
-                  name="heroicons:clock" 
-                  class="w-6 h-6"
-                  :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
-                    ? 'text-green-400'
-                    : decayStatus?.days_remaining_in_month <= 7
-                      ? 'text-red-400'
-                      : 'text-amber-400'"
-                />
-              </div>
-              <div class="flex-1">
-                <h3 class="text-size-3 font-semibold text-foreground">Actividad Mensual</h3>
-                <p class="text-size-4 text-foreground-muted">
-                  Partidos este mes: 
-                  <span class="font-semibold text-foreground">
-                    {{ decayStatus?.matches_this_month || 0 }} / {{ decayStatus?.matches_required || 2 }}
-                  </span>
-                </p>
-              </div>
-              <div class="text-right">
-                <p class="text-size-4 font-semibold text-foreground">{{ decayStatus?.days_remaining_in_month || 0 }}</p>
-                <p class="text-size-5 text-foreground-muted">días restantes</p>
-              </div>
-            </div>
-
-            <!-- Progress Bar -->
-            <div class="h-2 bg-surface-elevated rounded-full overflow-hidden mb-3">
-              <div 
-                class="h-full rounded-full transition-all duration-500"
-                :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
-                  ? 'bg-green-500'
-                  : 'bg-amber-500'"
-                :style="{ width: `${Math.min(((decayStatus?.matches_this_month || 0) / (decayStatus?.matches_required || 2)) * 100, 100)}%` }"
-              ></div>
-            </div>
-
-            <!-- Status Message -->
-            <div 
-              class="flex items-center gap-2 text-size-4"
-              :class="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
-                ? 'text-green-400'
-                : 'text-amber-400'"
-            >
-              <Icon 
-                :name="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)
-                  ? 'heroicons:check-circle'
-                  : 'heroicons:exclamation-triangle'" 
-                class="w-4 h-4"
-              />
-              <span v-if="decayStatus?.matches_this_month >= (decayStatus?.matches_required || 2)">
-                ¡Meta cumplida! Tu SR está protegido este mes.
-              </span>
-              <span v-else>
-                Juega {{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) }} partido{{ (decayStatus?.matches_required || 2) - (decayStatus?.matches_this_month || 0) !== 1 ? 's' : '' }} más para evitar decay de SR (-{{ decayStatus?.estimated_decay || 25 }} SR).
-              </span>
-            </div>
-          </div>
-
-          <!-- In Placement - No Decay Message -->
-          <div v-else class="glass-card p-4 animate-fade-up animate-delay-4">
-            <div class="flex items-center gap-3 text-size-4 text-foreground-muted">
-              <Icon name="heroicons:information-circle" class="w-5 h-5 text-accent" />
-              <span>Durante los partidos de colocación no hay decay de SR.</span>
-            </div>
-          </div>
-
-          <!-- Segment and Tier Ranks (Compact) - Hide during placement -->
-          <div v-if="!isInPlacement && (position?.segment_rank || position?.tier_rank)" class="grid md:grid-cols-2 gap-4 mt-6 animate-fade-up animate-delay-5">
-            <div v-if="position.segment_rank" class="glass-card p-5 hover-lift">
-              <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
-                  <Icon name="heroicons:map-pin" class="w-5 h-5 text-accent-secondary" />
-                </div>
-                <div class="flex-1">
-                  <p class="text-size-4 font-semibold text-foreground">{{ position.segment_name || 'Segmento' }}</p>
-                  <p class="text-size-5 text-foreground-muted">Ranking del segmento</p>
-                </div>
-                <div class="text-right">
-                  <p class="text-size-2 font-bold text-gradient-static">#{{ position.segment_rank }}</p>
-                  <p class="text-size-5 text-foreground-muted">de {{ position.segment_total }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="position.tier_rank" class="glass-card p-5 hover-lift">
-              <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                  <Icon name="heroicons:star" class="w-5 h-5 text-accent" />
-                </div>
-                <div class="flex-1">
-                  <p class="text-size-4 font-semibold text-foreground">División {{ nextTierProgress?.currentTier?.tier }}</p>
-                  <p class="text-size-5 text-foreground-muted">Ranking por tier</p>
-                </div>
-                <div class="text-right">
-                  <p class="text-size-2 font-bold text-gradient-static">#{{ position.tier_rank }}</p>
-                  <p class="text-size-5 text-foreground-muted">de {{ position.tier_total }}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quick Action: Find Match -->
-          <div class="mt-8 text-center animate-fade-up animate-delay-6">
-            <NuxtLink to="/matchmaking" class="btn-primary text-size-3 inline-flex items-center group">
-              <Icon name="heroicons:magnifying-glass" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-              Buscar Oponente
-            </NuxtLink>
-          </div>
+            </template>
+            <p v-else-if="h2hOpponent && !h2hLoading" class="meta">No jugaste contra este rival en el período elegido.</p>
+            <p v-else class="meta">Elige un rival para ver tu historial contra él.</p>
+          </section>
         </template>
       </div>
+
+      <div class="flow-stack">
+        <section v-if="!isInPlacement" class="panel" aria-label="Resumen">
+          <div class="stats">
+            <div><strong class="stat-value">{{ player.total_matches_played || 0 }}</strong><span class="meta">Partidos</span></div>
+            <div><strong class="stat-value">{{ winRate }}%</strong><span class="meta">Porcentaje de victorias</span></div>
+            <div><strong class="stat-value">{{ (historyStats?.peak_elo || player.elo).toLocaleString('es-EC') }}</strong><span class="meta">SR máximo</span></div>
+            <div><strong class="stat-value">{{ historyStats?.wins || 0 }}</strong><span class="meta">Victorias</span></div>
+          </div>
+        </section>
+
+        <section aria-labelledby="recent-title">
+          <div class="section-heading">
+            <h2 id="recent-title">{{ isInPlacement ? 'Historial de partidos' : 'Últimos partidos competitivos' }}</h2>
+          </div>
+          <div v-if="recentMatches.length > 0" class="list-surface">
+            <NuxtLink v-for="match in recentMatches" :key="match.id" :to="`/matches/${match.match_id || match.id}`" class="list-row">
+              <span class="avatar result-mark" :class="match.was_winner ? 'is-win' : 'is-loss'" :aria-label="match.was_winner ? 'Victoria' : 'Derrota'">
+                <Icon :name="match.was_winner ? 'heroicons:check' : 'heroicons:x-mark'" class="w-5 h-5" aria-hidden="true" />
+              </span>
+              <span class="row-copy">
+                <strong>{{ match.opponent?.name || 'Rival desconocido' }}</strong>
+                <span class="meta">{{ formatMatchDate(match.match_date || match.created_at) }}<template v-if="match.is_placement_match"> · Colocación</template></span>
+              </span>
+              <span class="rank-score" :class="match.elo_change > 0 ? 'text-success' : match.elo_change < 0 ? 'text-danger' : ''">{{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }}<small>SR</small></span>
+            </NuxtLink>
+          </div>
+          <div v-else class="panel empty-state">
+            <Icon name="heroicons:calendar" class="empty-state-icon" aria-hidden="true" />
+            <h3 class="empty-state-title">Sin partidos aún</h3>
+            <p class="empty-state-description">{{ isInPlacement ? 'Juega partidos para ver tu historial aquí.' : 'Juega partidos competitivos para ver tu historial aquí.' }}</p>
+            <NuxtLink to="/matchmaking" class="btn-primary">
+              Buscar rival
+              <Icon name="heroicons:magnifying-glass" class="w-5 h-5" aria-hidden="true" />
+            </NuxtLink>
+          </div>
+        </section>
+
+        <section v-if="!isInPlacement" class="panel progress-panel" aria-labelledby="activity-title">
+          <div class="progress-panel__head">
+            <div>
+              <h2 id="activity-title">Actividad mensual</h2>
+              <p class="meta">{{ decayStatus?.days_remaining_in_month || 0 }} días restantes</p>
+            </div>
+            <span class="numeric progress-panel__need"><strong>{{ decayStatus?.matches_this_month || 0 }}</strong> / {{ decayStatus?.matches_required || 2 }} partidos</span>
+          </div>
+          <div class="meter" :class="{ 'is-met': metGoal }" role="progressbar" :aria-valuenow="decayStatus?.matches_this_month || 0" aria-valuemin="0" :aria-valuemax="decayStatus?.matches_required || 2">
+            <span :style="{ width: `${Math.min(((decayStatus?.matches_this_month || 0) / (decayStatus?.matches_required || 2)) * 100, 100)}%` }"></span>
+          </div>
+          <p class="activity-status" :class="metGoal ? 'text-success' : 'text-warning'">
+            <Icon :name="metGoal ? 'heroicons:check-circle' : 'heroicons:exclamation-triangle'" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+            <span v-if="metGoal">Meta cumplida. Tu SR está protegido este mes.</span>
+            <span v-else>Juega {{ matchesLeft }} partido{{ matchesLeft !== 1 ? 's' : '' }} más para evitar el decay de SR (−{{ decayStatus?.estimated_decay || 25 }} SR).</span>
+          </p>
+        </section>
+        <p v-else class="panel meta">Durante los partidos de colocación no hay decay de SR.</p>
+
+        <section v-if="!isInPlacement && (position?.segment_rank || position?.tier_rank)" aria-labelledby="positions-title">
+          <div class="section-heading"><h2 id="positions-title">Tus posiciones</h2></div>
+          <div class="list-surface">
+            <div v-if="position.segment_rank" class="list-row">
+              <span class="row-copy"><strong>{{ position.segment_name || 'Segmento' }}</strong><span class="meta">Ranking del segmento</span></span>
+              <span class="rank-score">#{{ position.segment_rank }}<small>de {{ position.segment_total }}</small></span>
+            </div>
+            <div v-if="position.tier_rank" class="list-row">
+              <span class="row-copy"><strong>{{ tierName(nextTierProgress?.currentTier?.tier) }}</strong><span class="meta">Ranking por tier</span></span>
+              <span class="rank-score">#{{ position.tier_rank }}<small>de {{ position.tier_total }}</small></span>
+            </div>
+          </div>
+        </section>
+
+        <NuxtLink to="/leaderboard" class="btn-secondary">
+          Ver la clasificación nacional
+          <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
+      </div>
     </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -800,6 +306,8 @@ import type { MonthlyDecayStatus, RatingTierInfo, RatingTier, AdvancedStats, Hea
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { usePlayerSearch } from '~/composables/usePlayerSearch'
 import { getRatingTier } from '~/server/utils/rating-system'
+import { tierName } from '~/utils/tiers'
+import { formatScore } from '~/utils/pendingAction'
 
 definePageMeta({
   middleware: 'auth'
@@ -856,6 +364,15 @@ const nextTierProgress = ref<{
 const isInPlacement = computed(() => {
   return (player.value?.placement_matches_completed || 0) < 3
 })
+
+const periods = [
+  { value: 'month' as const, label: 'Último mes' },
+  { value: 'year' as const, label: 'Último año' },
+  { value: 'all' as const, label: 'Todo' }
+]
+const metGoal = computed(() => (decayStatus.value?.matches_this_month || 0) >= (decayStatus.value?.matches_required || 2))
+const matchesLeft = computed(() => (decayStatus.value?.matches_required || 2) - (decayStatus.value?.matches_this_month || 0))
+const trendLabel = (trend?: string) => (trend === 'improving' ? 'Al alza' : trend === 'declining' ? 'A la baja' : trend === 'stable' ? 'Estable' : '—')
 
 const winRate = computed(() => {
   if (!historyStats.value) return 0
@@ -1263,3 +780,40 @@ watch([isAuthenticated, userId], async ([authenticated, uid]) => {
 }, { immediate: true })
 
 </script>
+
+<style scoped>
+.panel-title { font-size: 20px; margin-bottom: 16px; }
+.rating { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rating__copy { display: grid; gap: 6px; justify-items: start; min-width: 0; }
+.rating__label { font-weight: 500; font-size: 14px; letter-spacing: 0; }
+.rating-number { font-size: clamp(42px, 4.5vw, 64px); font-weight: 700; letter-spacing: -0.05em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.rating-number span { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--foreground-muted); }
+.rating__facts { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; color: var(--foreground-muted); margin-top: 4px; }
+.rating__facts strong { color: var(--foreground); }
+.rating__tier { width: 88px; height: 88px; object-fit: contain; flex-shrink: 0; }
+.progress-panel { display: grid; gap: 12px; }
+.progress-panel h2 { font-size: 20px; }
+.progress-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.progress-panel__need { font-size: 14px; color: var(--foreground-muted); white-space: nowrap; }
+.progress-panel__need strong { font-size: 22px; color: var(--foreground); }
+.meter { height: 10px; border-radius: 999px; background: var(--lens); overflow: hidden; }
+.meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transform-origin: left; }
+.meter:not(.is-met) > span { background: var(--accent); }
+.meter__scale { display: flex; justify-content: space-between; font-size: 13px; color: var(--foreground-muted); }
+.meter__scale strong { color: var(--foreground); }
+.activity-status { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; }
+.segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 999px; background: var(--lens); border: 1px solid var(--edge); }
+.segmented button { min-height: 44px; border-radius: 999px; border: 0; background: transparent; color: var(--foreground-muted); font-weight: 600; font-size: 15px; }
+.segmented button[aria-pressed="true"] { background: var(--surface); color: var(--foreground); }
+.h2h { display: grid; gap: 16px; }
+.h2h .panel-title { margin-bottom: 0; }
+.h2h__search { position: relative; }
+.h2h__results { position: absolute; z-index: 10; left: 0; right: 0; margin: 8px 0 0; padding: 0; list-style: none; max-height: 240px; overflow-y: auto; box-shadow: var(--shadow-lg); }
+.result-mark.is-win { background: var(--success-subtle); color: var(--success); border-color: transparent; }
+.result-mark.is-loss { background: var(--danger-subtle); color: var(--danger); border-color: transparent; }
+@media (prefers-reduced-motion: no-preference) {
+  .meter > span { animation: meter-fill 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards; }
+}
+@keyframes meter-fill { from { transform: scaleX(0); } }
+@media (max-width: 767px) { .rating__tier { width: 64px; height: 64px; } }
+</style>

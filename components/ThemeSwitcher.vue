@@ -1,27 +1,26 @@
 <template>
-  <div class="theme-switcher" role="radiogroup" aria-label="Tema visual">
-    <button
-      v-for="key in themeKeys"
-      :key="key"
-      type="button"
-      role="radio"
-      :aria-checked="theme === key"
-      :title="`${themes[key].name} · ${themes[key].description}`"
-      class="theme-swatch"
-      :class="[`theme-swatch-${key}`, { 'is-active': theme === key }]"
-      @click="setTheme(key)"
-    >
-      <span class="sr-only">{{ themes[key].name }}</span>
-    </button>
-    <span v-if="showLabel" class="text-size-4 text-foreground-muted ml-1">{{ themes[theme].name }}</span>
-  </div>
+  <fieldset class="appearance-choice">
+    <legend class="appearance-legend">Tema visual</legend>
+    <label v-for="key in themeKeys" :key="key" class="theme-choice">
+      <input
+        type="radio"
+        name="appearance"
+        :value="key"
+        :checked="theme === key"
+        @change="setTheme(key)"
+      >
+      <span class="swatch" :class="`swatch-${key}`" aria-hidden="true"></span>
+      <span>{{ themes[key].name }}</span>
+    </label>
+  </fieldset>
 </template>
 
 <script setup lang="ts">
-/**
- * Three-swatch theme picker. Purely a preview aid until a theme is chosen as
- * the default in app.config.ts — remove or hide it afterwards if you like.
- */
-defineProps<{ showLabel?: boolean }>()
+/** Appearance setting (DESIGN_SYSTEM.md §3): native radios in 56px rows; the whole row is the target. */
 const { theme, themes, themeKeys, setTheme } = useTheme()
 </script>
+
+<style scoped>
+.appearance-choice { border: 0; padding: 0; margin: 0; }
+.appearance-legend { font-weight: 600; margin-bottom: 12px; }
+</style>

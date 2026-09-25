@@ -1,463 +1,190 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
+  <PageLayout>
+    <h1 v-if="!player" class="sr-only">Mi perfil</h1>
+
+    <div v-if="loading" class="panel loading-state" aria-busy="true">
+      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+      <p class="loading-text">Cargando tu perfil…</p>
     </div>
 
-    <!-- Navigation -->
-    <AppNavigation />
+    <div v-else-if="error" class="panel empty-state" role="alert">
+      <Icon name="heroicons:exclamation-triangle" class="empty-state-icon text-danger" aria-hidden="true" />
+      <h2 class="empty-state-title">No pudimos cargar tu perfil</h2>
+      <p class="empty-state-description">{{ error.message }}</p>
+      <button type="button" class="btn-primary" @click="loadProfile">
+        <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+        Reintentar
+      </button>
+    </div>
 
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <!-- Header -->
-        <div class="text-center mb-12 animate-fade-up">
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">
-            Mi Perfil
-          </h1>
-          <p class="text-size-3 font-regular text-foreground-muted">
-            Gestiona tu informacion personal y preferencias
-          </p>
-        </div>
-
-        <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
-          </div>
-          <p class="text-size-3 font-regular text-foreground-muted">Cargando perfil...</p>
-        </div>
-
-        <!-- Error State -->
-        <div v-else-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
-          </div>
-          <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
-          <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message }}</p>
-          <button @click="loadProfile" class="btn-primary text-size-3 w-full justify-center group">
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
-            Reintentar
-          </button>
-        </div>
-
-        <!-- Profile Content -->
-        <div v-else-if="player" class="glass-card-elevated p-8 md:p-10 animate-fade-up animate-delay-1 hover-lift">
-          <!-- Profile Header -->
-          <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-10">
-            <div class="flex items-center gap-6">
-              <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center flex-shrink-0">
-                <span class="text-4xl font-bold text-accent">
-                  {{ getPlayerInitials(player.name) }}
-                </span>
-              </div>
-              <div>
-                <h2 class="text-size-1 font-semibold text-foreground mb-2">{{ player.name }}</h2>
-                <div class="flex items-center gap-2 text-foreground-muted">
-                  <Icon name="heroicons:envelope" class="w-4 h-4" />
-                  <p class="text-size-4 font-regular">{{ user?.primaryEmailAddress?.emailAddress }}</p>
-                </div>
-              </div>
-            </div>
-            <NuxtLink to="/profile/edit" class="btn-primary text-size-3 !py-3 !px-6 group">
-              <Icon name="heroicons:pencil" class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-              Editar Perfil
+    <!-- Perfil (DESIGN.md §7, design/mock/court-Perfil.html) -->
+    <div v-else-if="player" class="split-grid even">
+      <div class="flow-stack">
+        <PhotoPanel photo="hero" variant="profile" eager>
+          <div class="profile-tools">
+            <NuxtLink to="/profile/edit" class="btn-photo">
+              Editar perfil
+              <Icon name="heroicons:pencil-square" class="w-5 h-5" aria-hidden="true" />
             </NuxtLink>
           </div>
-
-          <!-- Email Management Section -->
-          <div class="mb-8 p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                  <Icon name="heroicons:envelope" class="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <p class="text-size-4 font-semibold text-foreground-muted">Email</p>
-                  <p class="text-size-2 font-semibold text-foreground">
-                    {{ user?.primaryEmailAddress?.emailAddress || 'No disponible' }}
-                  </p>
-                </div>
-              </div>
-              <button
-                @click="openUserProfileModal"
-                class="btn-secondary text-size-3 !py-2 !px-4 group"
-              >
-                <Icon name="heroicons:cog-6-tooth" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                Gestionar Cuenta
-              </button>
-            </div>
-            <p class="text-size-4 font-regular text-foreground-muted">
-              Gestiona tu direccion de correo electronico y configuracion de cuenta
+          <div class="identity">
+            <span class="avatar avatar-lg" aria-hidden="true">{{ getPlayerInitials(player.name) }}</span>
+            <h1>{{ player.name }}</h1>
+            <p v-if="user?.primaryEmailAddress?.emailAddress">{{ user.primaryEmailAddress.emailAddress }}</p>
+            <p v-if="player.category?.name">
+              {{ player.category.name }}<template v-if="player.category.description"> · {{ player.category.description }}</template>
+            </p>
+            <p class="location">
+              <Icon name="heroicons:map-pin" class="w-5 h-5" aria-hidden="true" />
+              {{ player.city?.name ? `${player.city.name}, Ecuador` : 'Ciudad sin especificar' }}
             </p>
           </div>
+        </PhotoPanel>
 
-          <!-- Profile Info Grid -->
-          <div class="grid md:grid-cols-3 gap-6 mb-8">
-            <!-- Category -->
-            <div class="p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                  <Icon name="heroicons:star" class="w-5 h-5 text-accent" />
-                </div>
-                <p class="text-size-4 font-semibold text-foreground-muted">Categoria</p>
-              </div>
-              <p class="text-size-2 font-semibold text-foreground mb-2">
-                {{ player.category?.name || 'No seleccionada' }}
-              </p>
-              <p v-if="player.category?.description" class="text-size-4 font-regular text-foreground-muted">
-                {{ player.category.description }}
-              </p>
+        <section class="panel" aria-label="Resumen">
+          <div class="stats three">
+            <div>
+              <strong class="stat-value">{{ isUnrated ? '—' : (tierName(getTop100Tier() || tierInfo?.tier) || '—') }}</strong>
+              <span class="meta">Nivel actual</span>
             </div>
-
-            <!-- City -->
-            <div class="p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
-                  <Icon name="heroicons:map-pin" class="w-5 h-5 text-accent-secondary" />
-                </div>
-                <p class="text-size-4 font-semibold text-foreground-muted">Ciudad</p>
-              </div>
-              <p class="text-size-2 font-semibold text-foreground">
-                {{ player.city?.name || 'No especificada' }}
-              </p>
+            <div>
+              <strong class="stat-value">{{ globalRank ? `#${globalRank}` : '—' }}</strong>
+              <span class="meta">En Ecuador</span>
             </div>
-
-            <!-- Phone Number -->
-            <div class="p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
-                  <Icon name="heroicons:phone" class="w-5 h-5 text-accent-secondary" />
-                </div>
-                <p class="text-size-4 font-semibold text-foreground-muted">Telefono</p>
-              </div>
-              <p class="text-size-2 font-semibold text-foreground">
-                {{ player.phone_number || 'No proporcionado' }}
-              </p>
+            <div>
+              <strong class="stat-value">{{ player.win_streak || 0 }}</strong>
+              <span class="meta">Victorias seguidas<template v-if="!isUnrated && player.win_streak >= 5"> · bonus máximo</template></span>
             </div>
           </div>
-
-          <!-- Rating Section -->
-          <div class="mb-8">
-            <!-- SR Rating with Tier -->
-            <div class="p-8 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30 hover-lift">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <!-- Left: Rank Icon - Animated (League of Legends Style) -->
-                <div class="flex justify-center md:justify-start">
-                  <div class="relative w-full max-w-[300px] h-[300px] flex items-center justify-center overflow-visible">
-                    <!-- Rank Icon - Animated -->
-                    <RankIconAnimated
-                      v-if="tierInfo && player && !isUnrated && (player.total_matches_played || 0) > 0"
-                      :tier="getTop100Tier()"
-                      :elo="player.elo"
-                      :total-matches-played="player.total_matches_played || 0"
-                      size="300px"
-                      class="w-full h-full max-w-[300px] max-h-[300px]"
-                    />
-                    <!-- Unrated/Placement placeholder -->
-                    <div v-else class="w-full h-full max-w-[300px] max-h-[300px] flex items-center justify-center">
-                      <div class="w-48 h-48 rounded-2xl bg-surface-elevated border-2 border-border-subtle flex items-center justify-center">
-                        <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted opacity-50" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Right: SR, Tier, and Info -->
-                <div class="flex flex-col gap-4">
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                      <div class="w-12 h-12 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center">
-                        <Icon name="heroicons:trophy" class="w-6 h-6 text-accent" />
-                      </div>
-                      <div>
-                        <p class="text-size-3 font-semibold text-foreground">Puntuación SR (Skill Rating)</p>
-                        <p class="text-size-4 text-foreground-muted">Clasificación Actual</p>
-                      </div>
-                    </div>
-                    <RatingTierBadge 
-                      :elo="player.elo" 
-                      :total-matches-played="player.total_matches_played || 0"
-                      :placement-matches-completed="player.placement_matches_completed || 0"
-                      :show-provisional="true"
-                    />
-                  </div>
-                  <div class="flex items-baseline gap-3">
-                    <p class="text-size-1 font-bold text-gradient-static">{{ player.elo }}</p>
-                    <NuxtLink 
-                      v-if="!isUnrated"
-                      to="/my-ranking" 
-                      class="btn-secondary text-size-4 !py-2 !px-4 group"
-                    >
-                      <Icon name="heroicons:chart-bar-square" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                      Ver Mi Ranking
-                    </NuxtLink>
-                  </div>
-                  <p class="text-size-4 font-regular text-foreground-muted">
-                    {{ isUnrated ? '¡Juega tu primer partido para obtener tu clasificación!' : 'Tu calificación actual en el sistema' }}
-                  </p>
-
-                  <!-- Placement Progress (only show if rated and not completed) -->
-                  <PlacementProgress 
-                    v-if="!isUnrated && (player.placement_matches_completed || 0) < 3"
-                    :completed="player.placement_matches_completed || 0"
-                    :match-results="placementMatchResults"
-                  />
-                </div>
-              </div>
+          <details class="more-stats">
+            <summary>Ver estadísticas</summary>
+            <div class="stats three">
+              <div><strong class="stat-value">{{ player.elo.toLocaleString('es-EC') }}</strong><span class="meta">SR actual</span></div>
+              <div><strong class="stat-value">{{ player.total_matches_played || 0 }}</strong><span class="meta">Partidos jugados</span></div>
+              <div><strong class="stat-value">{{ percentile !== null ? `Top ${percentile}%` : '—' }}</strong><span class="meta">En Ecuador</span></div>
+              <div><strong class="stat-value">{{ ratingStats?.wins || 0 }}</strong><span class="meta">Victorias</span></div>
+              <div><strong class="stat-value">{{ winRate }}</strong><span class="meta">Porcentaje de victorias</span></div>
+              <div><strong class="stat-value">{{ player.loss_streak || 0 }}</strong><span class="meta">Derrotas seguidas</span></div>
             </div>
+          </details>
+        </section>
+      </div>
 
-            <!-- Ranking Section -->
-            <div v-if="!isUnrated" class="mt-6 p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-                  <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" />
-                </div>
-                <h3 class="text-size-3 font-semibold text-foreground">Mi Ranking</h3>
-              </div>
-              
-              <div v-if="rankingLoading" class="text-center py-8">
-                <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
-                <p class="text-size-4 font-regular text-foreground-muted mt-3">Cargando ranking...</p>
-              </div>
-              
-              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position" class="space-y-4">
-                <!-- Global Ranking -->
-                <div v-if="rankingPosition.position.global_rank && rankingPosition.position.total_players > 0" class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-size-3 font-semibold text-foreground">Ranking Global</h4>
-                    <RatingTierBadge 
-                      :elo="player.elo" 
-                      :total-matches-played="player.total_matches_played || 0"
-                      :show-elo="false"
-                    />
-                  </div>
-                  <div class="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        #{{ rankingPosition.position.global_rank }}
-                        <span class="text-size-4 font-regular text-foreground-muted">
-                          de {{ rankingPosition.position.total_players }}
-                        </span>
-                      </p>
-                    </div>
-                    <div v-if="rankingPosition.position.percentile !== undefined && rankingPosition.position.percentile >= 0">
-                      <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        Top {{ rankingPosition.position.percentile }}%
-                      </p>
-                    </div>
-                    <div v-if="rankingPosition.position.players_below !== undefined && rankingPosition.position.players_below >= 0">
-                      <p class="text-size-5 text-foreground-muted mb-1">Jugadores por debajo</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        {{ rankingPosition.position.players_below }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Tier Ranking -->
-                <div v-if="rankingPosition.position.tier_rank && rankingPosition.position.tier_total && rankingPosition.position.tier_total > 0 && rankingPosition.tier" class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <h4 class="text-size-3 font-semibold text-foreground mb-3">
-                    Ranking en {{ rankingPosition.tier }}
-                  </h4>
-                  <div class="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        #{{ rankingPosition.position.tier_rank }}
-                        <span class="text-size-4 font-regular text-foreground-muted">
-                          de {{ rankingPosition.position.tier_total }}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Segment Ranking -->
-                <div v-if="rankingPosition.position.segment_rank && rankingPosition.position.segment_total && rankingPosition.position.segment_total > 0" class="p-4 rounded-xl bg-surface border border-border-subtle">
-                  <h4 class="text-size-3 font-semibold text-foreground mb-3">
-                    Ranking en {{ rankingPosition.position.segment_name || 'Tu Región' }}
-                  </h4>
-                  <div class="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        #{{ rankingPosition.position.segment_rank }}
-                        <span class="text-size-4 font-regular text-foreground-muted">
-                          de {{ rankingPosition.position.segment_total }}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div v-else-if="rankingPosition && rankingPosition.is_unrated" class="p-4 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted">
-                  Aún no has completado partidos de colocación
-                </p>
-              </div>
-              
-              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.position && rankingPosition.current_players === 0" class="p-4 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted mb-2">
-                  Aún no hay suficientes jugadores para calcular el ranking.
-                </p>
-                <p class="text-size-5 font-regular text-foreground-muted">
-                  Se necesitan al menos {{ rankingPosition.min_players_required || 2 }} jugadores con partidos jugados. 
-                  Actualmente hay {{ rankingPosition.current_players || 0 }} jugador{{ rankingPosition.current_players !== 1 ? 'es' : '' }} en el sistema.
-                </p>
-              </div>
-              
-              <div v-else-if="!rankingPosition && !rankingLoading" class="p-4 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted">
-                  No hay información de ranking disponible
-                </p>
-              </div>
-            </div>
-
-            <!-- Monthly Decay Warning -->
-            <MonthlyDecayWarning 
-              v-if="decayStatus && !isUnrated"
-              :matches-this-month="decayStatus.matches_this_month"
-              :matches-required="decayStatus.matches_required"
-              :days-remaining="decayStatus.days_remaining_in_month"
-              :estimated-decay="decayStatus.estimated_decay"
-              :show-matchmaking-link="true"
-              :is-in-placement="(player.placement_matches_completed || 0) < 3"
+      <div class="flow-stack">
+        <section class="panel rating" aria-labelledby="rating-title">
+          <div class="rating__copy">
+            <h2 id="rating-title" class="meta rating__label">Tu nivel de juego</h2>
+            <p class="rating-number">{{ player.elo.toLocaleString('es-EC') }} <span>SR</span></p>
+            <RatingTierBadge
+              :elo="player.elo"
+              :total-matches-played="player.total_matches_played || 0"
+              :placement-matches-completed="player.placement_matches_completed || 0"
+              :show-provisional="true"
             />
+            <p class="meta mt-2">{{ isUnrated ? 'Juega tu primer partido para obtener tu clasificación.' : 'Tu calificación actual en el sistema.' }}</p>
+            <NuxtLink v-if="!isUnrated" to="/my-ranking" class="text-link">
+              Ver mi ranking
+              <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+            </NuxtLink>
+          </div>
+          <img v-if="tierImage" :src="tierImage" width="72" height="72" :alt="`Nivel ${tierName(getTop100Tier() || tierInfo?.tier)}`" class="rating__tier">
+        </section>
 
-            <!-- Win/Loss Streak -->
-            <div v-if="!isUnrated && (player.win_streak > 0 || player.loss_streak > 0)" class="flex gap-4">
-              <div 
-                v-if="player.win_streak > 0"
-                class="flex-1 p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30"
-              >
-                <div class="flex items-center gap-2 mb-2">
-                  <Icon name="heroicons:fire" class="w-5 h-5 text-green-400" />
-                  <span class="text-size-3 font-semibold text-green-400">¡Racha de victorias!</span>
-                </div>
-                <p class="text-size-4 text-foreground-muted">
-                  {{ player.win_streak }} victoria(s) consecutiva(s)
-                  <span v-if="player.win_streak >= 5" class="text-green-400"> (¡Máximo bonus!)</span>
-                </p>
-              </div>
+        <section v-if="!isUnrated && (player.placement_matches_completed || 0) < 3" class="panel placement-wrap">
+          <PlacementProgress
+            :completed="player.placement_matches_completed || 0"
+            :match-results="placementMatchResults"
+          />
+        </section>
+
+        <MonthlyDecayWarning
+          v-if="decayStatus && !isUnrated"
+          :matches-this-month="decayStatus.matches_this_month"
+          :matches-required="decayStatus.matches_required"
+          :days-remaining="decayStatus.days_remaining_in_month"
+          :estimated-decay="decayStatus.estimated_decay"
+          :show-matchmaking-link="true"
+          :is-in-placement="(player.placement_matches_completed || 0) < 3"
+        />
+
+        <section v-if="!isUnrated" aria-labelledby="positions-title">
+          <div class="section-heading"><h2 id="positions-title">Tus posiciones</h2></div>
+          <div v-if="rankingLoading" class="list-surface loading-state" aria-busy="true">
+            <p class="loading-text">Cargando ranking…</p>
+          </div>
+          <div v-else-if="position" class="list-surface">
+            <div v-if="position.global_rank && position.total_players > 0" class="list-row">
+              <span class="row-copy"><strong>Ecuador</strong><span class="meta">{{ position.players_below >= 0 ? `${position.players_below} jugadores por debajo` : 'Ranking nacional' }}</span></span>
+              <span class="rank-score">#{{ position.global_rank }}<small>de {{ position.total_players }}</small></span>
+            </div>
+            <div v-if="position.tier_rank && position.tier_total > 0 && rankingPosition.tier" class="list-row">
+              <span class="row-copy"><strong>{{ tierName(rankingPosition.tier) }}</strong><span class="meta">Dentro de tu tier</span></span>
+              <span class="rank-score">#{{ position.tier_rank }}<small>de {{ position.tier_total }}</small></span>
+            </div>
+            <div v-if="position.segment_rank && position.segment_total > 0" class="list-row">
+              <span class="row-copy"><strong>{{ position.segment_name || 'Tu región' }}</strong><span class="meta">Ranking regional</span></span>
+              <span class="rank-score">#{{ position.segment_rank }}<small>de {{ position.segment_total }}</small></span>
             </div>
           </div>
-
-          <!-- Stats -->
-          <div class="pt-8 border-t border-border-subtle">
-            <div class="flex items-center gap-3 mb-6">
-              <Icon name="heroicons:chart-bar" class="w-6 h-6 text-foreground-muted" />
-              <h3 class="text-size-2 font-semibold text-foreground">Estadisticas</h3>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center mx-auto mb-3">
-                  <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" />
-                </div>
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ player.elo }}</div>
-                <div class="text-size-4 font-regular text-foreground-muted">SR</div>
-              </div>
-              <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
-                <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center mx-auto mb-3">
-                  <Icon name="heroicons:calendar" class="w-5 h-5 text-accent-secondary" />
-                </div>
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ player.total_matches_played || 0 }}</div>
-                <div class="text-size-4 font-regular text-foreground-muted">Partidos</div>
-              </div>
-              <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
-                <div class="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center justify-center mx-auto mb-3">
-                  <Icon name="heroicons:star" class="w-5 h-5 text-green-400" />
-                </div>
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ ratingStats?.wins || 0 }}</div>
-                <div class="text-size-4 font-regular text-foreground-muted">Victorias</div>
-              </div>
-              <div class="text-center p-6 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all hover-lift">
-                <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center mx-auto mb-3">
-                  <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" />
-                </div>
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">
-                  {{ ratingStats && ratingStats.wins + ratingStats.losses > 0 
-                    ? Math.round(ratingStats.win_rate) + '%' 
-                    : '-' }}
-                </div>
-                <div class="text-size-4 font-regular text-foreground-muted">Win Rate</div>
-              </div>
-            </div>
+          <p v-else-if="rankingPosition && rankingPosition.is_unrated" class="panel meta">Aún no has completado partidos de colocación.</p>
+          <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.position && rankingPosition.current_players === 0" class="panel">
+            <p class="meta">Aún no hay suficientes jugadores para calcular el ranking. Se necesitan al menos {{ rankingPosition.min_players_required || 2 }} jugadores con partidos jugados; ahora hay {{ rankingPosition.current_players || 0 }}.</p>
           </div>
+          <p v-else class="panel meta">No hay información de ranking disponible.</p>
+        </section>
 
-        </div>
-
-        <!-- No Profile State - only show when NOT loading and no player exists -->
-        <div v-else-if="!loading && !player" class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:user-circle" class="w-12 h-12 text-accent" />
+        <section class="panel account" aria-labelledby="account-title">
+          <div class="account__copy">
+            <h2 id="account-title">Cuenta</h2>
+            <p class="meta">{{ player.phone_number || 'Sin teléfono' }} · {{ user?.primaryEmailAddress?.emailAddress || 'Email no disponible' }}</p>
           </div>
-          <h2 class="text-size-2 font-semibold text-foreground mb-4">Completa tu perfil</h2>
-          <p class="text-size-4 font-regular text-foreground-muted mb-8 max-w-md mx-auto leading-relaxed">
-            Para comenzar a usar la plataforma, necesitas completar tu perfil de jugador.
-          </p>
-          <NuxtLink to="/onboarding" class="btn-primary text-size-3 inline-flex items-center group">
-            <Icon name="heroicons:arrow-right" class="w-5 h-5 mr-2 group-hover:translate-x-1 transition-transform" />
-            Completar Perfil
-          </NuxtLink>
-        </div>
+          <button type="button" class="btn-secondary" @click="openUserProfileModal">
+            Gestionar cuenta
+            <Icon name="heroicons:cog-6-tooth" class="w-5 h-5" aria-hidden="true" />
+          </button>
+        </section>
       </div>
     </div>
 
-    <!-- UserProfile Modal -->
+    <div v-else-if="!loading && !player" class="panel empty-state">
+      <Icon name="heroicons:user-circle" class="empty-state-icon" aria-hidden="true" />
+      <h2 class="empty-state-title">Completa tu perfil</h2>
+      <p class="empty-state-description">Para comenzar a usar la plataforma, necesitas completar tu perfil de jugador.</p>
+      <NuxtLink to="/onboarding" class="btn-primary">
+        Completar perfil
+        <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+      </NuxtLink>
+    </div>
+
+    <!-- Account management (Clerk) -->
     <Transition name="modal">
-      <div
-        v-if="showUserProfileModal"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-      >
-        <!-- Backdrop -->
-        <div 
-          class="absolute inset-0 bg-black/70 backdrop-blur-md" 
-          @click="closeUserProfileModal"
-        ></div>
-        
-        <!-- Modal Content -->
-        <div class="user-profile-modal-container relative z-10">
-          <!-- Close button -->
-          <button
-            @click="closeUserProfileModal"
-            class="absolute top-4 right-4 z-20 p-2 rounded-full bg-surface-elevated border border-border hover:bg-surface hover:border-accent transition-all group"
-            aria-label="Cerrar modal"
-          >
-            <Icon name="heroicons:x-mark" class="w-5 h-5 text-foreground-muted group-hover:text-accent transition-colors" />
+      <div v-if="showUserProfileModal" class="account-modal" role="dialog" aria-modal="true" aria-label="Gestionar cuenta">
+        <div class="account-modal__backdrop" @click="closeUserProfileModal"></div>
+        <div class="user-profile-modal-container">
+          <button type="button" class="icon-button account-modal__close" aria-label="Cerrar" @click="closeUserProfileModal">
+            <Icon name="heroicons:x-mark" class="w-5 h-5" aria-hidden="true" />
           </button>
-          
           <ClientOnly>
             <div class="user-profile-wrapper">
-              <UserProfile 
-                :routing="'hash'"
-              />
+              <UserProfile :routing="'hash'" />
             </div>
             <template #fallback>
-              <div class="flex flex-col items-center justify-center py-16 px-8 bg-surface rounded-xl">
-                <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mb-6">
-                  <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
-                </div>
-                <p class="text-size-3 font-regular text-foreground-muted">Cargando gestion de cuenta...</p>
+              <div class="loading-state">
+                <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+                <p class="loading-text">Cargando tu cuenta…</p>
               </div>
             </template>
           </ClientOnly>
         </div>
       </div>
     </Transition>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
 import { UserProfile } from '@clerk/vue'
 import { useRankIconAsset } from '~/composables/useRankIcon'
+import { tierName } from '~/utils/tiers'
 
 definePageMeta({
   middleware: 'auth'
@@ -482,9 +209,6 @@ const placementMatchResults = ref<Array<'win' | 'loss' | null>>([])
 // Ranking position
 const rankingPosition = ref<any>(null)
 const rankingLoading = ref(false)
-
-// Rank icon
-const imageError = ref(false)
 
 // Check if player is unrated
 const isUnrated = computed(() => (player.value?.total_matches_played ?? 0) === 0)
@@ -513,14 +237,19 @@ const tierInfo = computed(() => {
   return RATING_TIERS[0] // Default to Bronze
 })
 
-const rankIconPath = computed(() => {
-  if (!tierInfo.value) return null
-  return useRankIconAsset(tierInfo.value.tier)
+const position = computed(() => (rankingPosition.value?.success && !rankingPosition.value?.is_unrated ? rankingPosition.value.position || null : null))
+const globalRank = computed(() => (position.value?.total_players > 0 ? position.value.global_rank || null : null))
+const percentile = computed(() => {
+  const p = position.value?.percentile
+  return typeof p === 'number' && p >= 0 ? p : null
 })
+const winRate = computed(() => (ratingStats.value && ratingStats.value.wins + ratingStats.value.losses > 0 ? `${Math.round(ratingStats.value.win_rate)}%` : '—'))
 
-const handleImageError = () => {
-  imageError.value = true
-}
+// Static tier art (DESIGN.md §4: secondary to content, fits its panel, no looping animation)
+const tierImage = computed(() => {
+  if (isUnrated.value || !tierInfo.value) return null
+  return useRankIconAsset(getTop100Tier() || tierInfo.value.tier)
+})
 
 const loadPlacementMatchResults = async (playerId: string) => {
   try {
@@ -672,49 +401,34 @@ const closeUserProfileModal = () => {
 </script>
 
 <style scoped>
-/* Modal container with glass-morphism styling */
-.user-profile-modal-container {
-  max-width: 95vw;
-  width: auto;
-  max-height: 90vh;
-  overflow: hidden;
-  border-radius: var(--radius-xl);
-  box-shadow: 
-    0 25px 50px -12px oklch(0 0 0 / 0.4),
-    0 0 0 1px var(--border);
-}
+.profile-tools { align-self: flex-end; }
+.identity { width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+.identity h1 { font-size: clamp(30px, 3vw, 38px); line-height: 1.12; letter-spacing: -0.035em; overflow-wrap: anywhere; }
+.identity > p { max-width: 32ch; color: var(--on-photo-muted); overflow-wrap: anywhere; }
+.location { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; }
 
-.user-profile-wrapper {
-  width: 100%;
-  overflow: auto;
-  max-height: 85vh;
-}
+.rating { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rating__copy { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.rating__label { font-weight: 500; font-size: 14px; letter-spacing: 0; }
+.rating-number { font-size: clamp(42px, 4vw, 60px); font-weight: 700; letter-spacing: -0.05em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.rating-number span { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--foreground-muted); }
+.rating__tier { width: 64px; height: 64px; object-fit: contain; flex-shrink: 0; }
 
-/* Modal transitions */
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
+.placement-wrap > :deep(div:first-child) { margin-top: 0; padding-top: 0; border-top: 0; }
+.account { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.account__copy { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.account__copy h2 { font-size: 20px; }
 
-.modal-enter-active .user-profile-modal-container,
-.modal-leave-active .user-profile-modal-container {
-  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
+.account-modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; }
+.account-modal__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); }
+.account-modal__close { position: absolute; top: 12px; right: 12px; z-index: 2; }
+.user-profile-modal-container { position: relative; z-index: 1; max-width: min(960px, 100%); max-height: 90vh; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--edge); background: var(--surface); }
+.user-profile-wrapper { width: 100%; overflow: auto; max-height: 90vh; }
 
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
+@media (prefers-reduced-motion: no-preference) {
+  .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
+  .modal-enter-active .user-profile-modal-container { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 }
-
-.modal-enter-from .user-profile-modal-container,
-.modal-leave-to .user-profile-modal-container {
-  opacity: 0;
-  transform: scale(0.95) translateY(-10px);
-}
-
-.modal-enter-to .user-profile-modal-container,
-.modal-leave-from .user-profile-modal-container {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-from .user-profile-modal-container { transform: translateY(8px); }
 </style>

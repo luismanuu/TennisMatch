@@ -1,7 +1,7 @@
 <template>
   <Transition name="modal">
     <div v-if="isOpen" class="modal-overlay" @click.self="handleClose">
-      <div class="modal-content glass-card-elevated">
+      <div class="modal-content panel">
         <!-- Header -->
         <div class="modal-header">
           <div class="flex items-center gap-3">

@@ -12,9 +12,9 @@
             {{ completed }}/{{ total }}
           </span>
         </div>
-        <div class="w-full bg-surface border-2 border-border-subtle rounded-full h-3 overflow-hidden">
+        <div class="w-full bg-surface border border-border-subtle rounded-full h-3 overflow-hidden">
           <div 
-            class="h-full bg-gradient-to-r from-accent to-accent/80 transition-all duration-300"
+            class="h-full bg-surface-elevated transition-all duration-300"
             :style="{ width: `${(completed / total) * 100}%` }"
           />
         </div>
@@ -26,7 +26,7 @@
           :disabled="loading"
           class="btn-secondary text-size-4 !py-2 !px-4 disabled:opacity-50"
         >
-          <Icon name="heroicons:arrow-path" class="w-4 h-4 mr-2" />
+          <Icon name="heroicons:arrow-path" class="w-4 h-4" />
           Reset
         </button>
         <button
@@ -35,7 +35,7 @@
           :disabled="loading"
           class="btn-primary text-size-4 !py-2 !px-4 disabled:opacity-50"
         >
-          <Icon name="heroicons:check" class="w-4 h-4 mr-2" />
+          <Icon name="heroicons:check" class="w-4 h-4" />
           Completar
         </button>
       </div>

@@ -1,235 +1,102 @@
 <template>
-  <PageLayout container-size="wide">
-    <!-- Page Header -->
-    <div class="text-center mb-10 animate-fade-up">
-      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-        <Icon name="heroicons:trophy" class="w-4 h-4 text-accent" />
-        <span class="text-size-4 font-semibold text-accent">Clasificación Global</span>
-      </div>
-      <h1 class="text-size-1 font-semibold text-foreground mb-3">
-        Leaderboard
-      </h1>
-      <p class="text-size-3 font-regular text-foreground-muted max-w-lg mx-auto mb-4">
-        Descubre los mejores jugadores, sube de ranking y compite por el top
-      </p>
-      <!-- Info Button -->
-      <button
-        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-surface border border-border hover:bg-surface-elevated transition-colors text-size-4 text-foreground-muted hover:text-foreground"
-        @click.stop="showRankingInfo = true"
-      >
-        <Icon name="heroicons:information-circle" class="w-5 h-5" />
-        <span>¿Cómo funciona el ranking?</span>
+  <PageLayout>
+    <!-- Ranking (DESIGN.md §7, design/mock/court-Ranking.html) -->
+    <PhotoPanel photo="aerial" variant="compact" eager>
+      <template #decor><RankLadder /></template>
+      <p>{{ total ? `${total.toLocaleString('es-EC')} jugadores clasificados` : 'Clasificación de Ecuador' }}</p>
+      <h1>Ranking</h1>
+      <button type="button" class="btn-photo ranking-info" @click.stop="showRankingInfo = true">
+        Cómo funciona
+        <Icon name="heroicons:information-circle" class="w-5 h-5" aria-hidden="true" />
       </button>
-    </div>
+    </PhotoPanel>
 
-    <!-- Ranking System Info Modal -->
     <RankingSystemInfo v-model="showRankingInfo" />
 
-    <!-- Loading State -->
-    <div v-if="initialLoading" class="loading-state">
-      <Icon name="heroicons:arrow-path" class="loading-spinner" />
-      <p class="loading-text">Cargando clasificación...</p>
+    <div v-if="initialLoading" class="panel loading-state" aria-busy="true">
+      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+      <p class="loading-text">Cargando clasificación…</p>
     </div>
 
     <template v-else>
-      <!-- Top 3 Players Podium -->
-      <div v-if="topPlayers.length >= 3" class="mb-8 md:mb-10 animate-fade-up animate-delay-1">
-        <div v-if="isAuthenticated && player && showAroundMe" class="text-center mb-4">
-          <p class="text-size-4 text-foreground-muted">
-            Top 3 de tu ranking actual
-          </p>
-        </div>
-        <div class="flex flex-col sm:flex-row items-center sm:items-end justify-center gap-3 sm:gap-4 md:gap-6">
-          <!-- 2nd Place -->
-          <div class="w-full sm:flex-1 sm:max-w-[200px] order-2 sm:order-1">
-            <div class="glass-card p-3 sm:p-4 text-center hover-lift transition-all">
-              <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-gradient-to-br from-gray-300/30 to-gray-400/10 border-2 border-gray-400/40 flex items-center justify-center mb-2 sm:mb-3">
-                <Icon name="heroicons:trophy" class="w-6 h-6 sm:w-8 sm:h-8 text-gray-300" />
-              </div>
-              <div class="text-2xl sm:text-3xl font-bold text-gray-300 mb-1">#2</div>
-              <NuxtLink :to="`/players/${topPlayers[1]?.id}`" class="text-size-4 sm:text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
-                {{ topPlayers[1]?.name }}
-              </NuxtLink>
-              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[1]?.elo }} SR</div>
-            </div>
+      <section class="panel filters" aria-label="Filtros">
+        <div class="filters__grid">
+          <div class="filters__search">
+            <label for="lb-search" class="sr-only">Buscar jugador</label>
+            <input id="lb-search" v-model="searchQuery" type="search" class="form-input" placeholder="Buscar jugador por nombre" autocomplete="off" @input="onSearchInput">
           </div>
-          
-          <!-- 1st Place (Center, Taller) -->
-          <div class="w-full sm:flex-1 sm:max-w-[220px] order-1 sm:order-2">
-            <div class="glass-card-elevated p-4 sm:p-5 text-center hover-lift transition-all relative overflow-hidden">
-              <!-- Crown Glow Effect -->
-              <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-24 h-24 sm:w-32 sm:h-32 bg-yellow-400/20 rounded-full blur-3xl"></div>
-              
-              <div class="relative">
-                <div class="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl bg-gradient-to-br from-yellow-400/30 to-yellow-600/10 border-2 border-yellow-500/50 flex items-center justify-center mb-2 sm:mb-3 animate-pulse-slow">
-                  <Icon name="heroicons:trophy" class="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400" />
-                </div>
-                <div class="text-3xl sm:text-4xl font-bold text-yellow-400 mb-1">#1</div>
-                <NuxtLink :to="`/players/${topPlayers[0]?.id}`" class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
-                  {{ topPlayers[0]?.name }}
-                </NuxtLink>
-                <div class="text-size-2 sm:text-size-1 font-bold text-gradient-static mt-1">{{ topPlayers[0]?.elo }} SR</div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 3rd Place -->
-          <div class="w-full sm:flex-1 sm:max-w-[200px] order-3">
-            <div class="glass-card p-3 sm:p-4 text-center hover-lift transition-all">
-              <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-600/30 to-amber-700/10 border-2 border-amber-600/40 flex items-center justify-center mb-2 sm:mb-3">
-                <Icon name="heroicons:trophy" class="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
-              </div>
-              <div class="text-2xl sm:text-3xl font-bold text-amber-600 mb-1">#3</div>
-              <NuxtLink :to="`/players/${topPlayers[2]?.id}`" class="text-size-4 sm:text-size-3 font-semibold text-foreground hover:text-accent transition-colors block truncate px-2">
-                {{ topPlayers[2]?.name }}
-              </NuxtLink>
-              <div class="text-size-3 sm:text-size-2 font-bold text-gradient-static mt-1">{{ topPlayers[2]?.elo }} SR</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Filters Section -->
-      <div class="glass-card p-4 mb-6 animate-fade-up animate-delay-3">
-        <div class="flex flex-col md:flex-row gap-4">
-          <!-- Search -->
-          <div class="flex-1">
-            <input 
-              v-model="searchQuery"
-              type="text"
-              class="form-input"
-              placeholder="Buscar jugador por nombre..."
-              @input="onSearchInput"
-            />
-          </div>
-          
-          <!-- Tier Filter -->
-          <div class="w-full md:w-48">
-            <select v-model="selectedTier" class="form-select" @change="onTierChange">
+          <div>
+            <label for="lb-tier" class="sr-only">Tier</label>
+            <select id="lb-tier" v-model="selectedTier" class="form-select" @change="onTierChange">
               <option :value="undefined">Todos los tiers</option>
-              <option value="Bronze">🥉 Bronce</option>
-              <option value="Silver">🥈 Plata</option>
-              <option value="Gold">🥇 Oro</option>
-              <option value="Platinum">💎 Platino</option>
-              <option value="Diamond">💠 Diamante</option>
-              <option value="Master">👑 Maestro</option>
-              <option value="Grandmaster">🏆 Gran Maestro</option>
+              <option v-for="t in TIERS" :key="t.tier" :value="t.tier">{{ t.name }}</option>
             </select>
           </div>
-          
-          <!-- City Filter -->
-          <div class="w-full md:w-48">
-            <select v-model="selectedCity" class="form-select" @change="onCityChange">
+          <div>
+            <label for="lb-city" class="sr-only">Ciudad</label>
+            <select id="lb-city" v-model="selectedCity" class="form-select" @change="onCityChange">
               <option :value="undefined">Todas las ciudades</option>
-              <option v-for="city in cities" :key="city.id" :value="city.id">
-                {{ city.name }}
-              </option>
+              <option v-for="city in cities" :key="city.id" :value="city.id">{{ city.name }}</option>
             </select>
           </div>
-          
-          <!-- Clear Filters -->
-          <button 
-            v-if="hasActiveFilters"
-            class="btn-secondary md:w-auto"
-            @click="clearAllFilters"
-          >
-            <Icon name="heroicons:x-mark" class="w-4 h-4" />
-            Limpiar
+        </div>
+        <button v-if="hasActiveFilters" type="button" class="text-link" @click="clearAllFilters">
+          <Icon name="heroicons:x-mark" class="w-4 h-4" aria-hidden="true" />
+          Limpiar filtros
+        </button>
+      </section>
+
+      <div class="section-heading">
+        <h2>{{ isAuthenticated && player && showAroundMe ? (selectedTier ? `Tu posición en ${getTierNameInSpanish(selectedTier)}` : 'Tu posición') : 'Clasificación nacional' }}</h2>
+        <div class="quick-actions ranking-actions">
+          <NuxtLink v-if="isAuthenticated && player" to="/my-ranking" class="text-link">
+            Mi ranking
+            <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+          </NuxtLink>
+          <button v-if="isAuthenticated && player" type="button" class="btn-secondary !min-h-[44px] !py-2" @click="toggleView">
+            <Icon :name="showAroundMe ? 'heroicons:globe-alt' : 'heroicons:user'" class="w-4 h-4" aria-hidden="true" />
+            {{ showAroundMe ? 'Ver todos' : 'Ver cerca de mí' }}
           </button>
         </div>
       </div>
+      <p class="meta">{{ isAuthenticated && player && showAroundMe ? 'Puestos destacados y jugadores cerca de tu posición.' : `${total} jugadores clasificados` }}</p>
 
-      <!-- Leaderboard List -->
-      <div class="glass-card-elevated p-4 sm:p-6 animate-fade-up animate-delay-4">
-        <div class="flex items-center justify-between mb-6">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center">
-              <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" />
+      <div class="ranking-grid">
+        <section v-if="topPlayers.length >= 3" class="list-surface" aria-label="Primeros tres puestos">
+          <LeaderboardPlayerCard v-for="p in topPlayers.slice(0, 3)" :key="`top-${p.id}`" :player="p" />
+        </section>
+
+        <section class="list-surface ranking-list" :aria-label="showAroundMe ? 'Cerca de tu posición' : 'Clasificación'">
+          <div v-if="loading && rankings.length === 0" class="loading-state" aria-busy="true">
+            <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+            <p class="loading-text">Cargando rankings…</p>
+          </div>
+          <div v-else-if="rankings.length > 0" ref="scrollContainer" class="ranking-scroll" @scroll="onScroll">
+            <div v-if="hasMoreAbove && isLoadingMore" class="ranking-more" aria-live="polite">
+              <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" aria-hidden="true" />
+              <span class="sr-only">Cargando más</span>
             </div>
-            <div>
-              <h2 class="text-size-3 font-semibold text-foreground">Clasificación General</h2>
-              <p class="text-size-4 text-foreground-muted">
-                {{ isAuthenticated && player && showAroundMe 
-                  ? `Jugadores ${selectedTier ? `en ${getTierNameInSpanish(selectedTier)}` : 'alrededor de tu posición'}` 
-                  : `${total} jugadores clasificados` 
-                }}
-              </p>
+            <LeaderboardPlayerCard v-for="p in rankings" :key="`${p.id}-${p.rank}`" :player="p" />
+            <div v-if="hasMoreBelow && isLoadingMore" class="ranking-more" aria-live="polite">
+              <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" aria-hidden="true" />
+              <span class="sr-only">Cargando más</span>
             </div>
           </div>
-          
-          <!-- Toggle View Button (if authenticated) -->
-          <div v-if="isAuthenticated && player" class="flex items-center gap-3">
-            <button 
-              class="btn-secondary !px-3 !py-2 text-size-4"
-              @click="toggleView"
-            >
-              <Icon :name="showAroundMe ? 'heroicons:globe-alt' : 'heroicons:user'" class="w-4 h-4 mr-2" />
-              {{ showAroundMe ? 'Ver Todos' : 'Ver Alrededor Mío' }}
-            </button>
+          <div v-else class="empty-state">
+            <Icon name="heroicons:user-group" class="empty-state-icon" aria-hidden="true" />
+            <h3 class="empty-state-title">No se encontraron jugadores</h3>
+            <p class="empty-state-description">{{ hasActiveFilters ? 'Prueba con otros filtros.' : 'Aún no hay jugadores clasificados.' }}</p>
+            <button v-if="hasActiveFilters" type="button" class="btn-primary" @click="clearAllFilters">Limpiar filtros</button>
           </div>
-        </div>
-        
-        <!-- Loading State for List -->
-        <div v-if="loading && rankings.length === 0" class="py-12 text-center">
-          <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
-          <p class="text-size-4 text-foreground-muted">Cargando rankings...</p>
-        </div>
-        
-        <!-- Scrollable Rankings List -->
-        <div 
-          v-else-if="rankings.length > 0"
-          ref="scrollContainer"
-          class="relative max-h-[400px] sm:max-h-[500px] md:max-h-[600px] overflow-y-auto scroll-smooth"
-          @scroll="onScroll"
-        >
-          <!-- Load More Above Indicator -->
-          <div 
-            v-if="hasMoreAbove && isLoadingMore"
-            class="sticky top-0 z-10 py-2 text-center bg-background/80 backdrop-blur-sm border-b border-border-subtle"
-          >
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin mx-auto" />
-          </div>
-          
-          <!-- Rankings List -->
-          <div class="space-y-2">
-            <LeaderboardPlayerCard 
-              v-for="p in rankings" 
-              :key="`${p.id}-${p.rank}`" 
-              :player="p"
-            />
-          </div>
-          
-          <!-- Load More Below Indicator -->
-          <div 
-            v-if="hasMoreBelow && isLoadingMore"
-            class="sticky bottom-0 z-10 py-2 text-center bg-background/80 backdrop-blur-sm border-t border-border-subtle"
-          >
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin mx-auto" />
-          </div>
-        </div>
-        
-        <!-- Empty State -->
-        <div v-else class="empty-state py-12">
-          <Icon name="heroicons:user-group" class="empty-state-icon" />
-          <h3 class="empty-state-title">No se encontraron jugadores</h3>
-          <p class="empty-state-description">
-            {{ hasActiveFilters 
-              ? 'Intenta ajustar los filtros de búsqueda' 
-              : 'Aún no hay jugadores clasificados en el sistema' 
-            }}
-          </p>
-          <button v-if="hasActiveFilters" class="btn-primary" @click="clearAllFilters">
-            Limpiar filtros
-          </button>
-        </div>
+        </section>
       </div>
-
     </template>
   </PageLayout>
 </template>
 
 <script setup lang="ts">
 import type { RatingTier, City } from '~/types'
+import { TIERS } from '~/utils/tiers'
 
 // Page meta
 definePageMeta({
@@ -781,23 +648,22 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.text-gradient-static {
-  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-@keyframes pulse-slow {
-  0%, 100% {
-    box-shadow: 0 0 20px oklch(0.80 0.20 60 / 0.3);
-  }
-  50% {
-    box-shadow: 0 0 30px oklch(0.80 0.20 60 / 0.5);
-  }
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 3s ease-in-out infinite;
+.ranking-info { margin-top: 4px; }
+.filters { display: grid; gap: 8px; margin-bottom: 28px; padding: 16px; }
+.filters__grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.filters .text-link { justify-self: start; }
+.ranking-actions { gap: 8px 16px; }
+.ranking-actions > .btn-secondary, .ranking-actions > .text-link { width: auto; margin: 0; flex-grow: 0; }
+.ranking-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; margin-top: 20px; align-items: start; }
+.ranking-grid > .ranking-list:only-child { grid-column: 1 / -1; }
+/* Scroll container kept: the page loads more rows above/below and centers the viewer's row inside it */
+.ranking-scroll { position: relative; max-height: min(70vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+.ranking-more { display: flex; justify-content: center; padding: 10px; }
+@media (min-width: 768px) and (max-width: 1099px) { .ranking-grid { grid-template-columns: 1fr; } }
+@media (max-width: 767px) {
+  .filters__grid { grid-template-columns: 1fr 1fr; }
+  .filters__search { grid-column: 1 / -1; }
+  .ranking-grid { grid-template-columns: 1fr; gap: 24px; }
+  .ranking-scroll { max-height: 60vh; }
 }
 </style>

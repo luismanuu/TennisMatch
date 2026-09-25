@@ -11,7 +11,7 @@
     
     <!-- Dropdown content -->
     <Transition name="slide-down">
-      <div v-if="isOpen" class="dropdown-content glass-card-elevated">
+      <div v-if="isOpen" class="dropdown-content panel">
         <!-- Header -->
         <div class="dropdown-header">
           <h3 class="text-lg font-semibold">Notificaciones</h3>

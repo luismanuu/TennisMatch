@@ -2,8 +2,8 @@
   <ClientOnly>
     <nav
       v-if="isAuthenticated"
-      class="tabbar md:hidden"
-      aria-label="Navegación principal"
+      class="tabbar"
+      aria-label="Principal móvil"
     >
       <NuxtLink
         v-for="tab in tabs"
@@ -25,9 +25,8 @@
 
 <script setup lang="ts">
 /**
- * Mobile bottom tab bar (luxury web-app shell).
- * Five primary destinations; secondary ones (organizer, admin, sign out,
- * theme) stay in the drawer opened from the top bar.
+ * Mobile tab island (DESIGN.md §6): five labeled destinations below 900px.
+ * Secondary destinations (organizer, appearance, sign out) live in Ajustes.
  */
 const route = useRoute()
 const { isAuthenticated } = useAuthState()

@@ -2,12 +2,12 @@
   <div class="tournament-bracket">
     <!-- Group Stage -->
     <div v-if="bracketData?.groups && bracketData.groups.length > 0" class="mb-12">
-      <h3 class="text-size-2 font-semibold text-foreground mb-6">Fase de Grupos</h3>
+      <h3 class="panel-title">Fase de Grupos</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div
           v-for="group in bracketData.groups"
           :key="group.id"
-          class="glass-card-elevated p-6 rounded-xl hover-lift transition-all"
+          class="panel transition-all"
         >
           <div class="flex items-center justify-between mb-4">
             <h4 class="text-size-3 font-semibold text-foreground">{{ group.group_name }}</h4>
@@ -84,7 +84,7 @@
               :class="[
                 'flex items-center justify-between p-3 rounded-lg border',
                 isCurrentPlayer(player.player?.id)
-                  ? 'bg-accent-subtle/30 border-accent border-2'
+                  ? 'bg-accent-subtle/30 border-accent border'
                   : 'bg-surface border-border-subtle'
               ]"
             >
@@ -137,7 +137,7 @@
       </h3>
       
       <!-- Current Round Deadline Info -->
-      <div v-if="mainCurrentRoundDeadline" class="mb-6 glass-card-elevated p-4 rounded-xl">
+      <div v-if="mainCurrentRoundDeadline" class="mb-6 panel rounded-xl">
         <div class="flex items-center gap-3">
           <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" />
           <div>
@@ -165,7 +165,7 @@
       </h3>
       
       <!-- Current Round Deadline Info -->
-      <div v-if="backdrawCurrentRoundDeadline" class="mb-6 glass-card-elevated p-4 rounded-xl">
+      <div v-if="backdrawCurrentRoundDeadline" class="mb-6 panel rounded-xl">
         <div class="flex items-center gap-3">
           <Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent-secondary" />
           <div>
@@ -195,10 +195,10 @@
     <Teleport to="body">
       <div
         v-if="selectedGroupId"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        class="te-modal"
         @click.self="closeGroupMatches"
       >
-        <div class="glass-card-elevated p-6 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-fade-in-scale">
+        <div class="panel max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between mb-6">
             <h3 class="text-size-2 font-semibold text-foreground">
               Partidos del Grupo
@@ -222,7 +222,7 @@
             <div
               v-for="tm in groupMatches"
               :key="tm.id"
-              class="p-4 rounded-xl bg-surface border-2 border-border-subtle hover:border-accent transition-all"
+              class="p-4 rounded-xl bg-surface border border-border-subtle hover:border-accent transition-all"
             >
               <div class="flex items-center justify-between">
                 <div class="flex-1">
@@ -292,7 +292,7 @@
               <div v-if="tm.match && canViewMatchDetails(tm.match)" class="mt-3 flex justify-end">
                 <NuxtLink
                   :to="`/matches/${tm.match.id}${props.tournamentId ? `?from=tournament&tournamentId=${props.tournamentId}` : ''}`"
-                  class="px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                  class="btn-primary"
                 >
                   Ver Detalles
                 </NuxtLink>
@@ -1055,9 +1055,9 @@ const loadBracket = async () => {
           
           try {
             // Pass options to createBracket with font settings
-            // Using 'inherit' to inherit Instrument Sans from the project
+            // Using 'inherit' to inherit Geist from the page
             const bracketOptions = {
-              rootFontFamily: 'inherit', // Inherits Instrument Sans from project
+              rootFontFamily: 'inherit', // Inherits Geist from the page
               roundTitlesFontFamily: 'inherit',
               playerTitleFontFamily: 'inherit',
               scoreFontFamily: 'inherit',
@@ -1107,9 +1107,9 @@ const loadBracket = async () => {
           
           try {
             // Pass options to createBracket with font settings
-            // Using 'inherit' to inherit Instrument Sans from the project
+            // Using 'inherit' to inherit Geist from the page
             const bracketOptions = {
-              rootFontFamily: 'inherit', // Inherits Instrument Sans from project
+              rootFontFamily: 'inherit', // Inherits Geist from the page
               roundTitlesFontFamily: 'inherit',
               playerTitleFontFamily: 'inherit',
               scoreFontFamily: 'inherit',
@@ -1307,10 +1307,10 @@ onMounted(() => {
   --matchTextColor: oklch(0.95 0 0);
   --matchFontSize: 14px;
   --roundTitlesFontSize: 18px;
-  --roundTitlesFontFamily: 'Instrument Sans', system-ui, -apple-system, sans-serif;
-  --matchFontFamily: 'Instrument Sans', system-ui, -apple-system, sans-serif;
-  --playerTitleFontFamily: 'Instrument Sans', system-ui, -apple-system, sans-serif;
-  --scoreFontFamily: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  --roundTitlesFontFamily: var(--font-sans);
+  --matchFontFamily: var(--font-sans);
+  --playerTitleFontFamily: var(--font-sans);
+  --scoreFontFamily: var(--font-sans);
   --connectionLinesColor: oklch(0.55 0.01 250); /* Lighter color for visibility on dark background */
   --highlightedConnectionLinesColor: oklch(0.70 0.22 150); /* Accent color for highlighted lines */
   --rootBorderColor: oklch(0.22 0.01 250);
@@ -1338,7 +1338,7 @@ onMounted(() => {
 }
 
 .bracketry-container .round-titles-wrapper > *:not(svg):not([class*="connection"]):not([class*="line"]) {
-  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-sans) !important;
   font-weight: 600 !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
@@ -1367,7 +1367,7 @@ onMounted(() => {
 }
 
 .bracketry-container .match > *:not(svg):not([class*="connection"]):not([class*="line"]):not(path):not(line):not(polyline) {
-  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-sans) !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
 }
@@ -1381,7 +1381,7 @@ onMounted(() => {
 .bracketry-container [class*="player"]:not(svg):not([class*="connection"]):not([class*="line"]) {
   color: oklch(0.95 0 0) !important;
   font-weight: 600 !important;
-  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-sans) !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
 }
@@ -1394,7 +1394,7 @@ onMounted(() => {
 .bracketry-container .score,
 .bracketry-container [class*="score"]:not(svg):not([class*="connection"]):not([class*="line"]) {
   color: oklch(0.70 0.01 250) !important;
-  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-sans) !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
 }
@@ -1412,7 +1412,7 @@ onMounted(() => {
   border-color: oklch(0.22 0.01 250) !important;
   color: oklch(0.70 0.01 250) !important;
   transition: all 0.2s ease !important;
-  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-sans) !important;
 }
 
 .bracketry-container .navigation-button:hover,
@@ -1440,7 +1440,7 @@ onMounted(() => {
 .bracketry-container p:not(svg):not([class*="connection"]):not([class*="line"]),
 .bracketry-container td:not(svg):not([class*="connection"]):not([class*="line"]),
 .bracketry-container th:not(svg):not([class*="connection"]):not([class*="line"]) {
-  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-sans) !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
 }

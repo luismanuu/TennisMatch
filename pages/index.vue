@@ -1,772 +1,215 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
+  <PageLayout>
+    <!-- Authenticated: Inicio (DESIGN.md §7, design/mock/court-Inicio.html) -->
+    <template v-if="isAuthenticated">
+      <header class="page-heading">
+        <p class="meta">{{ contextLine }}</p>
+        <h1>{{ greeting }}<span v-if="firstName">, {{ firstName }}</span></h1>
+      </header>
 
-    <!-- Navigation -->
-    <AppNavigation />
+      <div class="split-grid">
+        <div class="flow-stack">
+          <!-- Lead: the most urgent real action, derived from pending notifications -->
+          <PhotoPanel v-if="leadNotification" photo="clayday" variant="priority" eager>
+            <template #decor><CourtLines rally /></template>
+            <span class="status-pill">{{ leadCopy.status }}</span>
+            <h2>{{ leadCopy.title }}</h2>
+            <p v-if="leadNotification.type === 'score_proposal' && leadMatch?.score" class="score">{{ formatScore(leadMatch.score) }}</p>
+            <p v-if="leadMeta">{{ leadMeta }}</p>
+            <NuxtLink :to="`/matches/${leadNotification.match_id}`" class="btn-primary">
+              {{ leadCopy.action }}
+              <Icon :name="leadNotification.type === 'score_proposal' ? 'heroicons:check' : 'heroicons:arrow-right'" class="w-5 h-5" aria-hidden="true" />
+            </NuxtLink>
+          </PhotoPanel>
 
-    <!-- Spacer for fixed nav -->
-    <div class="h-16"></div>
-
-    <!-- Authenticated User Dashboard -->
-    <div v-if="isAuthenticated" class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <!-- Welcome Header -->
-        <div class="text-center mb-16 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:trophy" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Dashboard Activo</span>
-          </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">
-            ¡Bienvenido de vuelta<span v-if="player?.name">, {{ player.name.split(' ')[0] }}</span>!
-          </h1>
-          <p class="text-size-3 font-regular text-foreground-muted max-w-xl mx-auto">
-            Gestiona tus partidos, torneos y sigue tu progreso en la comunidad de tenis
-          </p>
-        </div>
-        
-        <!-- Pending Actions Section -->
-        <div 
-          v-if="notificationsCount.total > 0" 
-          class="glass-card-elevated p-6 mb-8 border-l-4 border-accent animate-fade-in-scale"
-        >
-          <div class="flex items-start gap-4">
-            <div class="w-12 h-12 rounded-xl bg-accent-subtle/30 border border-accent/30 flex items-center justify-center flex-shrink-0">
-              <Icon name="heroicons:bell-alert" class="w-6 h-6 text-accent" />
+          <section v-else class="panel lead-clear">
+            <CourtLines class="lead-clear__court" />
+            <div class="lead-clear__copy">
+              <span class="status-pill">Todo al día</span>
+              <h2>Tu próximo punto empieza aquí</h2>
+              <p class="meta">No tienes acciones pendientes. Organiza tu siguiente partido cuando quieras.</p>
+              <NuxtLink to="/matches/new" class="btn-primary">
+                Programar partido
+                <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
+              </NuxtLink>
             </div>
-            <div class="flex-1">
-              <div class="flex items-center gap-3 mb-2">
-                <h3 class="text-size-2 font-semibold text-foreground">Acciones Pendientes</h3>
-                <span class="px-2 py-1 rounded-full bg-accent text-white text-xs font-bold">
-                  {{ notificationsCount.total }}
+          </section>
+
+          <!-- Profile completion (real state from /api/players/me) -->
+          <section v-if="!playerLoading && (!player || !player.category)" class="panel notice" role="status">
+            <Icon name="heroicons:exclamation-triangle" class="w-6 h-6 text-warning flex-shrink-0" aria-hidden="true" />
+            <div class="notice__copy">
+              <h2>Completa tu perfil</h2>
+              <p class="meta">Agrega tu ciudad y categoría para aparecer en el ranking y recibir propuestas.</p>
+              <NuxtLink to="/onboarding" class="text-link">
+                Completar perfil
+                <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+              </NuxtLink>
+            </div>
+          </section>
+
+          <div class="quick-actions">
+            <NuxtLink v-if="leadNotification" to="/matches/new" class="btn-secondary">
+              Programar partido
+              <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
+            </NuxtLink>
+            <NuxtLink to="/matchmaking" class="text-link">
+              Buscar rival
+              <Icon name="heroicons:magnifying-glass" class="w-5 h-5" aria-hidden="true" />
+            </NuxtLink>
+          </div>
+
+          <!-- Remaining pending actions -->
+          <section v-if="otherNotifications.length" aria-labelledby="pending-title">
+            <div class="section-heading">
+              <h2 id="pending-title">También pendiente</h2>
+              <NuxtLink to="/matches?filter=pending" class="text-link">
+                Ver todos
+                <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+              </NuxtLink>
+            </div>
+            <div class="list-surface">
+              <NuxtLink
+                v-for="notification in otherNotifications"
+                :key="notification.id"
+                :to="`/matches/${notification.match_id}`"
+                class="list-row"
+              >
+                <span class="avatar" aria-hidden="true"><Icon :name="getNotificationIcon(notification.type)" class="w-5 h-5 text-accent" /></span>
+                <span class="row-copy">
+                  <strong>{{ notificationCopy(notification).status }}</strong>
+                  <span class="meta">{{ notificationCopy(notification).title }}</span>
                 </span>
-              </div>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Tienes {{ notificationsCount.total }} {{ notificationsCount.total === 1 ? 'partido que requiere' : 'partidos que requieren' }} tu atención
-              </p>
-              
-              <!-- Quick list of notifications -->
-              <div class="space-y-2 mb-4">
-                <div 
-                  v-for="notification in topNotifications" 
-                  :key="notification.id"
-                  class="flex items-center gap-3 p-3 rounded-lg bg-surface-elevated hover:bg-surface transition-colors cursor-pointer"
-                  @click="navigateToMatch(notification.match_id)"
-                >
-                  <Icon 
-                    :name="getNotificationIcon(notification.type)" 
-                    class="w-5 h-5 text-accent flex-shrink-0" 
-                  />
-                  <p class="text-size-4 font-regular text-foreground flex-1" v-html="getNotificationText(notification)"></p>
-                  <Icon name="heroicons:arrow-right" class="w-4 h-4 text-foreground-muted" />
-                </div>
-              </div>
-              
-              <NuxtLink 
-                to="/matches?filter=pending" 
-                class="btn-primary inline-flex items-center gap-2"
-              >
-                <Icon name="heroicons:eye" class="w-4 h-4" />
-                Ver Todos los Partidos Pendientes
+                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
               </NuxtLink>
             </div>
-          </div>
+          </section>
+
+          <section aria-labelledby="shortcuts-title">
+            <div class="section-heading"><h2 id="shortcuts-title">Tus partidos</h2></div>
+            <div class="list-surface">
+              <NuxtLink to="/matches" class="list-row">
+                <span class="avatar" aria-hidden="true"><Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" /></span>
+                <span class="row-copy"><strong>Próximos e historial</strong><span class="meta">Partidos programados, resultados y propuestas</span></span>
+                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
+              </NuxtLink>
+              <NuxtLink v-if="isStaff" to="/organizer/tournaments" class="list-row">
+                <span class="avatar" aria-hidden="true"><Icon name="heroicons:trophy" class="w-5 h-5 text-accent" /></span>
+                <span class="row-copy"><strong>Crear torneo</strong><span class="meta">Organiza y gestiona tus torneos</span></span>
+                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
+              </NuxtLink>
+              <NuxtLink to="/profile" class="list-row">
+                <span class="avatar" aria-hidden="true">{{ player?.name ? getPlayerInitials(player.name) : '?' }}</span>
+                <span class="row-copy"><strong>Tu perfil de jugador</strong><span class="meta">{{ user?.primaryEmailAddress?.emailAddress }}</span></span>
+                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
+              </NuxtLink>
+            </div>
+          </section>
         </div>
 
-        <!-- Dashboard Cards -->
-        <div class="grid md:grid-cols-2 gap-6">
-          <!-- Profile Card -->
-          <div class="glass-card-elevated p-8 hover-lift animate-fade-up animate-delay-1">
-            <div class="flex items-start gap-4 mb-6">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center flex-shrink-0">
-                <span v-if="player?.name" class="text-2xl font-bold text-accent">
-                  {{ getPlayerInitials(player.name) }}
-                </span>
-                <Icon v-else name="heroicons:user" class="w-8 h-8 text-accent" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <h3 class="text-size-2 font-semibold text-foreground mb-1">Tu Perfil</h3>
-                <p class="text-size-4 font-regular text-foreground-muted">Información de tu cuenta</p>
-              </div>
-              <NuxtLink to="/profile" class="btn-secondary text-size-4 !py-2 !px-4 flex-shrink-0 group">
-                <Icon name="heroicons:arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+        <aside class="flow-stack" aria-label="Tu nivel">
+          <section class="panel rating">
+            <div class="rating__copy">
+              <h2 class="meta rating__label">Tu nivel de juego</h2>
+              <p v-if="playerLoading" class="rating-number rating-number--loading" aria-busy="true">—</p>
+              <p v-else class="rating-number">{{ (player?.elo ?? 0).toLocaleString('es-EC') }} <span>SR</span></p>
+              <p v-if="currentTier" class="meta">{{ tierName(currentTier.tier) }}</p>
+              <p v-else-if="player && !playerLoading" class="meta">Sin nivel todavía: juega tus partidos de colocación</p>
+              <NuxtLink to="/my-ranking" class="text-link">
+                Ver mi ranking
+                <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
               </NuxtLink>
             </div>
-            <div class="space-y-3" v-if="user">
-              <div class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-center gap-3 mb-2">
-                  <Icon name="heroicons:envelope" class="w-4 h-4 text-foreground-muted" />
-                  <p class="text-size-4 font-semibold text-foreground-muted">Email</p>
-                </div>
-                <p class="text-size-3 font-regular text-foreground">{{ user?.primaryEmailAddress?.emailAddress }}</p>
-              </div>
-              <div class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-center gap-3 mb-2">
-                  <Icon name="heroicons:user-circle" class="w-4 h-4 text-foreground-muted" />
-                  <p class="text-size-4 font-semibold text-foreground-muted">Nombre</p>
-                </div>
-                <p class="text-size-3 font-regular text-foreground">{{ user?.fullName || player?.name || 'No configurado' }}</p>
-              </div>
-              <div v-if="player?.phone_number" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-center gap-3 mb-2">
-                  <Icon name="heroicons:phone" class="w-4 h-4 text-foreground-muted" />
-                  <p class="text-size-4 font-semibold text-foreground-muted">Teléfono</p>
-                </div>
-                <p class="text-size-3 font-regular text-foreground">{{ player.phone_number }}</p>
-              </div>
-              <!-- Loading state -->
-              <div v-if="playerLoading" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle">
-                <div class="flex items-center gap-3">
-                  <div class="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-                  <p class="text-size-4 font-regular text-foreground-muted">Cargando perfil...</p>
-                </div>
-              </div>
-              <!-- Profile complete -->
-              <div v-else-if="player?.category" class="p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/30 transition-all">
-                <div class="flex items-center gap-3 mb-2">
-                  <Icon name="heroicons:star" class="w-4 h-4 text-foreground-muted" />
-                  <p class="text-size-4 font-semibold text-foreground-muted">Categoría</p>
-                </div>
-                <p class="text-size-3 font-semibold text-foreground">{{ player.category.name }}</p>
-                <p v-if="player.category.description" class="text-size-4 font-regular text-foreground-muted mt-1">
-                  {{ player.category.description }}
-                </p>
-              </div>
-              <!-- Profile incomplete - only show when NOT loading and player exists but has no category -->
-              <div v-else-if="!playerLoading && player && !player.category" class="p-4 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
-                <div class="flex items-center gap-3 mb-2">
-                  <Icon name="heroicons:exclamation-triangle" class="w-5 h-5 text-accent" />
-                  <p class="text-size-4 font-semibold text-foreground">Perfil incompleto</p>
-                </div>
-                <p class="text-size-4 font-regular text-foreground-muted mb-3">
-                  Completa tu perfil para comenzar a jugar
-                </p>
-                <NuxtLink to="/onboarding" class="btn-primary text-size-4 !py-2 !px-4 inline-flex items-center group">
-                  <span>Completar Perfil</span>
-                  <Icon name="heroicons:arrow-right" class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </NuxtLink>
-              </div>
-              <!-- Profile doesn't exist yet - only show when NOT loading and no player -->
-              <div v-else-if="!playerLoading && !player" class="p-4 rounded-xl bg-accent-subtle/30 border border-accent/30 animate-fade-in-scale">
-                <div class="flex items-center gap-3 mb-2">
-                  <Icon name="heroicons:exclamation-triangle" class="w-5 h-5 text-accent" />
-                  <p class="text-size-4 font-semibold text-foreground">Perfil incompleto</p>
-                </div>
-                <p class="text-size-4 font-regular text-foreground-muted mb-3">
-                  Completa tu perfil para comenzar a jugar
-                </p>
-                <NuxtLink to="/onboarding" class="btn-primary text-size-4 !py-2 !px-4 inline-flex items-center group">
-                  <span>Completar Perfil</span>
-                  <Icon name="heroicons:arrow-right" class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </NuxtLink>
-              </div>
-            </div>
-          </div>
+            <img v-if="tierImage" :src="tierImage" width="72" height="72" :alt="`Nivel ${tierName(currentTier?.tier)}`" class="rating__tier">
+          </section>
 
-          <!-- Features Card -->
-          <div class="glass-card-elevated p-8 hover-lift animate-fade-up animate-delay-2">
-            <div class="flex items-start gap-4 mb-6">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-secondary/20 to-accent-secondary/5 border-2 border-accent-secondary/30 flex items-center justify-center flex-shrink-0">
-                <Icon name="heroicons:bolt" class="w-8 h-8 text-accent-secondary" />
-              </div>
-              <div>
-                <h3 class="text-size-2 font-semibold text-foreground mb-1">Acciones Rápidas</h3>
-                <p class="text-size-4 font-regular text-foreground-muted">Lo que puedes hacer</p>
-              </div>
+          <section class="panel" aria-label="Estadísticas recientes">
+            <div class="stats">
+              <div><strong class="stat-value">{{ player?.win_streak ?? 0 }}</strong><span class="meta">Victorias seguidas</span></div>
+              <div><strong class="stat-value">{{ player?.total_matches_played ?? 0 }}</strong><span class="meta">Partidos jugados</span></div>
+              <div><strong class="stat-value">{{ stats[2].value }}</strong><span class="meta">Victorias</span></div>
+              <div><strong class="stat-value">{{ stats[3].value }}</strong><span class="meta">Porcentaje de victorias</span></div>
             </div>
-            <ul class="space-y-3">
-              <!-- Create Tournament (only for organizers) -->
-              <NuxtLink 
-                v-if="isOrganizer"
-                to="/organizer/tournaments"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-purple-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-              >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
-                </div>
-                <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-purple-400 transition-colors block">
-                    Crear Torneo
-                  </span>
-                  <span class="text-size-4 font-regular text-foreground-muted">
-                    Organiza un nuevo torneo
-                  </span>
-                </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
-              </NuxtLink>
-              <NuxtLink 
-                to="/matchmaking"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-blue-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-              >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:magnifying-glass" class="w-6 h-6 text-background" />
-                </div>
-                <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-blue-400 transition-colors block">
-                    Busca Partida Competitiva
-                  </span>
-                  <span class="text-size-4 font-regular text-foreground-muted">
-                    Encuentra oponentes de tu nivel
-                  </span>
-                </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-              </NuxtLink>
-              <NuxtLink 
-                to="/matches/new"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-green-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-              >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:plus" class="w-6 h-6 text-background" />
-                </div>
-                <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-green-400 transition-colors block">
-                    Registrar Partido
-                  </span>
-                  <span class="text-size-4 font-regular text-foreground-muted">
-                    Programa un nuevo encuentro
-                  </span>
-                </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-green-400 group-hover:translate-x-1 transition-all" />
-              </NuxtLink>
-              <NuxtLink 
-                to="/matches"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-indigo-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-              >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:calendar" class="w-6 h-6 text-background" />
-                </div>
-                <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-indigo-400 transition-colors block">
-                    Ver Partidos
-                  </span>
-                  <span class="text-size-4 font-regular text-foreground-muted">
-                    Historial y próximos encuentros
-                  </span>
-                </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
-              </NuxtLink>
-              <NuxtLink 
-                to="/my-ranking"
-                class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-              >
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon name="heroicons:chart-bar-square" class="w-6 h-6 text-background" />
-                </div>
-                <div class="flex-1">
-                  <span class="text-size-3 font-semibold text-foreground group-hover:text-amber-400 transition-colors block">
-                    Ver tu Ranking
-                  </span>
-                  <span class="text-size-4 font-regular text-foreground-muted">
-                    Sigue tu progreso y estadísticas
-                  </span>
-                </div>
-                <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
-              </NuxtLink>
-              <template v-for="(feature, index) in dashboardFeatures" :key="index">
-                <NuxtLink
-                  v-if="feature === 'Gestionar tu perfil de jugador'"
-                  to="/profile"
-                  class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-green-500/30 hover:border-green-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-                >
-                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                    <Icon name="heroicons:user-circle" class="w-6 h-6 text-background" />
-                  </div>
-                  <div class="flex-1">
-                    <span class="text-size-3 font-semibold text-foreground group-hover:text-green-400 transition-colors block">
-                      {{ feature }}
-                    </span>
-                  </div>
-                  <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-green-400 group-hover:translate-x-1 transition-all" />
-                </NuxtLink>
-                <NuxtLink
-                  v-else-if="feature === 'Ver y crear torneos'"
-                  to="/organizer/tournaments"
-                  class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-purple-500/30 hover:border-purple-500/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-                >
-                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                    <Icon name="heroicons:trophy" class="w-6 h-6 text-background" />
-                  </div>
-                  <div class="flex-1">
-                    <span class="text-size-3 font-semibold text-foreground group-hover:text-purple-400 transition-colors block">
-                      {{ feature }}
-                    </span>
-                  </div>
-                  <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
-                </NuxtLink>
-                <li 
-                  v-else
-                  class="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border border-border-subtle hover:border-accent/50 hover:bg-surface-elevated cursor-pointer group transition-all hover-lift"
-                >
-                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                    <Icon name="heroicons:check-circle" class="w-6 h-6 text-accent" />
-                  </div>
-                  <div class="flex-1">
-                    <span class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors block">
-                      {{ feature }}
-                    </span>
-                  </div>
-                  <Icon name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted group-hover:text-accent group-hover:translate-x-1 transition-all" />
-                </li>
-              </template>
-            </ul>
-          </div>
-        </div>
-
-        <!-- Stats Preview -->
-        <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-up animate-delay-3">
-          <div 
-            v-for="(stat, index) in stats" 
-            :key="stat.label" 
-            class="glass-card-elevated p-6 text-center hover-lift"
-            :style="{ animationDelay: `${(index + 3) * 0.1}s` }"
-          >
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center mx-auto mb-3">
-              <Icon :name="stat.icon" class="w-6 h-6 text-accent" />
-            </div>
-            <div class="text-size-1 font-semibold text-gradient-static mb-2">{{ stat.value }}</div>
-            <div class="text-size-4 font-regular text-foreground-muted">{{ stat.label }}</div>
-          </div>
-        </div>
-
-        <!-- Estadísticas y Ranking Info -->
-        <div class="mt-12 grid md:grid-cols-2 gap-6 animate-fade-up animate-delay-4">
-          <!-- Estadísticas Card -->
-          <NuxtLink 
-            to="/my-ranking"
-            class="glass-card-elevated p-6 hover-lift group transition-all"
-          >
-            <div class="flex items-center gap-4 mb-4">
-              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:chart-bar" class="w-6 h-6 text-background" />
-              </div>
-              <div>
-                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-blue-400 transition-colors">
-                  Estadísticas
-                </h3>
-                <p class="text-size-5 text-foreground-muted">Tu rendimiento</p>
-              </div>
-            </div>
-            <p class="text-size-4 text-foreground-muted">
-              Visualiza tus estadísticas detalladas, historial de partidas y progreso de ranking
-            </p>
-          </NuxtLink>
-
-          <!-- Ranking Info Card -->
-          <div 
-            @click="showRankingInfo = true"
-            class="glass-card-elevated p-6 hover-lift group transition-all cursor-pointer"
-          >
-            <div class="flex items-center gap-4 mb-4">
-              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:information-circle" class="w-6 h-6 text-background" />
-              </div>
-              <div>
-                <h3 class="text-size-3 font-semibold text-foreground group-hover:text-accent transition-colors">
-                  Ranking Info
-                </h3>
-                <p class="text-size-5 text-foreground-muted">Sistema de ranking</p>
-              </div>
-            </div>
-            <p class="text-size-4 text-foreground-muted">
-              Aprende cómo funciona el sistema de ranking, tiers y cálculo de SR
-            </p>
-          </div>
-        </div>
-
-        <!-- Ranking System Info Modal -->
-        <RankingSystemInfo v-model="showRankingInfo" />
+            <button type="button" class="text-link mt-2" @click="showRankingInfo = true">
+              Cómo funciona el ranking
+              <Icon name="heroicons:information-circle" class="w-4 h-4" aria-hidden="true" />
+            </button>
+          </section>
+        </aside>
       </div>
-    </div>
 
-    <!-- Guest Landing Page -->
-    <div v-else>
-      <!-- Hero Section -->
-      <section class="section-padding relative overflow-hidden">
-        <div class="container-medium px-6">
-          <div class="text-center">
-            <!-- Badge -->
-            <div class="mb-8">
-              <span class="inline-flex items-center gap-2 badge badge-accent">
-                <span class="animate-tennis-bounce">🎾</span>
-                <span>La #1 plataforma de tenis en Ecuador</span>
-              </span>
-            </div>
+      <RankingSystemInfo v-model="showRankingInfo" />
+    </template>
 
-            <!-- Main Headline -->
-            <h1 class="text-size-1 font-semibold text-foreground mb-6">
-              Lleva tu juego al
-              <span class="text-gradient"> siguiente nivel</span>
-            </h1>
-
-            <!-- Subheadline -->
-            <p class="text-size-2 font-regular text-foreground-muted mb-8 max-w-2xl mx-auto">
-              La plataforma definitiva para jugadores amateur. Sistema SR (Skill Rating) avanzado, 
-              matchmaking inteligente, torneos organizados y rankings en tiempo real.
-            </p>
-
-            <!-- CTA Buttons -->
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <NuxtLink to="/sign-up" class="btn-primary text-size-3 w-full sm:w-auto">
-                Comenzar Gratis
-                <svg class="w-5 h-5 ml-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </NuxtLink>
-              <NuxtLink to="/sign-in" class="btn-secondary text-size-3 w-full sm:w-auto">
-                Ya tengo cuenta
-              </NuxtLink>
-            </div>
-
-            <!-- Social Proof -->
-            <div class="flex flex-wrap items-center justify-center gap-8 text-foreground-subtle">
-              <div class="flex items-center gap-2">
-                <div class="flex -space-x-2">
-                  <div class="w-8 h-8 rounded-full bg-accent-subtle border-2 border-background"></div>
-                  <div class="w-8 h-8 rounded-full bg-accent-secondary-muted border-2 border-background"></div>
-                  <div class="w-8 h-8 rounded-full bg-surface border-2 border-background"></div>
-                </div>
-                <span class="text-size-4">+500 jugadores activos</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-accent">★★★★★</span>
-                <span class="text-size-4">4.9/5 valoración</span>
-              </div>
-            </div>
-          </div>
+    <!-- Guest landing -->
+    <template v-else>
+      <PhotoPanel photo="hero" variant="priority" eager tag="section" class="landing-hero" sizes="(max-width: 767px) 320px, 90vw">
+        <template #decor><CourtLines rally /></template>
+        <h1 class="landing-hero__title">Lleva tu juego al siguiente nivel</h1>
+        <p class="landing-hero__lede">Registra tus partidos, sigue tu nivel SR y encuentra rivales de tu nivel en tu ciudad. Rankings y torneos para jugadores amateur de Ecuador.</p>
+        <div class="quick-actions landing-hero__actions">
+          <NuxtLink to="/sign-up" class="btn-primary">
+            Crear cuenta gratis
+            <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+          </NuxtLink>
+          <NuxtLink to="/sign-in" class="btn-photo">Ya tengo cuenta</NuxtLink>
         </div>
+      </PhotoPanel>
 
-        <!-- Decorative gradient line -->
-        <div class="gradient-line w-full max-w-md mx-auto mt-16 opacity-50"></div>
+      <section class="landing-section" aria-labelledby="features-title">
+        <div class="section-heading"><h2 id="features-title">Todo lo que necesitas para competir</h2></div>
+        <ul class="list-surface landing-features">
+          <li v-for="group in featureGroups" :key="group.title" class="landing-feature">
+            <span class="avatar" aria-hidden="true"><Icon :name="group.icon" class="w-5 h-5 text-accent" /></span>
+            <div class="row-copy">
+              <strong>{{ group.title }}</strong>
+              <span class="meta">{{ group.description }}</span>
+              <ul class="landing-feature-points">
+                <li v-for="point in group.points" :key="point">
+                  <Icon name="heroicons:check" class="w-4 h-4 text-accent flex-shrink-0" aria-hidden="true" />
+                  {{ point }}
+                </li>
+              </ul>
+            </div>
+          </li>
+        </ul>
       </section>
 
-      <!-- Features Section -->
-      <section class="section-padding relative z-10">
-        <div class="container-medium px-6">
-          <div class="text-center mb-16">
-            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-              <Icon name="heroicons:sparkles" class="w-4 h-4 text-accent" />
-              <span class="text-size-4 font-semibold text-accent">Características Principales</span>
-            </div>
-            <h2 class="text-size-1 font-semibold text-foreground mb-4">
-              Todo lo que necesitas para competir
-            </h2>
-            <p class="text-size-3 font-regular text-foreground-muted max-w-2xl mx-auto">
-              Una plataforma completa con sistema de ranking, matchmaking inteligente y torneos organizados
-            </p>
-          </div>
-          
-          <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Sistema SR -->
-            <div class="glass-card-elevated p-8 hover-lift group">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:chart-bar" class="w-8 h-8 text-accent" />
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Sistema SR (Skill Rating) Avanzado</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Rating dinámico basado en tus resultados competitivos con 7 tiers (Bronze a Grandmaster)
-              </p>
-              <ul class="space-y-2 text-size-4 text-foreground-muted">
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Partidos de colocación iniciales</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Decay mensual para mantener actividad</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Historial completo de cambios</span>
-                </li>
-              </ul>
-            </div>
-
-            <!-- Matchmaking -->
-            <div class="glass-card-elevated p-8 hover-lift group">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border-2 border-blue-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:magnifying-glass" class="w-8 h-8 text-blue-400" />
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Matchmaking Inteligente</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Encuentra oponentes perfectos basado en tu nivel, ubicación y actividad reciente
-              </p>
-              <ul class="space-y-2 text-size-4 text-foreground-muted">
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Búsqueda por tier (2 arriba, 1 abajo)</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Filtrado por ciudad y segmento</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Límite de 4 partidos/mes por oponente</span>
-                </li>
-              </ul>
-            </div>
-
-            <!-- Torneos -->
-            <div class="glass-card-elevated p-8 hover-lift group">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 border-2 border-purple-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:trophy" class="w-8 h-8 text-purple-400" />
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Torneos Organizados</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Participa en competencias estructuradas con brackets automáticos y seguimiento en tiempo real
-              </p>
-              <ul class="space-y-2 text-size-4 text-foreground-muted">
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Brackets automáticos</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Múltiples fases y grupos</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Programación inteligente</span>
-                </li>
-              </ul>
-            </div>
-
-            <!-- Partidos Competitivos -->
-            <div class="glass-card-elevated p-8 hover-lift group">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500/20 to-green-500/5 border-2 border-green-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:check-badge" class="w-8 h-8 text-green-400" />
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Partidos Competitivos</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Diferencia entre partidos competitivos (afectan SR) y amistosos (solo registro)
-              </p>
-              <ul class="space-y-2 text-size-4 text-foreground-muted">
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Partidos competitivos afectan ranking</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Partidos amistosos sin impacto SR</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Historial completo de ambos tipos</span>
-                </li>
-              </ul>
-            </div>
-
-            <!-- Leaderboard -->
-            <div class="glass-card-elevated p-8 hover-lift group">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 border-2 border-amber-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:bars-3-bottom-left" class="w-8 h-8 text-amber-400" />
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Leaderboards Múltiples</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Rankings globales, por ciudad, segmento y tier para competir en diferentes categorías
-              </p>
-              <ul class="space-y-2 text-size-4 text-foreground-muted">
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Ranking global</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Ranking por ciudad/segmento</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Ranking por tier</span>
-                </li>
-              </ul>
-            </div>
-
-            <!-- Perfiles y Estadísticas -->
-            <div class="glass-card-elevated p-8 hover-lift group">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 border-2 border-cyan-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Icon name="heroicons:user-circle" class="w-8 h-8 text-cyan-400" />
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Perfiles y Estadísticas</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Perfiles públicos con historial completo, estadísticas detalladas y gráficos de progreso
-              </p>
-              <ul class="space-y-2 text-size-4 text-foreground-muted">
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Historial de partidas competitivas</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Gráficos de progreso SR</span>
-                </li>
-                <li class="flex items-center gap-2">
-                  <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span>Estadísticas de win rate y rachas</span>
-                </li>
-              </ul>
-            </div>
+      <section class="landing-section split-grid even" aria-labelledby="tiers-title">
+        <div>
+          <div class="section-heading"><h2 id="tiers-title">Sube de nivel, de Bronce a Gran Maestro</h2></div>
+          <p class="meta">Cada partido competitivo confirmado mueve tu SR. Tres partidos de colocación te dan tu nivel inicial.</p>
+          <ol class="landing-steps">
+            <li><strong>Crea tu cuenta</strong><span class="meta">Con tu email, en menos de un minuto.</span></li>
+            <li><strong>Completa tu perfil</strong><span class="meta">Ciudad, categoría y nivel de juego.</span></li>
+            <li><strong>Juega tus partidos de colocación</strong><span class="meta">Obtén tu ranking inicial y empieza a subir.</span></li>
+          </ol>
+        </div>
+        <div class="list-surface">
+          <div v-for="tier in ratingTiers" :key="tier.tier" class="rank-row">
+            <img :src="tierImageFor(tier.tier)" width="36" height="36" alt="" class="landing-tier-icon" loading="lazy">
+            <span class="row-copy"><strong>{{ tierName(tier.tier) }}</strong></span>
+            <span class="rank-score">{{ tier.minElo.toLocaleString('es-EC') }}{{ tier.maxElo === Infinity ? '+' : `–${tier.maxElo.toLocaleString('es-EC')}` }}<small>SR</small></span>
           </div>
         </div>
       </section>
 
-      <!-- Rating Tiers Section -->
-      <section class="section-padding bg-surface relative z-10">
-        <div class="container-medium px-6">
-          <div class="text-center mb-16">
-            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-              <Icon name="heroicons:star" class="w-4 h-4 text-accent" />
-              <span class="text-size-4 font-semibold text-accent">Sistema de Tiers</span>
-            </div>
-            <h2 class="text-size-1 font-semibold text-foreground mb-4">
-              Sube de nivel y alcanza nuevos tiers
-            </h2>
-            <p class="text-size-3 font-regular text-foreground-muted max-w-2xl mx-auto">
-              Desde Bronze hasta Grandmaster, cada victoria te acerca más al siguiente nivel
-            </p>
-          </div>
-          
-          <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div 
-              v-for="tier in ratingTiers" 
-              :key="tier.tier"
-              class="glass-card p-6 text-center hover-lift group"
-            >
-              <div 
-                class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center border-2 transition-all group-hover:scale-110"
-                :style="{ 
-                  backgroundColor: `${tier.color}20`,
-                  borderColor: `${tier.color}40`,
-                  color: tier.color
-                }"
-              >
-                <Icon name="heroicons:trophy" class="w-8 h-8" />
-              </div>
-              <h3 class="text-size-2 font-bold mb-2" :style="{ color: tier.color }">
-                {{ tier.tier }}
-              </h3>
-              <p class="text-size-4 text-foreground-muted">
-                {{ tier.minElo.toLocaleString() }} - {{ tier.maxElo === Infinity ? '∞' : tier.maxElo.toLocaleString() }} SR
-              </p>
-            </div>
-          </div>
-        </div>
+      <section class="panel landing-cta">
+        <h2>¿Listo para competir?</h2>
+        <p class="meta">Es gratis. Crea tu cuenta y registra tu primer partido hoy.</p>
+        <NuxtLink to="/sign-up" class="btn-primary">
+          Crear cuenta gratis
+          <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
       </section>
-
-      <!-- How It Works Section -->
-      <section class="section-padding relative z-10">
-        <div class="container-medium px-6">
-          <div class="text-center mb-16">
-            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-              <Icon name="heroicons:question-mark-circle" class="w-4 h-4 text-accent" />
-              <span class="text-size-4 font-semibold text-accent">Cómo Funciona</span>
-            </div>
-            <h2 class="text-size-1 font-semibold text-foreground mb-4">
-              Comienza en 3 simples pasos
-            </h2>
-            <p class="text-size-3 font-regular text-foreground-muted max-w-2xl mx-auto">
-              Únete a la comunidad de tenistas más grande de Ecuador en menos de un minuto
-            </p>
-          </div>
-          
-          <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            <div class="glass-card-elevated p-8 text-center hover-lift">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-accent/80 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
-                1
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Crea tu cuenta</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Regístrate en menos de 30 segundos con tu email
-              </p>
-              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
-                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
-                <span>Verificación instantánea</span>
-              </div>
-            </div>
-            <div class="glass-card-elevated p-8 text-center hover-lift">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent-secondary to-accent-secondary/80 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
-                2
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Completa tu perfil</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Agrega tu ciudad, categoría y nivel de juego
-              </p>
-              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
-                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
-                <span>Configuración rápida</span>
-              </div>
-            </div>
-            <div class="glass-card-elevated p-8 text-center hover-lift">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 text-background font-bold text-size-2 flex items-center justify-center mx-auto mb-6">
-                3
-              </div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-3">Comienza a competir</h3>
-              <p class="text-size-4 font-regular text-foreground-muted mb-4">
-                Juega 3 partidos de colocación y obtén tu ranking inicial
-              </p>
-              <div class="flex items-center justify-center gap-2 text-size-5 text-foreground-muted">
-                <Icon name="heroicons:check-circle" class="w-4 h-4 text-green-400" />
-                <span>Matchmaking automático</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- CTA Section -->
-      <section class="section-padding">
-        <div class="container-narrow px-6">
-          <div class="glass-card-elevated p-12 text-center relative overflow-hidden">
-            <!-- Background Glow -->
-            <div class="absolute inset-0 bg-gradient-to-br from-accent-subtle to-transparent opacity-50"></div>
-            
-            <div class="relative z-10">
-              <h2 class="text-size-1 font-semibold text-foreground mb-4">
-                ¿Listo para competir?
-              </h2>
-              <p class="text-size-3 font-regular text-foreground-muted mb-8 max-w-md mx-auto">
-                Únete a la comunidad de tenistas más grande de Ecuador. Es gratis y solo toma 30 segundos.
-              </p>
-              <NuxtLink to="/sign-up" class="btn-primary text-size-3 inline-flex items-center">
-                Crear cuenta gratis
-                <svg class="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </NuxtLink>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Footer -->
-      <footer class="border-t border-border py-8">
-        <div class="container-wide px-6">
-          <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-                <span class="text-sm">🎾</span>
-              </div>
-              <span class="text-size-4 font-regular text-foreground-muted">
-                © 2024 Tenis Ecuador. Todos los derechos reservados.
-              </span>
-            </div>
-            <div class="flex items-center gap-6 text-size-4 text-foreground-muted">
-              <a href="#" class="hover:text-foreground transition-colors">Términos</a>
-              <a href="#" class="hover:text-foreground transition-colors">Privacidad</a>
-              <a href="#" class="hover:text-foreground transition-colors">Contacto</a>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
-  </div>
+    </template>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
+import { byUrgency, formatScore, pendingCopy } from '~/utils/pendingAction'
+import { tierName } from '~/utils/tiers'
+
 definePageMeta({
   middleware: []
 })
@@ -784,12 +227,35 @@ const { notifications, count: notificationsCount } = useNotifications()
 // Determine if user is staff (admin or organizer)
 const isStaff = computed(() => isAdmin.value || isOrganizer.value)
 
-// Notification helpers for pending actions section
-const topNotifications = computed(() => {
-  return notifications.value.slice(0, 3)
+// Lead card + pending list: most urgent real notification first (utils/pendingAction.ts)
+const sortedNotifications = computed(() => byUrgency(notifications.value || []))
+const leadNotification = computed(() => sortedNotifications.value.find(n => n.match_id) || null)
+const leadMatch = computed(() => leadNotification.value?.match || null)
+const leadCopy = computed(() => pendingCopy(leadNotification.value || {}, player.value?.id))
+const notificationCopy = (n: any) => pendingCopy(n, player.value?.id)
+const otherNotifications = computed(() =>
+  sortedNotifications.value.filter(n => n.match_id && n !== leadNotification.value).slice(0, 3)
+)
+const leadMeta = computed(() => {
+  const m = leadMatch.value
+  if (!m) return ''
+  const when = m.scheduled_at
+    ? new Date(m.scheduled_at).toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })
+    : ''
+  return [m.location, when].filter(Boolean).join(' · ')
 })
 
-const router = useRouter()
+// Greeting (client time; this branch only renders once Clerk has loaded in the browser)
+const firstName = computed(() => (player.value?.name || user.value?.firstName || '').trim().split(' ')[0] || '')
+const greeting = computed(() => {
+  const h = new Date().getHours()
+  return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'
+})
+const contextLine = computed(() => {
+  const date = new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })
+  const city = player.value?.city?.name
+  return city ? `${city}, ${date}` : date.charAt(0).toUpperCase() + date.slice(1)
+})
 
 const getNotificationIcon = (type: string) => {
   switch (type) {
@@ -808,37 +274,6 @@ const getNotificationIcon = (type: string) => {
     default:
       return 'heroicons:bell'
   }
-}
-
-const getNotificationText = (notification: any) => {
-  const metadata = notification.metadata || {}
-  
-  switch (notification.type) {
-    case 'match_proposal':
-      return `<strong>${metadata.proposed_by || 'Un jugador'}</strong> te ha propuesto un partido`
-    case 'match_created':
-      if (metadata.is_tournament) {
-        return `Nuevo partido de torneo con <strong>${metadata.with_player || 'otro jugador'}</strong>`
-      } else if (metadata.accepted_by) {
-        return `<strong>${metadata.accepted_by}</strong> aceptó tu propuesta`
-      } else {
-        return `Partido confirmado con <strong>${metadata.with_player || 'otro jugador'}</strong>`
-      }
-    case 'score_proposal':
-      return `Se propuso un resultado - requiere tu aprobación`
-    case 'schedule_proposal':
-      return `Nueva fecha propuesta para el partido`
-    case 'reschedule_proposal':
-      return `Solicitud de reprogramación del partido`
-    case 'acceptance_change':
-      return `Aceptado con propuesta de cambio de fecha/ubicación`
-    default:
-      return 'Nueva notificación sobre tu partido'
-  }
-}
-
-const navigateToMatch = (matchId: string) => {
-  router.push(`/matches/${matchId}`)
 }
 
 const getPlayerInitials = (name: string) => {
@@ -919,20 +354,6 @@ watch([playerLoading, player, isAuthenticated], async ([loading, currentPlayer, 
   }
 }, { immediate: false })
 
-// Dashboard data - different features for players vs staff
-const dashboardFeatures = computed(() => {
-  if (isStaff.value) {
-    return [
-      'Ver y crear torneos',
-      'Gestionar tu perfil de jugador'
-    ]
-  } else {
-    return [
-      'Gestionar tu perfil de jugador'
-    ]
-  }
-})
-
 // Stats with real data
 const stats = computed(() => {
   const totalMatches = player.value?.total_matches_played || 0
@@ -951,7 +372,7 @@ const stats = computed(() => {
     { value: elo.toLocaleString(), label: 'Puntos SR', icon: 'heroicons:trophy' },
     { value: totalMatches.toString(), label: 'Partidos', icon: 'heroicons:calendar' },
     { value: totalWins.toString(), label: 'Victorias', icon: 'heroicons:trophy' },
-    { value: winRate, label: 'Win Rate', icon: 'heroicons:chart-bar' }
+    { value: winRate, label: 'Porcentaje de victorias', icon: 'heroicons:chart-bar' }
   ]
 })
 
@@ -999,4 +420,76 @@ const ratingTiers = [
   { tier: 'Master', minElo: 3500, maxElo: 3999, color: '#9932CC' },
   { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity, color: '#FF4500' },
 ]
+
+const currentTier = computed(() => {
+  const elo = player.value?.elo
+  if (typeof elo !== 'number' || !player.value?.total_matches_played) return null
+  return ratingTiers.find(t => elo >= t.minElo && elo <= t.maxElo) || null
+})
+const tierImageFor = (tier: string) => `/images/ranks/${tier.toLowerCase()}.png`
+const tierImage = computed(() => (currentTier.value ? tierImageFor(currentTier.value.tier) : null))
+
+// Guest landing feature groups (copy kept from the previous landing, regrouped as lists)
+const featureGroups = [
+  { title: 'Sistema SR (Skill Rating)', icon: 'heroicons:chart-bar', description: 'Rating dinámico con 7 tiers, de Bronce a Gran Maestro.', points: ['Partidos de colocación iniciales', 'Decay mensual para mantener actividad', 'Historial completo de cambios'] },
+  { title: 'Matchmaking', icon: 'heroicons:magnifying-glass', description: 'Oponentes por nivel, ubicación y actividad reciente.', points: ['Búsqueda por tier (2 arriba, 1 abajo)', 'Filtrado por ciudad y segmento', 'Límite de 4 partidos al mes por oponente'] },
+  { title: 'Torneos organizados', icon: 'heroicons:trophy', description: 'Competencias con brackets automáticos y seguimiento.', points: ['Brackets automáticos', 'Múltiples fases y grupos', 'Programación de partidos'] },
+  { title: 'Partidos competitivos y amistosos', icon: 'heroicons:check-badge', description: 'Solo los competitivos mueven tu SR.', points: ['Los competitivos afectan el ranking', 'Los amistosos quedan registrados sin impacto', 'Historial de ambos tipos'] },
+  { title: 'Rankings', icon: 'heroicons:bars-3-bottom-left', description: 'Global, por ciudad, segmento y tier.', points: ['Ranking global', 'Ranking por ciudad y segmento', 'Ranking por tier'] },
+  { title: 'Perfiles y estadísticas', icon: 'heroicons:user-circle', description: 'Perfiles públicos con tu progreso.', points: ['Historial de partidos competitivos', 'Gráfico de progreso SR', 'Porcentaje de victorias y rachas'] }
+]
 </script>
+
+<style scoped>
+/* Clear state: quiet panel with the court drawn faintly behind the invitation */
+.lead-clear { position: relative; overflow: hidden; min-height: 300px; display: flex; align-items: flex-end; }
+.lead-clear__court { opacity: 0.55; }
+.lead-clear__court :deep(line) { stroke: var(--court-line); }
+.lead-clear__copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.lead-clear__copy h2 { font-size: clamp(23px, 2.6vw, 32px); line-height: 1.2; max-width: 22ch; }
+.lead-clear__copy .btn-primary { margin-top: 8px; }
+.photo .btn-primary { margin-top: 8px; }
+
+.notice { display: flex; gap: 16px; align-items: flex-start; }
+.notice__copy { display: grid; gap: 4px; }
+.notice__copy h2 { font-size: 20px; }
+
+.rating { display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: inset 0 1px 0 #ffffff0c; }
+.rating__copy { display: grid; gap: 2px; min-width: 0; }
+.rating__label { font-weight: 500; letter-spacing: 0; font-size: 14px; }
+.rating-number { font-size: clamp(42px, 4vw, 60px); font-weight: 700; letter-spacing: -0.05em; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.rating-number span { font-size: 14px; letter-spacing: 0; font-weight: 500; color: var(--foreground-muted); }
+.rating-number--loading { color: var(--foreground-subtle); }
+.rating__tier { width: 64px; height: 64px; object-fit: contain; flex-shrink: 0; }
+@media (min-width: 768px) and (max-width: 1099px) { .rating { padding: 20px; } .rating__tier { width: 48px; height: 48px; } }
+@media (max-width: 767px) { .rating-number { font-size: 48px; } }
+
+/* Guest landing */
+.landing-hero { margin-bottom: 40px; }
+.landing-hero :deep(.photo-content) { justify-content: flex-end; min-height: 520px; }
+.landing-hero__title { font-size: clamp(34px, 5vw, 58px); line-height: 1.05; letter-spacing: -0.04em; max-width: 14ch; text-wrap: balance; }
+.landing-hero__lede { max-width: 52ch; font-size: 17px; }
+.landing-hero__actions { width: 100%; max-width: 520px; margin-top: 8px; }
+.landing-hero__actions > .btn-photo { flex-grow: 1; }
+.landing-section { margin-bottom: 48px; }
+.landing-section p.meta, .landing-cta p { max-width: 62ch; }
+.landing-features { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.landing-feature { display: flex; gap: 12px; padding: 24px; border-top: 1px solid var(--edge); }
+.landing-feature:nth-child(-n + 2) { border-top: 0; }
+.landing-feature:nth-child(even) { border-left: 1px solid var(--edge); }
+.landing-feature-points { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; font-size: 15px; color: var(--foreground-muted); }
+.landing-feature-points li { display: flex; align-items: center; gap: 8px; }
+.landing-steps { list-style: none; counter-reset: step; margin: 24px 0 0; padding: 0; display: grid; gap: 20px; }
+.landing-steps li { counter-increment: step; display: grid; grid-template-columns: 40px 1fr; column-gap: 12px; }
+.landing-steps li::before { content: counter(step); grid-row: span 2; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--accent-foreground); font-weight: 700; font-variant-numeric: tabular-nums; }
+.landing-tier-icon { width: 36px; height: 36px; object-fit: contain; }
+.landing-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.landing-cta h2 { font-size: clamp(24px, 3vw, 34px); }
+@media (max-width: 767px) {
+  .landing-hero :deep(.photo-content) { min-height: 460px; }
+  .landing-features { grid-template-columns: 1fr; }
+  .landing-feature { padding: 20px 16px; }
+  .landing-feature:nth-child(2) { border-top: 1px solid var(--edge); }
+  .landing-feature:nth-child(even) { border-left: 0; }
+}
+</style>

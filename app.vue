@@ -3,9 +3,6 @@
     class="app-root antialiased bg-background text-foreground min-h-screen"
     :class="{ 'has-tabbar': isAuthenticated }"
   >
-    <!-- Fine grain for depth (theme sets the opacity) -->
-    <div class="noise-overlay"></div>
-
     <!-- Main Content -->
     <div class="relative z-10">
       <NuxtPage />
@@ -20,7 +17,7 @@
 </template>
 
 <script setup lang="ts">
-// Theme: sets <html data-theme>, dark/light class, theme-color and the theme's fonts
+// Appearance: sets <html data-theme>, dark/light class, theme-color and Geist
 useTheme()
 
 const { isAuthenticated } = useAuthState()
@@ -40,8 +37,8 @@ useHead({
       children: `
         /* Critical CSS — prevents FOUC; colors come from design-system.css tokens */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background-color: var(--background, #121110); }
-        body { font-family: var(--font-sans, system-ui, sans-serif); background-color: var(--background, #121110); color: var(--foreground, #F3EEE4); min-height: 100vh; }
+        html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background-color: var(--background, #0B1210); }
+        body { font-family: var(--font-sans, system-ui, sans-serif); background-color: var(--background, #0B1210); color: var(--foreground, #ECEEF0); min-height: 100vh; }
         .app-root { isolation: isolate; min-height: 100vh; }
       `
     }

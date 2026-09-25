@@ -3,16 +3,18 @@
     <Transition name="modal">
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        class="te-modal" role="dialog" aria-modal="true" aria-label="Cómo funciona el ranking"
         @click.self="close"
       >
     <div
-      class="glass-card-elevated w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 md:p-8 relative animate-fade-up"
+      class="te-modal__panel te-modal__panel--xl relative"
       @click.stop
     >
       <!-- Close Button -->
       <button
-        class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated transition-colors"
+        type="button"
+        class="icon-button absolute top-4 right-4"
+        aria-label="Cerrar"
         @click.stop="close"
       >
         <Icon name="heroicons:x-mark" class="w-5 h-5 text-foreground-muted" />
@@ -33,25 +35,17 @@
         <!-- Three Info Panels -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <!-- SKILL TIERS Panel -->
-          <div class="glass-card p-4 md:p-5 rounded-xl hover-lift">
+          <div class="action-card">
             <div class="flex flex-col items-center text-center space-y-3">
               <!-- Visual: Tier Icons Stack -->
               <div class="relative w-24 h-24 flex items-center justify-center">
                 <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="flex flex-col items-center gap-1">
-                    <div class="flex gap-1">
-                      <div class="w-3 h-3 rounded-full bg-gradient-to-br from-amber-600 to-amber-800"></div>
-                      <div class="w-3 h-3 rounded-full bg-gradient-to-br from-gray-400 to-gray-600"></div>
-                      <div class="w-3 h-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600"></div>
-                    </div>
-                    <div class="flex gap-1">
-                      <div class="w-3 h-3 rounded-full bg-gradient-to-br from-blue-300 to-blue-500"></div>
-                      <div class="w-3 h-3 rounded-full bg-gradient-to-br from-purple-400 to-purple-600"></div>
-                    </div>
+                  <div class="tier-stack" aria-hidden="true">
+                    <img v-for="t in ['bronze', 'silver', 'gold', 'platinum', 'diamond']" :key="t" :src="`/images/ranks/${t}.png`" alt="" width="28" height="28">
                   </div>
                 </div>
-                <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 border-2 border-background flex items-center justify-center">
-                  <span class="text-xs font-bold text-background">1</span>
+                <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
+                  <span class="text-xs font-bold text-accent-foreground">1</span>
                 </div>
               </div>
               
@@ -67,12 +61,12 @@
           </div>
 
           <!-- MATCHES Panel -->
-          <div class="glass-card p-4 md:p-5 rounded-xl hover-lift">
+          <div class="action-card">
             <div class="flex flex-col items-center text-center space-y-3">
               <!-- Visual: VS Icon -->
               <div class="relative w-24 h-24 flex items-center justify-center">
                 <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="w-16 h-16 rounded-full bg-accent-subtle border-2 border-accent flex items-center justify-center">
+                  <div class="w-16 h-16 rounded-full bg-accent-subtle border border-accent flex items-center justify-center">
                     <span class="text-2xl font-bold text-accent">VS</span>
                   </div>
                 </div>
@@ -96,12 +90,12 @@
           </div>
 
           <!-- RANKING SYSTEM Panel -->
-          <div class="glass-card p-4 md:p-5 rounded-xl hover-lift">
+          <div class="action-card">
             <div class="flex flex-col items-center text-center space-y-3">
               <!-- Visual: Calendar/Season Icon -->
               <div class="relative w-24 h-24 flex items-center justify-center">
                 <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="w-16 h-16 rounded-xl bg-accent-secondary-muted border-2 border-accent-secondary flex items-center justify-center">
+                  <div class="w-16 h-16 rounded-xl bg-accent-secondary-muted border border-accent-secondary flex items-center justify-center">
                     <Icon name="heroicons:calendar" class="w-8 h-8 text-accent-secondary" />
                   </div>
                 </div>
@@ -155,7 +149,7 @@
         </div>
 
         <!-- Additional Rules -->
-        <div class="glass-card p-4 md:p-5 rounded-xl space-y-3">
+        <div class="panel rounded-xl space-y-3">
           <h3 class="text-size-3 font-semibold text-foreground mb-3">
             Reglas Adicionales
           </h3>
@@ -277,6 +271,8 @@ const ranks = [
 </script>
 
 <style scoped>
+.tier-stack { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; width: 88px; }
+.tier-stack img { width: 28px; height: 28px; object-fit: contain; }
 @keyframes fade-in-scale {
   from {
     opacity: 0;

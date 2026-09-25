@@ -61,7 +61,7 @@
               :height="bar.height"
               :fill="bar.color"
               rx="6"
-              class="cursor-pointer transition-all duration-300"
+              class="cursor-pointer"
               @mouseenter="showTooltip(bar, $event)"
               @mouseleave="hideTooltip"
             />
@@ -208,10 +208,10 @@ const bars = computed(() => {
     
     // Color based on win rate
     let color = 'var(--accent)'
-    if (winRate >= 70) color = '#10b981' // green
+    if (winRate >= 70) color = 'var(--success)'
     else if (winRate >= 50) color = 'var(--accent)'
-    else if (winRate >= 30) color = '#f59e0b' // amber
-    else color = '#ef4444' // red
+    else if (winRate >= 30) color = 'var(--warning)'
+    else color = 'var(--danger)'
     
     return {
       period: item.period,
@@ -268,7 +268,7 @@ svg {
 }
 
 .bars rect {
-  transition: width 0.3s ease, opacity 0.2s ease;
+  transition: opacity 0.15s ease;
 }
 
 .bars rect:hover {

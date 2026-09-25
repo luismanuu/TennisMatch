@@ -1,33 +1,15 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <!-- Navigation -->
-    <AppNavigation />
-    
-    <!-- Spacer for fixed nav -->
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+  <PageLayout container-size="medium">
         <!-- Header -->
-        <div class="mb-8 animate-fade-up">
-          <NuxtLink to="/admin" class="inline-flex items-center gap-2 text-foreground-muted hover:text-accent transition-colors mb-4">
-            <Icon name="heroicons:arrow-left" class="w-5 h-5" />
-            <span class="text-size-4">Volver al Panel de Admin</span>
+        <div class="page-heading">
+          <NuxtLink to="/admin" class="text-link">
+            <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+            Volver al Panel de Admin
           </NuxtLink>
           <div class="flex items-center gap-3 mb-2">
-            <div class="w-12 h-12 rounded-xl bg-accent-subtle flex items-center justify-center">
-              <Icon name="heroicons:map" class="w-6 h-6 text-accent" />
-            </div>
             <div>
-              <h1 class="text-size-1 font-semibold text-foreground">Regiones de Matchmaking</h1>
-              <p class="text-size-4 font-regular text-foreground-muted">
+              <h1>Regiones de Matchmaking</h1>
+              <p class="meta">
                 Configura grupos de ciudades para el sistema de matchmaking
               </p>
             </div>
@@ -35,7 +17,7 @@
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
+        <div v-if="loading" class="panel text-center">
           <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
             <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
           </div>
@@ -43,46 +25,46 @@
         </div>
 
         <!-- Error State -->
-        <div v-else-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
+        <div v-else-if="error" class="panel max-w-md mx-auto">
           <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
             <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
           </div>
           <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
           <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error }}</p>
           <button @click="loadData" class="btn-primary text-size-3 w-full justify-center group">
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+            <Icon name="heroicons:arrow-path" class="w-5 h-5" />
             Reintentar
           </button>
         </div>
 
         <template v-else>
           <!-- Create/Edit Segment Form -->
-          <div class="glass-card-elevated p-4 sm:p-6 mb-8 animate-fade-up">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">
+          <div class="panel mb-8">
+            <h2 class="panel-title">
               {{ editingSegmentId ? 'Editar Región' : 'Crear Nueva Región' }}
             </h2>
             <form @submit.prevent="editingSegmentId ? handleUpdateSegment() : handleCreateSegment()" class="space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Nombre *
                   </label>
                   <input
                     v-model="segmentForm.name"
                     type="text"
                     required
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="ej. Área Metropolitana de Guayaquil"
                   />
                 </div>
                 <div>
-                  <label class="block text-size-4 font-semibold text-foreground mb-2">
+                  <label class="form-label">
                     Descripción
                   </label>
                   <input
                     v-model="segmentForm.description"
                     type="text"
-                    class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                    class="form-input"
                     placeholder="Descripción opcional"
                   />
                 </div>
@@ -90,14 +72,14 @@
               
               <!-- City Selection (only for new segments) -->
               <div v-if="!editingSegmentId">
-                <label class="block text-size-4 font-semibold text-foreground mb-2">
+                <label class="form-label">
                   Ciudades (opcional)
                 </label>
-                <div class="flex flex-wrap gap-2 p-4 bg-surface rounded-lg border-2 border-border">
+                <div class="flex flex-wrap gap-2 p-4 bg-surface rounded-lg border border-border">
                   <label 
                     v-for="city in allCities" 
                     :key="city.id"
-                    class="flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all"
+                    class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all"
                     :class="selectedCityIds.includes(city.id) 
                       ? 'bg-accent-subtle border-accent text-foreground' 
                       : 'bg-surface border-border-subtle text-foreground-muted hover:border-accent/50'"
@@ -139,11 +121,11 @@
           </div>
 
           <!-- Segments List -->
-          <div v-if="segments.length > 0" class="space-y-6 animate-fade-up animate-delay-1 mb-6">
+          <div v-if="segments.length > 0" class="space-y-6 mb-6">
             <div 
               v-for="segment in segments" 
               :key="segment.id"
-              class="glass-card-elevated p-4 sm:p-6 hover-lift"
+              class="panel"
             >
               <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                 <div class="flex-1">
@@ -191,7 +173,7 @@
                   <div 
                     v-for="city in segment.cities" 
                     :key="city.id"
-                    class="flex items-center gap-2 px-3 py-2 bg-surface rounded-lg border-2 border-border-subtle"
+                    class="flex items-center gap-2 px-3 py-2 bg-surface rounded-lg border border-border-subtle"
                   >
                     <Icon name="heroicons:building-office-2" class="w-4 h-4 text-accent" />
                     <span class="text-size-4 text-foreground">{{ city.name }}</span>
@@ -228,11 +210,11 @@
           </div>
 
           <!-- Empty State -->
-          <div v-else class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-            <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
+          <div v-else class="panel text-center max-w-md mx-auto">
+            <div class="w-24 h-24 rounded-2xl bg-surface-elevated border border-accent/30 flex items-center justify-center mx-auto mb-6">
               <Icon name="heroicons:map" class="w-12 h-12 text-accent" />
             </div>
-            <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay regiones</h3>
+            <h3 class="panel-title">No hay regiones</h3>
             <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
               Crea tu primera región de matchmaking para agrupar ciudades cercanas.
             </p>
@@ -243,10 +225,10 @@
         <Teleport to="body">
           <div 
             v-if="addCitiesModal.show" 
-            class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            class="te-modal"
             @click.self="closeAddCitiesModal"
           >
-            <div class="glass-card-elevated p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
+            <div class="te-modal__panel te-modal__panel--wide">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-size-2 font-semibold text-foreground">
                   Agregar ciudades a "{{ addCitiesModal.segmentName }}"
@@ -260,7 +242,7 @@
                 <label 
                   v-for="city in availableCitiesForModal" 
                   :key="city.id"
-                  class="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all"
+                  class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all"
                   :class="modalSelectedCityIds.includes(city.id) 
                     ? 'bg-accent-subtle border-accent' 
                     : 'bg-surface border-border-subtle hover:border-accent/50'"
@@ -295,9 +277,7 @@
             </div>
           </div>
         </Teleport>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">

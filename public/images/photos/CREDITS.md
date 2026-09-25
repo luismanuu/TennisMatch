@@ -7,3 +7,5 @@ Placeholder photography from Wikimedia Commons. All CC BY-SA; attribution requir
 - `bluenight.jpg`: RK Khanna Tennis Complex New Delhi - Centre Court at Night.jpg by Vssun, CC BY-SA 3.0. https://commons.wikimedia.org/wiki/File:RK_Khanna_Tennis_Complex_New_Delhi_-_Centre_Court_at_Night.jpg
 - `claynight.jpg`: Tennis court at Tennis Club Silchar.jpg by Sandydessert, CC BY-SA 3.0. https://commons.wikimedia.org/wiki/File:Tennis_court_at_Tennis_Club_Silchar.jpg
 - `aerial.jpg`: Aerial View of Tennis Courts in Büsingen 15.07.2008 16-56-14.JPG by Hansueli Krapf, CC BY-SA 3.0. https://commons.wikimedia.org/wiki/File:Aerial_View_of_Tennis_Courts_in_B%C3%BCsingen_15.07.2008_16-56-14.JPG
+
+`<name>-640.webp` and `<name>-1280.webp` are resized, recompressed derivatives of the originals above (same license and attribution). The JPEG originals are unchanged and remain the fallback source.

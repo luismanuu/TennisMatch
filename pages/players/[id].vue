@@ -1,611 +1,240 @@
 <template>
-  <div class="min-h-screen">
-    <!-- Navigation -->
-    <AppNavigation />
+  <PageLayout>
+    <button v-if="canGoBack" type="button" class="text-link back-link" @click="goBack">
+      <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+      Volver
+    </button>
 
-    <div class="h-16"></div>
+    <div v-if="publicLoading || publicPendingLoading" class="panel loading-state" aria-busy="true">
+      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+      <p class="loading-text">Cargando perfil…</p>
+    </div>
 
-    <div class="section-padding">
-      <div class="container-medium px-6">
-        <!-- Header -->
-        <div class="text-center mb-12">
-          <button 
-            v-if="canGoBack"
-            @click="goBack"
-            class="text-size-3 text-foreground-muted hover:text-foreground mb-4 inline-block transition-colors"
+    <div v-else-if="(publicError && !publicPendingPlayer) || (publicPendingError && !publicPlayer)" class="panel empty-state" role="alert">
+      <Icon name="heroicons:exclamation-triangle" class="empty-state-icon text-danger" aria-hidden="true" />
+      <h1 class="empty-state-title">No pudimos cargar este perfil</h1>
+      <p class="empty-state-description">{{ (publicError || publicPendingError)?.message || 'Error al cargar el perfil' }}</p>
+      <button type="button" class="btn-primary" @click="loadProfile">
+        <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+        Reintentar
+      </button>
+    </div>
+
+    <div v-else-if="!publicPlayer && !publicPendingPlayer" class="panel empty-state">
+      <Icon name="heroicons:user" class="empty-state-icon" aria-hidden="true" />
+      <h1 class="empty-state-title">Jugador no encontrado</h1>
+      <p class="empty-state-description">El perfil que buscas no existe o fue eliminado.</p>
+      <NuxtLink to="/matches" class="btn-primary">
+        Volver a partidos
+        <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+      </NuxtLink>
+    </div>
+
+    <!-- Registered player: Perfil system applied to someone else's profile -->
+    <div v-else-if="publicPlayer" class="split-grid even">
+      <div class="flow-stack">
+        <PhotoPanel photo="hero" variant="profile" eager>
+          <div class="identity">
+            <span class="avatar avatar-lg" aria-hidden="true">{{ initials(publicPlayer.name) }}</span>
+            <h1>{{ publicPlayer.name }}</h1>
+            <p>Miembro desde {{ formatDate(publicPlayer.created_at) }}</p>
+            <p v-if="publicPlayer.category?.name">
+              {{ publicPlayer.category.name }}<template v-if="publicPlayer.category.description"> · {{ publicPlayer.category.description }}</template>
+            </p>
+            <p v-if="publicPlayer.city" class="location">
+              <Icon name="heroicons:map-pin" class="w-5 h-5" aria-hidden="true" />
+              {{ publicPlayer.city.name }}, Ecuador
+            </p>
+            <a
+              v-if="publicPlayer.phone_number"
+              :href="getWhatsAppLink(publicPlayer.phone_number, `Hola ${publicPlayer.name}, te contacto desde la plataforma de Tenis Ecuador`)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-photo"
+            >
+              Escribir por WhatsApp
+              <Icon name="heroicons:chat-bubble-left-right" class="w-5 h-5" aria-hidden="true" />
+            </a>
+          </div>
+        </PhotoPanel>
+
+        <section class="panel" aria-label="Resumen">
+          <div class="stats three">
+            <div>
+              <strong class="stat-value">{{ (publicPlayer.total_matches_played || 0) > 0 ? tierName(getTop100TierForPlayer() || getPlayerTier(publicPlayer.elo || 0)) : '—' }}</strong>
+              <span class="meta">Nivel actual</span>
+            </div>
+            <div>
+              <strong class="stat-value">{{ rankingPosition?.position?.global_rank && rankingPosition.position.total_players > 0 ? `#${rankingPosition.position.global_rank}` : '—' }}</strong>
+              <span class="meta">En Ecuador</span>
+            </div>
+            <div>
+              <strong class="stat-value">{{ publicPlayer.win_streak || 0 }}</strong>
+              <span class="meta">Victorias seguidas</span>
+            </div>
+          </div>
+          <details class="more-stats">
+            <summary>Ver estadísticas</summary>
+            <div class="stats three">
+              <div><strong class="stat-value">{{ (publicPlayer.elo ?? 0).toLocaleString('es-EC') }}</strong><span class="meta">SR actual</span></div>
+              <div><strong class="stat-value">{{ publicPlayer.total_matches_played || 0 }}</strong><span class="meta">Partidos jugados</span></div>
+              <div v-if="(publicPlayer.placement_matches_completed || 0) < 3">
+                <strong class="stat-value">{{ publicPlayer.placement_matches_completed || 0 }}/3</strong><span class="meta">Colocación</span>
+              </div>
+              <div v-else><strong class="stat-value">{{ playerStats?.peak_elo ?? '—' }}</strong><span class="meta">SR máximo</span></div>
+            </div>
+          </details>
+        </section>
+      </div>
+
+      <div class="flow-stack">
+        <section class="panel rating" aria-label="Nivel de juego">
+          <div class="rating__copy">
+            <p class="meta">Nivel de juego</p>
+            <p class="rating-number">{{ (publicPlayer.elo ?? 0).toLocaleString('es-EC') }} <span>SR</span></p>
+            <RatingTierBadge
+              :elo="publicPlayer.elo"
+              :total-matches-played="publicPlayer.total_matches_played || 0"
+              :placement-matches-completed="publicPlayer.placement_matches_completed || 0"
+            />
+          </div>
+          <img
+            v-if="(publicPlayer.total_matches_played || 0) > 0"
+            :src="useRankIconAsset(getTop100TierForPlayer() || getPlayerTier(publicPlayer.elo || 0)) || ''"
+            width="72" height="72" alt="" class="rating__tier"
           >
-            ← Volver
-          </button>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">
-            Perfil del Jugador
-          </h1>
+        </section>
+
+        <div class="segmented" role="tablist" aria-label="Detalle del jugador">
+          <button id="tab-ranking" type="button" role="tab" :aria-selected="activeTab === 'ranking'" aria-controls="panel-ranking" @click="activeTab = 'ranking'">Ranking</button>
+          <button id="tab-matches" type="button" role="tab" :aria-selected="activeTab === 'matches'" aria-controls="panel-matches" @click="activeTab = 'matches'">Historial de partidos</button>
         </div>
 
-        <!-- Loading State -->
-        <div v-if="publicLoading || publicPendingLoading" class="glass-card-elevated p-12 text-center">
-          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-          <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando perfil...</p>
-        </div>
-
-        <!-- Error State -->
-        <div v-else-if="(publicError && !publicPendingPlayer) || (publicPendingError && !publicPlayer)" class="glass-card-elevated p-8">
-          <div class="flex items-center gap-4 mb-4">
-            <div class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
-              <span class="text-2xl">⚠️</span>
-            </div>
-            <div>
-              <h3 class="text-size-2 font-semibold text-foreground mb-1">Error</h3>
-              <p class="text-size-4 font-regular text-foreground-muted">{{ (publicError || publicPendingError)?.message || 'Error al cargar el perfil' }}</p>
-            </div>
-          </div>
-          <button @click="loadProfile" class="btn-primary text-size-4">
-            Reintentar
-          </button>
-        </div>
-
-        <!-- Not Found State -->
-        <div v-else-if="!publicPlayer && !publicPendingPlayer && !publicLoading && !publicPendingLoading" class="glass-card-elevated p-12 text-center">
-          <div class="w-20 h-20 rounded-2xl bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-            <span class="text-4xl">👤</span>
-          </div>
-          <h2 class="text-size-2 font-semibold text-foreground mb-4">Jugador no encontrado</h2>
-          <p class="text-size-4 font-regular text-foreground-muted mb-8 max-w-md mx-auto">
-            El perfil que buscas no existe o ha sido eliminado.
-          </p>
-          <NuxtLink to="/matches" class="btn-primary text-size-3 inline-flex items-center">
-            Volver a Partidos
-            <svg class="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </NuxtLink>
-        </div>
-
-        <!-- Profile Content - Regular Player -->
-        <div v-else-if="publicPlayer" class="glass-card-elevated p-8">
-          <!-- Header with Large Rank Icon -->
-          <div class="mb-8">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-              <!-- Left: Large Rank Icon with Animation -->
-              <div class="flex justify-center lg:justify-start">
-                <div class="relative w-full max-w-[300px] h-[300px] flex items-center justify-center overflow-visible">
-                  <!-- Rank Icon - Animated (League of Legends Style) -->
-                  <RankIconAnimated
-                    v-if="publicPlayer && publicPlayer.elo !== undefined && (publicPlayer.total_matches_played || 0) > 0"
-                    :tier="getTop100TierForPlayer()"
-                    :elo="publicPlayer.elo"
-                    :total-matches-played="publicPlayer.total_matches_played || 0"
-                    size="300px"
-                    class="w-full h-full max-w-[300px] max-h-[300px]"
-                  />
-                  <!-- Unrated placeholder -->
-                  <div v-else class="w-full h-full max-w-[300px] max-h-[300px] flex items-center justify-center">
-                    <div class="w-48 h-48 rounded-2xl bg-surface-elevated border-2 border-border-subtle flex items-center justify-center">
-                      <Icon name="heroicons:trophy" class="w-24 h-24 text-foreground-muted opacity-50" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Right: Player Info -->
-              <div class="flex flex-col gap-4">
-                <div>
-                  <h2 class="text-size-2 font-semibold text-foreground mb-2">{{ publicPlayer.name }}</h2>
-                  <p class="text-size-4 font-regular text-foreground-muted">
-                    Miembro desde {{ formatDate(publicPlayer.created_at) }}
-                  </p>
-                </div>
-
-                <!-- SR Display -->
-                <div class="flex flex-col gap-2">
-                  <div class="text-size-1 font-bold text-gradient-static">
-                    {{ publicPlayer.elo }} SR
-                  </div>
-                  <RatingTierBadge 
-                    :elo="publicPlayer.elo" 
-                    :total-matches-played="publicPlayer.total_matches_played || 0"
-                    :placement-matches-completed="publicPlayer.placement_matches_completed || 0"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="grid md:grid-cols-2 gap-6">
-            <!-- Category -->
-            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
-              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Categoría</p>
-              <p class="text-size-3 font-semibold text-foreground">
-                {{ publicPlayer.category?.name || 'No seleccionada' }}
-              </p>
-              <p v-if="publicPlayer.category?.description" class="text-size-4 font-regular text-foreground-muted mt-2">
-                {{ publicPlayer.category.description }}
-              </p>
-            </div>
-
-            <!-- City -->
-            <div v-if="publicPlayer.city" class="p-6 rounded-xl bg-surface border border-border-subtle">
-              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Ciudad</p>
-              <p class="text-size-3 font-semibold text-foreground">
-                {{ publicPlayer.city.name }}
-              </p>
-            </div>
-          </div>
-
-          <!-- Contact Information -->
-          <div v-if="publicPlayer.phone_number" class="mt-6">
-            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-lg bg-accent-secondary-muted flex items-center justify-center">
-                    <Icon name="heroicons:phone" class="w-5 h-5 text-accent-secondary" />
-                  </div>
-                  <div>
-                    <p class="text-size-4 font-regular text-foreground-subtle mb-1">Teléfono</p>
-                    <p class="text-size-3 font-semibold text-foreground">
-                      {{ publicPlayer.phone_number }}
-                    </p>
-                  </div>
-                </div>
-                <a
-                  :href="getWhatsAppLink(publicPlayer.phone_number, `Hola ${publicPlayer.name}, te contacto desde la plataforma de Tenis Ecuador`)"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 text-green-400 transition-all group"
-                  title="Abrir WhatsApp"
-                >
-                  <Icon name="heroicons:chat-bubble-left-right" class="w-5 h-5 group-hover:scale-110 transition-transform" />
-                  <span class="text-size-4 font-semibold">Contactar por WhatsApp</span>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- Stats -->
-          <div class="mt-8 pt-8 border-t border-border-subtle">
-            <h3 class="text-size-3 font-semibold text-foreground mb-4">Estadísticas</h3>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.elo }}</div>
-                <div class="text-size-4 font-regular text-foreground-muted">SR</div>
-              </div>
-              <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.total_matches_played || 0 }}</div>
-                <div class="text-size-4 font-regular text-foreground-muted">Partidos</div>
-              </div>
-              <div class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="flex items-center justify-center gap-2 mb-1">
-                  <Icon v-if="(publicPlayer.win_streak || 0) > 0" name="heroicons:fire" class="w-6 h-6 text-orange-400" />
-                  <div class="text-size-1 font-semibold text-gradient-static">{{ publicPlayer.win_streak || 0 }}</div>
-                </div>
-                <div class="text-size-4 font-regular text-foreground-muted">Racha Victorias</div>
-              </div>
-              <!-- Show placement status if still in placement, otherwise show peak ELO -->
-              <div v-if="(publicPlayer.placement_matches_completed || 0) < 3" class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">{{ publicPlayer.placement_matches_completed || 0 }}/3</div>
-                <div class="text-size-4 font-regular text-foreground-muted">Colocación</div>
-              </div>
-              <div v-else-if="playerStats" class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="flex items-center justify-center gap-2 mb-1">
-                  <Icon name="heroicons:trophy" class="w-5 h-5 text-amber-400" />
-                  <div class="text-size-1 font-semibold text-gradient-static">{{ playerStats.peak_elo }}</div>
-                </div>
-                <div class="text-size-4 font-regular text-foreground-muted">Peak SR</div>
-              </div>
-              <div v-else class="text-center p-4 rounded-xl bg-surface border border-border-subtle">
-                <div class="text-size-1 font-semibold text-gradient-static mb-1">-</div>
-                <div class="text-size-4 font-regular text-foreground-muted">Peak SR</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Ranking and Match History Tabs -->
-          <div class="mt-8 pt-8 border-t border-border-subtle">
-            <!-- Tab Navigation -->
-            <div class="flex gap-2 mb-6 border-b border-border-subtle">
-              <button
-                @click="activeTab = 'ranking'"
-                :class="[
-                  'px-6 py-3 text-size-3 font-semibold transition-all border-b-2 -mb-px',
-                  activeTab === 'ranking'
-                    ? 'text-accent border-accent'
-                    : 'text-foreground-muted border-transparent hover:text-foreground'
-                ]"
-              >
-                Ranking
-              </button>
-              <button
-                @click="activeTab = 'matches'"
-                :class="[
-                  'px-6 py-3 text-size-3 font-semibold transition-all border-b-2 -mb-px',
-                  activeTab === 'matches'
-                    ? 'text-accent border-accent'
-                    : 'text-foreground-muted border-transparent hover:text-foreground'
-                ]"
-              >
-                Historial de Partidas
-              </button>
-            </div>
-
-            <!-- Ranking Tab -->
-            <div v-if="activeTab === 'ranking'" class="animate-fade-in">
-              <div v-if="rankingLoading" class="text-center py-12">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-                <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando ranking...</p>
-              </div>
-              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position" class="space-y-6">
-                <!-- Global Ranking -->
-                <div v-if="rankingPosition.position.global_rank && rankingPosition.position.total_players > 0" class="p-6 rounded-xl bg-surface border border-border-subtle">
-                  <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-size-3 font-semibold text-foreground">Ranking Global</h4>
-                    <RatingTierBadge 
-                      :elo="publicPlayer.elo" 
-                      :total-matches-played="publicPlayer.total_matches_played"
-                      :show-elo="false"
-                    />
-                  </div>
-                  <div class="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        #{{ rankingPosition.position.global_rank }}
-                        <span class="text-size-4 font-regular text-foreground-muted">
-                          de {{ rankingPosition.position.total_players }}
-                        </span>
-                      </p>
-                    </div>
-                    <div v-if="rankingPosition.position.percentile !== undefined && rankingPosition.position.percentile >= 0">
-                      <p class="text-size-5 text-foreground-muted mb-1">Percentil</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        Top {{ rankingPosition.position.percentile }}%
-                      </p>
-                    </div>
-                    <div v-if="rankingPosition.position.players_below !== undefined && rankingPosition.position.players_below >= 0">
-                      <p class="text-size-5 text-foreground-muted mb-1">Jugadores por debajo</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        {{ rankingPosition.position.players_below }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Tier Ranking -->
-                <div v-if="rankingPosition.position.tier_rank && rankingPosition.position.tier_total && rankingPosition.position.tier_total > 0 && rankingPosition.tier" class="p-6 rounded-xl bg-surface border border-border-subtle">
-                  <h4 class="text-size-3 font-semibold text-foreground mb-4">
-                    Ranking en {{ rankingPosition.tier }}
-                  </h4>
-                  <div class="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        #{{ rankingPosition.position.tier_rank }}
-                        <span class="text-size-4 font-regular text-foreground-muted">
-                          de {{ rankingPosition.position.tier_total }}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Segment Ranking -->
-                <div v-if="rankingPosition.position.segment_rank && rankingPosition.position.segment_total && rankingPosition.position.segment_total > 0" class="p-6 rounded-xl bg-surface border border-border-subtle">
-                  <h4 class="text-size-3 font-semibold text-foreground mb-4">
-                    Ranking en {{ rankingPosition.position.segment_name || 'Tu Región' }}
-                  </h4>
-                  <div class="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <p class="text-size-5 text-foreground-muted mb-1">Posición</p>
-                      <p class="text-size-2 font-bold text-foreground">
-                        #{{ rankingPosition.position.segment_rank }}
-                        <span class="text-size-4 font-regular text-foreground-muted">
-                          de {{ rankingPosition.position.segment_total }}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- No ranking data message -->
-                <div v-if="!rankingPosition.position.global_rank && !rankingPosition.position.tier_rank && !rankingPosition.position.segment_rank" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
-                  <p class="text-size-4 font-regular text-foreground-muted mb-2">
-                    Aún no hay suficientes jugadores para calcular el ranking.
-                  </p>
-                  <p class="text-size-5 font-regular text-foreground-muted">
-                    Se necesitan al menos {{ rankingPosition.min_players_required || 2 }} jugadores con partidos jugados. 
-                    Actualmente hay {{ rankingPosition.current_players || 0 }} jugador{{ rankingPosition.current_players !== 1 ? 'es' : '' }} en el sistema.
-                  </p>
-                </div>
-              </div>
-              <div v-else-if="rankingPosition && rankingPosition.is_unrated" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted">
-                  Este jugador aún no ha completado partidos de colocación
-                </p>
-              </div>
-              <div v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.position && rankingPosition.current_players === 0" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted mb-2">
-                  Aún no hay suficientes jugadores para calcular el ranking.
-                </p>
-                <p class="text-size-5 font-regular text-foreground-muted">
-                  Se necesitan al menos {{ rankingPosition.min_players_required || 2 }} jugadores con partidos jugados. 
-                  Actualmente hay {{ rankingPosition.current_players || 0 }} jugador{{ rankingPosition.current_players !== 1 ? 'es' : '' }} en el sistema.
-                </p>
-              </div>
-              <div v-else-if="rankingPosition && !rankingPosition.success" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted">
-                  No se pudo cargar la información de ranking
-                </p>
-              </div>
-              <div v-else-if="!rankingPosition && !rankingLoading" class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted">
-                  No hay información de ranking disponible
-                </p>
-              </div>
-            </div>
-
-            <!-- Match History Tab -->
-            <div v-if="activeTab === 'matches'" class="animate-fade-in">
-              <!-- Filters -->
-              <div class="mb-6 p-6 rounded-xl bg-surface border border-border-subtle">
-                <h3 class="text-size-3 font-semibold text-foreground mb-4">Filtros</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <!-- Status Filter -->
-                  <div>
-                    <label class="block text-size-4 font-semibold text-foreground mb-2">Estado</label>
-                    <select
-                      v-model="matchHistoryStatusFilter"
-                      @change="applyFilters"
-                      class="w-full px-4 py-2 rounded-xl bg-surface-elevated border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none transition-all"
-                    >
-                      <option value="">Todos los estados</option>
-                      <option value="scheduled">Programado</option>
-                      <option value="active">En Curso</option>
-                      <option value="completed">Completado</option>
-                      <option value="cancelled">Cancelado</option>
-                    </select>
-                  </div>
-                  
-                  <!-- Start Date Filter -->
-                  <div>
-                    <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha Inicio</label>
-                    <input
-                      v-model="matchHistoryStartDate"
-                      type="date"
-                      @change="applyFilters"
-                      class="w-full px-4 py-2 rounded-xl bg-surface-elevated border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none transition-all"
-                    />
-                  </div>
-                  
-                  <!-- End Date Filter -->
-                  <div>
-                    <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha Fin</label>
-                    <input
-                      v-model="matchHistoryEndDate"
-                      type="date"
-                      @change="applyFilters"
-                      class="w-full px-4 py-2 rounded-xl bg-surface-elevated border-2 border-border-subtle text-foreground focus:border-accent focus:outline-none transition-all"
-                    />
-                  </div>
-                  
-                  <!-- Clear Filters Button -->
-                  <div class="flex items-end">
-                    <button
-                      @click="clearFilters"
-                      :disabled="!hasActiveFilters"
-                      class="w-full px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                    >
-                      <Icon name="heroicons:x-mark" class="w-4 h-4" />
-                      <span>Limpiar</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div v-if="matchHistoryLoading" class="text-center py-12">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-                <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando partidos...</p>
-              </div>
-              <div v-else-if="matchHistory.length > 0" class="space-y-4">
-                <div 
-                  v-for="match in matchHistory" 
-                  :key="match.id"
-                  class="p-6 rounded-xl bg-surface border border-border-subtle hover:border-accent/50 transition-all cursor-pointer"
-                  @click="navigateTo(`/matches/${match.id}`)"
-                >
-                  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <!-- Match Info -->
-                    <div class="flex-1">
-                      <div class="flex items-center gap-4 mb-3">
-                        <!-- Opponent -->
-                        <div class="flex items-center gap-3">
-                          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-surface-elevated to-surface border-2 border-border-subtle flex items-center justify-center">
-                            <span class="text-lg font-bold text-foreground-muted">
-                              {{ getOpponentInitials(match) }}
-                            </span>
-                          </div>
-                          <div>
-                            <p class="text-size-3 font-semibold text-foreground">
-                              {{ getOpponentName(match) }}
-                            </p>
-                            <p v-if="match.played_at" class="text-size-5 text-foreground-muted">
-                              {{ formatMatchDate(match.played_at) }}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-3 flex-wrap">
-                        <span 
-                          class="px-3 py-1 rounded-full text-size-5 font-semibold"
-                          :class="getMatchStatusClass(match.status)"
-                        >
-                          {{ getMatchStatusLabel(match.status) }}
-                        </span>
-                        <!-- Competitive/Friendly Badge -->
-                        <span 
-                          class="px-3 py-1 rounded-full text-size-5 font-semibold border"
-                          :class="match.is_competitive !== false ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-gray-500/10 border-gray-500/30 text-gray-400'"
-                        >
-                          {{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}
-                        </span>
-                        <span v-if="match.tournament" class="px-3 py-1 rounded-full bg-accent-subtle/30 border border-accent/30 text-size-5 text-foreground-muted">
-                          {{ match.tournament.name }}
-                        </span>
-                      </div>
-                    </div>
-                    <!-- Result -->
-                    <div v-if="match.status === 'completed' && match.score" class="text-center md:text-right">
-                      <p class="text-size-2 font-bold text-foreground mb-1">{{ match.score }}</p>
-                      <p v-if="match.winner" class="text-size-5 text-foreground-muted mb-2">
-                        Ganador: {{ match.winner.name }}
-                      </p>
-                      <!-- SR Change - Only show for competitive matches -->
-                      <div v-if="match.is_competitive && match.elo_change !== undefined && match.elo_change !== null" class="mt-2">
-                        <div 
-                          class="text-size-2 font-bold"
-                          :class="match.elo_change > 0 ? 'text-green-400' : match.elo_change < 0 ? 'text-red-400' : 'text-foreground-muted'"
-                        >
-                          {{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }} SR
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="p-6 rounded-xl bg-surface border border-border-subtle text-center">
-                <p class="text-size-4 font-regular text-foreground-muted">
-                  <span v-if="hasActiveFilters">
-                    No se encontraron partidos con los filtros seleccionados
+        <section v-if="activeTab === 'ranking'" id="panel-ranking" role="tabpanel" aria-labelledby="tab-ranking">
+          <div v-if="rankingLoading" class="list-surface loading-state" aria-busy="true"><p class="loading-text">Cargando ranking…</p></div>
+          <template v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.is_unrated && rankingPosition.position">
+            <div v-if="rankingPosition.position.global_rank || rankingPosition.position.tier_rank || rankingPosition.position.segment_rank" class="list-surface">
+              <div v-if="rankingPosition.position.global_rank && rankingPosition.position.total_players > 0" class="list-row">
+                <span class="row-copy">
+                  <strong>Ecuador</strong>
+                  <span class="meta">
+                    <template v-if="rankingPosition.position.percentile >= 0">Top {{ rankingPosition.position.percentile }}%</template>
+                    <template v-if="rankingPosition.position.players_below >= 0"> · {{ rankingPosition.position.players_below }} jugadores por debajo</template>
                   </span>
-                  <span v-else>
-                    No hay partidos registrados
-                  </span>
-                </p>
-                <button
-                  v-if="hasActiveFilters"
-                  @click="clearFilters"
-                  class="mt-4 px-4 py-2 rounded-xl border-2 border-accent bg-accent-subtle text-accent hover:bg-accent hover:text-white transition-all text-size-4 font-semibold"
-                >
-                  Limpiar filtros
-                </button>
+                </span>
+                <span class="rank-score">#{{ rankingPosition.position.global_rank }}<small>de {{ rankingPosition.position.total_players }}</small></span>
               </div>
-
-              <!-- Pagination -->
-              <div v-if="matchHistoryTotalPages > 1" class="mt-6 pt-6 border-t border-border-subtle">
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div class="text-size-4 text-foreground-muted">
-                    Mostrando {{ (matchHistoryPage - 1) * matchHistoryPageSize + 1 }} - 
-                    {{ Math.min(matchHistoryPage * matchHistoryPageSize, matchHistoryTotal) }} 
-                    de {{ matchHistoryTotal }} partidos
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <button
-                      @click="handleMatchHistoryPageChange(matchHistoryPage - 1)"
-                      :disabled="matchHistoryPage === 1 || matchHistoryLoading"
-                      class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                    >
-                      <Icon name="heroicons:chevron-left" class="w-4 h-4" />
-                      <span class="hidden sm:inline">Anterior</span>
-                    </button>
-                    
-                    <div class="flex items-center gap-2">
-                      <span class="text-size-4 text-foreground-muted">Página</span>
-                      <span class="text-size-3 font-semibold text-foreground">{{ matchHistoryPage }}</span>
-                      <span class="text-size-4 text-foreground-muted">de</span>
-                      <span class="text-size-3 font-semibold text-foreground">{{ matchHistoryTotalPages }}</span>
-                    </div>
-                    
-                    <button
-                      @click="handleMatchHistoryPageChange(matchHistoryPage + 1)"
-                      :disabled="matchHistoryPage >= matchHistoryTotalPages || matchHistoryLoading"
-                      class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                    >
-                      <span class="hidden sm:inline">Siguiente</span>
-                      <Icon name="heroicons:chevron-right" class="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+              <div v-if="rankingPosition.position.tier_rank && rankingPosition.position.tier_total > 0 && rankingPosition.tier" class="list-row">
+                <span class="row-copy"><strong>{{ tierName(rankingPosition.tier) }}</strong><span class="meta">Dentro de su tier</span></span>
+                <span class="rank-score">#{{ rankingPosition.position.tier_rank }}<small>de {{ rankingPosition.position.tier_total }}</small></span>
+              </div>
+              <div v-if="rankingPosition.position.segment_rank && rankingPosition.position.segment_total > 0" class="list-row">
+                <span class="row-copy"><strong>{{ rankingPosition.position.segment_name || 'Su región' }}</strong><span class="meta">Ranking regional</span></span>
+                <span class="rank-score">#{{ rankingPosition.position.segment_rank }}<small>de {{ rankingPosition.position.segment_total }}</small></span>
               </div>
             </div>
-          </div>
-        </div>
+            <p v-else class="panel meta">Aún no hay suficientes jugadores para calcular el ranking. Se necesitan al menos {{ rankingPosition.min_players_required || 2 }}; ahora hay {{ rankingPosition.current_players || 0 }}.</p>
+          </template>
+          <p v-else-if="rankingPosition && rankingPosition.is_unrated" class="panel meta">Este jugador aún no ha completado partidos de colocación.</p>
+          <p v-else-if="rankingPosition && rankingPosition.success && !rankingPosition.position && rankingPosition.current_players === 0" class="panel meta">Aún no hay suficientes jugadores para calcular el ranking. Se necesitan al menos {{ rankingPosition.min_players_required || 2 }}; ahora hay {{ rankingPosition.current_players || 0 }}.</p>
+          <p v-else-if="rankingPosition && !rankingPosition.success" class="panel meta">No se pudo cargar la información de ranking.</p>
+          <p v-else class="panel meta">No hay información de ranking disponible.</p>
+        </section>
 
-        <!-- Profile Content - Pending Player -->
-        <div v-else-if="publicPendingPlayer" class="glass-card-elevated p-8">
-          <!-- Pending Status Badge -->
-          <div class="mb-6">
-            <span class="px-4 py-2 rounded-full text-size-4 font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 inline-block">
-              ⏳ Pendiente de registro
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between mb-8">
-            <div>
-              <h2 class="text-size-2 font-semibold text-foreground mb-2">{{ publicPendingPlayer.name }}</h2>
-              <p class="text-size-4 font-regular text-foreground-muted">
-                Invitado el {{ formatDate(publicPendingPlayer.created_at) }}
-              </p>
-            </div>
-            <div class="w-16 h-16 rounded-2xl bg-yellow-500/20 flex items-center justify-center">
-              <span class="text-3xl">⏳</span>
-            </div>
-          </div>
-
-          <div class="grid md:grid-cols-2 gap-6">
-            <!-- Category -->
-            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
-              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Categoría</p>
-              <p class="text-size-3 font-semibold text-foreground">
-                {{ publicPendingPlayer.category?.name || 'No seleccionada' }}
-              </p>
-              <p v-if="publicPendingPlayer.category?.description" class="text-size-4 font-regular text-foreground-muted mt-2">
-                {{ publicPendingPlayer.category.description }}
-              </p>
-            </div>
-
-            <!-- Email -->
-            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
-              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Correo Electrónico</p>
-              <p class="text-size-3 font-semibold text-foreground">
-                {{ publicPendingPlayer.email || 'No proporcionado' }}
-              </p>
-            </div>
-          </div>
-
-          <!-- Status Info -->
-          <div class="mt-6">
-            <div class="p-6 rounded-xl bg-surface border border-border-subtle">
-              <p class="text-size-4 font-regular text-foreground-subtle mb-2">Estado</p>
-              <p class="text-size-3 font-semibold text-foreground">
-                {{ getStatusLabel(publicPendingPlayer.status) }}
-              </p>
-              <p class="text-size-4 font-regular text-foreground-muted mt-2">
-                Este jugador aún no ha completado su registro en la plataforma
-              </p>
-            </div>
-          </div>
-
-          <!-- Info Message -->
-          <div class="mt-8 pt-8 border-t border-border-subtle">
-            <div class="p-6 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
-              <div class="flex items-start gap-4">
-                <div class="w-8 h-8 rounded-xl bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
-                  <span class="text-xl">ℹ️</span>
-                </div>
-                <div>
-                  <h3 class="text-size-3 font-semibold text-foreground mb-2">Jugador Pendiente</h3>
-                  <p class="text-size-4 font-regular text-foreground-muted">
-                    Este jugador ha sido invitado a un partido pero aún no ha completado su registro. 
-                    Una vez que se registre, podrás ver su perfil completo con estadísticas y puntuación SR.
-                  </p>
-                </div>
+        <section v-if="activeTab === 'matches'" id="panel-matches" role="tabpanel" aria-labelledby="tab-matches" class="flow-stack">
+          <details class="panel filters" :open="hasActiveFilters">
+            <summary>Filtrar partidos<span v-if="hasActiveFilters" class="badge badge-accent ml-2">Activos</span><Icon name="heroicons:chevron-down" class="filters__chevron w-5 h-5" aria-hidden="true" /></summary>
+            <div class="filters__grid">
+              <div>
+                <label for="f-status" class="form-label">Estado</label>
+                <select id="f-status" v-model="matchHistoryStatusFilter" class="form-select" @change="applyFilters">
+                  <option value="">Todos los estados</option>
+                  <option value="scheduled">Programado</option>
+                  <option value="active">En curso</option>
+                  <option value="completed">Completado</option>
+                  <option value="cancelled">Cancelado</option>
+                </select>
+              </div>
+              <div>
+                <label for="f-start" class="form-label">Desde</label>
+                <input id="f-start" v-model="matchHistoryStartDate" type="date" class="form-input" @change="applyFilters">
+              </div>
+              <div>
+                <label for="f-end" class="form-label">Hasta</label>
+                <input id="f-end" v-model="matchHistoryEndDate" type="date" class="form-input" @change="applyFilters">
               </div>
             </div>
+            <button type="button" class="text-link" :disabled="!hasActiveFilters" @click="clearFilters">Limpiar filtros</button>
+          </details>
+
+          <div v-if="matchHistoryLoading" class="list-surface loading-state" aria-busy="true"><p class="loading-text">Cargando partidos…</p></div>
+          <div v-else-if="matchHistory.length > 0" class="list-surface">
+            <NuxtLink v-for="match in matchHistory" :key="match.id" :to="`/matches/${match.id}`" class="list-row history-row">
+              <span class="avatar" aria-hidden="true">{{ getOpponentInitials(match) }}</span>
+              <span class="row-copy">
+                <strong>{{ getOpponentName(match) }}</strong>
+                <span v-if="match.played_at" class="meta">{{ formatMatchDate(match.played_at) }}</span>
+                <span class="history-tags">
+                  <span class="status-badge" :class="getMatchStatusClass(match.status)">{{ getMatchStatusLabel(match.status) }}</span>
+                  <span class="badge">{{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}</span>
+                  <span v-if="match.tournament" class="badge">{{ match.tournament.name }}</span>
+                </span>
+              </span>
+              <span v-if="match.status === 'completed' && match.score" class="row-end history-result">
+                <strong class="numeric">{{ formatScore(match.score) }}</strong>
+                <span v-if="match.winner" class="meta">Ganó {{ match.winner.name }}</span>
+                <span
+                  v-if="match.is_competitive && match.elo_change !== undefined && match.elo_change !== null"
+                  class="numeric sr-change"
+                  :class="match.elo_change > 0 ? 'text-success' : match.elo_change < 0 ? 'text-danger' : 'text-foreground-muted'"
+                >{{ match.elo_change > 0 ? '+' : '' }}{{ match.elo_change }} SR</span>
+              </span>
+            </NuxtLink>
           </div>
-        </div>
+          <div v-else class="panel empty-state">
+            <p class="empty-state-description">{{ hasActiveFilters ? 'No hay partidos con esos filtros.' : 'Todavía no hay partidos registrados.' }}</p>
+            <button v-if="hasActiveFilters" type="button" class="btn-secondary" @click="clearFilters">Limpiar filtros</button>
+          </div>
+
+          <nav v-if="matchHistoryTotalPages > 1" class="pager" aria-label="Paginación del historial">
+            <button type="button" class="btn-secondary" :disabled="matchHistoryPage === 1 || matchHistoryLoading" @click="handleMatchHistoryPageChange(matchHistoryPage - 1)">
+              <Icon name="heroicons:chevron-left" class="w-4 h-4" aria-hidden="true" />
+              Anterior
+            </button>
+            <span class="meta numeric">Página {{ matchHistoryPage }} de {{ matchHistoryTotalPages }} · {{ matchHistoryTotal }} partidos</span>
+            <button type="button" class="btn-secondary" :disabled="matchHistoryPage >= matchHistoryTotalPages || matchHistoryLoading" @click="handleMatchHistoryPageChange(matchHistoryPage + 1)">
+              Siguiente
+              <Icon name="heroicons:chevron-right" class="w-4 h-4" aria-hidden="true" />
+            </button>
+          </nav>
+        </section>
       </div>
     </div>
-  </div>
+
+    <!-- Invited, not yet registered -->
+    <div v-else-if="publicPendingPlayer" class="pending-player flow-stack">
+      <PageHeader :title="publicPendingPlayer.name" :subtitle="`Invitado el ${formatDate(publicPendingPlayer.created_at)}`" />
+      <section class="panel flow-stack">
+        <span class="status-pill pending-pill">
+          <Icon name="heroicons:clock" class="w-4 h-4" aria-hidden="true" />
+          Pendiente de registro
+        </span>
+        <div class="list-surface">
+          <div class="list-row"><span class="row-copy"><strong>Categoría</strong><span class="meta">{{ publicPendingPlayer.category?.name || 'No seleccionada' }}<template v-if="publicPendingPlayer.category?.description"> · {{ publicPendingPlayer.category.description }}</template></span></span></div>
+          <div class="list-row"><span class="row-copy"><strong>Correo electrónico</strong><span class="meta">{{ publicPendingPlayer.email || 'No proporcionado' }}</span></span></div>
+          <div class="list-row"><span class="row-copy"><strong>Estado</strong><span class="meta">{{ getStatusLabel(publicPendingPlayer.status) }}</span></span></div>
+        </div>
+        <p class="meta">Este jugador fue invitado a un partido pero aún no completa su registro. Cuando lo haga, verás su perfil con estadísticas y puntuación SR.</p>
+      </section>
+    </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
+import { formatScore } from '~/utils/pendingAction'
+import { useRankIconAsset } from '~/composables/useRankIcon'
+import { tierName } from '~/utils/tiers'
+
 definePageMeta({
   middleware: []
 })
@@ -861,12 +490,18 @@ const getMatchStatusLabel = (status: string) => {
 
 const getMatchStatusClass = (status: string) => {
   const classes: Record<string, string> = {
-    scheduled: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
-    active: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
-    completed: 'bg-green-500/20 text-green-400 border border-green-500/30',
-    cancelled: 'bg-red-500/20 text-red-400 border border-red-500/30'
+    scheduled: 'status-badge-upcoming',
+    active: 'status-badge-pending',
+    completed: 'status-badge-active',
+    cancelled: 'status-badge-danger'
   }
-  return classes[status] || 'bg-surface border border-border-subtle text-foreground-muted'
+  return classes[status] || 'status-badge-completed'
+}
+
+const initials = (name: string) => {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1]?.[0] || '' : '')).toUpperCase()
 }
 
 // Get player tier from ELO (client-side calculation)
@@ -924,3 +559,32 @@ onMounted(async () => {
 })
 </script>
 
+
+<style scoped>
+.back-link { margin-bottom: 12px; }
+.identity { width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; margin-top: auto; }
+.identity h1 { font-size: clamp(30px, 3vw, 38px); line-height: 1.12; letter-spacing: -0.035em; overflow-wrap: anywhere; }
+.identity > p { max-width: 36ch; color: var(--on-photo-muted); overflow-wrap: anywhere; }
+.location { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; }
+.rating { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rating__copy { display: grid; gap: 4px; justify-items: start; }
+.rating-number { font-size: clamp(40px, 4vw, 56px); font-weight: 700; letter-spacing: -0.05em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.rating-number span { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--foreground-muted); }
+.rating__tier { width: 64px; height: 64px; object-fit: contain; }
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: var(--lens); border: 1px solid var(--edge); }
+.segmented button { min-height: 44px; border-radius: 999px; border: 0; background: transparent; color: var(--foreground-muted); font-weight: 600; font-size: 15px; }
+.segmented button[aria-selected="true"] { background: var(--surface); color: var(--foreground); }
+.filters > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; list-style: none; }
+.filters > summary::-webkit-details-marker { display: none; }
+.filters__chevron { margin-left: auto; color: var(--foreground-muted); }
+.filters[open] .filters__chevron { transform: rotate(180deg); }
+.filters__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 12px 0 4px; }
+.history-row { align-items: flex-start; }
+.history-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.history-result { display: grid; gap: 2px; justify-items: end; }
+.sr-change { font-weight: 650; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.pending-pill { background: var(--warning-subtle); color: var(--warning); align-self: flex-start; }
+.pending-player { max-width: 720px; }
+@media (max-width: 767px) { .filters__grid { grid-template-columns: 1fr; } .history-result { justify-items: start; } }
+</style>

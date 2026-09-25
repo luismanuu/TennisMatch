@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all"
+    class="inline-flex items-center gap-2 px-3 py-1 rounded-full border"
     :class="badgeClasses"
     :style="badgeStyle"
   >
@@ -21,7 +21,7 @@
     </span>
     <span 
       v-if="showProvisional && isProvisional" 
-      class="text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+      class="text-size-5 font-medium text-warning"
     >
       Provisional
     </span>
@@ -94,13 +94,10 @@ const displayText = computed(() => {
 })
 
 const badgeClasses = computed(() => {
-  const baseClasses = 'backdrop-blur-sm'
-  
   if (isUnrated.value) {
-    return `${baseClasses} bg-gray-500/10 border-gray-500/30 text-gray-400`
+    return 'bg-surface-high border-border text-foreground-muted'
   }
-  
-  return `${baseClasses} text-foreground`
+  return 'text-foreground'
 })
 
 const badgeStyle = computed(() => {
@@ -110,8 +107,8 @@ const badgeStyle = computed(() => {
   
   const color = tierInfo.value.color
   return {
-    backgroundColor: `${color}15`,
-    borderColor: `${color}50`,
+    backgroundColor: `${color}14`,
+    borderColor: `${color}66`,
   }
 })
 

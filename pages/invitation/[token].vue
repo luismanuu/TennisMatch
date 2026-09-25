@@ -1,24 +1,17 @@
 <template>
-  <div class="min-h-screen">
-    <!-- Navigation -->
-    <AppNavigation />
-
-    <div class="h-16"></div>
-
-    <div class="section-padding">
-      <div class="container-medium px-6">
+  <PageLayout container-size="medium">
         <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center max-w-2xl mx-auto">
-          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+        <div v-if="loading" class="panel text-center max-w-2xl mx-auto">
+          <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" aria-hidden="true" />
           <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando invitación...</p>
         </div>
 
         <!-- Error State -->
-        <div v-else-if="error || !invitation" class="glass-card-elevated p-12 text-center max-w-2xl mx-auto">
+        <div v-else-if="error || !invitation" class="panel text-center max-w-2xl mx-auto">
           <div class="w-20 h-20 rounded-2xl bg-red-500/20 flex items-center justify-center mx-auto mb-6">
-            <span class="text-4xl">⚠️</span>
+            <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-danger" aria-hidden="true" />
           </div>
-          <h2 class="text-size-2 font-semibold text-foreground mb-4">Invitación no válida</h2>
+          <h2 class="panel-title">Invitación no válida</h2>
           <p class="text-size-4 font-regular text-foreground-muted mb-8">
             {{ error?.message || 'La invitación no existe o ha expirado' }}
           </p>
@@ -29,10 +22,10 @@
 
         <!-- Invitation Acceptance Form -->
         <div v-else-if="invitation && !isAuthenticated" class="max-w-2xl mx-auto">
-          <div class="glass-card-elevated p-8 mb-8">
+          <div class="panel mb-8">
             <div class="text-center mb-8">
               <div class="w-20 h-20 rounded-2xl bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-                <span class="text-4xl">🎾</span>
+                <BrandMark :size="40" />
               </div>
               <h1 class="text-size-1 font-semibold text-foreground mb-4">
                 {{ isOrganizer ? '¡Has sido invitado como Organizador!' : '¡Has sido invitado!' }}
@@ -83,7 +76,7 @@
                   type="password"
                   required
                   minlength="8"
-                  class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                  class="form-input"
                   placeholder="Mínimo 8 caracteres"
                 />
                 <p class="text-size-4 font-regular text-foreground-muted mt-2">
@@ -103,7 +96,7 @@
                     type="button"
                     @click="formData.category_id = category.id"
                     :class="[
-                      'w-full p-4 rounded-xl border-2 text-left transition-all',
+                      'w-full p-4 rounded-xl border text-left transition-all',
                       formData.category_id === category.id
                         ? 'border-accent bg-accent-subtle'
                         : 'border-border-subtle bg-surface hover:border-accent/50'
@@ -151,10 +144,10 @@
 
         <!-- Already Authenticated - Accept Invitation -->
         <div v-else-if="invitation && isAuthenticated" class="max-w-2xl mx-auto">
-          <div class="glass-card-elevated p-8">
+          <div class="panel">
             <div class="text-center mb-8">
               <div class="w-20 h-20 rounded-2xl bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-                <span class="text-4xl">🎾</span>
+                <BrandMark :size="40" />
               </div>
               <h1 class="text-size-1 font-semibold text-foreground mb-4">
                 {{ isOrganizer ? 'Aceptar Invitación como Organizador' : 'Aceptar Invitación' }}
@@ -207,9 +200,7 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -378,19 +369,19 @@ onMounted(async () => {
 /* Custom form styles */
 form input[type="password"] {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius-md);
-  border: 2px solid var(--border);
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--edge);
   background: var(--surface);
   color: var(--foreground);
-  font-size: 0.875rem;
-  transition: all 150ms ease;
+  font-size: 1rem;
 }
 
 form input[type="password"]:focus {
-  outline: none;
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 form input[type="password"]:hover {

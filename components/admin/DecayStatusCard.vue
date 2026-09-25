@@ -1,5 +1,5 @@
 <template>
-  <div class="decay-status-card p-4 rounded-xl bg-surface border-2" :class="isAtRisk ? 'border-red-500/30 bg-red-500/5' : 'border-border-subtle'">
+  <div class="decay-status-card p-4 rounded-xl bg-surface border" :class="isAtRisk ? 'border-red-500/30 bg-red-500/5' : 'border-border-subtle'">
     <div class="flex items-center justify-between mb-3">
       <div>
         <p class="text-size-3 font-semibold text-foreground">{{ player.name }}</p>
@@ -33,7 +33,7 @@
         <span class="text-size-5 text-foreground-muted">Progreso del mes</span>
         <span class="text-size-5 text-foreground-muted">{{ daysRemaining }} días restantes</span>
       </div>
-      <div class="w-full bg-surface border-2 border-border-subtle rounded-full h-2 overflow-hidden">
+      <div class="w-full bg-surface border border-border-subtle rounded-full h-2 overflow-hidden">
         <div 
           class="h-full transition-all duration-300"
           :class="progressPercent >= 100 ? 'bg-green-500' : progressPercent >= 50 ? 'bg-yellow-500' : 'bg-red-500'"
@@ -49,7 +49,7 @@
         :disabled="loading"
         class="btn-danger text-size-4 !py-2 !px-4 flex-1 disabled:opacity-50"
       >
-        <Icon name="heroicons:arrow-down" class="w-4 h-4 mr-2" />
+        <Icon name="heroicons:arrow-down" class="w-4 h-4" />
         Aplicar Decay
       </button>
       <button
@@ -57,7 +57,7 @@
         :disabled="loading"
         class="btn-secondary text-size-4 !py-2 !px-4 flex-1 disabled:opacity-50"
       >
-        <Icon name="heroicons:shield-check" class="w-4 h-4 mr-2" />
+        <Icon name="heroicons:shield-check" class="w-4 h-4" />
         Eximir
       </button>
     </div>

@@ -1,30 +1,16 @@
 <template>
-  <header :class="headerClass">
-    <!-- Back Link (optional) -->
-    <NuxtLink
-      v-if="backTo"
-      :to="backTo"
-      class="page-back-link animate-fade-up"
-    >
-      <Icon name="heroicons:arrow-left" class="w-4 h-4" />
-      <span>{{ backLabel || 'Volver' }}</span>
+  <header class="page-heading">
+    <NuxtLink v-if="backTo" :to="backTo" class="text-link">
+      <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+      {{ backLabel || 'Volver' }}
     </NuxtLink>
-
-    <div :class="layout === 'split' ? 'flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4' : ''">
-      <div :class="titleContainerClass">
-        <!-- Eyebrow (optional) -->
-        <div v-if="badge" class="page-header-badge animate-fade-up">
-          <Icon v-if="badgeIcon" :name="badgeIcon" class="w-3.5 h-3.5" />
-          <span>{{ badge }}</span>
-        </div>
-
-        <!-- Title and Subtitle -->
-        <h1 class="page-header-title">{{ title }}</h1>
-        <p v-if="subtitle" class="page-header-subtitle">{{ subtitle }}</p>
+    <p v-if="meta" class="meta">{{ meta }}</p>
+    <div :class="$slots.actions ? 'page-heading-row' : undefined">
+      <div class="page-heading-copy">
+        <h1>{{ title }}</h1>
+        <p v-if="subtitle" class="meta page-heading-subtitle">{{ subtitle }}</p>
       </div>
-
-      <!-- Actions (optional) -->
-      <div v-if="$slots.actions" class="flex flex-wrap items-center gap-3 animate-fade-up animate-delay-1 sm:flex-shrink-0">
+      <div v-if="$slots.actions" class="quick-actions">
         <slot name="actions" />
       </div>
     </div>
@@ -33,23 +19,23 @@
 
 <script setup lang="ts">
 /**
- * Editorial page header: eyebrow · display title · subtitle, left-aligned.
- * `layout="split"` places the actions slot to the right on ≥ sm screens.
+ * Plain/detail page heading (DESIGN_SYSTEM.md §4): optional back link, a short
+ * context line, one wrapping h1, optional subtitle and actions. The photo variant
+ * is <PhotoPanel variant="compact"> with an h1 inside.
  */
 interface Props {
   title: string
   subtitle?: string
-  badge?: string
-  badgeIcon?: string
+  meta?: string
   backTo?: string
   backLabel?: string
-  layout?: 'centered' | 'split'
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  layout: 'centered'
-})
-
-const headerClass = computed(() => (props.layout === 'split' ? 'page-header-with-back' : 'page-header'))
-const titleContainerClass = computed(() => (props.layout === 'split' ? 'flex-1 min-w-0' : ''))
+defineProps<Props>()
 </script>
+
+<style scoped>
+.page-heading-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; }
+.page-heading-copy { display: grid; gap: 10px; min-width: 0; flex: 1 1 22rem; }
+.page-heading-subtitle { font-size: 16px; max-width: 58ch; }
+</style>

@@ -1,75 +1,57 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <AppNavigation />
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <div class="text-center mb-12 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:arrow-down" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Monthly Decay</span>
-          </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">Gestión de Monthly Decay</h1>
-          <p class="text-size-3 font-regular text-foreground-muted">Administra el decay mensual de jugadores inactivos</p>
-        </div>
+  <PageLayout container-size="medium">
+        <PageHeader title="Gestión de Monthly Decay" subtitle="Administra el decay mensual de jugadores inactivos" back-to="/admin/rankings" back-label="Volver a rankings" />
 
         <!-- Navigation -->
         <div class="mb-8 flex flex-wrap gap-4">
           <NuxtLink to="/admin/rankings" class="btn-secondary text-size-4">
-            <Icon name="heroicons:chart-bar" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:chart-bar" class="w-4 h-4" />
             Estadísticas
           </NuxtLink>
           <NuxtLink to="/admin/rankings/trends" class="btn-secondary text-size-4">
-            <Icon name="heroicons:arrow-trending-up" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:arrow-trending-up" class="w-4 h-4" />
             Tendencias
           </NuxtLink>
           <NuxtLink to="/admin/rankings/leaderboards" class="btn-secondary text-size-4">
-            <Icon name="heroicons:trophy" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:trophy" class="w-4 h-4" />
             Leaderboards
           </NuxtLink>
           <NuxtLink to="/admin/rankings/placement" class="btn-secondary text-size-4">
-            <Icon name="heroicons:clock" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:clock" class="w-4 h-4" />
             Placement
           </NuxtLink>
           <NuxtLink to="/admin/rankings/decay" class="btn-primary text-size-4">
-            <Icon name="heroicons:arrow-down" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:arrow-down" class="w-4 h-4" />
             Decay
           </NuxtLink>
           <NuxtLink to="/admin/rankings/health" class="btn-secondary text-size-4">
-            <Icon name="heroicons:heart" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:heart" class="w-4 h-4" />
             Health
           </NuxtLink>
         </div>
 
         <!-- Statistics -->
         <div v-if="decayStats" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
-          <div class="glass-card-elevated p-6">
+          <div class="panel">
             <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Elegibles</h3>
             <p class="text-size-1 font-bold text-foreground">{{ decayStats.total_eligible }}</p>
           </div>
-          <div class="glass-card-elevated p-6">
+          <div class="panel">
             <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">En Riesgo</h3>
             <p class="text-size-1 font-bold text-red-400">{{ decayStats.total_at_risk }}</p>
           </div>
-          <div class="glass-card-elevated p-6">
+          <div class="panel">
             <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Exentos</h3>
             <p class="text-size-1 font-bold text-foreground">{{ decayStats.total_exempt }}</p>
           </div>
-          <div class="glass-card-elevated p-6">
+          <div class="panel">
             <h3 class="text-size-3 font-semibold text-foreground-muted mb-2">Decay Total</h3>
             <p class="text-size-1 font-bold text-red-400">-{{ decayStats.total_decay_amount }} SR</p>
           </div>
         </div>
 
         <!-- Filters -->
-        <div class="glass-card-elevated p-4 mb-8">
+        <div class="panel mb-8">
           <div class="flex items-center gap-4">
             <label class="flex items-center gap-2 cursor-pointer">
               <input
@@ -86,20 +68,20 @@
               :disabled="loading || bulkTriggering"
               class="btn-danger text-size-4 ml-auto disabled:opacity-50"
             >
-              <Icon name="heroicons:arrow-down" class="w-4 h-4 mr-2" />
+              <Icon name="heroicons:arrow-down" class="w-4 h-4" />
               Aplicar Decay a Todos
             </button>
           </div>
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center">
-          <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
-          <p class="text-size-3 text-foreground-muted">Cargando...</p>
+        <div v-if="loading" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Cargando…</p>
         </div>
 
         <!-- No Players -->
-        <div v-else-if="filteredPlayers.length === 0" class="glass-card-elevated p-12 text-center">
+        <div v-else-if="filteredPlayers.length === 0" class="panel text-center">
           <Icon name="heroicons:check-circle" class="w-16 h-16 text-green-400 mx-auto mb-4" />
           <h2 class="text-size-2 font-semibold text-foreground mb-2">¡Excelente! No hay jugadores en riesgo de decay</h2>
           <p class="text-size-4 text-foreground-muted mb-6">
@@ -111,7 +93,7 @@
             </span>
           </p>
           <button v-if="showOnlyAtRisk" @click="showOnlyAtRisk = false; filterPlayers()" class="btn-primary text-size-4">
-            <Icon name="heroicons:eye" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:eye" class="w-4 h-4" />
             Ver Todos los Jugadores
           </button>
         </div>
@@ -141,9 +123,7 @@
             @page-change="(page) => fetchDecayStatus(showOnlyAtRisk, page)"
           />
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">

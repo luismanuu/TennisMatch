@@ -1,30 +1,15 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <!-- Navigation -->
-    <AppNavigation />
-    
-    <!-- Spacer for fixed nav -->
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+  <PageLayout container-size="medium">
         <!-- Header -->
-        <div class="mb-8 animate-fade-up">
-          <NuxtLink to="/admin/tournaments" class="inline-flex items-center gap-2 text-size-4 text-foreground-muted hover:text-accent mb-4 transition-colors">
-            <Icon name="heroicons:arrow-left" class="w-4 h-4" />
-            <span>Volver a Torneos</span>
+        <div class="page-heading">
+          <NuxtLink to="/admin/tournaments" class="text-link">
+            <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+            Volver a Torneos
           </NuxtLink>
-          <div class="flex items-start justify-between">
+          <div class="heading-row">
             <div>
-              <h1 class="text-size-1 font-semibold text-foreground mb-2">{{ tournament?.name || 'Cargando...' }}</h1>
-              <p class="text-size-3 font-regular text-foreground-muted">
+              <h1>{{ tournament?.name || 'Cargando...' }}</h1>
+              <p class="meta">
                 {{ tournament?.category?.name || 'Abierto a todos' }} • {{ tournament ? formatDate(tournament.start_date) : '' }}
               </p>
             </div>
@@ -33,7 +18,7 @@
                 v-if="tournament && tournament.registrations && tournament.registrations.length >= tournament.min_players && !tournament.groups?.length"
                 @click="handleGenerateBrackets"
                 :disabled="generating"
-                class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50"
+                class="btn-primary"
               >
                 <span v-if="!generating">Generar Brackets</span>
                 <span v-else class="flex items-center gap-2">
@@ -46,16 +31,16 @@
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <Icon name="heroicons:arrow-path" class="w-12 h-12 text-accent mx-auto mb-4 animate-spin" />
-          <p class="text-size-3 font-regular text-foreground-muted">Cargando torneo...</p>
+        <div v-if="loading" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Cargando torneo…</p>
         </div>
 
         <!-- Tournament Details -->
         <div v-else-if="tournament" class="space-y-8">
           <!-- Tournament Info -->
-          <div class="glass-card-elevated p-6 animate-fade-up">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Información del Torneo</h2>
+          <div class="panel">
+            <h2 class="panel-title">Información del Torneo</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-size-4 mb-6">
               <div>
                 <span class="text-foreground-muted">Estado:</span>
@@ -123,31 +108,31 @@
           </div>
 
           <!-- Tournament Statistics -->
-          <div class="glass-card-elevated p-6 animate-fade-up animate-delay-1">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Estadísticas del Torneo</h2>
+          <div class="panel">
+            <h2 class="panel-title">Estadísticas del Torneo</h2>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30">
+              <div class="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
                 <div class="flex items-center gap-2 mb-2">
                   <Icon name="heroicons:user-group" class="w-5 h-5 text-blue-400" />
                   <p class="text-size-4 text-foreground-muted">Grupos</p>
                 </div>
                 <p class="text-size-2 font-bold text-blue-400">{{ tournament.groups?.length || 0 }}</p>
               </div>
-              <div class="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30">
+              <div class="p-4 rounded-xl bg-green-500/10 border border-green-500/30">
                 <div class="flex items-center gap-2 mb-2">
                   <Icon name="heroicons:calendar" class="w-5 h-5 text-green-400" />
                   <p class="text-size-4 text-foreground-muted">Partidos Totales</p>
                 </div>
                 <p class="text-size-2 font-bold text-green-400">{{ tournamentStats.totalMatches || 0 }}</p>
               </div>
-              <div class="p-4 rounded-xl bg-purple-500/10 border-2 border-purple-500/30">
+              <div class="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
                 <div class="flex items-center gap-2 mb-2">
                   <Icon name="heroicons:check-circle" class="w-5 h-5 text-purple-400" />
                   <p class="text-size-4 text-foreground-muted">Completados</p>
                 </div>
                 <p class="text-size-2 font-bold text-purple-400">{{ tournamentStats.completedMatches || 0 }}</p>
               </div>
-              <div class="p-4 rounded-xl bg-yellow-500/10 border-2 border-yellow-500/30">
+              <div class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
                 <div class="flex items-center gap-2 mb-2">
                   <Icon name="heroicons:clock" class="w-5 h-5 text-yellow-400" />
                   <p class="text-size-4 text-foreground-muted">Pendientes</p>
@@ -174,29 +159,29 @@
           </div>
 
           <!-- Registered Players -->
-          <div class="glass-card-elevated p-6 animate-fade-up animate-delay-1">
+          <div class="panel">
             <div class="flex items-center justify-between mb-4">
               <h2 class="text-size-2 font-semibold text-foreground">Jugadores Registrados</h2>
               <button
                 @click="showRegisterForm = !showRegisterForm"
-                class="px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                class="btn-primary"
               >
                 Registrar Jugador
               </button>
             </div>
-            <div v-if="showRegisterForm" class="mb-4 p-4 bg-surface rounded-xl border-2 border-border-subtle">
+            <div v-if="showRegisterForm" class="mb-4 p-4 bg-surface rounded-xl border border-border-subtle">
               <input
                 v-model="playerSearch"
                 type="text"
                 placeholder="Buscar jugador..."
-                class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none mb-3"
+                class="form-input"
               />
               <div v-if="searchResults.length > 0" class="max-h-48 overflow-y-auto space-y-2">
                 <button
                   v-for="player in searchResults"
                   :key="player.id"
                   @click="handleRegisterPlayer(player.id)"
-                  class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 hover:border-accent transition-colors text-left"
+                  class="btn-secondary w-full"
                 >
                   {{ player.name }}
                 </button>
@@ -206,7 +191,7 @@
               <div
                 v-for="reg in tournament.registrations"
                 :key="reg.id"
-                class="flex items-center justify-between p-3 rounded-xl bg-surface border-2 border-border-subtle"
+                class="flex items-center justify-between p-3 rounded-xl bg-surface border border-border-subtle"
               >
                 <span class="text-size-4 text-foreground">{{ reg.player?.name }}</span>
                 <span
@@ -227,13 +212,13 @@
           </div>
 
           <!-- Groups Information -->
-          <div v-if="tournament.groups && tournament.groups.length > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-2">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Grupos del Torneo</h2>
+          <div v-if="tournament.groups && tournament.groups.length > 0" class="panel">
+            <h2 class="panel-title">Grupos del Torneo</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div
                 v-for="group in tournament.groups"
                 :key="group.id"
-                class="p-4 rounded-xl bg-surface border-2 border-border-subtle hover:border-accent/50 transition-colors"
+                class="p-4 rounded-xl bg-surface border border-border-subtle hover:border-accent/50 transition-colors"
               >
                 <h3 class="text-size-3 font-semibold text-foreground mb-3">{{ group.group_name }}</h3>
                 <div class="space-y-2">
@@ -251,26 +236,26 @@
           </div>
 
           <!-- Tournament Matches -->
-          <div v-if="tournamentStats.totalMatches > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-3">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Partidos del Torneo</h2>
+          <div v-if="tournamentStats.totalMatches > 0" class="panel">
+            <h2 class="panel-title">Partidos del Torneo</h2>
             <div class="space-y-3">
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div class="p-4 rounded-xl bg-blue-500/10 border-2 border-blue-500/30">
+                <div class="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
                   <p class="text-size-4 text-foreground-muted mb-1">Total</p>
                   <p class="text-size-2 font-bold text-blue-400">{{ tournamentStats.totalMatches }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-green-500/10 border-2 border-green-500/30">
+                <div class="p-4 rounded-xl bg-green-500/10 border border-green-500/30">
                   <p class="text-size-4 text-foreground-muted mb-1">Completados</p>
                   <p class="text-size-2 font-bold text-green-400">{{ tournamentStats.completedMatches }}</p>
                 </div>
-                <div class="p-4 rounded-xl bg-yellow-500/10 border-2 border-yellow-500/30">
+                <div class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
                   <p class="text-size-4 text-foreground-muted mb-1">Pendientes</p>
                   <p class="text-size-2 font-bold text-yellow-400">{{ tournamentStats.pendingMatches }}</p>
                 </div>
               </div>
               <NuxtLink
                 :to="`/admin/tournaments/${tournamentId}/matches`"
-                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                class="btn-primary"
               >
                 <Icon name="heroicons:eye" class="w-4 h-4" />
                 <span>Ver Todos los Partidos</span>
@@ -279,19 +264,19 @@
           </div>
 
           <!-- Bracket Visualization -->
-          <div v-if="tournament.groups && tournament.groups.length > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-4">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Brackets</h2>
+          <div v-if="tournament.groups && tournament.groups.length > 0" class="panel">
+            <h2 class="panel-title">Brackets</h2>
             <TournamentBracket :tournament-id="tournament.id" />
           </div>
 
           <!-- Rounds and Deadlines -->
-          <div v-if="tournament.rounds && tournament.rounds.length > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-5">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Rondas y Fechas Límite</h2>
+          <div v-if="tournament.rounds && tournament.rounds.length > 0" class="panel">
+            <h2 class="panel-title">Rondas y Fechas Límite</h2>
             <div class="space-y-4">
               <div
                 v-for="round in tournament.rounds"
                 :key="round.id"
-                class="p-4 rounded-xl bg-surface border-2 border-border-subtle"
+                class="p-4 rounded-xl bg-surface border border-border-subtle"
               >
                 <div class="flex items-center justify-between mb-2">
                   <div>
@@ -323,23 +308,23 @@
           </div>
 
           <!-- Deadline Management -->
-          <div v-if="tournament.groups && tournament.groups.length > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-6">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Gestionar Fechas Límite</h2>
+          <div v-if="tournament.groups && tournament.groups.length > 0" class="panel">
+            <h2 class="panel-title">Gestionar Fechas Límite</h2>
             <div class="space-y-4">
               <div>
-                <label class="block text-size-4 font-semibold text-foreground mb-2">Fecha Límite Fase de Grupos</label>
+                <label class="form-label">Fecha Límite Fase de Grupos</label>
                 <input
                   v-model="groupDeadline"
                   type="datetime-local"
                   :min="minDateTime"
-                  class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                  class="form-input"
                 />
                 <p v-if="isGroupDeadlineInPast" class="text-size-4 font-regular text-red-400 mt-2">
                   No puedes establecer una fecha límite en el pasado
                 </p>
                 <button
                   @click="handleSetGroupDeadline"
-                  class="mt-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                  class="btn-primary"
                 >
                   Establecer Fecha Límite
                 </button>
@@ -347,9 +332,7 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -519,3 +502,7 @@ onMounted(async () => {
 })
 </script>
 
+
+<style scoped>
+.heading-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; }
+</style>

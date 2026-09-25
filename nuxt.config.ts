@@ -27,11 +27,13 @@ export default defineNuxtConfig({
     '@clerk/nuxt'
   ],
 
-  // Nuxt UI ships @nuxtjs/color-mode; the active theme drives dark/light (see useTheme)
+  // Nuxt UI ships @nuxtjs/color-mode; the appearance (te-theme) drives dark/light (see useTheme).
+  // Cookie storage lets SSR render the right class instead of patching it after hydration.
   colorMode: {
     preference: 'dark',
     fallback: 'dark',
     classSuffix: '',
+    storage: 'cookie',
     storageKey: 'te-color-mode'
   },
 

@@ -1,45 +1,28 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <!-- Navigation -->
-    <AppNavigation />
-    
-    <!-- Spacer for fixed nav -->
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
+  <PageLayout>
         <!-- Header -->
-        <div class="mb-8 animate-fade-up">
-          <NuxtLink to="/organizer/tournaments" class="inline-flex items-center gap-2 text-size-4 text-foreground-muted hover:text-accent mb-4 transition-colors">
-            <Icon name="heroicons:arrow-left" class="w-4 h-4" />
-            <span>Volver a Mis Torneos</span>
+        <div class="page-heading">
+          <NuxtLink to="/organizer/tournaments" class="text-link">
+            <Icon name="heroicons:arrow-left" class="w-5 h-5" aria-hidden="true" />
+            Volver a mis torneos
           </NuxtLink>
-          <div class="flex items-start justify-between">
+          <div class="heading-row">
             <div>
-              <h1 v-if="tournament" class="text-size-1 font-semibold text-foreground mb-2">{{ tournament.name }}</h1>
-              <h1 v-else class="text-size-1 font-semibold text-foreground mb-2">
-                <span class="inline-block w-48 h-8 bg-surface rounded animate-pulse"></span>
-              </h1>
-              <p v-if="tournament" class="text-size-3 font-regular text-foreground-muted">
+              <h1 v-if="tournament">{{ tournament.name }}</h1>
+              <h1 v-else><span class="skeleton inline-block w-48 h-8"></span></h1>
+              <p v-if="tournament" class="meta">
                 {{ tournament.category?.name || 'Abierto a todos' }} • {{ formatDate(tournament.start_date) }}
               </p>
               <p v-else class="text-size-3 font-regular text-foreground-muted">
-                <span class="inline-block w-64 h-5 bg-surface rounded animate-pulse"></span>
+                <span class="skeleton inline-block w-64 h-5"></span>
               </p>
             </div>
-            <div class="flex gap-3">
+            <div class="quick-actions">
               <button
                 v-if="tournament && tournament.status === 'upcoming'"
                 @click="handleStartTournament"
                 :disabled="startingTournament"
-                class="px-6 py-3 rounded-xl bg-green-500 text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50"
+                class="btn-primary"
               >
                 <span v-if="!startingTournament" class="flex items-center gap-2">
                   <Icon name="heroicons:play" class="w-4 h-4" />
@@ -54,7 +37,7 @@
                 v-if="tournament && tournament.registrations && tournament.registrations.length >= tournament.min_players && !tournament.groups?.length"
                 @click="handleGenerateBrackets"
                 :disabled="generating"
-                class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50"
+                class="btn-secondary"
               >
                 <span v-if="!generating">Generar Brackets</span>
                 <span v-else class="flex items-center gap-2">
@@ -67,31 +50,31 @@
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading || !isLoaded" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <Icon name="heroicons:arrow-path" class="w-12 h-12 text-accent mx-auto mb-4 animate-spin" />
-          <p class="text-size-3 font-regular text-foreground-muted">Cargando torneo...</p>
+        <div v-if="loading || !isLoaded" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Cargando torneo…</p>
         </div>
 
         <!-- Error State -->
-        <div v-else-if="error && !loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <Icon name="heroicons:exclamation-triangle" class="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h3 class="text-size-2 font-semibold text-foreground mb-2">Error al cargar el torneo</h3>
-          <p class="text-size-4 font-regular text-foreground-muted mb-4">
+        <div v-else-if="error && !loading" class="panel empty-state" role="alert">
+          <Icon name="heroicons:exclamation-triangle" class="empty-state-icon text-danger" aria-hidden="true" />
+          <h3 class="empty-state-title">Error al cargar el torneo</h3>
+          <p class="empty-state-description">
             {{ error.message || 'No se pudo cargar la información del torneo' }}
           </p>
           <button
             @click="loadTournament"
-            class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+            class="btn-primary"
           >
             Intentar de nuevo
           </button>
         </div>
 
         <!-- Tournament Details -->
-        <div v-else-if="tournament" class="space-y-8">
+        <div v-else-if="tournament" class="flow-stack">
           <!-- Tournament Info -->
-          <div class="glass-card-elevated p-6 animate-fade-up">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Información del Torneo</h2>
+          <div class="panel">
+            <h2 class="panel-title">Información del Torneo</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-size-4 mb-4">
               <div>
                 <span class="text-foreground-muted">Estado:</span>
@@ -173,7 +156,7 @@
                     v-if="phaseStatus?.currentPhase === 'playoffs' && !hasPlayoffBrackets"
                     @click="handleGeneratePlayoffs"
                     :disabled="generatingPlayoffs"
-                    class="px-6 py-3 rounded-xl bg-yellow-500/20 text-yellow-400 border-2 border-yellow-500/30 text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 flex items-center gap-2"
+                    class="px-6 py-3 rounded-xl bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-size-4 font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
                   >
                     <Icon name="heroicons:trophy" class="w-4 h-4" />
                     <span v-if="!generatingPlayoffs">Generar Brackets de Playoffs</span>
@@ -188,7 +171,7 @@
                     v-if="canAdvancePhase"
                     @click="handleAdvancePhase"
                     :disabled="advancingPhase"
-                    class="px-6 py-3 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 flex items-center gap-2"
+                    class="btn-primary"
                   >
                     <Icon name="heroicons:arrow-right" class="w-4 h-4" />
                     <span v-if="!advancingPhase">{{ getAdvanceButtonLabel() }}</span>
@@ -203,7 +186,7 @@
           </div>
 
           <!-- Registered Players -->
-          <div class="glass-card-elevated p-6 animate-fade-up animate-delay-1">
+          <div class="panel">
             <div class="flex items-center justify-between mb-4">
               <button
                 @click="showRegisteredPlayers = !showRegisteredPlayers"
@@ -217,14 +200,14 @@
               </button>
               <button
                 @click="showRegisterForm = !showRegisterForm"
-                class="px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                class="btn-primary"
               >
                 Registrar Jugador
               </button>
             </div>
             <div v-show="showRegisteredPlayers">
               <!-- Filters -->
-              <div class="mb-4 p-4 bg-surface rounded-xl border-2 border-border-subtle">
+              <div class="mb-4 p-4 bg-surface rounded-xl border border-border-subtle">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label class="block text-size-4 font-semibold text-foreground mb-2">Buscar por Nombre</label>
@@ -232,14 +215,14 @@
                       v-model="playerFilters.search"
                       type="text"
                       placeholder="Nombre del jugador..."
-                      class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                      class="form-input"
                     />
                   </div>
                   <div>
                     <label class="block text-size-4 font-semibold text-foreground mb-2">Filtrar por Categoría</label>
                     <select
                       v-model="playerFilters.category"
-                      class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                      class="form-select"
                     >
                       <option value="">Todas las categorías</option>
                       <option
@@ -255,7 +238,7 @@
                     <label class="block text-size-4 font-semibold text-foreground mb-2">Filtrar por Estado</label>
                     <select
                       v-model="playerFilters.status"
-                      class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                      class="form-select"
                     >
                       <option value="">Todos los estados</option>
                       <option value="confirmed">Confirmado</option>
@@ -267,25 +250,25 @@
                 <div class="mt-3 flex justify-end">
                   <button
                     @click="clearPlayerFilters"
-                    class="px-4 py-2 rounded-xl bg-surface-elevated border-2 border-border-subtle text-foreground text-size-4 font-semibold hover:border-accent transition-all"
+                    class="px-4 py-2 rounded-xl bg-surface-elevated border border-border-subtle text-foreground text-size-4 font-semibold hover:border-accent transition-all"
                   >
                     Limpiar Filtros
                   </button>
                 </div>
               </div>
-            <div v-if="showRegisterForm" class="mb-4 p-4 bg-surface rounded-xl border-2 border-border-subtle">
+            <div v-if="showRegisterForm" class="mb-4 p-4 bg-surface rounded-xl border border-border-subtle">
               <input
                 v-model="playerSearch"
                 type="text"
                 placeholder="Buscar jugador..."
-                class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none mb-3"
+                class="form-input"
               />
               <div v-if="searchResults.length > 0" class="max-h-48 overflow-y-auto space-y-2">
                 <button
                   v-for="player in searchResults"
                   :key="player.id"
                   @click="handleRegisterPlayer(player.id)"
-                  class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 hover:border-accent transition-colors text-left"
+                  class="btn-secondary w-full"
                 >
                   {{ player.name }}
                 </button>
@@ -295,7 +278,7 @@
               <div
                 v-for="reg in paginatedRegistrations"
                 :key="reg.id"
-                class="p-4 rounded-xl bg-surface border-2 border-border-subtle"
+                class="p-4 rounded-xl bg-surface border border-border-subtle"
               >
                 <div class="flex items-start justify-between mb-2">
                   <div class="flex-1">
@@ -320,7 +303,7 @@
                           class="ml-2 p-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 hover:border-green-500/50 transition-all group"
                           title="Abrir WhatsApp"
                         >
-                          <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4 text-green-400 group-hover:scale-110 transition-transform" />
+                          <Icon name="heroicons:chat-bubble-left-right" class="w-4 h-4 text-green-400 transition-transform" />
                         </a>
                       </div>
                       <div v-if="!reg.player?.email && !reg.player?.phone_number" class="text-size-4 text-foreground-muted italic">
@@ -356,7 +339,7 @@
                 <button
                   @click="currentPage = Math.max(1, currentPage - 1)"
                   :disabled="currentPage === 1"
-                  class="px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 font-semibold hover:border-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="btn-secondary"
                 >
                   <Icon name="heroicons:chevron-left" class="w-4 h-4" />
                 </button>
@@ -366,7 +349,7 @@
                 <button
                   @click="currentPage = Math.min(totalPages, currentPage + 1)"
                   :disabled="currentPage === totalPages"
-                  class="px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 font-semibold hover:border-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="btn-secondary"
                 >
                   <Icon name="heroicons:chevron-right" class="w-4 h-4" />
                 </button>
@@ -376,7 +359,7 @@
           </div>
 
           <!-- Bracket Visualization -->
-          <div v-if="tournament.groups && tournament.groups.length > 0" class="glass-card-elevated p-6 animate-fade-up animate-delay-2">
+          <div v-if="tournament.groups && tournament.groups.length > 0" class="panel">
             <div class="flex items-center justify-between mb-4">
               <button
                 @click="showBrackets = !showBrackets"
@@ -391,7 +374,7 @@
               <button
                 v-if="showBrackets && tournament.current_phase === 'playoffs'"
                 @click="refreshBracket"
-                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all"
+                class="btn-primary"
                 :disabled="refreshingBracket"
               >
                 <Icon 
@@ -414,8 +397,8 @@
           </div>
 
           <!-- Deadline Management -->
-          <div v-if="tournament && tournament.status === 'active'" class="glass-card-elevated p-6 animate-fade-up animate-delay-3">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">Gestionar Fechas Límite</h2>
+          <div v-if="tournament && tournament.status === 'active'" class="panel">
+            <h2 class="panel-title">Gestionar Fechas Límite</h2>
             
             <!-- Group Stage Deadline (only show if in group_stage phase) -->
             <div v-if="tournament.current_phase === 'group_stage'" class="space-y-4">
@@ -435,7 +418,7 @@
                   v-model="groupDeadline"
                   type="datetime-local"
                   :min="minDateTime"
-                  class="w-full px-4 py-2 rounded-xl bg-surface border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                  class="form-input"
                 />
                 <p v-if="isGroupDeadlineInPast" class="text-size-4 font-regular text-red-400 mt-2">
                   No puedes establecer una fecha límite en el pasado
@@ -443,7 +426,7 @@
                 <button
                   @click="handleSetGroupDeadline"
                   :disabled="!groupDeadline"
-                  class="mt-2 px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="btn-primary"
                 >
                   {{ currentGroupDeadline ? 'Actualizar Fecha Límite' : 'Establecer Fecha Límite' }}
                 </button>
@@ -462,7 +445,7 @@
                   <div
                     v-for="(round, index) in mainPlayoffRounds"
                     :key="`main-${index}`"
-                    class="p-4 rounded-xl bg-surface border-2 border-border-subtle"
+                    class="p-4 rounded-xl bg-surface border border-border-subtle"
                   >
                     <label class="block text-size-4 font-semibold text-foreground mb-2">
                       {{ getRoundName(round.round_number) }}
@@ -481,13 +464,13 @@
                       v-model="playoffDeadlines.main[round.round_number]"
                       type="datetime-local"
                       :min="minDateTime"
-                      class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                      class="form-input"
                     />
                   </div>
                   <button
                     @click="handleSetPlayoffDeadlines('main')"
                     :disabled="!hasValidPlayoffDeadlines('main') || mainPlayoffRounds.length === 0"
-                    class="w-full px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="btn-primary w-full"
                   >
                     Establecer Fechas Límite Bracket Main
                   </button>
@@ -507,7 +490,7 @@
                   <div
                     v-for="(round, index) in backdrawPlayoffRounds"
                     :key="`backdraw-${index}`"
-                    class="p-4 rounded-xl bg-surface border-2 border-border-subtle"
+                    class="p-4 rounded-xl bg-surface border border-border-subtle"
                   >
                     <label class="block text-size-4 font-semibold text-foreground mb-2">
                       {{ getRoundName(round.round_number) }}
@@ -526,13 +509,13 @@
                       v-model="playoffDeadlines.backdraw[round.round_number]"
                       type="datetime-local"
                       :min="minDateTime"
-                      class="w-full px-4 py-2 rounded-xl bg-background border-2 border-border-subtle text-foreground text-size-4 focus:border-accent focus:outline-none"
+                      class="form-input"
                     />
                   </div>
                   <button
                     @click="handleSetPlayoffDeadlines('backdraw')"
                     :disabled="!hasValidPlayoffDeadlines('backdraw') || backdrawPlayoffRounds.length === 0"
-                    class="w-full px-4 py-2 rounded-xl bg-accent text-foreground text-size-4 font-semibold hover-lift transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="btn-primary w-full"
                   >
                     Establecer Fechas Límite Bracket Back
                   </button>
@@ -544,9 +527,7 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -1289,3 +1270,7 @@ onMounted(async () => {
 })
 </script>
 
+
+<style scoped>
+.heading-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+</style>

@@ -1,74 +1,56 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
-
-    <AppNavigation />
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <div class="text-center mb-12 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:trophy" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Leaderboards</span>
-          </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">Vista de Leaderboards</h1>
-          <p class="text-size-3 font-regular text-foreground-muted">Explora y compara leaderboards con diferentes filtros</p>
-        </div>
+  <PageLayout container-size="medium">
+        <PageHeader title="Vista de Leaderboards" subtitle="Explora y compara leaderboards con diferentes filtros" back-to="/admin/rankings" back-label="Volver a rankings" />
 
         <!-- Navigation -->
         <div class="mb-8 flex flex-wrap gap-4">
           <NuxtLink to="/admin/rankings" class="btn-secondary text-size-4">
-            <Icon name="heroicons:chart-bar" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:chart-bar" class="w-4 h-4" />
             Estadísticas
           </NuxtLink>
           <NuxtLink to="/admin/rankings/trends" class="btn-secondary text-size-4">
-            <Icon name="heroicons:arrow-trending-up" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:arrow-trending-up" class="w-4 h-4" />
             Tendencias
           </NuxtLink>
           <NuxtLink to="/admin/rankings/leaderboards" class="btn-primary text-size-4">
-            <Icon name="heroicons:trophy" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:trophy" class="w-4 h-4" />
             Leaderboards
           </NuxtLink>
           <NuxtLink to="/admin/rankings/placement" class="btn-secondary text-size-4">
-            <Icon name="heroicons:clock" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:clock" class="w-4 h-4" />
             Placement
           </NuxtLink>
           <NuxtLink to="/admin/rankings/decay" class="btn-secondary text-size-4">
-            <Icon name="heroicons:arrow-down" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:arrow-down" class="w-4 h-4" />
             Decay
           </NuxtLink>
           <NuxtLink to="/admin/rankings/health" class="btn-secondary text-size-4">
-            <Icon name="heroicons:heart" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:heart" class="w-4 h-4" />
             Health
           </NuxtLink>
         </div>
 
         <!-- Filters -->
-        <div class="glass-card-elevated p-4 sm:p-6 mb-8">
-          <h2 class="text-size-2 font-semibold text-foreground mb-4">Filtros</h2>
+        <div class="panel mb-8">
+          <h2 class="panel-title">Filtros</h2>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Ciudad</label>
-              <select v-model="filters.city_id" @change="loadLeaderboard(true)" class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none">
+              <label class="form-label">Ciudad</label>
+              <select v-model="filters.city_id" @change="loadLeaderboard(true)" class="form-select">
                 <option value="">Todas las ciudades</option>
                 <option v-for="city in cities" :key="city.id" :value="city.id">{{ city.name }}</option>
               </select>
             </div>
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Categoría</label>
-              <select v-model="filters.category_id" @change="loadLeaderboard(true)" class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none">
+              <label class="form-label">Categoría</label>
+              <select v-model="filters.category_id" @change="loadLeaderboard(true)" class="form-select">
                 <option value="">Todas las categorías</option>
                 <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
               </select>
             </div>
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Tier</label>
-              <select v-model="filters.tier" @change="loadLeaderboard(true)" class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none">
+              <label class="form-label">Tier</label>
+              <select v-model="filters.tier" @change="loadLeaderboard(true)" class="form-select">
                 <option value="">Todos los tiers</option>
                 <option value="Bronze">Bronze</option>
                 <option value="Silver">Silver</option>
@@ -80,57 +62,57 @@
               </select>
             </div>
             <div>
-              <label class="block text-size-4 font-semibold text-foreground mb-2">Búsqueda</label>
+              <label class="form-label">Búsqueda</label>
               <input
                 v-model="filters.search"
                 type="text"
                 placeholder="Buscar por nombre..."
                 @input="debouncedSearch"
-                class="w-full px-4 py-2 rounded-lg bg-surface border-2 border-border text-foreground focus:border-accent focus:outline-none"
+                class="form-input"
               />
             </div>
           </div>
           <div class="flex flex-col sm:flex-row gap-4 mt-4">
             <button @click="loadLeaderboard(true)" class="btn-primary text-size-4">
-              <Icon name="heroicons:magnifying-glass" class="w-4 h-4 mr-2" />
+              <Icon name="heroicons:magnifying-glass" class="w-4 h-4" />
               Aplicar Filtros
             </button>
             <button @click="exportLeaderboard('csv')" class="btn-secondary text-size-4">
-              <Icon name="heroicons:arrow-down-tray" class="w-4 h-4 mr-2" />
+              <Icon name="heroicons:arrow-down-tray" class="w-4 h-4" />
               Exportar CSV
             </button>
             <button @click="exportLeaderboard('json')" class="btn-secondary text-size-4">
-              <Icon name="heroicons:arrow-down-tray" class="w-4 h-4 mr-2" />
+              <Icon name="heroicons:arrow-down-tray" class="w-4 h-4" />
               Exportar JSON
             </button>
             <button @click="clearFilters" class="btn-secondary text-size-4">
-              <Icon name="heroicons:x-mark" class="w-4 h-4 mr-2" />
+              <Icon name="heroicons:x-mark" class="w-4 h-4" />
               Limpiar
             </button>
           </div>
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center">
-          <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin mx-auto mb-4" />
-          <p class="text-size-3 text-foreground-muted">Cargando leaderboard...</p>
+        <div v-if="loading" class="panel loading-state" aria-busy="true">
+          <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+          <p class="loading-text">Cargando leaderboard…</p>
         </div>
 
         <!-- No Data -->
-        <div v-else-if="!loading && leaderboards.length === 0" class="glass-card-elevated p-12 text-center">
+        <div v-else-if="!loading && leaderboards.length === 0" class="panel text-center">
           <Icon name="heroicons:trophy" class="w-16 h-16 text-foreground-muted mx-auto mb-4 opacity-50" />
           <h2 class="text-size-2 font-semibold text-foreground mb-2">No hay jugadores en el leaderboard</h2>
           <p class="text-size-4 text-foreground-muted mb-6">
             No se encontraron jugadores con los filtros aplicados. Intenta ajustar los filtros o verifica que haya jugadores activos.
           </p>
           <button @click="clearFilters" class="btn-primary text-size-4">
-            <Icon name="heroicons:x-mark" class="w-4 h-4 mr-2" />
+            <Icon name="heroicons:x-mark" class="w-4 h-4" />
             Limpiar Filtros
           </button>
         </div>
 
         <!-- Leaderboard Table -->
-        <div v-else class="glass-card-elevated overflow-hidden">
+        <div v-else class="panel overflow-hidden">
           <AdminLeaderboardTable
             :data="leaderboards"
             :columns="tableColumns"
@@ -165,9 +147,7 @@
             </template>
           </AdminLeaderboardTable>
         </div>
-      </div>
-    </div>
-  </div>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
