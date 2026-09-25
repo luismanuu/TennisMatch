@@ -76,3 +76,17 @@ export function byUrgency<T extends PendingNotification>(list: readonly T[]): T[
 
 /** "6-4, 3-6, 10-7" → "6–4, 3–6, 10–7" (en dash between games only). */
 export const formatScore = (score: string) => score.replace(/(\d)\s*-\s*(\d)/g, '$1–$2')
+
+/**
+ * Which lead panel Inicio shows. "Todo al día" is a claim about real data, so it needs
+ * a completed fetch behind it: before the first successful load the empty list means
+ * "unknown", not "nothing pending" (DESIGN.md §7, §9.5: skeleton, inline retry, empty).
+ * A real pending action always wins; after one good load a failed poll keeps what we know.
+ */
+export type LeadPanelState = 'lead' | 'loading' | 'error' | 'clear'
+
+export function leadPanelState(s: { hasLead: boolean; loaded: boolean; error: unknown }): LeadPanelState {
+  if (s.hasLead) return 'lead'
+  if (!s.loaded) return s.error ? 'error' : 'loading'
+  return 'clear'
+}

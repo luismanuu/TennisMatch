@@ -141,7 +141,7 @@
           role="link"
           tabindex="0"
           @click="navigateTo(`/matches/${match.id}`)"
-          @keydown.enter="navigateTo(`/matches/${match.id}`)"
+          @keydown.enter="onRowEnter($event, match.id)"
         >
           <span
             class="avatar result-mark"
@@ -219,6 +219,7 @@
 
 <script setup lang="ts">
 import { formatScore } from '~/utils/pendingAction'
+import { isOwnRowActivation } from '~/utils/rowActivation'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
 import { usePlayerSearch } from '~/composables/usePlayerSearch'
@@ -654,6 +655,11 @@ const filteredMatchesForCalendar = computed(() => {
   
   return filtered
 })
+
+// Enter on the focused row opens the match; Enter on an inner player link stays with that link
+const onRowEnter = (e: KeyboardEvent, matchId: string) => {
+  if (isOwnRowActivation(e)) navigateTo(`/matches/${matchId}`)
+}
 
 // Handle match navigation from calendar
 const handleMatchNavigate = (matchId: string) => {
