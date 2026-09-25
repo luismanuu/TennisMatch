@@ -1,6 +1,8 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, eq, isNull } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
-import { checkAndApplyMonthlyDecay, applyDecay, calculateDecayAmount, ELO_DECAY_FLOOR, MATCHES_REQUIRED_PER_MONTH } from '~/server/utils/rating-system'
+import { applyDecay, calculateDecayAmount, MATCHES_REQUIRED_PER_MONTH } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -13,43 +15,48 @@ export default defineEventHandler(async (event) => {
     if (!playerId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Player ID is required'
+        statusMessage: 'Player ID is required',
       })
     }
 
     if (!action || !['trigger', 'exempt'].includes(action)) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Invalid action. Must be "trigger" or "exempt"'
+        statusMessage: 'Invalid action. Must be "trigger" or "exempt"',
       })
     }
 
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Get player
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('id, name, elo, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed')
-      .eq('id', playerId)
-      .eq('status', 'active')
-      .single()
+    const player = await db.query.players.findFirst({
+      where: and(eq(players.id, playerId), eq(players.status, 'active'), isNull(players.deleted_at)),
+      columns: {
+        id: true,
+        name: true,
+        elo: true,
+        matches_this_month: true,
+        last_decay_check: true,
+        total_matches_played: true,
+        placement_matches_completed: true,
+      },
+    })
 
-    if (playerError || !player) {
+    if (!player) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Player not found',
-        data: playerError
       })
     }
 
     if (action === 'trigger') {
       // Manually trigger decay
       const isInPlacement = (player.placement_matches_completed || 0) < 3
-      
+
       if (isInPlacement) {
         throw createError({
           statusCode: 400,
-          statusMessage: 'Cannot apply decay to players in placement matches'
+          statusMessage: 'Cannot apply decay to players in placement matches',
         })
       }
 
@@ -58,22 +65,14 @@ export default defineEventHandler(async (event) => {
       const newElo = applyDecay(player.elo || 0, decayAmount)
 
       // Apply decay
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({
+      await db
+        .update(players)
+        .set({
           elo: newElo,
           last_decay_check: new Date().toISOString().split('T')[0],
-          matches_this_month: 0 // Reset for new month
+          matches_this_month: 0, // Reset for new month
         })
-        .eq('id', playerId)
-
-      if (updateError) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Failed to apply decay',
-          data: updateError
-        })
-      }
+        .where(eq(players.id, playerId))
 
       return {
         success: true,
@@ -83,25 +82,12 @@ export default defineEventHandler(async (event) => {
           name: player.name,
           elo_before: player.elo,
           elo_after: newElo,
-          decay_amount: decayAmount
-        }
+          decay_amount: decayAmount,
+        },
       }
     } else if (action === 'exempt') {
       // Exempt player from decay (by setting matches_this_month to required amount)
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({
-          matches_this_month: MATCHES_REQUIRED_PER_MONTH
-        })
-        .eq('id', playerId)
-
-      if (updateError) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Failed to exempt player from decay',
-          data: updateError
-        })
-      }
+      await db.update(players).set({ matches_this_month: MATCHES_REQUIRED_PER_MONTH }).where(eq(players.id, playerId))
 
       return {
         success: true,
@@ -109,15 +95,15 @@ export default defineEventHandler(async (event) => {
         player: {
           id: player.id,
           name: player.name,
-          matches_this_month: MATCHES_REQUIRED_PER_MONTH
-        }
+          matches_this_month: MATCHES_REQUIRED_PER_MONTH,
+        },
       }
     }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
       statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
+      data: error.data || error,
     })
   }
 })

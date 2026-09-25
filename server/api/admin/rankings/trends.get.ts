@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, asc, eq, gte, isNull } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players, rating_history } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
 import { getRatingTier, RATING_TIERS } from '~/server/utils/rating-system'
 
@@ -10,7 +12,7 @@ export default defineEventHandler(async (event) => {
     const timeRange = (query.time_range as string) || '30d' // 7d, 30d, 90d, 1y
     const granularity = (query.granularity as string) || 'daily' // daily, weekly, monthly
 
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Limit time range to prevent excessive data processing
     const maxDays = timeRange === '1y' ? 365 : timeRange === '90d' ? 90 : timeRange === '7d' ? 7 : 30
@@ -18,7 +20,7 @@ export default defineEventHandler(async (event) => {
     // Calculate date range
     const now = new Date()
     let startDate = new Date()
-    
+
     switch (timeRange) {
       case '7d':
         startDate.setDate(now.getDate() - 7)
@@ -37,28 +39,18 @@ export default defineEventHandler(async (event) => {
     }
 
     // Get rating history for the time period (limit to prevent memory issues)
-    const { data: ratingHistory, error: historyError } = await supabase
-      .from('rating_history')
-      .select(`
-        id,
-        player_id,
-        elo_after,
-        elo_before,
-        created_at
-      `)
-      .gte('created_at', startDate.toISOString())
-      .eq('rating_reversed', false) // Only non-reversed ratings
-      .order('created_at', { ascending: true })
-      .limit(10000) // Limit to prevent memory issues
-
-    if (historyError) {
-      console.error('Rating history error:', historyError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch rating history',
-        data: historyError
-      })
-    }
+    const ratingHistory = await db.query.rating_history.findMany({
+      where: and(gte(rating_history.created_at, startDate), eq(rating_history.rating_reversed, false)), // Only non-reversed ratings
+      orderBy: [asc(rating_history.created_at)],
+      limit: 10000, // Limit to prevent memory issues
+      columns: {
+        id: true,
+        player_id: true,
+        elo_after: true,
+        elo_before: true,
+        created_at: true,
+      },
+    })
 
     // If no rating history, return empty trends
     if (!ratingHistory || ratingHistory.length === 0) {
@@ -67,34 +59,29 @@ export default defineEventHandler(async (event) => {
         granularity,
         start_date: startDate.toISOString(),
         end_date: now.toISOString(),
-        trends: []
+        trends: [],
       }
     }
 
     // Get all players' current state for baseline
-    const { data: currentPlayers, error: playersError } = await supabase
-      .from('players')
-      .select('id, elo, total_matches_played, placement_matches_completed, created_at')
-      .eq('status', 'active')
-
-    if (playersError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch players',
-        data: playersError
-      })
-    }
+    const currentPlayers = await db.query.players.findMany({
+      where: and(eq(players.status, 'active'), isNull(players.deleted_at)),
+      columns: { id: true, elo: true, total_matches_played: true, placement_matches_completed: true, created_at: true },
+    })
 
     // Group data by time period
-    const timeSeriesData: Record<string, {
-      date: string
-      average_elo: number
-      tier_population: Record<string, number>
-      new_players: number
-      tier_promotions: number
-      tier_demotions: number
-      elo_volatility: number
-    }> = {}
+    const timeSeriesData: Record<
+      string,
+      {
+        date: string
+        average_elo: number
+        tier_population: Record<string, number>
+        new_players: number
+        tier_promotions: number
+        tier_demotions: number
+        elo_volatility: number
+      }
+    > = {}
 
     // Helper to get date key based on granularity
     const getDateKey = (date: Date): string => {
@@ -102,10 +89,11 @@ export default defineEventHandler(async (event) => {
       switch (granularity) {
         case 'daily':
           return d.toISOString().split('T')[0]
-        case 'weekly':
+        case 'weekly': {
           const weekStart = new Date(d)
           weekStart.setDate(d.getDate() - d.getDay())
           return weekStart.toISOString().split('T')[0]
+        }
         case 'monthly':
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
         default:
@@ -117,7 +105,7 @@ export default defineEventHandler(async (event) => {
     const currentDate = new Date(startDate)
     const maxIterations = maxDays * (granularity === 'monthly' ? 1 : granularity === 'weekly' ? 1 : 1) + 100
     let iterations = 0
-    
+
     while (currentDate <= now && iterations < maxIterations) {
       try {
         const key = getDateKey(currentDate)
@@ -129,13 +117,13 @@ export default defineEventHandler(async (event) => {
             new_players: 0,
             tier_promotions: 0,
             tier_demotions: 0,
-            elo_volatility: 0
+            elo_volatility: 0,
           }
-          RATING_TIERS.forEach(tier => {
+          RATING_TIERS.forEach((tier) => {
             timeSeriesData[key].tier_population[tier.tier] = 0
           })
         }
-        
+
         // Increment date based on granularity
         if (granularity === 'daily') {
           currentDate.setDate(currentDate.getDate() + 1)
@@ -146,7 +134,7 @@ export default defineEventHandler(async (event) => {
         } else {
           currentDate.setDate(currentDate.getDate() + 1)
         }
-        
+
         iterations++
       } catch (err) {
         console.error('Error initializing time series bucket:', err)
@@ -156,37 +144,37 @@ export default defineEventHandler(async (event) => {
 
     // Process rating history to build time series - simplified
     const playerEloHistory: Record<string, Array<{ date: string; elo: number; tier: string }>> = {}
-    
+
     if (ratingHistory && ratingHistory.length > 0) {
       try {
-        ratingHistory.forEach(entry => {
+        ratingHistory.forEach((entry) => {
           try {
-            const entryDate = new Date(entry.created_at)
+            const entryDate = new Date(entry.created_at ?? 0)
             if (isNaN(entryDate.getTime())) {
               return // Skip invalid dates
             }
-            
+
             const dateKey = getDateKey(entryDate)
             const playerId = entry.player_id
-            
+
             if (!playerEloHistory[playerId]) {
               playerEloHistory[playerId] = []
             }
-            
+
             const tierBefore = getRatingTier(entry.elo_before || 0).tier
             const tierAfter = getRatingTier(entry.elo_after || 0).tier
-            
+
             playerEloHistory[playerId].push({
               date: dateKey,
               elo: entry.elo_after || 0,
-              tier: tierAfter
+              tier: tierAfter,
             })
 
             // Track tier changes
             if (tierBefore !== tierAfter && timeSeriesData[dateKey]) {
-              const tierBeforeIndex = RATING_TIERS.findIndex(t => t.tier === tierBefore)
-              const tierAfterIndex = RATING_TIERS.findIndex(t => t.tier === tierAfter)
-              
+              const tierBeforeIndex = RATING_TIERS.findIndex((t) => t.tier === tierBefore)
+              const tierAfterIndex = RATING_TIERS.findIndex((t) => t.tier === tierAfter)
+
               if (tierAfterIndex > tierBeforeIndex && tierAfterIndex >= 0 && tierBeforeIndex >= 0) {
                 timeSeriesData[dateKey].tier_promotions++
               } else if (tierAfterIndex < tierBeforeIndex && tierAfterIndex >= 0 && tierBeforeIndex >= 0) {
@@ -204,7 +192,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Calculate average ELO and tier population for each time period
-    Object.keys(timeSeriesData).forEach(dateKey => {
+    Object.keys(timeSeriesData).forEach((dateKey) => {
       try {
         // Handle different date formats
         let date: Date
@@ -215,41 +203,40 @@ export default defineEventHandler(async (event) => {
         } else {
           date = new Date(dateKey)
         }
-        
+
         if (isNaN(date.getTime())) {
           console.warn('Invalid date key:', dateKey)
           return
         }
-        
+
         const elos: number[] = []
         const tierCounts: Record<string, number> = {}
-        
-        RATING_TIERS.forEach(tier => {
+
+        RATING_TIERS.forEach((tier) => {
           tierCounts[tier.tier] = 0
         })
 
         // Get players that existed at this point in time
-        currentPlayers?.forEach(player => {
+        currentPlayers?.forEach((player) => {
           try {
-            const playerCreated = new Date(player.created_at)
+            const playerCreated = new Date(player.created_at ?? 0)
             if (isNaN(playerCreated.getTime())) {
               return
             }
-            
+
             if (playerCreated <= date) {
               // Find the most recent rating history entry before or on this date
               const history = playerEloHistory[player.id] || []
               const relevantEntry = history
-                .filter(h => {
+                .filter((h) => {
                   if (granularity === 'monthly') {
                     const hDate = new Date(h.date)
-                    return hDate.getFullYear() === date.getFullYear() && 
-                           hDate.getMonth() === date.getMonth()
+                    return hDate.getFullYear() === date.getFullYear() && hDate.getMonth() === date.getMonth()
                   }
                   return h.date <= dateKey
                 })
                 .sort((a, b) => b.date.localeCompare(a.date))[0]
-              
+
               if (relevantEntry) {
                 elos.push(relevantEntry.elo)
                 tierCounts[relevantEntry.tier] = (tierCounts[relevantEntry.tier] || 0) + 1
@@ -266,9 +253,7 @@ export default defineEventHandler(async (event) => {
         })
 
         if (elos.length > 0) {
-          timeSeriesData[dateKey].average_elo = Math.round(
-            elos.reduce((a, b) => a + b, 0) / elos.length
-          )
+          timeSeriesData[dateKey].average_elo = Math.round(elos.reduce((a, b) => a + b, 0) / elos.length)
         }
         timeSeriesData[dateKey].tier_population = tierCounts
       } catch (err) {
@@ -277,14 +262,14 @@ export default defineEventHandler(async (event) => {
     })
 
     // Count new players per period
-    currentPlayers?.forEach(player => {
+    currentPlayers?.forEach((player) => {
       try {
-        const playerCreated = new Date(player.created_at)
+        const playerCreated = new Date(player.created_at ?? 0)
         if (isNaN(playerCreated.getTime())) {
           // Skip invalid dates
           return
         }
-        
+
         if (playerCreated >= startDate) {
           const dateKey = getDateKey(playerCreated)
           if (timeSeriesData[dateKey]) {
@@ -298,18 +283,18 @@ export default defineEventHandler(async (event) => {
     })
 
     // Calculate ELO volatility (simplified - average absolute change)
-    Object.keys(timeSeriesData).forEach(dateKey => {
+    Object.keys(timeSeriesData).forEach((dateKey) => {
       try {
         const eloChanges: number[] = []
-        
+
         if (ratingHistory && ratingHistory.length > 0) {
-          ratingHistory.forEach(entry => {
+          ratingHistory.forEach((entry) => {
             try {
-              const entryDate = new Date(entry.created_at)
+              const entryDate = new Date(entry.created_at ?? 0)
               if (isNaN(entryDate.getTime())) {
                 return
               }
-              
+
               if (getDateKey(entryDate) === dateKey) {
                 const change = Math.abs((entry.elo_after || 0) - (entry.elo_before || 0))
                 if (!isNaN(change)) {
@@ -333,22 +318,21 @@ export default defineEventHandler(async (event) => {
     })
 
     // Convert to array and sort by date
-    const trends = Object.values(timeSeriesData)
-      .sort((a, b) => a.date.localeCompare(b.date))
+    const trends = Object.values(timeSeriesData).sort((a, b) => a.date.localeCompare(b.date))
 
     return {
       time_range: timeRange,
       granularity,
       start_date: startDate.toISOString(),
       end_date: now.toISOString(),
-      trends
+      trends,
     }
   } catch (error: any) {
     console.error('Trends endpoint error:', error)
     throw createError({
       statusCode: error.statusCode || 500,
       statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
+      data: error.data || error,
     })
   }
 })
