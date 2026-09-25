@@ -1,0 +1,667 @@
+{
+ "accentShadow|before|graphite|390": {
+  "rect": [
+   56,
+   57,
+   278,
+   48
+  ],
+  "boxShadow": "none"
+ },
+ "accentShadow|after|graphite|390": {
+  "rect": [
+   56,
+   57,
+   278,
+   48
+  ],
+  "boxShadow": "oklab(0 0 0 / 0) 0px 0px 0px 0px"
+ },
+ "spinner|before|graphite|390": {
+  "rect": [
+   179,
+   48,
+   32,
+   32
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "spinner|after|graphite|390": {
+  "rect": [
+   179,
+   48,
+   32,
+   32
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "bracketModal|before|graphite|390": {
+  "rect": [
+   0,
+   295,
+   390,
+   549
+  ],
+  "paddingBottom": "20px",
+  "borderRadius": "24px",
+  "maxHeight": "759.6px",
+  "viewportH": 844,
+  "lastBtnBottom": 823
+ },
+ "bracketModal|after|graphite|390": {
+  "rect": [
+   0,
+   287,
+   390,
+   557
+  ],
+  "paddingBottom": "24px",
+  "borderRadius": "24px 24px 0px 0px",
+  "maxHeight": "812px",
+  "viewportH": 844,
+  "lastBtnBottom": 819
+ },
+ "authHero|before|graphite|390": {
+  "rect": [
+   40,
+   392,
+   229,
+   64
+  ],
+  "color": "rgb(225, 232, 227)",
+  "fontSize": "30px"
+ },
+ "authHero|after|graphite|390": {
+  "rect": [
+   40,
+   392,
+   229,
+   64
+  ],
+  "color": "rgb(255, 255, 255)",
+  "fontSize": "30px"
+ },
+ "placement|before|graphite|390": {
+  "rect": [
+   46,
+   78,
+   199,
+   10
+  ],
+  "fill": "oklch(0.265 0.016 165)",
+  "track": "oklch(0.233 0.015 166.2)"
+ },
+ "placement|after|graphite|390": {
+  "rect": [
+   46,
+   78,
+   199,
+   10
+  ],
+  "fill": "oklch(0.704 0.146 155.8)",
+  "track": "oklch(0.233 0.015 166.2)"
+ },
+ "closeButton|before|graphite|390": {
+  "rect": [
+   5,
+   737,
+   44,
+   44
+  ],
+  "position": "relative",
+  "rightGap": 341,
+  "topGap": 41
+ },
+ "closeButton|after|graphite|390": {
+  "rect": [
+   329,
+   757,
+   44,
+   44
+  ],
+  "position": "absolute",
+  "rightGap": 17,
+  "topGap": 17
+ },
+ "insufficient|before|graphite|390": {
+  "rect": [
+   24,
+   102,
+   342,
+   84
+  ],
+  "opacity": "1",
+  "bg": "rgba(24, 34, 29, 0.88)",
+  "border": "solid"
+ },
+ "insufficient|after|graphite|390": {
+  "rect": [
+   24,
+   102,
+   342,
+   84
+  ],
+  "opacity": "1",
+  "bg": "rgba(0, 0, 0, 0)",
+  "border": "dashed"
+ },
+ "inicioLead|before|graphite|390": {
+  "rect": [
+   16,
+   16,
+   358,
+   190
+  ],
+  "text": "Todo al día"
+ },
+ "inicioLead|after|graphite|390": {
+  "rect": [
+   16,
+   16,
+   358,
+   300
+  ],
+  "text": "Revisando pendientes…"
+ },
+ "accentShadow|before|claro|390": {
+  "rect": [
+   56,
+   57,
+   278,
+   48
+  ],
+  "boxShadow": "none"
+ },
+ "accentShadow|after|claro|390": {
+  "rect": [
+   56,
+   57,
+   278,
+   48
+  ],
+  "boxShadow": "oklab(0 0 0 / 0) 0px 0px 0px 0px"
+ },
+ "spinner|before|claro|390": {
+  "rect": [
+   179,
+   48,
+   32,
+   32
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "spinner|after|claro|390": {
+  "rect": [
+   177,
+   46,
+   35,
+   35
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "bracketModal|before|claro|390": {
+  "rect": [
+   0,
+   295,
+   390,
+   549
+  ],
+  "paddingBottom": "20px",
+  "borderRadius": "24px",
+  "maxHeight": "759.6px",
+  "viewportH": 844,
+  "lastBtnBottom": 823
+ },
+ "bracketModal|after|claro|390": {
+  "rect": [
+   0,
+   287,
+   390,
+   557
+  ],
+  "paddingBottom": "24px",
+  "borderRadius": "24px 24px 0px 0px",
+  "maxHeight": "812px",
+  "viewportH": 844,
+  "lastBtnBottom": 819
+ },
+ "authHero|before|claro|390": {
+  "rect": [
+   40,
+   392,
+   229,
+   64
+  ],
+  "color": "rgb(225, 232, 227)",
+  "fontSize": "30px"
+ },
+ "authHero|after|claro|390": {
+  "rect": [
+   40,
+   392,
+   229,
+   64
+  ],
+  "color": "rgb(255, 255, 255)",
+  "fontSize": "30px"
+ },
+ "placement|before|claro|390": {
+  "rect": [
+   46,
+   78,
+   199,
+   10
+  ],
+  "fill": "oklch(0.985 0.004 154)",
+  "track": "oklch(1 0 0)"
+ },
+ "placement|after|claro|390": {
+  "rect": [
+   46,
+   78,
+   199,
+   10
+  ],
+  "fill": "oklch(0.456 0.102 155.1)",
+  "track": "oklch(1 0 0)"
+ },
+ "closeButton|before|claro|390": {
+  "rect": [
+   5,
+   737,
+   44,
+   44
+  ],
+  "position": "relative",
+  "rightGap": 341,
+  "topGap": 41
+ },
+ "closeButton|after|claro|390": {
+  "rect": [
+   329,
+   757,
+   44,
+   44
+  ],
+  "position": "absolute",
+  "rightGap": 17,
+  "topGap": 17
+ },
+ "insufficient|before|claro|390": {
+  "rect": [
+   24,
+   102,
+   342,
+   84
+  ],
+  "opacity": "1",
+  "bg": "rgba(255, 255, 255, 0.94)",
+  "border": "solid"
+ },
+ "insufficient|after|claro|390": {
+  "rect": [
+   24,
+   102,
+   342,
+   84
+  ],
+  "opacity": "1",
+  "bg": "rgba(0, 0, 0, 0)",
+  "border": "dashed"
+ },
+ "inicioLead|before|claro|390": {
+  "rect": [
+   16,
+   16,
+   358,
+   190
+  ],
+  "text": "Todo al día"
+ },
+ "inicioLead|after|claro|390": {
+  "rect": [
+   16,
+   16,
+   358,
+   300
+  ],
+  "text": "Revisando pendientes…"
+ },
+ "accentShadow|before|graphite|1280": {
+  "rect": [
+   1109,
+   65,
+   107,
+   48
+  ],
+  "boxShadow": "none"
+ },
+ "accentShadow|after|graphite|1280": {
+  "rect": [
+   1109,
+   65,
+   107,
+   48
+  ],
+  "boxShadow": "oklab(0 0 0 / 0) 0px 0px 0px 0px"
+ },
+ "spinner|before|graphite|1280": {
+  "rect": [
+   622,
+   46,
+   35,
+   35
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "spinner|after|graphite|1280": {
+  "rect": [
+   624,
+   48,
+   32,
+   32
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "bracketModal|before|graphite|1280": {
+  "rect": [
+   192,
+   128,
+   896,
+   589
+  ],
+  "paddingBottom": "24px",
+  "borderRadius": "24px",
+  "maxHeight": "759.6px",
+  "viewportH": 844,
+  "lastBtnBottom": 691
+ },
+ "bracketModal|after|graphite|1280": {
+  "rect": [
+   192,
+   124,
+   896,
+   597
+  ],
+  "paddingBottom": "28px",
+  "borderRadius": "24px",
+  "maxHeight": "812px",
+  "viewportH": 844,
+  "lastBtnBottom": 691
+ },
+ "authHero|before|graphite|1280": {
+  "rect": [
+   56,
+   1048,
+   352,
+   98
+  ],
+  "color": "rgb(225, 232, 227)",
+  "fontSize": "46.08px"
+ },
+ "authHero|after|graphite|1280": {
+  "rect": [
+   56,
+   1048,
+   352,
+   98
+  ],
+  "color": "rgb(255, 255, 255)",
+  "fontSize": "46.08px"
+ },
+ "placement|before|graphite|1280": {
+  "rect": [
+   50,
+   82,
+   787,
+   10
+  ],
+  "fill": "oklch(0.265 0.016 165)",
+  "track": "oklch(0.233 0.015 166.2)"
+ },
+ "placement|after|graphite|1280": {
+  "rect": [
+   50,
+   82,
+   787,
+   10
+  ],
+  "fill": "oklch(0.704 0.146 155.8)",
+  "track": "oklch(0.233 0.015 166.2)"
+ },
+ "closeButton|before|graphite|1280": {
+  "rect": [
+   205,
+   389,
+   44,
+   44
+  ],
+  "position": "relative",
+  "rightGap": 839,
+  "topGap": 45
+ },
+ "closeButton|after|graphite|1280": {
+  "rect": [
+   1027,
+   383,
+   44,
+   44
+  ],
+  "position": "absolute",
+  "rightGap": 17,
+  "topGap": 17
+ },
+ "insufficient|before|graphite|1280": {
+  "rect": [
+   24,
+   110,
+   1232,
+   71
+  ],
+  "opacity": "1",
+  "bg": "rgba(24, 34, 29, 0.88)",
+  "border": "solid"
+ },
+ "insufficient|after|graphite|1280": {
+  "rect": [
+   24,
+   110,
+   1232,
+   71
+  ],
+  "opacity": "1",
+  "bg": "rgba(0, 0, 0, 0)",
+  "border": "dashed"
+ },
+ "inicioLead|before|graphite|1280": {
+  "rect": [
+   16,
+   16,
+   1248,
+   177
+  ],
+  "text": "Todo al día"
+ },
+ "inicioLead|after|graphite|1280": {
+  "rect": [
+   16,
+   16,
+   1248,
+   300
+  ],
+  "text": "Revisando pendientes…"
+ },
+ "accentShadow|before|claro|1280": {
+  "rect": [
+   1109,
+   65,
+   107,
+   48
+  ],
+  "boxShadow": "none"
+ },
+ "accentShadow|after|claro|1280": {
+  "rect": [
+   1109,
+   65,
+   107,
+   48
+  ],
+  "boxShadow": "oklab(0 0 0 / 0) 0px 0px 0px 0px"
+ },
+ "spinner|before|claro|1280": {
+  "rect": [
+   622,
+   46,
+   35,
+   35
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "spinner|after|claro|1280": {
+  "rect": [
+   622,
+   46,
+   35,
+   35
+  ],
+  "animationName": "spin",
+  "animationDuration": "1s"
+ },
+ "bracketModal|before|claro|1280": {
+  "rect": [
+   192,
+   128,
+   896,
+   589
+  ],
+  "paddingBottom": "24px",
+  "borderRadius": "24px",
+  "maxHeight": "759.6px",
+  "viewportH": 844,
+  "lastBtnBottom": 691
+ },
+ "bracketModal|after|claro|1280": {
+  "rect": [
+   192,
+   124,
+   896,
+   597
+  ],
+  "paddingBottom": "28px",
+  "borderRadius": "24px",
+  "maxHeight": "812px",
+  "viewportH": 844,
+  "lastBtnBottom": 691
+ },
+ "authHero|before|claro|1280": {
+  "rect": [
+   56,
+   1048,
+   352,
+   98
+  ],
+  "color": "rgb(225, 232, 227)",
+  "fontSize": "46.08px"
+ },
+ "authHero|after|claro|1280": {
+  "rect": [
+   56,
+   1048,
+   352,
+   98
+  ],
+  "color": "rgb(255, 255, 255)",
+  "fontSize": "46.08px"
+ },
+ "placement|before|claro|1280": {
+  "rect": [
+   50,
+   82,
+   787,
+   10
+  ],
+  "fill": "oklch(0.985 0.004 154)",
+  "track": "oklch(1 0 0)"
+ },
+ "placement|after|claro|1280": {
+  "rect": [
+   50,
+   82,
+   787,
+   10
+  ],
+  "fill": "oklch(0.456 0.102 155.1)",
+  "track": "oklch(1 0 0)"
+ },
+ "closeButton|before|claro|1280": {
+  "rect": [
+   205,
+   389,
+   44,
+   44
+  ],
+  "position": "relative",
+  "rightGap": 839,
+  "topGap": 45
+ },
+ "closeButton|after|claro|1280": {
+  "rect": [
+   1027,
+   383,
+   44,
+   44
+  ],
+  "position": "absolute",
+  "rightGap": 17,
+  "topGap": 17
+ },
+ "insufficient|before|claro|1280": {
+  "rect": [
+   24,
+   110,
+   1232,
+   71
+  ],
+  "opacity": "1",
+  "bg": "rgba(255, 255, 255, 0.94)",
+  "border": "solid"
+ },
+ "insufficient|after|claro|1280": {
+  "rect": [
+   24,
+   110,
+   1232,
+   71
+  ],
+  "opacity": "1",
+  "bg": "rgba(0, 0, 0, 0)",
+  "border": "dashed"
+ },
+ "inicioLead|before|claro|1280": {
+  "rect": [
+   16,
+   16,
+   1248,
+   177
+  ],
+  "text": "Todo al día"
+ },
+ "inicioLead|after|claro|1280": {
+  "rect": [
+   16,
+   16,
+   1248,
+   300
+  ],
+  "text": "Revisando pendientes…"
+ },
+ "spinner|after|reducedMotion": "none"
+}

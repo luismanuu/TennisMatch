@@ -1,0 +1,8 @@
+before graphite [33m390[39m none
+after graphite [33m390[39m oklch(0.704 0.146 155.8 / 0.3) 0px 4px 12px 0px
+before graphite [33m1280[39m none
+after graphite [33m1280[39m oklch(0.704 0.146 155.8 / 0.3) 0px 4px 12px 0px
+before claro [33m390[39m none
+after claro [33m390[39m oklch(0.456 0.102 155.1 / 0.3) 0px 4px 12px 0px
+before claro [33m1280[39m none
+after claro [33m1280[39m oklch(0.456 0.102 155.1 / 0.3) 0px 4px 12px 0px
