@@ -9,7 +9,7 @@ import type { Db } from '../../server/db'
 import { createTestDb, rerunMigrations } from './pglite'
 
 const declaredTables = Object.values(schema).filter((v): v is PgTable => is(v, PgTableClass))
-const AUTH_TABLES = new Set(['user', 'session', 'account', 'verification'])
+const AUTH_TABLES = new Set(['user', 'session', 'account', 'verification', 'rate_limit'])
 
 let client: PGlite
 let db: Db
@@ -27,7 +27,7 @@ async function rows<T>(query: string, params: unknown[] = []): Promise<T[]> {
 }
 
 describe('migrations build the declared schema from zero', () => {
-  it('creates exactly the declared tables: 17 app tables plus 4 Better Auth tables', async () => {
+  it('creates exactly the declared tables: 18 app tables plus 5 Better Auth tables', async () => {
     const built = (
       await rows<{ table_name: string }>(
         `select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`,
@@ -35,7 +35,7 @@ describe('migrations build the declared schema from zero', () => {
     ).map((r) => r.table_name)
     const declared = declaredTables.map((t) => getTableConfig(t).name)
     expect(new Set(built)).toEqual(new Set(declared))
-    expect(declared.filter((n) => !AUTH_TABLES.has(n))).toHaveLength(17)
+    expect(declared.filter((n) => !AUTH_TABLES.has(n))).toHaveLength(18)
   })
 
   it('every declared column exists with the declared nullability', async () => {

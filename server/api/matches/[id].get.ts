@@ -112,10 +112,9 @@ export default defineEventHandler(async (event) => {
       orderBy: [asc(match_messages.created_at)],
     })
     
+    // tournament_match stays an array (empty for a friendly), as the API has always returned it.
     return {
       ...match,
-      // One tournament_match per match: flatten the relation to its first row
-      tournament_match: match.tournament_match.length > 0 ? match.tournament_match[0] : match.tournament_match,
       messages
     }
   } catch (error: any) {

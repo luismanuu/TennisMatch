@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { requireAdmin } from '~/server/utils/session'
-import { invitationUrl, newInvitationToken, sendInvitationEmail } from '~/server/utils/invitations'
+import { adminTargetEmailLimit, invitationUrl, newInvitationToken, sendInvitationEmail } from '~/server/utils/invitations'
+import { enforceRateLimits } from '~/server/utils/rate-limit'
 import { useDb } from '~/server/db'
 import { pending_players } from '~/server/db/schema'
 
@@ -42,13 +43,16 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // Every resend emails the address again
+    await enforceRateLimits(event, db, [adminTargetEmailLimit(invitation.email)])
+
     const token = newInvitationToken()
     await db
       .update(pending_players)
       .set({ invitation_token: token, updated_at: new Date() })
       .where(eq(pending_players.id, invitation.id))
 
-    const url = invitationUrl(event, token)
+    const url = invitationUrl(token)
     const emailSent = await sendInvitationEmail({ to: invitation.email, name: invitation.name, url })
 
     return {
