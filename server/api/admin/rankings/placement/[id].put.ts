@@ -1,20 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
-    const query = getQuery(event)
     const body = await readBody(event)
-    const clerkId = query.clerk_id as string
     const playerId = getRouterParam(event, 'id')
     const action = body.action as 'reset' | 'complete'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
 
     if (!playerId) {
       throw createError({
@@ -29,8 +22,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Invalid action. Must be "reset" or "complete"'
       })
     }
-
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

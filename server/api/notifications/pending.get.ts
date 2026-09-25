@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requirePlayer } from '~/server/utils/session'
 
 /**
  * GET /api/notifications/pending
@@ -8,35 +8,12 @@ import { getClerkUser } from '~/server/utils/clerk'
  * Includes full match details and categorization by type
  */
 export default defineEventHandler(async (event) => {
+  const { player: currentPlayer } = await requirePlayer(event)
+
   try {
     const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
     
     const supabase = getSupabaseAdmin()
-    
-    // Get current player
-    const { data: currentPlayer, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
-    
-    if (playerError || !currentPlayer) {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Player not found'
-      })
-    }
     
     // Get limit from query (default 50, max 200 for performance)
     // Reduced from 100 to improve load time

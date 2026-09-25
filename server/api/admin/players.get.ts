@@ -1,23 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
-import { getClerkClient } from '~/server/utils/clerk'
+import { requireAdmin } from '~/server/utils/session'
+import { getAccountsByIds } from '~/server/utils/users'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    await requireAdmin(clerkId)
-
     const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
 
     // Check if we should include deleted players
     const includeDeleted = query.include_deleted === 'true'
@@ -49,7 +39,7 @@ export default defineEventHandler(async (event) => {
       .from('players')
       .select(`
         id,
-        clerk_id,
+        user_id,
         name,
         phone_number,
         category_id,
@@ -83,28 +73,16 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Enrich players with email and role from Clerk
-    const playersWithEmail = await Promise.all(
-      (players || []).map(async (player) => {
-        try {
-          const clerkUser = await clerkClient.users.getUser(player.clerk_id)
-          const role = clerkUser.publicMetadata?.role as string | undefined
-          return {
-            ...player,
-            email: clerkUser.emailAddresses[0]?.emailAddress || '',
-            role: role || 'player'
-          }
-        } catch (err) {
-          // Skip if user doesn't exist in Clerk
-          console.warn(`Could not fetch Clerk user for ${player.clerk_id}:`, err)
-          return {
-            ...player,
-            email: '',
-            role: 'player'
-          }
-        }
-      })
-    )
+    // Enrich players with email and role from their account
+    const accounts = await getAccountsByIds((players || []).map((p: any) => p.user_id))
+    const playersWithEmail = (players || []).map((player: any) => {
+      const account = accounts.get(player.user_id)
+      return {
+        ...player,
+        email: account?.email || '',
+        role: account?.role || 'player'
+      }
+    })
 
     return {
       data: playersWithEmail,

@@ -1,22 +1,15 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { updateBracketFromCompletedMatches } from '~/server/utils/tournament-brackets'
-import { getClerkClient } from '~/server/utils/clerk'
 
 export default defineEventHandler(async (event) => {
+  const { player: organizer } = await requirePlayer(event, 'organizer')
+
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const tournamentId = getRouterParam(event, 'id')
     const body = await readBody(event)
     const bracketType = (body.bracketType || 'all') as 'main' | 'backdraw' | 'all'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
 
     if (!tournamentId) {
       throw createError({
@@ -25,27 +18,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireOrganizer(clerkId)
-
     const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
-
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerkId)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
 
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
     // Update bracket from all completed matches
     await updateBracketFromCompletedMatches(tournamentId, bracketType, supabase)
@@ -58,5 +34,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-
-

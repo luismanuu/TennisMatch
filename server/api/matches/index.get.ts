@@ -1,10 +1,11 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requireUser } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
     const page = parseInt(query.page as string) || 1
     const limit = parseInt(query.limit as string) || 10
     const offset = (page - 1) * limit
@@ -15,23 +16,13 @@ export default defineEventHandler(async (event) => {
     const skip24hFilter = query.skip_24h_filter === 'true'
     const opponentId = query.opponent_id as string | undefined
     
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
     const supabase = getSupabaseAdmin()
     
     // Get current player
     const { data: currentPlayer, error: playerError } = await supabase
       .from('players')
       .select('id')
-      .eq('clerk_id', clerk_id)
+      .eq('user_id', user.id)
       .single()
     
     if (playerError || !currentPlayer) {

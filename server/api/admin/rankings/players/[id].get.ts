@@ -1,19 +1,12 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { getRatingTier, getNextTierProgress, getMonthlyDecayStatus } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const playerId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const playerId = getRouterParam(event, 'id')
 
     if (!playerId) {
       throw createError({
@@ -21,8 +14,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Player ID is required'
       })
     }
-
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

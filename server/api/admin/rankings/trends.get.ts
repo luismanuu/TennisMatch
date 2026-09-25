@@ -1,22 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { getRatingTier, RATING_TIERS } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const timeRange = (query.time_range as string) || '30d' // 7d, 30d, 90d, 1y
     const granularity = (query.granularity as string) || 'daily' // daily, weekly, monthly
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

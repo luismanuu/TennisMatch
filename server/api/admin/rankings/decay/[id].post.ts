@@ -1,21 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { checkAndApplyMonthlyDecay, applyDecay, calculateDecayAmount, ELO_DECAY_FLOOR, MATCHES_REQUIRED_PER_MONTH } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
-    const query = getQuery(event)
     const body = await readBody(event)
-    const clerkId = query.clerk_id as string
     const playerId = getRouterParam(event, 'id')
     const action = body.action as 'trigger' | 'exempt'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
 
     if (!playerId) {
       throw createError({
@@ -30,8 +23,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Invalid action. Must be "trigger" or "exempt"'
       })
     }
-
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

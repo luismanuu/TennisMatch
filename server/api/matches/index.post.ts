@@ -1,19 +1,21 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requireUser } from '~/server/utils/session'
 import { validateAndSetMatchScheduling } from '~/server/utils/tournament-scheduling'
 import { createMatchNotification } from '~/server/utils/notifications'
 import { datetimeLocalToISO, isDateInPast } from '~/server/utils/timezone'
 import type { CreateMatchPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
-    const body = await readBody<CreateMatchPayload & { clerk_id: string }>(event)
-    const { clerk_id, player1_id, player2_id, pending_player2_id, scheduled_at, location, is_competitive } = body
+    const body = await readBody<CreateMatchPayload>(event)
+    const { player1_id, player2_id, pending_player2_id, scheduled_at, location, is_competitive } = body
     
-    if (!clerk_id || !player1_id || !scheduled_at) {
+    if (!player1_id || !scheduled_at) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, player1_id, scheduled_at'
+        statusMessage: 'Missing required fields: player1_id, scheduled_at'
       })
     }
     
@@ -54,17 +56,14 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
     const supabase = getSupabaseAdmin()
     
     // Verify player1 exists and belongs to the authenticated user
     const { data: player1, error: player1Error } = await supabase
       .from('players')
-      .select('id, clerk_id')
+      .select('id, user_id')
       .eq('id', player1_id)
-      .eq('clerk_id', clerk_id)
+      .eq('user_id', user.id)
       .single()
     
     if (player1Error || !player1) {
@@ -185,9 +184,11 @@ export default defineEventHandler(async (event) => {
     }
     
     // Only set match_proposed_by for non-tournament matches
-    // Tournament matches are assigned by admin/organizer and don't need acceptance
-    const bodyWithTournament = body as CreateMatchPayload & { clerk_id: string; tournament_id?: string }
-    if (!bodyWithTournament.tournament_id) {
+    // Tournament matches are assigned by admin/organizer and don't need acceptance.
+    // A client-sent tournament_id skips the opponent's acceptance, so only those roles may use it.
+    const bodyWithTournament = body as CreateMatchPayload & { tournament_id?: string }
+    const canAssignTournamentMatch = user.role === 'admin' || user.role === 'tournament_organizer'
+    if (!bodyWithTournament.tournament_id || !canAssignTournamentMatch) {
       matchData.match_proposed_by = player1_id // The creator proposes the match
     }
     

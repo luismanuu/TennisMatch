@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 /**
  * Admin endpoint to force recalculate a match
@@ -8,21 +8,12 @@ import { requireAdmin } from '~/server/utils/admin'
  * Works for any match, regardless of whether it used LLM or fallback
  */
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const matchId = query.match_id as string | undefined
     
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    // Verify admin access
-    await requireAdmin(clerkId)
-
     if (!matchId) {
       throw createError({
         statusCode: 400,

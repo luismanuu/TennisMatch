@@ -1,24 +1,15 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     
     // Pagination parameters
     const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
     const offset = query.offset ? parseInt(query.offset as string) : 0
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify admin
-    await checkIsAdmin(clerkId)
     
     const supabase = getSupabaseAdmin()
     

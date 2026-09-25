@@ -1,22 +1,19 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
-import { getClerkClient } from '~/server/utils/clerk'
+import { eq } from 'drizzle-orm'
+import { requireAdmin } from '~/server/utils/session'
+import { getAccountById } from '~/server/utils/users'
+import { useDb } from '~/server/db'
+import { players } from '~/server/db/schema'
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// [id] is the organizer's player id. Updates the player-profile name, as before.
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<{
-      clerk_id: string
-      name?: string
-    }>(event)
-    const { clerk_id, name } = body
-    const organizerId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<{ name?: string }>(event)
+    const name = body?.name
+    const organizerId = getRouterParam(event, 'id')
 
     if (!organizerId) {
       throw createError({
@@ -25,19 +22,12 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireAdmin(clerk_id)
+    const db = useDb()
+    const organizer = UUID.test(organizerId)
+      ? await db.query.players.findFirst({ where: eq(players.id, organizerId) })
+      : undefined
 
-    const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
-
-    // Get organizer player record
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id, clerk_id, name')
-      .eq('id', organizerId)
-      .single()
-
-    if (organizerError || !organizer) {
+    if (!organizer) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Organizer not found'
@@ -45,39 +35,20 @@ export default defineEventHandler(async (event) => {
     }
 
     // Verify they are actually a tournament organizer
-    const clerkUser = await clerkClient.users.getUser(organizer.clerk_id)
-    const role = clerkUser.publicMetadata?.role as string | undefined
-
-    if (role !== 'tournament_organizer') {
+    const account = await getAccountById(organizer.user_id)
+    if (account?.role !== 'tournament_organizer') {
       throw createError({
         statusCode: 400,
         statusMessage: 'User is not a tournament organizer'
       })
     }
 
-    const updateData: any = {}
-
-    // Update name if provided
     if (name !== undefined) {
-      updateData.name = name.trim()
-    }
-
-    // Update in database
-    if (Object.keys(updateData).length > 0) {
-      const { data: updatedOrganizer, error: updateError } = await supabase
-        .from('players')
-        .update(updateData)
-        .eq('id', organizerId)
-        .select()
-        .single()
-
-      if (updateError) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Failed to update organizer',
-          data: updateError
-        })
-      }
+      const [updatedOrganizer] = await db
+        .update(players)
+        .set({ name: name.trim(), updated_at: new Date() })
+        .where(eq(players.id, organizer.id))
+        .returning()
 
       return {
         success: true,
@@ -98,4 +69,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

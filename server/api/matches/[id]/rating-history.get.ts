@@ -1,12 +1,11 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireUser } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const matchId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     
     if (!matchId) {
       throw createError({
@@ -15,26 +14,16 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerkId)
-    
     const supabase = getSupabaseAdmin()
     
-    // Check if user is admin
-    const isAdmin = await checkIsAdmin(clerkId)
+    // Admins can act on any match
+    const isAdmin = user.role === 'admin'
     
     // Get current player
     const { data: currentPlayer, error: playerError } = await supabase
       .from('players')
       .select('id')
-      .eq('clerk_id', clerkId)
+      .eq('user_id', user.id)
       .single()
     
     if (playerError || !currentPlayer) {

@@ -1,11 +1,12 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { getMonthlyDecayStatus, calculateDecayAmount, MATCHES_REQUIRED_PER_MONTH } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     
     // Pagination parameters
     const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
@@ -13,15 +14,6 @@ export default defineEventHandler(async (event) => {
     
     // Filter: only_at_risk
     const onlyAtRisk = query.only_at_risk === 'true'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

@@ -1,19 +1,12 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { createGroups, generateGroupMatches, generatePlayoffBracket } from '~/server/utils/tournament-brackets'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<{ clerk_id: string }>(event)
-    const { clerk_id } = body
-    const tournamentId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -21,8 +14,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Tournament ID is required'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     const supabase = getSupabaseAdmin()
 

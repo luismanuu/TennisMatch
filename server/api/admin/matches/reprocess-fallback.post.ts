@@ -1,25 +1,17 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 /**
  * Admin endpoint to reprocess matches that used fallback calculation
  * This will reverse existing rating_history entries and recalculate with LLM
  */
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    // Verify admin access
-    await requireAdmin(clerkId)
     const matchId = query.match_id as string | undefined
     const limit = parseInt(query.limit as string) || 100
     const dryRun = query.dry_run === 'true'

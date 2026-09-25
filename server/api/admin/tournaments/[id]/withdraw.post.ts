@@ -1,19 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import type { WithdrawPlayerPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<WithdrawPlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, player_id, option, replacement_player_id } = body
-    const tournamentId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<WithdrawPlayerPayload>(event)
+    const { player_id, option, replacement_player_id } = body
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId || !player_id) {
       throw createError({
@@ -35,8 +30,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Replacement player ID is required when option is "replacement"'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     const supabase = getSupabaseAdmin()
 

@@ -1,12 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { getRatingTier } from '~/server/utils/rating-system'
 import type { RatingTier } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const cityId = query.city_id as string | undefined
     const categoryId = query.category_id as string | undefined
     const tier = query.tier as RatingTier | undefined
@@ -14,15 +15,6 @@ export default defineEventHandler(async (event) => {
     const limit = Math.min(query.limit ? parseInt(query.limit as string) : 100, 500)
     const offset = query.offset ? parseInt(query.offset as string) : 0
     const exportFormat = query.export as string | undefined // 'csv' or 'json'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

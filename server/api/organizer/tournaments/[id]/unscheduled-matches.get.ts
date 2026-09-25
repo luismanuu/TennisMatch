@@ -1,19 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { getUnscheduledMatches } from '~/server/utils/tournament-scheduling'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
+  const { player: organizer } = await requirePlayer(event, 'organizer')
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -22,26 +16,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireOrganizer(clerkId)
-
     const supabase = getSupabaseAdmin()
 
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerkId)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
-
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
     const matches = await getUnscheduledMatches(tournamentId, supabase)
 

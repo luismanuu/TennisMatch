@@ -1,15 +1,10 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
-    // Get clerk_id from query (passed from client)
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    // Verify admin access
-    await requireAdmin(clerkId)
-    
     const supabase = getSupabaseAdmin()
     
     // Fetch all pending players with related data
@@ -23,7 +18,6 @@ export default defineEventHandler(async (event) => {
         category:categories(id, name, description, order),
         invited_by_player_id,
         invited_by_player:players!pending_players_invited_by_player_id_fkey(id, name),
-        clerk_invitation_id,
         invitation_token,
         status,
         created_at,

@@ -1,11 +1,11 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const segmentId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     
     if (!segmentId) {
       throw createError({
@@ -13,16 +13,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Segment ID is required'
       })
     }
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify admin
-    await checkIsAdmin(clerkId)
     
     const supabase = getSupabaseAdmin()
     

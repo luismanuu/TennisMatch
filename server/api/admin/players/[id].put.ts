@@ -1,27 +1,26 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const playerId = getRouterParam(event, 'id')
     const body = await readBody<{
-      clerk_id: string
       name?: string
       phone_number?: string
       category_id?: string
       elo?: number
     }>(event)
 
-    const { clerk_id, name, phone_number, category_id, elo } = body
+    const { name, phone_number, category_id, elo } = body
 
-    if (!playerId || !clerk_id) {
+    if (!playerId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: player_id, clerk_id'
+        statusMessage: 'Missing required fields: player_id'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     const supabase = getSupabaseAdmin()
 
@@ -78,7 +77,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', playerId)
       .select(`
         id,
-        clerk_id,
+        user_id,
         name,
         phone_number,
         category_id,

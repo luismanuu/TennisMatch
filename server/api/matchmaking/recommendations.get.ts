@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requireUser } from '~/server/utils/session'
 import { 
   getRatingTier, 
   getExpectedWinProbability, 
@@ -20,22 +20,13 @@ import type { MatchmakingRecommendation, Player, RatingTier } from '~/types'
 // ============================================
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const limit = parseInt(query.limit as string) || 20 // Increased default for pagination
     const page = parseInt(query.page as string) || 1
     const offset = (page - 1) * limit
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-
-    // Verify Clerk user exists
-    await getClerkUser(clerkId)
 
     const supabase = getSupabaseAdmin()
 
@@ -56,7 +47,7 @@ export default defineEventHandler(async (event) => {
         last_match_at,
         category:categories(id, name, order, default_elo)
       `)
-      .eq('clerk_id', clerkId)
+      .eq('user_id', user.id)
       .eq('status', 'active')
       .is('deleted_at', null)
       .single()

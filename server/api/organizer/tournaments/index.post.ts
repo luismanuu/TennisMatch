@@ -1,21 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer } from '~/server/utils/organizer'
+import { requirePlayer } from '~/server/utils/session'
 import { datetimeLocalToISO } from '~/server/utils/timezone'
 import type { CreateTournamentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  const { player: organizer } = await requirePlayer(event, 'organizer')
+
   try {
-    const body = await readBody<CreateTournamentPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, category_id, start_date, end_date, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
-
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    await requireOrganizer(clerk_id)
+    const body = await readBody<CreateTournamentPayload>(event)
+    const { name, category_id, start_date, end_date, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
 
     if (!name || !start_date) {
       throw createError({
@@ -25,20 +18,6 @@ export default defineEventHandler(async (event) => {
     }
 
     const supabase = getSupabaseAdmin()
-
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
 
     // Verify category exists if provided
     if (category_id) {

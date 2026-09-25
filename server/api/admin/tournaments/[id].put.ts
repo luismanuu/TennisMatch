@@ -1,19 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import type { UpdateTournamentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<UpdateTournamentPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, category_id, start_date, end_date, status, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
-    const tournamentId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<UpdateTournamentPayload>(event)
+    const { name, category_id, start_date, end_date, status, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -21,8 +16,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Tournament ID is required'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     const supabase = getSupabaseAdmin()
 

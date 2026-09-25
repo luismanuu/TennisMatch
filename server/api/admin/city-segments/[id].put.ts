@@ -1,8 +1,10 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import type { UpdateCitySegmentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const segmentId = getRouterParam(event, 'id')
     
@@ -13,18 +15,8 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    const body = await readBody<UpdateCitySegmentPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, description } = body
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify admin
-    await checkIsAdmin(clerk_id)
+    const body = await readBody<UpdateCitySegmentPayload>(event)
+    const { name, description } = body
     
     const supabase = getSupabaseAdmin()
     

@@ -1,13 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 // Ecuador timezone offset: UTC-5
 const ECUADOR_UTC_OFFSET = -5
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const status = query.status as string | undefined
     const playerId = query.player_id as string | undefined
     const startDate = query.start_date as string | undefined
@@ -16,15 +17,6 @@ export default defineEventHandler(async (event) => {
     // Pagination parameters
     const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
     const offset = query.offset ? parseInt(query.offset as string) : 0
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

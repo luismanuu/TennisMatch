@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { findPlayerByUserId, getSessionUser } from '~/server/utils/session'
 import { getRatingTier, getNextTierProgress } from '~/server/utils/rating-system'
 import type { RatingTier } from '~/types'
 import type { LeaderboardPlayer, LeaderboardResponse, BadgeType } from '~/types/leaderboard'
@@ -13,6 +14,10 @@ function getPlayerBadges(
 }
 
 export default defineEventHandler(async (event): Promise<LeaderboardResponse> => {
+  // Public; a signed-in viewer's own row is marked. The viewer comes from the session, never the query.
+  const viewer = await getSessionUser(event)
+  const currentPlayerId = viewer ? (await findPlayerByUserId(viewer.id))?.id : undefined
+
   try {
     const query = getQuery(event)
     
@@ -22,7 +27,6 @@ export default defineEventHandler(async (event): Promise<LeaderboardResponse> =>
     const search = query.search as string | undefined
     const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 100)
     const offset = query.offset ? parseInt(query.offset as string) : 0
-    const currentPlayerId = query.current_player_id as string | undefined
     const centerAroundPlayer = query.center_around_player === 'true' // New param to center around current player
     
     const supabase = getSupabaseAdmin()

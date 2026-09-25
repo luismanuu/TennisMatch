@@ -1,59 +1,59 @@
-import { requireAdmin } from '~/server/utils/admin'
-import { getClerkClient, getAllClerkInvitations } from '~/server/utils/clerk'
+import { eq } from 'drizzle-orm'
+import { requireAdmin } from '~/server/utils/session'
+import { useDb } from '~/server/db'
+import { pending_players } from '~/server/db/schema'
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Revoking an invitation expires the pending player instead of deleting it: matches may reference the row.
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const invitationId = getRouterParam(event, 'id')
-    const body = await readBody<{ clerk_id: string }>(event)
-    const { clerk_id } = body
 
-    if (!invitationId || !clerk_id) {
+    if (!invitationId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: invitation_id, clerk_id'
+        statusMessage: 'Missing required fields: invitation_id'
       })
     }
 
-    await requireAdmin(clerk_id)
+    const db = useDb()
+    const invitation = UUID.test(invitationId)
+      ? await db.query.pending_players.findFirst({
+          columns: { id: true, name: true, email: true, status: true },
+          where: eq(pending_players.id, invitationId),
+        })
+      : undefined
 
-    const client = getClerkClient()
-
-    // Get invitation details before deleting
-    // Clerk SDK doesn't have getInvitation, so we use getAllClerkInvitations
-    let invitationEmail = ''
-    let invitationName = ''
-    try {
-      const { invitations } = await getAllClerkInvitations()
-      const invitation = invitations.find((inv: any) => inv.id === invitationId)
-      if (invitation) {
-        invitationEmail = invitation.emailAddress || ''
-        const metadata = (invitation.publicMetadata as any) || {}
-        invitationName = metadata.name || invitationEmail
-      }
-    } catch (e) {
-      console.warn('Could not fetch invitation details before deletion:', e)
-    }
-
-    // Revoke/delete the invitation in Clerk
-    try {
-      await client.invitations.revokeInvitation(invitationId)
-      console.log('Revoked Clerk invitation:', invitationId)
-    } catch (deleteError: any) {
-      console.error('Error revoking Clerk invitation:', deleteError)
+    if (!invitation) {
       throw createError({
-        statusCode: 500,
-        statusMessage: `Failed to delete invitation: ${deleteError?.message || 'Unknown error'}`,
-        data: deleteError
+        statusCode: 404,
+        statusMessage: 'Invitation not found'
       })
     }
+
+    if (invitation.status === 'accepted') {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invitation has already been accepted'
+      })
+    }
+
+    // Clearing the token kills the link even if a caller forgets to check the status.
+    await db
+      .update(pending_players)
+      .set({ status: 'expired', invitation_token: null, updated_at: new Date() })
+      .where(eq(pending_players.id, invitationId))
 
     return {
       success: true,
-      message: `Invitation for "${invitationName}" (${invitationEmail}) has been deleted successfully`,
+      message: 'Invitation revoked successfully',
       deletedInvitation: {
-        id: invitationId,
-        name: invitationName,
-        email: invitationEmail
+        id: invitation.id,
+        name: invitation.name,
+        email: invitation.email
       }
     }
   } catch (error: any) {
@@ -63,4 +63,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

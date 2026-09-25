@@ -1,20 +1,18 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const categoryId = getRouterParam(event, 'id')
-    const body = await readBody<{ clerk_id: string }>(event)
-    const { clerk_id } = body
 
-    if (!categoryId || !clerk_id) {
+    if (!categoryId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: category_id, clerk_id'
+        statusMessage: 'Missing required fields: category_id'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     const supabase = getSupabaseAdmin()
 

@@ -1,19 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
-import { getClerkClient } from '~/server/utils/clerk'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { getAccountsByIds } from '~/server/utils/users'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
+  const { player: organizer } = await requirePlayer(event, 'organizer')
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -22,27 +16,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireOrganizer(clerkId)
-
     const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
-
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerkId)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
 
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
     const { data: tournament, error } = await supabase
       .from('tournaments')
@@ -55,7 +32,7 @@ export default defineEventHandler(async (event) => {
             id,
             name,
             phone_number,
-            clerk_id,
+            user_id,
             category:categories(id, name, description, order)
           )
         ),
@@ -78,36 +55,23 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Enrich registrations with email from Clerk
+    // Enrich registrations with the account email
     if (tournament.registrations && tournament.registrations.length > 0) {
-      const enrichedRegistrations = await Promise.all(
-        tournament.registrations.map(async (reg: any) => {
-          if (reg.player?.clerk_id) {
-            try {
-              const clerkUser = await clerkClient.users.getUser(reg.player.clerk_id)
-              const email = clerkUser.emailAddresses[0]?.emailAddress || null
-              return {
-                ...reg,
-                player: {
-                  ...reg.player,
-                  email
-                }
-              }
-            } catch (err) {
-              // If we can't get Clerk user, just return without email
-              return {
-                ...reg,
-                player: {
-                  ...reg.player,
-                  email: null
-                }
-              }
-            }
-          }
-          return reg
-        })
+      const accounts = await getAccountsByIds(
+        tournament.registrations.map((reg: any) => reg.player?.user_id).filter(Boolean)
       )
-      tournament.registrations = enrichedRegistrations
+      tournament.registrations = tournament.registrations.map((reg: any) => {
+        if (!reg.player?.user_id) {
+          return reg
+        }
+        return {
+          ...reg,
+          player: {
+            ...reg.player,
+            email: accounts.get(reg.player.user_id)?.email ?? null
+          }
+        }
+      })
     }
 
     return tournament

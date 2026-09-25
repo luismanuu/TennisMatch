@@ -1,12 +1,11 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireUser } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const matchId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
     
     if (!matchId) {
       throw createError({
@@ -15,23 +14,13 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
     const supabase = getSupabaseAdmin()
     
     // Get current player
     const { data: currentPlayer, error: playerError } = await supabase
       .from('players')
       .select('id')
-      .eq('clerk_id', clerk_id)
+      .eq('user_id', user.id)
       .single()
     
     if (playerError || !currentPlayer) {
@@ -50,7 +39,7 @@ export default defineEventHandler(async (event) => {
         player1:players!matches_player1_id_fkey(
           id,
           name,
-          clerk_id,
+          user_id,
           status,
           elo,
           total_matches_played,
@@ -61,7 +50,7 @@ export default defineEventHandler(async (event) => {
         player2:players!matches_player2_id_fkey(
           id,
           name,
-          clerk_id,
+          user_id,
           status,
           elo,
           total_matches_played,
@@ -175,8 +164,8 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Check if user is admin (admins can view any match)
-    const isAdmin = await checkIsAdmin(clerk_id)
+    // Admins can act on any match
+    const isAdmin = user.role === 'admin'
     
     // Verify user is part of the match OR is organizer of the tournament OR is admin
     const isPlayer1 = match.player1_id === currentPlayer.id
@@ -214,7 +203,7 @@ export default defineEventHandler(async (event) => {
         player:players(
           id,
           name,
-          clerk_id
+          user_id
         )
       `)
       .eq('match_id', matchId)

@@ -1,24 +1,18 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const body = await readBody<{
-      clerk_id: string
       name: string
       description?: string
       order?: number
       default_elo?: number
     }>(event)
 
-    const { clerk_id, name, description, order, default_elo } = body
-
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const { name, description, order, default_elo } = body
 
     if (!name || name.trim().length === 0) {
       throw createError({
@@ -26,8 +20,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Category name is required'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     const supabase = getSupabaseAdmin()
 

@@ -1,19 +1,15 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import type { UpdateTournamentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<UpdateTournamentPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, category_id, start_date, end_date, status, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
-    const tournamentId = getRouterParam(event, 'id')
+  const { player: organizer } = await requirePlayer(event, 'organizer')
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<UpdateTournamentPayload>(event)
+    const { name, category_id, start_date, end_date, status, group_size, players_per_group_advance, registration_open, registration_deadline, max_players, min_players, description, rules, location, points_config } = body
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -22,26 +18,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireOrganizer(clerk_id)
-
     const supabase = getSupabaseAdmin()
 
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
-
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
     // If status is being changed to 'active', verify brackets are generated
     if (status === 'active') {

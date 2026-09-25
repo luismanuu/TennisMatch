@@ -1,29 +1,32 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { updateClerkUserName } from '~/server/utils/clerk'
+import { requireUser } from '~/server/utils/session'
+import { setAccountName } from '~/server/utils/users'
 import { eloToMmr } from '~/server/utils/rating-system'
 import type { UpdatePlayerPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const playerId = getRouterParam(event, 'id')
-    const body = await readBody<UpdatePlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, phone_number, city_id, category_id } = body
+    const body = await readBody<UpdatePlayerPayload>(event)
+    const { name, phone_number, city_id, category_id } = body
     
-    if (!playerId || !clerk_id) {
+    if (!playerId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: id, clerk_id'
+        statusMessage: 'Missing required fields: id'
       })
     }
     
     const supabase = getSupabaseAdmin()
     
-    // Verify the player exists and belongs to the clerk_id
+    // Verify the player exists and belongs to the signed-in account
     const { data: existingPlayer, error: fetchError } = await supabase
       .from('players')
       .select('*, category:categories(id, default_elo)')
       .eq('id', playerId)
-      .eq('clerk_id', clerk_id)
+      .eq('user_id', user.id)
       .single()
     
     if (fetchError || !existingPlayer) {
@@ -137,13 +140,13 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // If name changed, update Clerk user
-    if (name && name !== existingPlayer.name) {
+    // If name changed, keep the account name in sync (the player row belongs to this account, checked above)
+    if (name && name !== existingPlayer.name && existingPlayer.user_id === user.id) {
       try {
-        await updateClerkUserName(clerk_id, name)
-      } catch (clerkError) {
+        await setAccountName(user.id, name)
+      } catch (accountError) {
         // Log error but don't fail the request
-        console.error('Failed to update Clerk user name:', clerkError)
+        console.error('Failed to update account name:', accountError)
       }
     }
     

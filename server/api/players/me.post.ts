@@ -1,16 +1,18 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requireUser } from '~/server/utils/session'
 import type { CreatePlayerPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
-    const body = await readBody<CreatePlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, phone_number, city_id, category_id } = body
+    const body = await readBody<CreatePlayerPayload>(event)
+    const { name, phone_number, city_id, category_id } = body
     
-    if (!clerk_id || !name || !category_id || !city_id) {
+    if (!name || !category_id || !city_id) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, name, category_id, city_id'
+        statusMessage: 'Missing required fields: name, category_id, city_id'
       })
     }
     
@@ -26,19 +28,6 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 400,
         statusMessage: 'Invalid city_id'
-      })
-    }
-    
-    // Verify Clerk user exists
-    let clerkUser
-    try {
-      clerkUser = await getClerkUser(clerk_id)
-    } catch (clerkError: any) {
-      console.error('Clerk user verification error:', clerkError)
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Clerk user not found',
-        data: clerkError
       })
     }
     
@@ -63,7 +52,7 @@ export default defineEventHandler(async (event) => {
     const { data: existingPlayer } = await supabase
       .from('players')
       .select('id')
-      .eq('clerk_id', clerk_id)
+      .eq('user_id', user.id)
       .single()
     
     if (existingPlayer) {
@@ -80,7 +69,7 @@ export default defineEventHandler(async (event) => {
     const { data: player, error: insertError } = await supabase
       .from('players')
       .insert({
-        clerk_id,
+        user_id: user.id,
         name,
         phone_number: phone_number || null,
         city_id,

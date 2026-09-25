@@ -1,7 +1,6 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
-import { checkIsOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireUser } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { updateBracketAfterMatch, recalculateGroupStandings } from '~/server/utils/tournament-brackets'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { createMatchNotification, dismissExistingNotifications } from '~/server/utils/notifications'
@@ -9,6 +8,8 @@ import { datetimeLocalToISO, isDateInFuture } from '~/server/utils/timezone'
 import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const matchId = getRouterParam(event, 'id')
     
@@ -20,22 +21,11 @@ export default defineEventHandler(async (event) => {
     }
     
     const body = await readBody<{
-      clerk_id: string
       action: 'update_status' | 'propose_score' | 'approve_score' | 'reject_score' | 'cancel' | 'accept_match' | 'reject_match' | 'propose_schedule' | 'approve_schedule' | 'reject_schedule' | 'propose_reschedule' | 'approve_reschedule' | 'reject_reschedule' | 'approve_acceptance_change' | 'reject_acceptance_change' | 'organizer_set_result'
       data?: UpdateMatchStatusPayload | ProposeScorePayload | ApproveScorePayload | ProposeReschedulePayload | { score?: string, winner_id: string, is_wo?: boolean } | { scheduled_at?: string, location?: string }
     }>(event)
     
-    const { clerk_id, action, data } = body
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
+    const { action, data } = body
     
     const supabase = getSupabaseAdmin()
     
@@ -43,7 +33,7 @@ export default defineEventHandler(async (event) => {
     const { data: currentPlayer, error: playerError } = await supabase
       .from('players')
       .select('id')
-      .eq('clerk_id', clerk_id)
+      .eq('user_id', user.id)
       .single()
     
     if (playerError || !currentPlayer) {
@@ -82,11 +72,9 @@ export default defineEventHandler(async (event) => {
     // Check if user is organizer of the tournament (if match belongs to a tournament)
     let isTournamentOrganizer = false
     if (match.tournament_id && match.tournament) {
-      const clerkUser = await getClerkUser(clerk_id)
-      const role = clerkUser.publicMetadata?.role as string | undefined
-      if (role === 'tournament_organizer') {
+      if (user.role === 'tournament_organizer') {
         try {
-          await verifyOrganizerOwnsTournament(currentPlayer.id, match.tournament_id, supabase)
+          await verifyOrganizerOwnsTournament(currentPlayer.id, match.tournament_id)
           isTournamentOrganizer = true
         } catch (err) {
           // Not organizer of this tournament
@@ -96,7 +84,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Check if user is admin
-    const isAdmin = await checkIsAdmin(clerk_id)
+    const isAdmin = user.role === 'admin'
     
     // Verify user is part of the match (unless they're organizer and action is organizer-specific, or admin)
     if (body.action !== 'organizer_set_result' && !isAdmin) {

@@ -1,27 +1,25 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const playerId = getRouterParam(event, 'id')
-    const body = await readBody<{ clerk_id: string }>(event)
-    const { clerk_id } = body
 
-    if (!playerId || !clerk_id) {
+    if (!playerId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: player_id, clerk_id'
+        statusMessage: 'Missing required fields: player_id'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     const supabase = getSupabaseAdmin()
 
     // Check if player exists and is not already deleted
     const { data: player, error: fetchError } = await supabase
       .from('players')
-      .select('id, clerk_id, name, status')
+      .select('id, user_id, name, status')
       .eq('id', playerId)
       .single()
 
@@ -42,7 +40,7 @@ export default defineEventHandler(async (event) => {
 
     // SOFT DELETE: Set status to 'deleted' and set deleted_at timestamp
     // DO NOT delete matches - preserve all match history
-    // DO NOT delete from Clerk - preserve ability to restore
+    // DO NOT delete the account - preserve ability to restore
     const { error: updateError } = await supabase
       .from('players')
       .update({

@@ -1,19 +1,14 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requirePlayer } from '~/server/utils/session'
 import { checkSelfRegistrationAllowed } from '~/server/utils/tournament-status'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<{ clerk_id: string; waitlist?: boolean }>(event)
-    const { clerk_id, waitlist = false } = body
-    const tournamentId = getRouterParam(event, 'id')
+  const { player } = await requirePlayer(event)
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<{ waitlist?: boolean }>(event)
+    const { waitlist = false } = body
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -22,24 +17,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-
     const supabase = getSupabaseAdmin()
-
-    // Get player ID
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('id, category_id')
-      .eq('clerk_id', clerk_id)
-      .single()
-
-    if (playerError || !player) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Player profile not found'
-      })
-    }
 
     // Check if self-registration is allowed
     const allowed = await checkSelfRegistrationAllowed(tournamentId, supabase)

@@ -1,21 +1,10 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requireUser } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
-    // Get Clerk user from the request
-    // In Nuxt with Clerk, we can access the user via useClerk() on client
-    // For server-side, we need to get the clerk_id from the request
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-    
     const supabase = getSupabaseAdmin()
     
     // Try to fetch existing player profile (only active players)
@@ -26,7 +15,7 @@ export default defineEventHandler(async (event) => {
         category:categories(*),
         city:cities(*)
       `)
-      .eq('clerk_id', clerkId)
+      .eq('user_id', user.id)
       .eq('status', 'active')
       .single()
     
@@ -54,21 +43,8 @@ export default defineEventHandler(async (event) => {
       return player
     }
     
-    // If player doesn't exist, get Clerk user info and return null
-    // The client can then create the profile
-    try {
-      const clerkUser = await getClerkUser(clerkId)
-      return null // Profile doesn't exist yet
-    } catch (clerkError: any) {
-      console.error('Error fetching Clerk user:', {
-        message: clerkError?.message,
-        status: clerkError?.status,
-        statusCode: clerkError?.statusCode
-      })
-      // Don't throw error if Clerk user doesn't exist - just return null
-      // The client can handle creating a new profile
-      return null
-    }
+    // Profile doesn't exist yet; the client can then create it
+    return null
   } catch (error: any) {
     console.error('Unexpected error in players/me endpoint:', error)
     throw createError({

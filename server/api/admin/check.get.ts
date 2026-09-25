@@ -1,28 +1,13 @@
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
+// Like every route under /api/admin, this answers only admins: 401 without a session, 403 for any
+// other role. A 200 therefore always means isAdmin: true.
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Missing clerk_id'
-      })
-    }
-    
-    const isAdmin = await checkIsAdmin(clerkId)
-    
-    return {
-      isAdmin,
-      clerkId
-    }
-  } catch (error: any) {
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
-    })
+  const user = await requireAdmin(event)
+
+  return {
+    isAdmin: user.role === 'admin',
+    userId: user.id,
+    role: user.role
   }
 })
-

@@ -1,26 +1,21 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
-import { getClerkClient, createInvitation } from '~/server/utils/clerk'
-import { randomUUID } from 'crypto'
+import { findPlayerByUserId, requireAdmin } from '~/server/utils/session'
+import { findAccountByEmail, setAccountRole } from '~/server/utils/users'
 
+// Promotes an existing account to tournament organizer. There are no organizer invitations any more:
+// the person creates an account first, then an admin promotes it by email.
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
-    const body = await readBody<{
-      clerk_id: string
-      name: string
-      email: string
-    }>(event)
+    const body = await readBody<{ email: string; name?: string }>(event)
+    const email = body?.email?.trim()
 
-    const { clerk_id, name, email } = body
-
-    if (!clerk_id || !name || !email) {
+    if (!email) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, name, email'
+        statusMessage: 'Missing required fields: email'
       })
     }
-
-    await requireAdmin(clerk_id)
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -31,89 +26,44 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
+    const account = await findAccountByEmail(email)
 
-    // Check if user already exists in Clerk
-    try {
-      const existingUsers = await clerkClient.users.getUserList({
-        emailAddress: [email]
+    if (!account) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: `No existe una cuenta con el correo ${email}. La persona debe crear una cuenta primero.`
       })
-
-      if (existingUsers.data.length > 0) {
-        const existingUser = existingUsers.data[0]
-        const role = existingUser.publicMetadata?.role as string | undefined
-
-        if (role === 'tournament_organizer') {
-          throw createError({
-            statusCode: 409,
-            statusMessage: `User with email ${email} is already a tournament organizer`
-          })
-        }
-
-        // If user exists but is not an organizer, we can't convert them
-        throw createError({
-          statusCode: 409,
-          statusMessage: `User with email ${email} already exists with a different role`
-        })
-      }
-    } catch (checkError: any) {
-      if (checkError.statusCode) {
-        throw checkError
-      }
-      // User doesn't exist, continue with invitation
     }
 
-    // Check if email is already registered as a player
-    const { data: existingPlayer } = await supabase
-      .from('players')
-      .select('id, name, clerk_id')
-      .eq('clerk_id', email)
-      .single()
-
-    if (existingPlayer) {
+    if (account.role === 'tournament_organizer') {
       throw createError({
         statusCode: 409,
-        statusMessage: `Email ${email} is already registered as a player (${existingPlayer.name})`
+        statusMessage: `User with email ${email} is already a tournament organizer`
       })
     }
 
-    // Generate unique invitation token
-    const invitationToken = randomUUID()
-
-    // Get the base URL for invitation links
-    const config = useRuntimeConfig()
-    const baseUrl = config.public?.appUrl || process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const invitationUrl = `${baseUrl}/invitation/${invitationToken}`
-
-    // Create Clerk invitation with tournament_organizer role
-    try {
-      const invitation = await clerkClient.invitations.createInvitation({
-        emailAddress: email,
-        publicMetadata: {
-          name: name,
-          invitationToken: invitationToken,
-          role: 'tournament_organizer'
-        },
-        redirectUrl: invitationUrl // Redirect to our custom invitation page
-      })
-
-      return {
-        success: true,
-        message: 'Tournament organizer invitation sent successfully',
-        invitation: {
-          id: invitation.id,
-          email: invitation.emailAddress,
-          status: invitation.status,
-          name: name
-        }
-      }
-    } catch (invitationError: any) {
-      console.error('Error creating organizer invitation:', invitationError)
+    // Promoting would silently strip admin rights; an admin must be demoted deliberately.
+    if (account.role === 'admin') {
       throw createError({
-        statusCode: invitationError.statusCode || 500,
-        statusMessage: invitationError.errors?.[0]?.message || invitationError.message || 'Failed to create invitation'
+        statusCode: 409,
+        statusMessage: `User with email ${email} is an admin`
       })
+    }
+
+    await setAccountRole(account.id, 'tournament_organizer')
+    const player = await findPlayerByUserId(account.id)
+
+    return {
+      success: true,
+      message: 'User promoted to tournament organizer',
+      organizer: {
+        id: player?.id ?? account.id,
+        user_id: account.id,
+        player_id: player?.id ?? null,
+        name: player?.name ?? account.name,
+        email: account.email,
+        role: 'tournament_organizer'
+      }
     }
   } catch (error: any) {
     throw createError({
@@ -122,4 +72,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

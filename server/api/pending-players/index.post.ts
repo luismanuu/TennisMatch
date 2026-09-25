@@ -1,21 +1,38 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
-import { createInvitation } from '~/server/utils/clerk'
-import { randomUUID } from 'crypto'
+import { eq, sql } from 'drizzle-orm'
+import { requirePlayer } from '~/server/utils/session'
+import { findAccountByEmail } from '~/server/utils/users'
+import { invitationUrl, newInvitationToken, sendInvitationEmail } from '~/server/utils/invitations'
+import { useDb } from '~/server/db'
+import { categories, pending_players } from '~/server/db/schema'
 import type { CreatePendingPlayerPayload } from '~/types'
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export default defineEventHandler(async (event) => {
+  // The inviter is always the signed-in player.
+  const { player: inviter } = await requirePlayer(event)
+
   try {
-    const body = await readBody<CreatePendingPlayerPayload & { clerk_id: string }>(event)
-    const { clerk_id, name, email, category_id, invited_by_player_id } = body
-    
-    if (!clerk_id || !name || !email || !category_id || !invited_by_player_id) {
+    const body = await readBody<Partial<CreatePendingPlayerPayload>>(event)
+    const name = body?.name?.trim()
+    const email = body?.email?.trim()
+    const category_id = body?.category_id
+
+    if (!name || !email || !category_id) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, name, email, category_id, invited_by_player_id'
+        statusMessage: 'Missing required fields: name, email, category_id'
       })
     }
-    
+
+    // Older clients still send invited_by_player_id; it may only name the signed-in player.
+    if (body.invited_by_player_id && body.invited_by_player_id !== inviter.id) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Unauthorized: invited_by_player_id does not match authenticated user'
+      })
+    }
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
@@ -24,119 +41,82 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Invalid email format'
       })
     }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Verify the inviting player exists and belongs to the authenticated user
-    const { data: invitingPlayer, error: playerError } = await supabase
-      .from('players')
-      .select('id, clerk_id')
-      .eq('id', invited_by_player_id)
-      .eq('clerk_id', clerk_id)
-      .single()
-    
-    if (playerError || !invitingPlayer) {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Unauthorized: invited_by_player_id does not match authenticated user'
-      })
-    }
-    
+
+    const db = useDb()
+
     // Verify category exists
-    const { data: category, error: categoryError } = await supabase
-      .from('categories')
-      .select('id')
-      .eq('id', category_id)
-      .single()
-    
-    if (categoryError || !category) {
+    const category = UUID.test(category_id)
+      ? await db.query.categories.findFirst({ columns: { id: true }, where: eq(categories.id, category_id) })
+      : undefined
+    if (!category) {
       throw createError({
         statusCode: 400,
         statusMessage: 'Invalid category_id'
       })
     }
-    
-    // Check if email is already registered as a player
-    const { data: existingPlayer } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', email) // This is a simple check - in production, you'd check Clerk users
-      .single()
-    
-    // Check if email already has a pending invitation
-    const { data: existingPending } = await supabase
-      .from('pending_players')
-      .select('id, status')
-      .eq('email', email)
-      .eq('status', 'pending')
-      .single()
-    
-    if (existingPending) {
+
+    if (await findAccountByEmail(email)) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'This email already has an account'
+      })
+    }
+
+    const existing = await db.query.pending_players.findFirst({
+      columns: { id: true, status: true },
+      where: eq(sql`lower(${pending_players.email})`, email.toLowerCase()),
+    })
+
+    if (existing?.status === 'pending') {
       throw createError({
         statusCode: 409,
         statusMessage: 'A pending invitation already exists for this email'
       })
     }
-    
-    // Generate unique invitation token
-    const invitationToken = randomUUID()
-    
-    // Create Clerk invitation
-    let clerkInvitationId: string | undefined
-    try {
-      console.log('Creating Clerk invitation for:', { email, name, invitationToken })
-      const invitation = await createInvitation(email, name, invitationToken)
-      clerkInvitationId = invitation.id
-      console.log('Clerk invitation created successfully:', { id: invitation.id, email: invitation.emailAddress, status: invitation.status })
-    } catch (invitationError: any) {
-      console.error('Error creating Clerk invitation:', {
-        error: invitationError,
-        message: invitationError?.message,
-        statusCode: invitationError?.statusCode,
-        statusMessage: invitationError?.statusMessage,
-        email,
-        name
-      })
-      // Throw error to prevent creating pending player without invitation
-      // This ensures the user knows the invitation failed
+    if (existing?.status === 'accepted') {
       throw createError({
-        statusCode: 500,
-        statusMessage: `Failed to send invitation email: ${invitationError?.message || invitationError?.statusMessage || 'Unknown error'}. Please check your Clerk configuration and try again.`,
-        data: invitationError
+        statusCode: 409,
+        statusMessage: 'This email has already accepted an invitation'
       })
     }
-    
-    // Create pending player record
-    const { data: pendingPlayer, error: createError } = await supabase
-      .from('pending_players')
-      .insert({
-        name,
-        email,
-        category_id,
-        invited_by_player_id,
-        clerk_invitation_id: clerkInvitationId,
-        invitation_token: invitationToken,
-        status: 'pending'
-      })
-      .select(`
-        *,
-        category:categories(id, name, description, order),
-        invited_by_player:players!pending_players_invited_by_player_id_fkey(id, name)
-      `)
-      .single()
-    
-    if (createError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to create pending player',
-        data: createError
-      })
+
+    const token = newInvitationToken()
+    const values = {
+      name,
+      category_id,
+      invited_by_player_id: inviter.id,
+      invitation_token: token,
+      status: 'pending' as const,
     }
-    
-    return pendingPlayer
+
+    // pending_players.email is unique: an expired invitation for the same email is reopened, not duplicated.
+    const [created] = existing
+      ? await db
+          .update(pending_players)
+          .set({ ...values, updated_at: new Date() })
+          .where(eq(pending_players.id, existing.id))
+          .returning({ id: pending_players.id })
+      : await db
+          .insert(pending_players)
+          .values({ ...values, email })
+          .returning({ id: pending_players.id })
+
+    const pendingPlayer = await db.query.pending_players.findFirst({
+      where: eq(pending_players.id, created.id),
+      with: {
+        category: { columns: { id: true, name: true, description: true, order: true } },
+        invited_by_player: { columns: { id: true, name: true } },
+      },
+    })
+
+    const url = invitationUrl(event, token)
+    const emailSent = await sendInvitationEmail({ to: email, name, url })
+
+    return {
+      ...pendingPlayer,
+      invitation_url: url,
+      email_sent: emailSent
+    }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -144,4 +124,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

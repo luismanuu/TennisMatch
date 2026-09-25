@@ -5,27 +5,18 @@
  */
 
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const playerId = query.player_id as string | undefined
     const matchId = query.match_id as string | undefined
     const limit = parseInt(query.limit as string) || 100
     const dryRun = query.dry_run === 'true'
-
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    // Verify admin access
-    await requireAdmin(clerkId)
 
     const supabase = getSupabaseAdmin()
 

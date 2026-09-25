@@ -1,100 +1,62 @@
-import { requireAdmin } from '~/server/utils/admin'
-import { getAllClerkInvitations } from '~/server/utils/clerk'
+import { count, desc, eq } from 'drizzle-orm'
+import { requireAdmin } from '~/server/utils/session'
+import { useDb } from '~/server/db'
+import { pending_players } from '~/server/db/schema'
+
+// Invitations are pending_players rows; the invitation id is pending_players.id.
+const invitationColumns = {
+  columns: {
+    id: true,
+    name: true,
+    email: true,
+    category_id: true,
+    invited_by_player_id: true,
+    status: true,
+    created_at: true,
+    updated_at: true,
+  },
+  with: {
+    category: { columns: { id: true, name: true, description: true, order: true } },
+    invited_by_player: { columns: { id: true, name: true } },
+  },
+} as const
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
+
     // Pagination parameters
     const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
     const offset = query.offset ? parseInt(query.offset as string) : 0
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const db = useDb()
+    const isPending = eq(pending_players.status, 'pending')
 
-    await requireAdmin(clerkId)
-
-    // Get all invitations directly from Clerk
-    const { invitations: clerkInvitations, total: clerkTotal } = await getAllClerkInvitations()
-
-    console.log(`[invitations.get] Received ${clerkInvitations.length} invitations from Clerk (total: ${clerkTotal})`)
-
-    // Transform Clerk invitations to a format compatible with the dashboard
-    const formattedInvitations = clerkInvitations.map((inv) => {
-      const metadata = inv.publicMetadata as any || {}
-      // Determine status: if revoked, it's revoked; otherwise use the status from Clerk
-      // Clerk status can be: 'pending', 'accepted', 'revoked', or undefined
-      const isRevoked = inv.revoked === true
-      // Get the original status from Clerk (might be undefined, null, or a string)
-      const originalClerkStatus = inv.status
-      // Default to 'pending' if status is not set, but preserve the original for filtering
-      const clerkStatus = originalClerkStatus || 'pending'
-      const status = isRevoked ? 'revoked' : clerkStatus
-      
-      
-      const formatted = {
-        id: inv.id,
-        clerk_invitation_id: inv.id,
-        email: inv.emailAddress || '',
-        name: metadata.name || inv.emailAddress?.split('@')[0] || 'Unknown',
-        category_id: metadata.category_id || null,
-        category: metadata.category_name ? {
-          id: metadata.category_id,
-          name: metadata.category_name
-        } : null,
-        status: status,
-        created_at: inv.createdAt ? new Date(inv.createdAt).toISOString() : new Date().toISOString(),
-        updated_at: inv.updatedAt ? new Date(inv.updatedAt).toISOString() : new Date().toISOString(),
-        revoked: isRevoked,
-        expiresAt: inv.expiresAt
-      }
-      
-      // Store original status for filtering (internal use only)
-      ;(formatted as any)._originalStatus = originalClerkStatus
-      
-      return formatted
-    })
-
-    // Filter to show only pending invitations by default
-    // Show invitations that are not revoked and have status 'pending'
-    // Also include invitations that don't have a status set (might be older invitations)
-    const pendingInvitations = formattedInvitations.filter(inv => {
-      // Consider pending if:
-      // 1. Not revoked AND
-      // 2. Status is 'pending' (either explicitly set or defaulted), OR
-      // 3. Original status was undefined/null (meaning it's truly pending in Clerk), OR
-      // 4. Status is not 'accepted' and not 'revoked' (catch-all for pending invitations)
-      const originalStatus = (inv as any)._originalStatus
-      const statusLower = (inv.status || '').toLowerCase()
-      const isAccepted = statusLower === 'accepted'
-      const isRevoked = inv.revoked === true || statusLower === 'revoked'
-      
-      // More permissive: if not explicitly accepted or revoked, consider it pending
-      const hasPendingStatus = statusLower === 'pending' || 
-                               originalStatus === undefined || 
-                               originalStatus === null ||
-                               (!isAccepted && !isRevoked)
-      
-      return (!isRevoked) && hasPendingStatus
-    })
-
-    console.log(`[invitations.get] Filtered to ${pendingInvitations.length} pending invitations out of ${formattedInvitations.length} total`)
-
-    // Apply pagination
-    const totalPending = pendingInvitations.length
-    const paginatedPending = pendingInvitations.slice(offset, offset + limit)
-    const paginatedAll = formattedInvitations.slice(offset, offset + limit)
+    const [pending, all, [{ value: totalPending }], [{ value: totalAll }]] = await Promise.all([
+      db.query.pending_players.findMany({
+        ...invitationColumns,
+        where: isPending,
+        orderBy: desc(pending_players.created_at),
+        limit,
+        offset,
+      }),
+      db.query.pending_players.findMany({
+        ...invitationColumns,
+        orderBy: desc(pending_players.created_at),
+        limit,
+        offset,
+      }),
+      db.select({ value: count() }).from(pending_players).where(isPending),
+      db.select({ value: count() }).from(pending_players),
+    ])
 
     return {
-      invitations: paginatedPending,
-      allInvitations: paginatedAll,
+      invitations: pending,
+      allInvitations: all,
       total: totalPending,
-      total_all: clerkTotal,
+      total_all: totalAll,
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }
@@ -105,4 +67,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

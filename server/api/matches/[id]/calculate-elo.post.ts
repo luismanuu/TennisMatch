@@ -2,12 +2,16 @@
  * API Endpoint for LLM-based ELO Calculation
  * This endpoint can be called manually, but it's also automatically triggered
  * when a match is completed (both players accepted score)
+ * Admin only: it rewrites ratings and spends LLM credits.
  */
 
 import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const matchId = getRouterParam(event, 'id')
     

@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
     
     // Fetch public player profile (no authentication required)
     // Only return public information: name, category, elo, stats
-    // Do NOT return: phone_number, clerk_id, email
+    // Do NOT return: phone_number, user_id, email
     const { data: player, error: fetchError } = await supabase
       .from('players')
       .select(`

@@ -14,14 +14,13 @@ export default defineEventHandler(async (event) => {
     const supabase = getSupabaseAdmin()
     
     // Fetch public pending player profile (no authentication required)
-    // Return public information: name, email, category
-    // Do NOT return: clerk_invitation_id, invitation_token
+    // Public information only: name, category, status. The email is personal data and never leaves the server here.
+    // Do NOT return: invitation_token
     const { data: pendingPlayer, error: fetchError } = await supabase
       .from('pending_players')
       .select(`
         id,
         name,
-        email,
         category_id,
         category:categories(*),
         status,

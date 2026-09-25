@@ -1,12 +1,13 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import type { RemoveCityFromSegmentPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const segmentId = getRouterParam(event, 'id')
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const cityId = query.city_id as string
     
     if (!segmentId) {
@@ -16,22 +17,12 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
     if (!cityId) {
       throw createError({
         statusCode: 400,
         statusMessage: 'city_id is required'
       })
     }
-    
-    // Verify admin
-    await checkIsAdmin(clerkId)
     
     const supabase = getSupabaseAdmin()
     

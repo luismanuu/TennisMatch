@@ -1,10 +1,11 @@
 import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { requireUser } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
-import { checkIsAdmin } from '~/server/utils/admin'
 import type { CreateMatchMessagePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const matchId = getRouterParam(event, 'id')
     
@@ -15,18 +16,15 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    const body = await readBody<CreateMatchMessagePayload & { clerk_id: string }>(event)
-    const { clerk_id, message } = body
+    const body = await readBody<CreateMatchMessagePayload>(event)
+    const { message } = body
     
-    if (!clerk_id || !message || !message.trim()) {
+    if (!message || !message.trim()) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'clerk_id and message are required'
+        statusMessage: 'message is required'
       })
     }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
     
     const supabase = getSupabaseAdmin()
     
@@ -34,7 +32,7 @@ export default defineEventHandler(async (event) => {
     const { data: currentPlayer, error: playerError } = await supabase
       .from('players')
       .select('id')
-      .eq('clerk_id', clerk_id)
+      .eq('user_id', user.id)
       .single()
     
     if (playerError || !currentPlayer) {
@@ -71,14 +69,14 @@ export default defineEventHandler(async (event) => {
     const isPendingPlayerInviter = match.pending_player2_id && 
       (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
     
-    // Check if user is admin
-    const isAdmin = await checkIsAdmin(clerk_id)
+    // Admins can act on any match
+    const isAdmin = user.role === 'admin'
     
     // Check if user is organizer of the tournament (if match belongs to a tournament)
     let isTournamentOrganizer = false
     if (match.tournament_id && match.tournament) {
       try {
-        await verifyOrganizerOwnsTournament(currentPlayer.id, match.tournament_id, supabase)
+        await verifyOrganizerOwnsTournament(currentPlayer.id, match.tournament_id)
         isTournamentOrganizer = true
       } catch (err) {
         // Not organizer of this tournament
@@ -95,7 +93,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Create message
-    const { data: newMessage, error: createError } = await supabase
+    const { data: newMessage, error: insertError } = await supabase
       .from('match_messages')
       .insert({
         match_id: matchId,
@@ -107,16 +105,16 @@ export default defineEventHandler(async (event) => {
         player:players(
           id,
           name,
-          clerk_id
+          user_id
         )
       `)
       .single()
     
-    if (createError) {
+    if (insertError) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to create message',
-        data: createError
+        data: insertError
       })
     }
     
