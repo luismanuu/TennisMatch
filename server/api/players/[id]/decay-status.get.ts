@@ -39,7 +39,6 @@ export default defineEventHandler(async (event) => {
     let uncertaintyIncrease = 0
 
     if (applyDecay) {
-      // cross-batch: checkAndApplyMonthlyDecay(playerId, supabase) -> checkAndApplyMonthlyDecay(playerId, tx?) once matches batch lands.
       const decayResult = await checkAndApplyMonthlyDecay(playerId)
       if (decayResult) {
         decayApplied = decayResult.decayApplied
