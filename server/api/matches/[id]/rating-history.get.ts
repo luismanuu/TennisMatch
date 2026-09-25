@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, asc, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, players, rating_history } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
@@ -14,19 +16,18 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
     
     // Admins can act on any match
     const isAdmin = user.role === 'admin'
     
     // Get current player
-    const { data: currentPlayer, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
+    const currentPlayer = await db.query.players.findFirst({
+      columns: { id: true },
+      where: eq(players.user_id, user.id),
+    })
     
-    if (playerError || !currentPlayer) {
+    if (!currentPlayer) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Player not found'
@@ -34,13 +35,12 @@ export default defineEventHandler(async (event) => {
     }
     
     // Get match to verify user is involved
-    const { data: match, error: matchError } = await supabase
-      .from('matches')
-      .select('id, player1_id, player2_id, status, is_competitive')
-      .eq('id', matchId)
-      .single()
+    const match = await db.query.matches.findFirst({
+      columns: { id: true, player1_id: true, player2_id: true, status: true, is_competitive: true },
+      where: eq(matches.id, matchId),
+    })
     
-    if (matchError || !match) {
+    if (!match) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Match not found'
@@ -63,64 +63,30 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Get rating history for both players for this match (only non-reversed entries)
-    const { data: ratingHistory, error: historyError } = await supabase
-      .from('rating_history')
-      .select(`
-        id,
-        player_id,
-        elo_before,
-        elo_after,
-        elo_change,
-        was_winner,
-        is_placement_match
-      `)
-      .eq('match_id', matchId)
-      .eq('rating_reversed', false)
-      .order('created_at', { ascending: true })
-    
-    if (historyError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch rating history',
-        data: historyError
+    // Rating history for both players for this match (only non-reversed entries).
+    // None yet (not calculated, or a recalculation in progress) returns null so the page keeps showing "Calculando ELO...".
+    const ratingHistory = await db
+      .select({
+        player_id: rating_history.player_id,
+        elo_before: rating_history.elo_before,
+        elo_after: rating_history.elo_after,
+        elo_change: rating_history.elo_change,
       })
-    }
+      .from(rating_history)
+      .where(and(eq(rating_history.match_id, matchId), eq(rating_history.rating_reversed, false)))
+      .orderBy(asc(rating_history.created_at))
     
-    // Check if we have rating history entries (even if reversed) to detect if match was reprocessed
-    const { data: allHistoryEntries } = await supabase
-      .from('rating_history')
-      .select('id, rating_reversed')
-      .eq('match_id', matchId)
-      .limit(1)
-    
-    // If no rating history exists at all, return null (ELO not calculated yet)
-    if (!ratingHistory || ratingHistory.length === 0) {
-      // If there are reversed entries but no non-reversed ones, it means recalculation is in progress
-      // or failed - we should still return null so frontend shows "Calculando ELO..."
-      const hasReversedEntries = allHistoryEntries && allHistoryEntries.some((h: any) => h.rating_reversed)
-      if (hasReversedEntries) {
-        // Match was reprocessed but new entries not created yet - return null to show calculating state
-        // The frontend will continue polling until new entries are created
-        return {
-          success: true,
-          rating_history: null
-        }
-      }
-      
+    if (ratingHistory.length === 0) {
       return {
         success: true,
         rating_history: null
       }
     }
     
-    // Get player data - ensure we have entries for both players
     const player1History = ratingHistory.find(h => h.player_id === match.player1_id)
     const player2History = ratingHistory.find(h => h.player_id === match.player2_id)
     
-    // If we only have one player's history, it might be incomplete - return what we have
-    // This can happen if rating history creation was interrupted, but we'll return partial data
-    
+    // A missing side returns null for that player (partial data is still returned)
     return {
       success: true,
       rating_history: {

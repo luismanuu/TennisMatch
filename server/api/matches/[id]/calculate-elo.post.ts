@@ -5,7 +5,9 @@
  * Admin only: it rewrites ratings and spends LLM credits.
  */
 
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, rating_history } from '~/server/db/schema'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { requireAdmin } from '~/server/utils/session'
 
@@ -22,16 +24,15 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
     
     // Check if match exists and is completed
-    const { data: match, error: matchError } = await supabase
-      .from('matches')
-      .select('id, status, winner_id, player1_id, player2_id, score')
-      .eq('id', matchId)
-      .single()
+    const match = await db.query.matches.findFirst({
+      columns: { id: true, status: true, winner_id: true, player1_id: true, player2_id: true, score: true },
+      where: eq(matches.id, matchId),
+    })
     
-    if (matchError || !match) {
+    if (!match) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Match not found'
@@ -53,15 +54,14 @@ export default defineEventHandler(async (event) => {
     }
     
     // Check if ELO has already been calculated
-    const { data: existingHistory } = await supabase
-      .from('rating_history')
-      .select('id')
-      .eq('match_id', matchId)
-      .limit(1)
+    const existingHistory = await db.query.rating_history.findFirst({
+      columns: { id: true },
+      where: eq(rating_history.match_id, matchId),
+    })
     
-    if (existingHistory && existingHistory.length > 0) {
+    if (existingHistory) {
       // ELO already calculated, recalculate (this will update UTR if needed)
-      const result = await updateRatingsAfterMatch(matchId, supabase)
+      const result = await updateRatingsAfterMatch(matchId)
       
       return {
         success: true,
@@ -72,7 +72,7 @@ export default defineEventHandler(async (event) => {
     }
     
     // Calculate ELO (this will trigger LLM if API key is available)
-    const result = await updateRatingsAfterMatch(matchId, supabase)
+    const result = await updateRatingsAfterMatch(matchId)
     
     if (!result) {
       throw createError({
