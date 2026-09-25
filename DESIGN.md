@@ -127,7 +127,7 @@ The court is its own night: **Court Night** (`court-night`) is the stadium dark 
 
 ### Player card (Inicio, Ranking)
 `components/broadcast/PlayerCard.vue`, `composables/useSheen.ts`. A sports-game player card in enamel, not a holo foil:
-- **Face:** Board Raise enamel set in an 8 px **brushed-metal bezel** (a light hairline, a machined edge, fine horizontal brushing masked to the bezel only), a recessed **name strap** with the player's name in Big Shoulders and the tier on an enamel tab, SR hung on large plates, a faint engraved court corner as card art. On Ranking the viewer's rank hangs on the lamp plate at the start of the strap.
+- **Face:** Board Raise enamel set in an 8 px **brushed-metal bezel** (a light hairline, a machined edge, fine horizontal brushing masked to the bezel only), a recessed **name strap** with the player's name in Big Shoulders and the tier on an enamel tab, SR hung on large plates. On Ranking the viewer's rank hangs on the lamp plate at the start of the strap.
 - **Light:** the pointer moves a soft warm highlight (13% at most) and a narrow specular band across the enamel and the bezel, and tips the card at most 4° (`sheenAt`, one CSS-variable write per frame, only while the pointer moves). On phones where it needs no permission prompt, device tilt does the same at half strength. Leaving rests it flat. Reduced motion: flat, lit from the middle.
 - **Stats:** plate numbers in ruled columns; win rate carries a thin enamel bar. When the card mounts before its numbers, the columns wipe in left to right (80 ms stagger) the moment they arrive and the bar fills; if the numbers were already there they are simply shown.
 - **No rainbow, no foil, no glow, no rarity colours.** The luxury is the metal, the enamel and the light.

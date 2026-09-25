@@ -2,10 +2,6 @@
   <article ref="card" class="pc" :class="{ 'is-compact': compact, 'is-armed': armed, 'is-revealed': revealed }" :aria-labelledby="titleId">
     <!-- The card face: enamel on a brushed-metal bezel; the light follows the pointer -->
     <div ref="face" class="pc__face">
-      <!-- Card art: the corner of a court, engraved into the enamel -->
-      <svg class="pc__art" viewBox="0 0 200 160" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false">
-        <path d="M200 60 H110 V160 M200 118 H160 V160" fill="none" stroke="currentColor" stroke-width="1.5" />
-      </svg>
       <span class="pc__sheen" aria-hidden="true" />
       <header class="pc__strap">
         <span v-if="rank" class="pc__rank">
@@ -130,7 +126,6 @@ defineExpose({ rating: ratingEl })
 }
 [data-theme='claro'] .pc__face { box-shadow: inset 0 0 0 1px rgba(14, 58, 45, 0.4), inset 0 0 0 5px #c9d0c6, inset 0 0 0 6px rgba(14, 58, 45, 0.25), 0 2px 2px -1px rgba(14, 58, 45, 0.25), 0 18px 28px -20px rgba(14, 58, 45, 0.5); }
 
-.pc__art { position: absolute; right: 8px; bottom: 8px; width: 34%; height: 48%; color: var(--t-ink); opacity: 0.1; pointer-events: none; }
 /* Name strap: a recessed bar across the top of the card, the tier on an enamel tab */
 .pc__strap {
   position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 1.6rem;
