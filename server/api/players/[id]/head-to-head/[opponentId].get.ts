@@ -18,7 +18,7 @@ async function fetchHistory(playerId: string, opponentId: string, dateFilter: Da
       created_at: true,
     },
     with: {
-      match: { columns: { played_at: true, scheduled_at: true } },
+      match: { columns: { id: true, played_at: true, scheduled_at: true, score: true, winner_id: true } },
     },
     where: and(
       eq(rating_history.player_id, playerId),

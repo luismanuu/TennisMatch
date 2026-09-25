@@ -146,43 +146,50 @@ test('sign up, onboarding, sign in, match, result, ranking, tournaments', async 
   // 7. Tournaments: Ana is promoted to admin on the staging DB, creates a tournament; Beto registers in the UI.
   test.skip(!process.env.STAGING_DATABASE_URL, 'STAGING_DATABASE_URL not set; skipping the admin part')
   execFileSync('psql', [process.env.STAGING_DATABASE_URL!, '-qc', `update "user" set role = 'admin' where email = '${ana.email}'`])
-  const t = await page.request.post('/api/admin/tournaments', {
-    data: {
-      name: `Copa E2E ${stamp}`,
-      start_date: new Date(Date.now() + 7 * 86400_000).toISOString(),
-      group_size: 4,
-      players_per_group_advance: 2,
-      min_players: 2,
-      registration_open: true,
-      location: 'Guayaquil',
-    },
-  })
-  expect(t.status()).toBe(200)
-  const tournament = await t.json()
-  const tournamentId = tournament.id ?? tournament.tournament?.id
-  await page.goto('/tournaments', { waitUntil: 'networkidle' })
-  // "Todos" merges two lists into a read-only ref and shows nothing (issue #15, predates the rebuild).
-  await page.getByRole('button', { name: /Próximos/ }).click()
-  await expect(page.getByText(`Copa E2E ${stamp}`).first()).toBeVisible()
-  await shot(page, '11-tournaments-list')
-  // Players see the "coming soon" teaser for tournaments (a product decision in the redesign), so the player
-  // registers through the self-registration API and the bracket is checked from the staff side.
-  await betoPage.goto(`/tournaments/${tournamentId}`, { waitUntil: 'networkidle' })
-  await shot(betoPage, '12-tournament-player-view')
-  const self = await betoPage.request.post(`/api/tournaments/${tournamentId}/register`, { data: {} })
-  expect(self.status()).toBe(200)
-  const other = await betoPage.request.post(`/api/tournaments/${tournamentId}/register`, { data: { player_id: me.id } })
-  expect(other.status(), 'a player cannot register someone else').not.toBe(200)
-  const reg = await page.request.post(`/api/admin/tournaments/${tournamentId}/register`, { data: { player_id: me.id } })
-  expect(reg.status()).toBe(200)
-  const gen = await page.request.post(`/api/admin/tournaments/${tournamentId}/generate-brackets`, { data: {} })
-  expect(gen.status()).toBe(200)
-  await page.goto(`/tournaments/${tournamentId}`, { waitUntil: 'networkidle' })
-  await expect(page.getByRole('heading', { name: 'Fase de Grupos' })).toBeVisible()
-  await expect(page.getByRole('cell', { name: beto.name })).toBeVisible()
-  await shot(page, '13-tournament-groups')
-  await page.goto(`/admin/tournaments/${tournamentId}`, { waitUntil: 'networkidle' })
-  await shot(page, '14-admin-tournament')
+  try {
+    const t = await page.request.post('/api/admin/tournaments', {
+      data: {
+        name: `Copa E2E ${stamp}`,
+        start_date: new Date(Date.now() + 7 * 86400_000).toISOString(),
+        group_size: 4,
+        players_per_group_advance: 2,
+        min_players: 2,
+        registration_open: true,
+        location: 'Guayaquil',
+      },
+    })
+    expect(t.status()).toBe(200)
+    const tournament = await t.json()
+    const tournamentId = tournament.id ?? tournament.tournament?.id
+    await page.goto('/tournaments', { waitUntil: 'networkidle' })
+    // "Todos" merges two lists into a read-only ref and shows nothing (issue #15, predates the rebuild).
+    await page.getByRole('button', { name: /Próximos/ }).click()
+    await expect(page.getByText(`Copa E2E ${stamp}`).first()).toBeVisible()
+    await shot(page, '11-tournaments-list')
+    // Players see the "coming soon" teaser for tournaments (a product decision in the redesign), so the player
+    // registers through the self-registration API and the bracket is checked from the staff side.
+    await betoPage.goto(`/tournaments/${tournamentId}`, { waitUntil: 'networkidle' })
+    await shot(betoPage, '12-tournament-player-view')
+    const self = await betoPage.request.post(`/api/tournaments/${tournamentId}/register`, { data: {} })
+    expect(self.status()).toBe(200)
+    const other = await betoPage.request.post(`/api/tournaments/${tournamentId}/register`, { data: { player_id: me.id } })
+    // The body's player_id is ignored: the request registers Beto himself, who is already registered
+    expect(other.status(), 'a player cannot register someone else').toBe(400)
+    expect(await other.text()).toContain('You are already registered for this tournament')
+    const reg = await page.request.post(`/api/admin/tournaments/${tournamentId}/register`, { data: { player_id: me.id } })
+    expect(reg.status()).toBe(200)
+    const gen = await page.request.post(`/api/admin/tournaments/${tournamentId}/generate-brackets`, { data: {} })
+    expect(gen.status()).toBe(200)
+    await page.goto(`/tournaments/${tournamentId}`, { waitUntil: 'networkidle' })
+    await expect(page.getByRole('heading', { name: 'Fase de Grupos' })).toBeVisible()
+    await expect(page.getByRole('cell', { name: beto.name })).toBeVisible()
+    await shot(page, '13-tournament-groups')
+    await page.goto(`/admin/tournaments/${tournamentId}`, { waitUntil: 'networkidle' })
+    await shot(page, '14-admin-tournament')
+  } finally {
+    // Leave no admin behind on the staging DB, whatever happened above
+    execFileSync('psql', [process.env.STAGING_DATABASE_URL!, '-qc', `update "user" set role = 'player' where email = '${ana.email}'`])
+  }
 
   await anaCtx.close()
   await betoCtx.close()

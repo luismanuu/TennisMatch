@@ -1,6 +1,14 @@
 import { and, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
-import { matches, players, tournament_group_players, tournament_matches, tournament_registrations, tournaments } from '~/server/db/schema'
+import {
+  matches,
+  players,
+  tournament_group_players,
+  tournament_matches,
+  tournament_registrations,
+  tournament_standings,
+  tournaments,
+} from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
 import type { WithdrawPlayerPayload } from '~/types'
 
@@ -98,6 +106,12 @@ export default defineEventHandler(async (event) => {
           .update(tournament_group_players)
           .set({ player_id: replacement_player_id })
           .where(and(eq(tournament_group_players.tournament_id, tournamentId), eq(tournament_group_players.player_id, player_id)))
+
+        // The group table follows the group seat
+        await tx
+          .update(tournament_standings)
+          .set({ player_id: replacement_player_id })
+          .where(and(eq(tournament_standings.tournament_id, tournamentId), eq(tournament_standings.player_id, player_id)))
 
         // Replace in registrations, then record the original player as withdrawn
         await tx

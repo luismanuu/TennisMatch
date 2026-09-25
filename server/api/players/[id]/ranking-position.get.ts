@@ -1,4 +1,4 @@
-import { and, count, eq, gt, gte, inArray } from 'drizzle-orm'
+import { and, count, eq, gt, gte, inArray, isNull } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { city_segment_cities, players } from '~/server/db/schema'
 import { getRatingTier } from '~/server/utils/rating-system'
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
       return { success: true, is_unrated: true, position: null }
     }
 
-    const rated = and(eq(players.status, 'active'), gte(players.total_matches_played, 1))
+    const rated = and(eq(players.status, 'active'), isNull(players.deleted_at), gte(players.total_matches_played, 1))
 
     const [{ n: totalPlayersRaw }] = await db.select({ n: count() }).from(players).where(rated)
     const actualTotalPlayers = totalPlayersRaw > 0 ? totalPlayersRaw : 1

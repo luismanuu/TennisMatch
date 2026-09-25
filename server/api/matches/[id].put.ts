@@ -1029,6 +1029,14 @@ export default defineEventHandler(async (event) => {
       case 'organizer_set_result': {
         // Only organizers can use this action (already verified above)
         const resultData = data as { score?: string, winner_id: string, is_wo?: boolean }
+
+        // A completed match is already rated; a new result would disagree with its ratings
+        if (match.status === 'completed') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Este partido ya está completado: no puedes cambiar su resultado.'
+          })
+        }
         
         if (!resultData?.winner_id) {
           throw createError({

@@ -338,6 +338,29 @@ describe('LLM path without a usable model', () => {
 })
 
 describe('regressions', () => {
+  // organizer_set_result rewrote the winner and score of a completed match. The rating stayed on the old result
+  // (the match was already rated, so the re-rate was skipped), so the ranking and the result disagreed.
+  it('organizer_set_result on a completed, rated match is a 400 and changes nothing', async () => {
+    const a = await createPlayer(app, categoryId, 'resultado')
+    const b = await createPlayer(app, categoryId, 'resultado')
+    const matchId = await activeMatch(app, a, b)
+    await put(app, a, matchId, 'propose_score', { score: '6-3 6-4', winner_id: a.playerId })
+    expect((await put(app, b, matchId, 'approve_score')).status).toBe(200)
+    const staff = await createPlayer(app, categoryId, 'staff')
+    await app.setRole(staff.userId, 'admin')
+    const before = await matchRow(matchId)
+    const ratingsBefore = await history(matchId)
+
+    const res = await put(app, staff, matchId, 'organizer_set_result', { winner_id: b.playerId, score: '0-6 0-6' })
+
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(res.body)).toContain('Este partido ya está completado: no puedes cambiar su resultado.')
+    expect(await matchRow(matchId)).toEqual(before)
+    expect(await history(matchId)).toEqual(ratingsBefore)
+    const { rows } = await app.client.query<{ score: string }>(`select score from matches where id = $1`, [matchId])
+    expect(rows[0].score).toBe('6-3 6-4')
+  })
+
   // created_at is stored with microseconds but serialised with milliseconds. Polling with the last message's
   // created_at as ?since= returned that same message again (seen while porting messages.get.ts).
   it('messages.get.ts: ?since=<last message created_at> does not return the last message again', async () => {

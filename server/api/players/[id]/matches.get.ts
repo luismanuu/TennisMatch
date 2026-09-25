@@ -72,8 +72,9 @@ export default defineEventHandler(async (event) => {
       with: {
         player1: { columns: playerColumns, with: { category: { columns: categoryColumns } } },
         player2: { columns: playerColumns, with: { category: { columns: categoryColumns } } },
+        // Public route: the invited player's email is personal data and stays out
         pending_player2: {
-          columns: { id: true, name: true, email: true, status: true },
+          columns: { id: true, name: true, status: true },
           with: { category: { columns: categoryColumns } },
         },
         winner: { columns: { id: true, name: true, status: true } },

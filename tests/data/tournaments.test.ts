@@ -347,3 +347,40 @@ describe('delete', () => {
     expect(res.status).toBe(404)
   })
 })
+
+describe('admin withdraw with a replacement', () => {
+  // The replacement took the withdrawn player's matches, group seat and registration, but tournament_standings
+  // kept the withdrawn player's row: the group table showed someone who no longer plays, and not the replacement.
+  it('moves the withdrawn player\'s standings row to the replacement, in the same group', async () => {
+    const tournamentId = await adminTournament()
+    const registered = await seedPlayers(app, 4)
+    for (const playerId of registered) {
+      const res = await app.request('POST', `/api/admin/tournaments/${tournamentId}/register`, { cookie: admin.cookie, body: { player_id: playerId } })
+      expect(res.status, JSON.stringify(res.body)).toBe(200)
+    }
+    expect((await app.request('POST', `/api/admin/tournaments/${tournamentId}/generate-brackets`, { cookie: admin.cookie })).status).toBe(200)
+    const [withdrawn] = registered
+    const [replacement] = await seedPlayers(app, 1)
+    const [seat] = await rows<{ group_id: string }>(
+      app,
+      `select group_id from tournament_standings where tournament_id = $1 and player_id = $2`,
+      [tournamentId, withdrawn],
+    )
+
+    const res = await app.request('POST', `/api/admin/tournaments/${tournamentId}/withdraw`, {
+      cookie: admin.cookie,
+      body: { player_id: withdrawn, option: 'replacement', replacement_player_id: replacement },
+    })
+    expect(res.status, JSON.stringify(res.body)).toBe(200)
+
+    const standings = await rows<{ group_id: string; player_id: string }>(
+      app,
+      `select group_id, player_id from tournament_standings where tournament_id = $1`,
+      [tournamentId],
+    )
+    expect(standings).toHaveLength(4)
+    expect(standings.filter((s) => s.player_id === withdrawn)).toEqual([])
+    expect(standings.filter((s) => s.player_id === replacement)).toEqual([{ group_id: seat.group_id, player_id: replacement }])
+    expect(await assertGroupStage(app, tournamentId, [...registered.slice(1), replacement], 4)).toEqual([])
+  })
+})
