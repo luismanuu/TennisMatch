@@ -1,91 +1,81 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { UserProfile } from '@clerk/vue'
 
 definePageMeta({
   middleware: 'auth'
 })
+
+const { isOrganizer } = useOrganizer()
+useHead({ title: 'Ajustes · Tenis Ecuador' })
 </script>
 
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
-    </div>
+  <PageLayout container-size="medium">
+    <PageHeader title="Ajustes" subtitle="Tu apariencia, tus accesos y la seguridad de tu cuenta." />
 
-    <!-- Navigation -->
-    <AppNavigation />
+    <div class="flow-stack">
+      <section class="panel settings-panel" aria-labelledby="appearance-title">
+        <h2 id="appearance-title" class="settings-title">Apariencia</h2>
+        <p class="meta">La misma identidad, con la luz que prefieras.</p>
+        <ThemeSwitcher class="mt-4" />
+        <p class="meta">Geist y verde cancha en ambos modos. Tu elección se guarda en este navegador.</p>
+      </section>
 
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <!-- Header -->
-        <div class="text-center mb-12 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:cog-6-tooth" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Gestion de Cuenta</span>
-          </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">
-            Configuracion de Cuenta
-          </h1>
-          <p class="text-size-3 font-regular text-foreground-muted">
-            Gestiona tu perfil, seguridad y preferencias de cuenta
-          </p>
-        </div>
-
-        <!-- Back Link -->
-        <div class="mb-8 animate-fade-up animate-delay-1">
-          <NuxtLink to="/profile" class="inline-flex items-center gap-2 text-size-4 text-foreground-muted hover:text-accent transition-colors group">
-            <Icon name="heroicons:arrow-left" class="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Volver a Mi Perfil
+      <section aria-labelledby="shortcuts-title">
+        <div class="section-heading"><h2 id="shortcuts-title">Accesos</h2></div>
+        <div class="list-surface">
+          <NuxtLink to="/my-ranking" class="list-row">
+            <Icon name="heroicons:chart-bar" class="w-5 h-5 text-accent" aria-hidden="true" />
+            <span class="row-copy"><strong>Mi ranking</strong><span class="meta">Tu nivel, historial de SR y posición</span></span>
+            <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
           </NuxtLink>
+          <NuxtLink v-if="isOrganizer" to="/organizer/tournaments" class="list-row">
+            <Icon name="heroicons:trophy" class="w-5 h-5 text-accent" aria-hidden="true" />
+            <span class="row-copy"><strong>Mis torneos</strong><span class="meta">Torneos que organizas</span></span>
+            <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
+          </NuxtLink>
+          <NuxtLink to="/creditos" class="list-row">
+            <Icon name="heroicons:photo" class="w-5 h-5 text-accent" aria-hidden="true" />
+            <span class="row-copy"><strong>Créditos de fotografías</strong><span class="meta">Autores, fuentes y licencias</span></span>
+            <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
+          </NuxtLink>
+          <SignOutButton>
+            <button type="button" class="list-row w-full text-left">
+              <Icon name="heroicons:arrow-right-on-rectangle" class="w-5 h-5 text-danger" aria-hidden="true" />
+              <span class="row-copy"><strong>Cerrar sesión</strong></span>
+            </button>
+          </SignOutButton>
         </div>
+      </section>
 
-        <!-- UserProfile Component Container -->
-        <div class="user-profile-page-container animate-fade-up animate-delay-2">
+      <section aria-labelledby="account-title">
+        <div class="section-heading"><h2 id="account-title">Cuenta y seguridad</h2></div>
+        <div class="user-profile-page-container">
           <ClientOnly>
-            <div class="user-profile-wrapper">
-              <UserProfile 
-                :routing="'hash'"
-              />
-            </div>
+            <UserProfile :routing="'hash'" />
             <template #fallback>
-              <div class="glass-card-elevated p-16 text-center">
-                <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-                  <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
-                </div>
-                <p class="text-size-3 font-regular text-foreground-muted">Cargando configuracion de cuenta...</p>
+              <div class="panel loading-state">
+                <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+                <p class="loading-text">Cargando tu cuenta…</p>
               </div>
             </template>
           </ClientOnly>
         </div>
-      </div>
+      </section>
     </div>
-  </div>
+  </PageLayout>
 </template>
 
 <style scoped>
-/* Page container for UserProfile component */
-.user-profile-page-container {
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  box-shadow: 
-    0 25px 50px -12px oklch(0 0 0 / 0.25),
-    0 0 0 1px var(--border);
-}
-
-.user-profile-wrapper {
-  width: 100%;
-}
-
-/* Override Clerk UserProfile to fit within page container */
+.settings-panel { display: grid; gap: 8px; }
+.settings-title { font-size: 22px; }
+.user-profile-page-container { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--edge); }
 .user-profile-page-container :deep(.cl-userProfile-root),
 .user-profile-page-container :deep(.cl-rootBox),
 .user-profile-page-container :deep(.cl-card),
 .user-profile-page-container :deep(.cl-cardBox) {
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius) !important;
+  width: 100%;
+  max-width: 100%;
 }
 </style>

@@ -11,8 +11,8 @@ import type { Config } from 'tailwindcss'
  *
  * The raw palette hues the codebase leans on (green-400, red-500, yellow-400 …)
  * are remapped to theme-tuned bases using CSS relative color syntax, so a
- * `text-green-400` badge stays legible on the light Clay theme and stays
- * calm on the dark ones. New code should prefer the semantic names
+ * `text-green-400` badge stays legible on Claro and stays
+ * calm on Graphite. New code should prefer the semantic names
  * (`text-success`, `bg-warning/10`, `border-danger/30`, `text-info`).
  */
 
@@ -32,6 +32,15 @@ const hueScale = (hue: string) =>
         : `oklch(from var(--hue-${hue}) calc(l ${dl > 0 ? '+' : '-'} ${Math.abs(dl)}) c h / <alpha-value>)`
     ])
   )
+
+/**
+ * `accent-subtle` keeps the 14% base tint and multiplies Tailwind's opacity modifier
+ * in CSS, so variable modifiers (`var(--tw-bg-opacity)`) survive untouched.
+ */
+export const accentSubtle = ({ opacityValue }: { opacityValue?: string }) =>
+  opacityValue === undefined || opacityValue === '1'
+    ? 'var(--accent-subtle)'
+    : `oklch(var(--accent-ch) / calc(0.14 * ${opacityValue}))`
 
 /** Static hex scale for Nuxt UI's `primary` (it needs hex to build its own vars). Court green, the chosen accent. */
 const brand = {
@@ -56,11 +65,8 @@ export default <Partial<Config>>{
         accent: ch('accent'),
         'accent-hover': ch('accent-hover'),
         'accent-foreground': ch('accent-foreground'),
-        // `bg-accent-subtle` = quiet tint; `bg-accent-subtle/30` = an even quieter one.
-        'accent-subtle': ({ opacityValue }: { opacityValue?: string }) =>
-          opacityValue === undefined
-            ? 'var(--accent-subtle)'
-            : `oklch(var(--accent-ch) / ${Math.min(1, Number(opacityValue) * 0.5).toFixed(3)})`,
+        // DESIGN_SYSTEM.md §2: unmodified subtle = 0.14; `accent-subtle/30` = 0.14 × 0.30.
+        'accent-subtle': accentSubtle,
         'accent-secondary': ch('accent-secondary'),
         'accent-secondary-muted': 'var(--accent-secondary-muted)',
         border: ch('border'),

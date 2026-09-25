@@ -1,7 +1,7 @@
 export default defineAppConfig({
   /**
-   * Visual theme served by default: 'graphite' | 'slate' | 'forest'.
-   * Users can still switch at runtime (ThemeSwitcher); their choice is kept in a cookie.
+   * Appearance served by default: 'graphite' | 'claro'.
+   * Users switch in Ajustes (ThemeSwitcher); their choice is kept in the `te-theme` cookie.
    * See composables/useTheme.ts and assets/css/design-system.css.
    */
   theme: {
