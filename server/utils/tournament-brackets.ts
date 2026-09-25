@@ -1,5 +1,22 @@
-import { getSupabaseAdmin } from './supabase'
-import type { Tournament, TournamentGroup, TournamentMatch } from '~/types'
+import { randomUUID } from 'node:crypto'
+import { createError } from 'h3'
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { useDb, type DbOrTx } from '../db'
+import {
+  matches,
+  tournament_group_players,
+  tournament_groups,
+  tournament_matches,
+  tournament_registrations,
+  tournament_standings,
+  tournaments,
+  type BracketType,
+  type PointsConfig,
+} from '../db/schema'
+import type { Tournament } from '~/types'
+
+// The points functions only read points_config, so a stored tournament row works as well as the client type.
+type PointsSource = { points_config?: Tournament['points_config'] | null }
 
 /**
  * Get default points configuration
@@ -23,7 +40,7 @@ export function getDefaultPointsConfig(): {
  * @returns Points value for winning this match
  */
 export function getPointsForMatch(
-  tournament: Tournament,
+  tournament: PointsSource,
   bracketType: 'group' | 'main' | 'backdraw',
   roundNumber?: number
 ): number {
@@ -65,7 +82,7 @@ export function calculatePlayerPoints(
     bracket_type?: 'group' | 'main' | 'backdraw'
     round_number?: number
   }>,
-  tournament: Tournament
+  tournament: PointsSource
 ): number {
   let totalPoints = 0
   
@@ -147,7 +164,7 @@ export function calculateGroupStandings(
     winner_id?: string
     score?: string
   }>,
-  tournament?: Tournament
+  tournament?: PointsSource
 ): Map<string, {
   wins: number
   losses: number
@@ -524,412 +541,387 @@ export function calculateBracketPositions(roundCount: number): Array<{
   return positions
 }
 
+// ── Database access ───────────────────────────────────────────────────────────
+
+// Multi-row writes run in their own transaction, or in a savepoint of the caller's transaction when given one,
+// so a failed step never leaves half a bracket behind.
+function inTransaction<T>(tx: DbOrTx | undefined, run: (db: DbOrTx) => Promise<T>): Promise<T> {
+  return (tx ?? useDb()).transaction((t) => run(t))
+}
+
+/**
+ * Normalize a points_config from a request body into the stored shape.
+ * Mirrors getPointsForMatch's fallbacks, so the points a tournament awards do not change.
+ */
+export function normalizePointsConfig(input: Tournament['points_config'] | null | undefined): PointsConfig | null {
+  if (!input) {
+    return null
+  }
+  return {
+    group_stage: typeof input.group_stage === 'number' && input.group_stage ? input.group_stage : 3,
+    playoffs: typeof input.playoffs === 'number' ? input.playoffs : 5,
+  }
+}
+
+/**
+ * Generate the group stage: groups, group players, zeroed standings, round-robin matches and their
+ * tournament_matches rows. All-or-nothing. A second call is refused with 400.
+ * @param tournamentId - Tournament ID
+ * @param advancePhase - Also move the tournament to the group_stage phase
+ * @param tx - Optional transaction to run in
+ */
+export async function generateGroupStageBrackets(
+  tournamentId: string,
+  advancePhase: boolean,
+  tx?: DbOrTx
+): Promise<{ groups: number; groupMatches: number }> {
+  return inTransaction(tx, async (db) => {
+    // Lock the tournament row so two concurrent generations cannot both pass the "already generated" check.
+    const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId)).for('update')
+
+    if (!tournament) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Tournament not found'
+      })
+    }
+
+    // Get confirmed registrations
+    const registrations = await db
+      .select({ player_id: tournament_registrations.player_id })
+      .from(tournament_registrations)
+      .where(
+        and(
+          eq(tournament_registrations.tournament_id, tournamentId),
+          eq(tournament_registrations.status, 'confirmed'),
+          isNull(tournament_registrations.withdrawn_at)
+        )
+      )
+
+    const playerIds = registrations.map((r) => r.player_id)
+
+    // Validate minimum players
+    if (playerIds.length < tournament.min_players) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Tournament requires at least ${tournament.min_players} players, but only ${playerIds.length} are registered`
+      })
+    }
+
+    if (tournament.group_size < 1) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Group size must be at least 1'
+      })
+    }
+
+    // Check if brackets already exist
+    const existingGroup = await db.query.tournament_groups.findFirst({
+      columns: { id: true },
+      where: eq(tournament_groups.tournament_id, tournamentId),
+    })
+
+    if (existingGroup) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Brackets have already been generated for this tournament'
+      })
+    }
+
+    // Step 1: Create groups
+    const groups = createGroups(playerIds, tournament.group_size)
+    if (groups.length === 0) {
+      return { groups: 0, groupMatches: 0 }
+    }
+
+    const createdGroups = await db
+      .insert(tournament_groups)
+      .values(
+        groups.map((g) => ({
+          tournament_id: tournamentId,
+          group_name: `Group ${String.fromCharCode(64 + g.groupNumber)}`, // A, B, C, etc.
+          group_number: g.groupNumber
+        }))
+      )
+      .returning({ id: tournament_groups.id, group_number: tournament_groups.group_number })
+
+    const groupIdByNumber = new Map(createdGroups.map((g) => [g.group_number, g.id]))
+    const groupId = (groupNumber: number) => {
+      const id = groupIdByNumber.get(groupNumber)
+      if (!id) throw new Error(`Group ${groupNumber} was not created`)
+      return id
+    }
+
+    // Step 2: Assign players to groups, each with an empty standings row
+    const groupPlayerRecords = groups.flatMap((g) =>
+      g.players.map((playerId, playerIndex) => ({
+        tournament_id: tournamentId,
+        group_id: groupId(g.groupNumber),
+        player_id: playerId,
+        seed_position: playerIndex + 1
+      }))
+    )
+    await db.insert(tournament_group_players).values(groupPlayerRecords)
+    await db.insert(tournament_standings).values(
+      groupPlayerRecords.map(({ tournament_id, group_id, player_id }) => ({ tournament_id, group_id, player_id }))
+    )
+
+    // Step 3: Generate group stage matches (round-robin)
+    const matchRecords: Array<typeof matches.$inferInsert & { id: string }> = []
+    const tournamentMatchRecords: Array<typeof tournament_matches.$inferInsert> = []
+
+    for (const g of groups) {
+      for (const pair of generateGroupMatches(g.players)) {
+        const matchId = randomUUID()
+        matchRecords.push({
+          id: matchId,
+          player1_id: pair.player1_id,
+          player2_id: pair.player2_id,
+          tournament_id: tournamentId,
+          status: 'scheduled',
+          scheduled_at: null // Players will schedule later
+        })
+        tournamentMatchRecords.push({
+          tournament_id: tournamentId,
+          match_id: matchId,
+          bracket_type: 'group',
+          round_number: 1,
+          group_id: groupId(g.groupNumber),
+          is_bye: false
+        })
+      }
+    }
+
+    if (matchRecords.length > 0) {
+      await db.insert(matches).values(matchRecords)
+      await db.insert(tournament_matches).values(tournamentMatchRecords)
+    }
+
+    if (advancePhase) {
+      await db
+        .update(tournaments)
+        .set({ current_phase: 'group_stage', updated_at: new Date() })
+        .where(eq(tournaments.id, tournamentId))
+    }
+
+    return { groups: createdGroups.length, groupMatches: tournamentMatchRecords.length }
+  })
+}
+
+type BracketSlotRecord = {
+  id: string
+  tournament_id: string
+  bracket_type: BracketType
+  round_number: number | null
+  bracket_position: string | null
+}
+
+/**
+ * Work out a tournament match's position in its round when bracket_position is missing, from the order of the
+ * round's rows, and store it for next time. Falls back to 1.
+ */
+async function resolveBracketPosition(
+  db: DbOrTx,
+  tm: BracketSlotRecord,
+  currentRound: number,
+  secondaryOrder: 'id' | 'match_id',
+  isThisRow: (row: { id: string; match_id: string | null; is_bye: boolean }) => boolean
+): Promise<number> {
+  if (tm.bracket_position !== null) {
+    return Number(tm.bracket_position)
+  }
+
+  const roundMatches = await db
+    .select({ id: tournament_matches.id, match_id: tournament_matches.match_id, is_bye: tournament_matches.is_bye })
+    .from(tournament_matches)
+    .where(
+      and(
+        eq(tournament_matches.tournament_id, tm.tournament_id),
+        eq(tournament_matches.bracket_type, tm.bracket_type),
+        eq(tournament_matches.round_number, currentRound)
+      )
+    )
+    .orderBy(asc(tournament_matches.bracket_position), asc(tournament_matches[secondaryOrder]))
+
+  const matchIndex = roundMatches.findIndex(isThisRow)
+  if (matchIndex < 0) {
+    return 1
+  }
+
+  const position = matchIndex + 1
+  await db.update(tournament_matches).set({ bracket_position: String(position) }).where(eq(tournament_matches.id, tm.id))
+  return position
+}
+
+/**
+ * Put a player into their slot of the next round's match, creating that match when it does not exist yet.
+ * Round 1 Match 1 → Round 2 Match 1 player1; Round 1 Match 2 → Round 2 Match 1 player2; and so on.
+ */
+async function placeInNextRound(
+  db: DbOrTx,
+  tm: BracketSlotRecord,
+  currentRound: number,
+  currentMatchNumber: number,
+  playerId: string
+): Promise<void> {
+  const nextRound = currentRound + 1
+  const nextRoundMatchNumber = Math.ceil(currentMatchNumber / 2)
+  const isPlayer1Slot = currentMatchNumber % 2 === 1
+
+  // Check if next round match exists
+  const nextRoundMatch = await db.query.tournament_matches.findFirst({
+    columns: { id: true, match_id: true },
+    where: and(
+      eq(tournament_matches.tournament_id, tm.tournament_id),
+      eq(tournament_matches.bracket_type, tm.bracket_type),
+      eq(tournament_matches.round_number, nextRound),
+      eq(tournament_matches.bracket_position, String(nextRoundMatchNumber))
+    ),
+  })
+
+  if (nextRoundMatch && nextRoundMatch.match_id) {
+    await db
+      .update(matches)
+      .set(isPlayer1Slot ? { player1_id: playerId } : { player2_id: playerId })
+      .where(eq(matches.id, nextRoundMatch.match_id))
+    return
+  }
+
+  // Total rounds come from the number of players in round 1. Only rows with a match count, as before
+  // (the old query inner-joined matches, so bye rows were never counted).
+  const round1Matches = await db
+    .select({ player1_id: matches.player1_id, player2_id: matches.player2_id })
+    .from(tournament_matches)
+    .innerJoin(matches, eq(matches.id, tournament_matches.match_id))
+    .where(
+      and(
+        eq(tournament_matches.tournament_id, tm.tournament_id),
+        eq(tournament_matches.bracket_type, tm.bracket_type),
+        eq(tournament_matches.round_number, 1)
+      )
+    )
+
+  const uniquePlayers = new Set<string>()
+  for (const match of round1Matches) {
+    if (match.player1_id) uniquePlayers.add(match.player1_id)
+    if (match.player2_id) uniquePlayers.add(match.player2_id)
+  }
+
+  const totalPlayers = uniquePlayers.size
+  if (totalPlayers === 0) {
+    console.error(`[bracket] No players found in round 1 of tournament ${tm.tournament_id} (${tm.bracket_type})`)
+    return
+  }
+
+  // If the next round is beyond the rounds needed, this was the final
+  const totalRounds = Math.ceil(Math.log2(totalPlayers))
+  if (nextRound > totalRounds) {
+    return
+  }
+
+  // A tournament match may start with one player; the other slot fills when the sibling match completes
+  const [newMatch] = await db
+    .insert(matches)
+    .values({
+      tournament_id: tm.tournament_id,
+      status: 'scheduled',
+      scheduled_at: null,
+      ...(isPlayer1Slot ? { player1_id: playerId } : { player2_id: playerId })
+    })
+    .returning({ id: matches.id })
+
+  await db.insert(tournament_matches).values({
+    tournament_id: tm.tournament_id,
+    match_id: newMatch.id,
+    bracket_type: tm.bracket_type,
+    round_number: nextRound,
+    bracket_position: String(nextRoundMatchNumber),
+    is_bye: false
+  })
+}
+
 /**
  * Process a bye match to advance the player to the next round
  * @param tournamentMatch - Tournament match record with is_bye = true and player_id set
- * @param supabase - Supabase admin client
+ * @param tx - Optional transaction to run in
  */
 export async function processByeAdvancement(
-  tournamentMatch: any,
-  supabase: any
+  tournamentMatch: BracketSlotRecord & { player_id: string | null },
+  tx?: DbOrTx
 ): Promise<void> {
   const playerId = tournamentMatch.player_id
-  if (!playerId) {
-    console.log(`[processByeAdvancement] No player_id found for bye match`)
+  if (!playerId || tournamentMatch.round_number === null) {
     return
   }
-  
-  console.log(`[processByeAdvancement] Processing bye for round ${tournamentMatch.round_number}, position ${tournamentMatch.bracket_position}, player ${playerId}`)
-  
-  // Calculate next round match number and slot (same logic as updateBracketAfterMatch)
-  const currentRound = tournamentMatch.round_number!
-  let currentMatchNumber = tournamentMatch.bracket_position
-  
-  // If bracket_position is null, calculate it based on the order of matches in the round
-  if (currentMatchNumber === null || currentMatchNumber === undefined) {
-    console.log(`[processByeAdvancement] bracket_position is null, calculating from match order...`)
-    
-    // Get all matches in the same round to determine position
-    const { data: roundMatches, error: roundError } = await supabase
-      .from('tournament_matches')
-      .select('id, match_id, bracket_position, is_bye, player_id')
-      .eq('tournament_id', tournamentMatch.tournament_id)
-      .eq('bracket_type', tournamentMatch.bracket_type)
-      .eq('round_number', currentRound)
-      .order('bracket_position', { ascending: true, nullsFirst: false })
-      .order('id', { ascending: true })
-    
-    if (roundError) {
-      console.error(`[processByeAdvancement] Error fetching round matches:`, roundError)
-      currentMatchNumber = 1 // Fallback
-    } else {
-      // Find the index of the current bye match
-      const matchIndex = roundMatches?.findIndex((tm: any) => 
-        tm.is_bye && tm.id === tournamentMatch.id
-      )
-      if (matchIndex !== undefined && matchIndex >= 0) {
-        currentMatchNumber = matchIndex + 1
-        console.log(`[processByeAdvancement] Calculated bracket_position: ${currentMatchNumber} from match order`)
-        
-        // Update the bracket_position in the database for future use
-        await supabase
-          .from('tournament_matches')
-          .update({ bracket_position: currentMatchNumber })
-          .eq('id', tournamentMatch.id)
-      } else {
-        currentMatchNumber = 1 // Fallback
-      }
-    }
-  }
-  
-  const nextRound = currentRound + 1
-  const nextRoundMatchNumber = Math.ceil(currentMatchNumber / 2)
-  const isPlayer1Slot = (currentMatchNumber % 2 === 1)
-  
-  // Check if next round match exists
-  const { data: nextRoundMatch, error: findError } = await supabase
-    .from('tournament_matches')
-    .select('id, match_id')
-    .eq('tournament_id', tournamentMatch.tournament_id)
-    .eq('bracket_type', tournamentMatch.bracket_type)
-    .eq('round_number', nextRound)
-    .eq('bracket_position', nextRoundMatchNumber)
-    .single()
-  
-  if (findError && findError.code !== 'PGRST116') { // PGRST116 = not found
-    console.error('Error finding next round match:', findError)
-    return
-  }
-  
-  console.log(`[processByeAdvancement] Round ${currentRound} Bye ${currentMatchNumber} → Round ${nextRound} Match ${nextRoundMatchNumber} (${isPlayer1Slot ? 'player1' : 'player2'})`)
-  console.log(`[processByeAdvancement] Next round match exists:`, !!nextRoundMatch)
-  
-  if (nextRoundMatch && nextRoundMatch.match_id) {
-    // Match exists, update it with the bye player
-    const updateField = isPlayer1Slot ? 'player1_id' : 'player2_id'
-    
-    console.log(`[processByeAdvancement] Updating existing match ${nextRoundMatch.match_id}, setting ${updateField} to ${playerId}`)
-    
-    const { error: updateError } = await supabase
-      .from('matches')
-      .update({ [updateField]: playerId })
-      .eq('id', nextRoundMatch.match_id)
-    
-    if (updateError) {
-      console.error('Error updating next round match with bye player:', updateError)
-    } else {
-      console.log(`[processByeAdvancement] Successfully updated match ${nextRoundMatch.match_id}`)
-    }
-  } else {
-    // Match doesn't exist, need to create it (same logic as updateBracketAfterMatch)
-    // Calculate total rounds needed
-    const { data: round1Matches, error: round1Error } = await supabase
-      .from('tournament_matches')
-      .select('match_id, matches!inner(player1_id, player2_id), player_id, is_bye')
-      .eq('tournament_id', tournamentMatch.tournament_id)
-      .eq('bracket_type', tournamentMatch.bracket_type)
-      .eq('round_number', 1)
-    
-    if (round1Error) {
-      console.error('Error fetching round 1 matches:', round1Error)
-      return
-    }
-    
-    // Count unique players in round 1 (including byes)
-    const uniquePlayers = new Set<string>()
-    round1Matches?.forEach((tm: any) => {
-      if (tm.is_bye && tm.player_id) {
-        uniquePlayers.add(tm.player_id)
-      } else if (tm.matches) {
-        const match = tm.matches
-        if (match?.player1_id) uniquePlayers.add(match.player1_id)
-        if (match?.player2_id) uniquePlayers.add(match.player2_id)
-      }
-    })
-    
-    const totalPlayers = uniquePlayers.size
-    if (totalPlayers === 0) {
-      console.error('processByeAdvancement: No players found in round 1')
-      return
-    }
-    
-    const totalRounds = Math.ceil(Math.log2(totalPlayers))
-    
-    console.log(`[processByeAdvancement] Total players in round 1: ${totalPlayers}, total rounds needed: ${totalRounds}, next round: ${nextRound}`)
-    
-    if (nextRound > totalRounds) {
-      console.log(`[processByeAdvancement] This is the final round, no next round to create`)
-      return
-    }
-    
-    // Create the match
-    console.log(`[processByeAdvancement] Creating new match for round ${nextRound}, match ${nextRoundMatchNumber}, slot: ${isPlayer1Slot ? 'player1' : 'player2'}`)
-    
-    const matchData: any = {
-      tournament_id: tournamentMatch.tournament_id,
-      status: 'scheduled',
-      scheduled_at: null
-    }
-    
-    if (isPlayer1Slot) {
-      matchData.player1_id = playerId
-    } else {
-      matchData.player2_id = playerId
-    }
-    
-    const { data: newMatch, error: createMatchError } = await supabase
-      .from('matches')
-      .insert(matchData)
-      .select()
-      .single()
-    
-    if (createMatchError || !newMatch) {
-      console.error('Error creating next round match for bye:', createMatchError)
-      return
-    }
-    
-    console.log(`[processByeAdvancement] Created new match ${newMatch.id} for round ${nextRound}`)
-    
-    // Create tournament match record
-    const { error: createTmError } = await supabase
-      .from('tournament_matches')
-      .insert({
-        tournament_id: tournamentMatch.tournament_id,
-        match_id: newMatch.id,
-        bracket_type: tournamentMatch.bracket_type,
-        round_number: nextRound,
-        bracket_position: nextRoundMatchNumber,
-        is_bye: false
-      })
-    
-    if (createTmError) {
-      console.error('Error creating tournament match record for bye:', createTmError)
-    } else {
-      console.log(`[processByeAdvancement] Successfully created tournament match record for round ${nextRound}, match ${nextRoundMatchNumber}`)
-    }
-  }
+  const currentRound = tournamentMatch.round_number
+
+  await inTransaction(tx, async (db) => {
+    const currentMatchNumber = await resolveBracketPosition(
+      db,
+      tournamentMatch,
+      currentRound,
+      'id',
+      (row) => row.is_bye && row.id === tournamentMatch.id
+    )
+    await placeInNextRound(db, tournamentMatch, currentRound, currentMatchNumber, playerId)
+  })
 }
 
 /**
  * Update bracket after match completion
  * @param matchId - Match ID
  * @param winnerId - Winner player ID
- * @param supabase - Supabase admin client
+ * @param tx - Optional transaction to run in
  */
 export async function updateBracketAfterMatch(
   matchId: string,
   winnerId: string,
-  supabase: any
+  tx?: DbOrTx
 ): Promise<void> {
-  console.log(`[updateBracketAfterMatch] Called for match ${matchId}, winner ${winnerId}`)
-  
-  // Get tournament match info
-  const { data: tournamentMatch, error: tmError } = await supabase
-    .from('tournament_matches')
-    .select('id, tournament_id, bracket_type, round_number, bracket_position, is_bye')
-    .eq('match_id', matchId)
-    .single()
-  
-  if (tmError || !tournamentMatch) {
-    console.log(`[updateBracketAfterMatch] Not a tournament match or error:`, tmError?.message || 'No tournament match found')
-    return // Not a tournament match
-  }
-  
-  // Handle bye matches separately
-  if (tournamentMatch.is_bye) {
-    console.log(`[updateBracketAfterMatch] This is a bye match, processing separately`)
-    await processByeAdvancement(tournamentMatch, supabase)
-    return
-  }
-  
-  console.log(`[updateBracketAfterMatch] Tournament match found:`, {
-    tournament_id: tournamentMatch.tournament_id,
-    bracket_type: tournamentMatch.bracket_type,
-    round_number: tournamentMatch.round_number,
-    bracket_position: tournamentMatch.bracket_position
-  })
-  
-  // Only update for playoff matches (main or backdraw)
-  if (tournamentMatch.bracket_type !== 'main' && tournamentMatch.bracket_type !== 'backdraw') {
-    console.log(`[updateBracketAfterMatch] Skipping - not a playoff match, bracket_type: ${tournamentMatch.bracket_type}`)
-    return
-  }
-  
-  const currentRound = tournamentMatch.round_number!
-  let currentMatchNumber = tournamentMatch.bracket_position
-  
-  // If bracket_position is null, calculate it based on the order of matches in the round
-  if (currentMatchNumber === null || currentMatchNumber === undefined) {
-    console.log(`[updateBracketAfterMatch] bracket_position is null, calculating from match order...`)
-    
-    // Get all matches in the same round to determine position
-    const { data: roundMatches, error: roundError } = await supabase
-      .from('tournament_matches')
-      .select('id, match_id, bracket_position')
-      .eq('tournament_id', tournamentMatch.tournament_id)
-      .eq('bracket_type', tournamentMatch.bracket_type)
-      .eq('round_number', currentRound)
-      .order('bracket_position', { ascending: true, nullsFirst: false })
-      .order('match_id', { ascending: true })
-    
-    if (roundError) {
-      console.error(`[updateBracketAfterMatch] Error fetching round matches:`, roundError)
-      currentMatchNumber = 1 // Fallback
-    } else {
-      // Find the index of the current match
-      const matchIndex = roundMatches?.findIndex((tm: any) => tm.match_id === matchId)
-      if (matchIndex !== undefined && matchIndex >= 0) {
-        currentMatchNumber = matchIndex + 1
-        console.log(`[updateBracketAfterMatch] Calculated bracket_position: ${currentMatchNumber} from match order`)
-        
-        // Update the bracket_position in the database for future use
-        await supabase
-          .from('tournament_matches')
-          .update({ bracket_position: currentMatchNumber })
-          .eq('id', tournamentMatch.id)
-      } else {
-        currentMatchNumber = 1 // Fallback
-      }
-    }
-  }
-  
-  const nextRound = currentRound + 1
-  
-  // Calculate next round match number and slot
-  // Round 1 Match 1 winner → Round 2 Match 1 player1
-  // Round 1 Match 2 winner → Round 2 Match 1 player2
-  // Round 1 Match 3 winner → Round 2 Match 2 player1
-  // Round 1 Match 4 winner → Round 2 Match 2 player2
-  const nextRoundMatchNumber = Math.ceil(currentMatchNumber / 2)
-  const isPlayer1Slot = (currentMatchNumber % 2 === 1)
-  
-  // Check if next round match exists
-  const { data: nextRoundMatch, error: findError } = await supabase
-    .from('tournament_matches')
-    .select('id, match_id')
-    .eq('tournament_id', tournamentMatch.tournament_id)
-    .eq('bracket_type', tournamentMatch.bracket_type)
-    .eq('round_number', nextRound)
-    .eq('bracket_position', nextRoundMatchNumber)
-    .single()
-  
-  if (findError && findError.code !== 'PGRST116') { // PGRST116 = not found
-    console.error('Error finding next round match:', findError)
-    return
-  }
-  
-  console.log(`[updateBracketAfterMatch] Round ${currentRound} Match ${currentMatchNumber} → Round ${nextRound} Match ${nextRoundMatchNumber} (${isPlayer1Slot ? 'player1' : 'player2'})`)
-  console.log(`[updateBracketAfterMatch] Next round match exists:`, !!nextRoundMatch)
-  
-  if (nextRoundMatch && nextRoundMatch.match_id) {
-    // Match exists, update it with the winner
-    const updateField = isPlayer1Slot ? 'player1_id' : 'player2_id'
-    
-    console.log(`[updateBracketAfterMatch] Updating existing match ${nextRoundMatch.match_id}, setting ${updateField} to ${winnerId}`)
-    
-    const { error: updateError } = await supabase
-      .from('matches')
-      .update({ [updateField]: winnerId })
-      .eq('id', nextRoundMatch.match_id)
-    
-    if (updateError) {
-      console.error('Error updating next round match with winner:', updateError)
-    } else {
-      console.log(`[updateBracketAfterMatch] Successfully updated match ${nextRoundMatch.match_id}`)
-    }
-  } else {
-    // Match doesn't exist, need to create it
-    // First, calculate the total number of rounds needed based on the number of players in round 1
-    const { data: round1Matches, error: round1Error } = await supabase
-      .from('tournament_matches')
-      .select('match_id, matches!inner(player1_id, player2_id)')
-      .eq('tournament_id', tournamentMatch.tournament_id)
-      .eq('bracket_type', tournamentMatch.bracket_type)
-      .eq('round_number', 1)
-    
-    if (round1Error) {
-      console.error('Error fetching round 1 matches:', round1Error)
-      return
-    }
-    
-    // Count unique players in round 1
-    const uniquePlayers = new Set<string>()
-    round1Matches?.forEach((tm: any) => {
-      const match = tm.matches
-      if (match?.player1_id) uniquePlayers.add(match.player1_id)
-      if (match?.player2_id) uniquePlayers.add(match.player2_id)
+  await inTransaction(tx, async (db) => {
+    // Get tournament match info
+    const tournamentMatch = await db.query.tournament_matches.findFirst({
+      columns: {
+        id: true,
+        tournament_id: true,
+        bracket_type: true,
+        round_number: true,
+        bracket_position: true,
+        is_bye: true,
+        player_id: true,
+      },
+      where: eq(tournament_matches.match_id, matchId),
     })
-    
-    const totalPlayers = uniquePlayers.size
-    if (totalPlayers === 0) {
-      console.error('updateBracketAfterMatch: No players found in round 1')
+
+    if (!tournamentMatch) {
+      return // Not a tournament match
+    }
+
+    // Handle bye matches separately
+    if (tournamentMatch.is_bye) {
+      await processByeAdvancement(tournamentMatch, db)
       return
     }
-    
-    // Calculate total rounds needed: Math.ceil(Math.log2(totalPlayers))
-    const totalRounds = Math.ceil(Math.log2(totalPlayers))
-    
-    console.log(`[updateBracketAfterMatch] Total players in round 1: ${totalPlayers}, total rounds needed: ${totalRounds}, next round: ${nextRound}`)
-    
-    // If next round is beyond the total rounds needed, this is the final - no need to create next round match
-    if (nextRound > totalRounds) {
-      console.log(`[updateBracketAfterMatch] This is the final round, no next round to create`)
+
+    // Only update for playoff matches (main or backdraw)
+    if (tournamentMatch.bracket_type !== 'main' && tournamentMatch.bracket_type !== 'backdraw') {
       return
     }
-    
-    // Match doesn't exist, create it
-    // For tournament matches, we can create with only one player initially
-    // Both player1_id and player2_id can be NULL for tournament matches
-    console.log(`[updateBracketAfterMatch] Creating new match for round ${nextRound}, match ${nextRoundMatchNumber}, slot: ${isPlayer1Slot ? 'player1' : 'player2'}`)
-    
-    const matchData: any = {
-      tournament_id: tournamentMatch.tournament_id,
-      status: 'scheduled',
-      scheduled_at: null
-    }
-    
-    // Set the player in the appropriate slot
-    // The other slot will be NULL and filled when the other match completes
-    if (isPlayer1Slot) {
-      matchData.player1_id = winnerId
-      // player2_id will be NULL (allowed for tournament matches via constraint)
-    } else {
-      matchData.player2_id = winnerId
-      // player1_id will be NULL (allowed for tournament matches via constraint)
-      // This will be updated when the other match completes
-    }
-    
-    const { data: newMatch, error: createMatchError } = await supabase
-      .from('matches')
-      .insert(matchData)
-      .select()
-      .single()
-    
-    if (createMatchError || !newMatch) {
-      console.error('Error creating next round match:', createMatchError)
+
+    if (tournamentMatch.round_number === null) {
       return
     }
-    
-    console.log(`[updateBracketAfterMatch] Created new match ${newMatch.id} for round ${nextRound}`)
-    
-    // Create tournament match record
-    const { error: createTmError } = await supabase
-      .from('tournament_matches')
-      .insert({
-        tournament_id: tournamentMatch.tournament_id,
-        match_id: newMatch.id,
-        bracket_type: tournamentMatch.bracket_type,
-        round_number: nextRound,
-        bracket_position: nextRoundMatchNumber,
-        is_bye: false
-      })
-    
-    if (createTmError) {
-      console.error('Error creating tournament match record:', createTmError)
-    } else {
-      console.log(`[updateBracketAfterMatch] Successfully created tournament match record for round ${nextRound}, match ${nextRoundMatchNumber}`)
-    }
-  }
+    const currentRound = tournamentMatch.round_number
+
+    const currentMatchNumber = await resolveBracketPosition(
+      db,
+      tournamentMatch,
+      currentRound,
+      'match_id',
+      (row) => row.match_id === matchId
+    )
+    await placeInNextRound(db, tournamentMatch, currentRound, currentMatchNumber, winnerId)
+  })
 }
 
 /**
@@ -937,145 +929,84 @@ export async function updateBracketAfterMatch(
  * This is useful when bracket needs to be refreshed and some matches were already completed
  * @param tournamentId - Tournament ID
  * @param bracketType - 'main' or 'backdraw' or 'all' for both
- * @param supabase - Supabase admin client
+ * @param tx - Optional transaction to run in
  */
 export async function updateBracketFromCompletedMatches(
   tournamentId: string,
   bracketType: 'main' | 'backdraw' | 'all',
-  supabase: any
+  tx?: DbOrTx
 ): Promise<void> {
-  console.log(`[updateBracketFromCompletedMatches] Starting for tournament ${tournamentId}, bracket type: ${bracketType}`)
-  
-  // Get all completed playoff matches for this tournament
-  const bracketTypes = bracketType === 'all' ? ['main', 'backdraw'] : [bracketType]
-  
+  const db = tx ?? useDb()
+  const bracketTypes: Array<'main' | 'backdraw'> = bracketType === 'all' ? ['main', 'backdraw'] : [bracketType]
+
   for (const bt of bracketTypes) {
-    console.log(`[updateBracketFromCompletedMatches] Processing ${bt} bracket...`)
-    
-    // Get all completed matches for this bracket type, ordered by round and position
-    // First, get tournament_matches (including byes) - DO NOT DELETE BYES
-    // Byes are part of the bracket structure and should be preserved
-    const { data: tournamentMatches, error: tmError } = await supabase
-      .from('tournament_matches')
-      .select('id, match_id, round_number, bracket_position, is_bye, player_id, tournament_id, bracket_type')
-      .eq('tournament_id', tournamentId)
-      .eq('bracket_type', bt)
-      .order('round_number', { ascending: true })
-      .order('bracket_position', { ascending: true, nullsFirst: false })
-      .order('id', { ascending: true }) // Secondary sort for consistent ordering when bracket_position is null
-    
-    if (tmError) {
-      console.error(`[updateBracketFromCompletedMatches] Error fetching tournament matches for ${bt}:`, tmError)
+    // Byes are part of the bracket structure and are never deleted here
+    let tournamentMatches
+    try {
+      tournamentMatches = await db
+        .select({
+          id: tournament_matches.id,
+          match_id: tournament_matches.match_id,
+          round_number: tournament_matches.round_number,
+          bracket_position: tournament_matches.bracket_position,
+          is_bye: tournament_matches.is_bye,
+          player_id: tournament_matches.player_id,
+          tournament_id: tournament_matches.tournament_id,
+          bracket_type: tournament_matches.bracket_type,
+        })
+        .from(tournament_matches)
+        .where(and(eq(tournament_matches.tournament_id, tournamentId), eq(tournament_matches.bracket_type, bt)))
+        .orderBy(asc(tournament_matches.round_number), asc(tournament_matches.bracket_position), asc(tournament_matches.id))
+    } catch (err) {
+      console.error(`[updateBracketFromCompletedMatches] Error fetching tournament matches for ${bt}:`, err)
       continue
     }
-    
-    if (!tournamentMatches || tournamentMatches.length === 0) {
-      console.log(`[updateBracketFromCompletedMatches] No tournament matches found for ${bt} bracket`)
+
+    if (tournamentMatches.length === 0) {
       continue
     }
-    
-    console.log(`[updateBracketFromCompletedMatches] Found ${tournamentMatches.length} tournament matches for ${bt} bracket`)
-    
-    // Now fetch match details for each tournament match
-    const matchIds = tournamentMatches.map((tm: any) => tm.match_id).filter(Boolean)
-    
+
+    const matchIds = tournamentMatches.map((tm) => tm.match_id).filter((id): id is string => Boolean(id))
     if (matchIds.length === 0) {
-      console.log(`[updateBracketFromCompletedMatches] No match IDs found for ${bt} bracket`)
       continue
     }
-    
-    const { data: matches, error: matchesError } = await supabase
-      .from('matches')
-      .select('id, status, winner_id')
-      .in('id', matchIds)
-    
-    if (matchesError) {
-      console.error(`[updateBracketFromCompletedMatches] Error fetching matches for ${bt}:`, matchesError)
+
+    let matchRows
+    try {
+      matchRows = await db
+        .select({ id: matches.id, status: matches.status, winner_id: matches.winner_id })
+        .from(matches)
+        .where(inArray(matches.id, matchIds))
+    } catch (err) {
+      console.error(`[updateBracketFromCompletedMatches] Error fetching matches for ${bt}:`, err)
       continue
     }
-    
-    console.log(`[updateBracketFromCompletedMatches] Found ${matches?.length || 0} matches for ${bt} bracket`)
-    
-    // Combine tournament_matches with match data
-    const completedMatches = tournamentMatches.map((tm: any) => {
-      const match = matches?.find((m: any) => m.id === tm.match_id)
-      return {
-        ...tm,
-        match
-      }
-    })
-    
-    if (!completedMatches || completedMatches.length === 0) {
-      console.log(`[updateBracketFromCompletedMatches] No matches found for ${bt} bracket`)
-      continue
-    }
-    
-    console.log(`[updateBracketFromCompletedMatches] Total matches found for ${bt}: ${completedMatches.length}`)
-    
-    // Separate byes from regular matches
-    const byeMatches = tournamentMatches.filter((tm: any) => tm.is_bye)
-    const regularMatches = tournamentMatches.filter((tm: any) => !tm.is_bye)
-    
-    console.log(`[updateBracketFromCompletedMatches] Found ${byeMatches.length} bye matches and ${regularMatches.length} regular matches in ${bt} bracket`)
-    
+
     // Process bye matches first (they advance automatically)
-    // IMPORTANT: Byes should NOT be deleted - they are part of the bracket structure
-    for (const tm of byeMatches) {
+    for (const tm of tournamentMatches.filter((row) => row.is_bye)) {
       if (tm.player_id) {
-        console.log(`[updateBracketFromCompletedMatches] Processing bye (round ${tm.round_number}, position ${tm.bracket_position || 'null'}, player: ${tm.player_id})`)
         try {
-          // Ensure we have all required fields including id
-          const byeRecord = {
-            ...tm,
-            tournament_id: tournamentId,
-            bracket_type: bt
-          }
-          await processByeAdvancement(byeRecord, supabase)
-          console.log(`[updateBracketFromCompletedMatches] Successfully processed bye`)
+          await processByeAdvancement({ ...tm, tournament_id: tournamentId, bracket_type: bt }, tx)
         } catch (err) {
           console.error(`[updateBracketFromCompletedMatches] Error processing bye:`, err)
         }
       }
     }
-    
-    // Debug: Log all regular matches to see their status
-    completedMatches.forEach((tm: any) => {
-      console.log(`[updateBracketFromCompletedMatches] Match ${tm.match_id}: round ${tm.round_number}, position ${tm.bracket_position}, status: ${tm.match?.status}, winner: ${tm.match?.winner_id || 'none'}`)
-    })
-    
-    // Filter to only completed matches with winners
-    const matchesToProcess = completedMatches.filter((tm: any) => 
-      tm.match?.status === 'completed' && tm.match?.winner_id
-    )
-    
-    console.log(`[updateBracketFromCompletedMatches] Found ${matchesToProcess.length} completed matches with winners in ${bt} bracket`)
-    
-    if (matchesToProcess.length === 0) {
-      console.log(`[updateBracketFromCompletedMatches] No completed matches to process for ${bt} bracket`)
-      continue
-    }
-    
-    // Process each completed match to update bracket progression
-    for (const tm of matchesToProcess) {
-      if (tm.match_id && tm.match?.winner_id) {
-        console.log(`[updateBracketFromCompletedMatches] Processing match ${tm.match_id} (round ${tm.round_number}, position ${tm.bracket_position}, winner: ${tm.match.winner_id})`)
-        try {
-          await updateBracketAfterMatch(tm.match_id, tm.match.winner_id, supabase)
-          console.log(`[updateBracketFromCompletedMatches] Successfully processed match ${tm.match_id}`)
-        } catch (err) {
-          console.error(`[updateBracketFromCompletedMatches] Error processing match ${tm.match_id}:`, err)
-          // Continue with next match even if one fails
-        }
-      } else {
-        console.log(`[updateBracketFromCompletedMatches] Skipping match - missing match_id or winner_id:`, {
-          match_id: tm.match_id,
-          winner_id: tm.match?.winner_id
-        })
+
+    // Then every completed match with a winner
+    for (const tm of tournamentMatches) {
+      const match = matchRows.find((m) => m.id === tm.match_id)
+      if (!tm.match_id || match?.status !== 'completed' || !match.winner_id) {
+        continue
+      }
+      try {
+        await updateBracketAfterMatch(tm.match_id, match.winner_id, tx)
+      } catch (err) {
+        // Continue with next match even if one fails
+        console.error(`[updateBracketFromCompletedMatches] Error processing match ${tm.match_id}:`, err)
       }
     }
   }
-  
-  console.log(`[updateBracketFromCompletedMatches] Completed for tournament ${tournamentId}`)
 }
 
 /**
@@ -1083,7 +1014,7 @@ export async function updateBracketFromCompletedMatches(
  * @param tournamentId - Tournament ID
  * @param groupId - Group ID
  * @param standings - Calculated standings map
- * @param supabase - Supabase admin client
+ * @param tx - Optional transaction to run in
  */
 export async function updateStandingsInDatabase(
   tournamentId: string,
@@ -1099,9 +1030,8 @@ export async function updateStandingsInDatabase(
     game_difference: number
     head_to_head: Map<string, number>
   }>,
-  supabase: any
+  tx?: DbOrTx
 ): Promise<void> {
-  // Convert standings map to array for database operations
   const standingsArray = Array.from(standings.entries()).map(([playerId, standing]) => ({
     tournament_id: tournamentId,
     group_id: groupId,
@@ -1117,81 +1047,88 @@ export async function updateStandingsInDatabase(
     head_to_head_wins: 0 // This is calculated separately if needed
   }))
 
-  // Upsert standings (update if exists, insert if not)
-  for (const standing of standingsArray) {
-    const { error } = await supabase
-      .from('tournament_standings')
-      .upsert(standing, {
-        onConflict: 'tournament_id,group_id,player_id'
-      })
+  if (standingsArray.length === 0) {
+    return
+  }
 
-    if (error) {
-      console.error(`Error updating standings for player ${standing.player_id}:`, error)
+  // One upsert statement: every row lands or none does
+  await (tx ?? useDb())
+    .insert(tournament_standings)
+    .values(standingsArray)
+    .onConflictDoUpdate({
+      target: [tournament_standings.tournament_id, tournament_standings.group_id, tournament_standings.player_id],
+      set: {
+        wins: sql`excluded.wins`,
+        losses: sql`excluded.losses`,
+        sets_won: sql`excluded.sets_won`,
+        sets_lost: sql`excluded.sets_lost`,
+        games_won: sql`excluded.games_won`,
+        games_lost: sql`excluded.games_lost`,
+        points: sql`excluded.points`,
+        game_difference: sql`excluded.game_difference`,
+        head_to_head_wins: sql`excluded.head_to_head_wins`,
+        updated_at: new Date(),
+      },
+    })
+}
+
+/**
+ * Completed group matches of one group, in the shape calculateGroupStandings takes.
+ */
+export async function getCompletedGroupMatches(
+  tournamentId: string,
+  groupId: string,
+  tx?: DbOrTx
+): Promise<Array<{ player1_id: string; player2_id: string; winner_id: string; score: string | undefined }>> {
+  const rows = await (tx ?? useDb())
+    .select({
+      player1_id: matches.player1_id,
+      player2_id: matches.player2_id,
+      winner_id: matches.winner_id,
+      score: matches.score,
+      status: matches.status,
+    })
+    .from(tournament_matches)
+    .innerJoin(matches, eq(matches.id, tournament_matches.match_id))
+    .where(
+      and(
+        eq(tournament_matches.tournament_id, tournamentId),
+        eq(tournament_matches.group_id, groupId),
+        eq(tournament_matches.bracket_type, 'group')
+      )
+    )
+
+  const completed: Array<{ player1_id: string; player2_id: string; winner_id: string; score: string | undefined }> = []
+  for (const m of rows) {
+    if (m.status === 'completed' && m.winner_id && m.player1_id && m.player2_id) {
+      completed.push({ player1_id: m.player1_id, player2_id: m.player2_id, winner_id: m.winner_id, score: m.score ?? undefined })
     }
   }
+  return completed
 }
 
 /**
  * Recalculate and persist standings for a group
  * @param tournamentId - Tournament ID
  * @param groupId - Group ID
- * @param supabase - Supabase admin client
+ * @param tx - Optional transaction to run in
  */
 export async function recalculateGroupStandings(
   tournamentId: string,
   groupId: string,
-  supabase: any
+  tx?: DbOrTx
 ): Promise<void> {
-  // Get tournament to access points_config
-  const { data: tournament, error: tournamentError } = await supabase
-    .from('tournaments')
-    .select('*')
-    .eq('id', tournamentId)
-    .single()
+  const db = tx ?? useDb()
 
-  if (tournamentError || !tournament) {
+  // Get tournament to access points_config
+  const tournament = await db.query.tournaments.findFirst({ where: eq(tournaments.id, tournamentId) })
+  if (!tournament) {
     throw new Error(`Tournament ${tournamentId} not found`)
   }
 
-  // Get all matches for this group
-  const { data: tournamentMatches, error: matchesError } = await supabase
-    .from('tournament_matches')
-    .select(`
-      match_id,
-      bracket_type,
-      round_number,
-      matches!inner(
-        id,
-        player1_id,
-        player2_id,
-        winner_id,
-        score,
-        status
-      )
-    `)
-    .eq('tournament_id', tournamentId)
-    .eq('group_id', groupId)
-    .eq('bracket_type', 'group')
+  // Only matches with a score count here
+  const completedMatches = (await getCompletedGroupMatches(tournamentId, groupId, db)).filter((m) => m.score)
 
-  if (matchesError) {
-    throw new Error(`Failed to fetch matches for group ${groupId}: ${matchesError.message}`)
-  }
-
-  // Filter completed matches and format for calculateGroupStandings
-  const completedMatches = (tournamentMatches || [])
-    .filter(tm => tm.matches && tm.matches.status === 'completed' && tm.matches.winner_id && tm.matches.score)
-    .map(tm => ({
-      player1_id: tm.matches.player1_id,
-      player2_id: tm.matches.player2_id,
-      winner_id: tm.matches.winner_id,
-      score: tm.matches.score
-    }))
-
-  // Calculate standings
-  const standings = calculateGroupStandings(groupId, completedMatches, tournament as Tournament)
-
-  // Persist to database
-  await updateStandingsInDatabase(tournamentId, groupId, standings, supabase)
+  const standings = calculateGroupStandings(groupId, completedMatches, tournament)
+  await updateStandingsInDatabase(tournamentId, groupId, standings, db)
 }
-
-
