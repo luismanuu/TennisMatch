@@ -1,4 +1,3 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/session'
 import { getUnscheduledMatches } from '~/server/utils/tournament-scheduling'
 
@@ -15,11 +14,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
-    const matches = await getUnscheduledMatches(tournamentId, supabase)
-
-    return matches
+    return await getUnscheduledMatches(tournamentId)
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -27,4 +22,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

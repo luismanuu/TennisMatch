@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, players, tournament_group_players, tournament_matches, tournament_registrations, tournaments } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
 import type { WithdrawPlayerPayload } from '~/types'
 
@@ -7,7 +9,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const body = await readBody<WithdrawPlayerPayload>(event)
-    const { player_id, option, replacement_player_id } = body
+    const { player_id, option, replacement_player_id } = body ?? {}
     const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId || !player_id) {
@@ -31,131 +33,109 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
-    // Get registration
-    const { data: registration, error: regError } = await supabase
-      .from('tournament_registrations')
-      .select('*')
-      .eq('tournament_id', tournamentId)
-      .eq('player_id', player_id)
-      .single()
-
-    if (regError || !registration) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Player is not registered in this tournament'
+    // Every write of a withdrawal lands together or not at all
+    await useDb().transaction(async (tx) => {
+      const registration = await tx.query.tournament_registrations.findFirst({
+        where: and(
+          eq(tournament_registrations.tournament_id, tournamentId),
+          eq(tournament_registrations.player_id, player_id)
+        ),
       })
-    }
 
-    if (option === 'replacement') {
-      // Verify replacement player exists and is in same category
-      const { data: tournament } = await supabase
-        .from('tournaments')
-        .select('category_id')
-        .eq('id', tournamentId)
-        .single()
-
-      const { data: replacementPlayer } = await supabase
-        .from('players')
-        .select('id, category_id')
-        .eq('id', replacement_player_id)
-        .single()
-
-      if (!replacementPlayer || replacementPlayer.category_id !== tournament?.category_id) {
+      if (!registration) {
         throw createError({
-          statusCode: 400,
-          statusMessage: 'Replacement player must be in the same category as the tournament'
+          statusCode: 404,
+          statusMessage: 'Player is not registered in this tournament'
         })
       }
 
-      // Check if replacement is already registered
-      const { data: replacementReg } = await supabase
-        .from('tournament_registrations')
-        .select('id')
-        .eq('tournament_id', tournamentId)
-        .eq('player_id', replacement_player_id)
-        .single()
-
-      if (replacementReg) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'Replacement player is already registered'
+      if (option === 'replacement' && replacement_player_id) {
+        // Verify replacement player exists and is in same category
+        const tournament = await tx.query.tournaments.findFirst({
+          columns: { category_id: true },
+          where: eq(tournaments.id, tournamentId),
         })
-      }
-
-      // Replace player in all tournament matches
-      const { error: matchUpdateError } = await supabase
-        .from('matches')
-        .update({
-          player1_id: replacement_player_id
+        const replacementPlayer = await tx.query.players.findFirst({
+          columns: { id: true, category_id: true },
+          where: eq(players.id, replacement_player_id),
         })
-        .eq('tournament_id', tournamentId)
-        .eq('player1_id', player_id)
 
-      await supabase
-        .from('matches')
-        .update({
-          player2_id: replacement_player_id
-        })
-        .eq('tournament_id', tournamentId)
-        .eq('player2_id', player_id)
-
-      // Replace in group assignments
-      await supabase
-        .from('tournament_group_players')
-        .update({ player_id: replacement_player_id })
-        .eq('tournament_id', tournamentId)
-        .eq('player_id', player_id)
-
-      // Replace in registrations
-      await supabase
-        .from('tournament_registrations')
-        .update({ player_id: replacement_player_id })
-        .eq('id', registration.id)
-
-      // Withdraw original player
-      await supabase
-        .from('tournament_registrations')
-        .insert({
-          tournament_id: tournamentId,
-          player_id: player_id,
-          status: 'withdrawn',
-          withdrawn_at: new Date().toISOString()
-        })
-        .select()
-        .single()
-    } else {
-      // Walkover: mark all matches as completed with opponent winning
-      const { data: matches } = await supabase
-        .from('tournament_matches')
-        .select('match_id, match:matches(*)')
-        .eq('tournament_id', tournamentId)
-
-      for (const tm of matches || []) {
-        const match = tm.match as any
-        if (match && (match.player1_id === player_id || match.player2_id === player_id)) {
-          const winnerId = match.player1_id === player_id ? match.player2_id : match.player1_id
-          await supabase
-            .from('matches')
-            .update({
-              winner_id: winnerId,
-              status: 'completed',
-              score: 'Walkover'
-            })
-            .eq('id', match.id)
+        if (!replacementPlayer || replacementPlayer.category_id !== tournament?.category_id) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Replacement player must be in the same category as the tournament'
+          })
         }
-      }
 
-      // Mark registration as withdrawn
-      await supabase
-        .from('tournament_registrations')
-        .update({
-          status: 'withdrawn',
-          withdrawn_at: new Date().toISOString()
+        // Check if replacement is already registered
+        const replacementReg = await tx.query.tournament_registrations.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(tournament_registrations.tournament_id, tournamentId),
+            eq(tournament_registrations.player_id, replacement_player_id)
+          ),
         })
-        .eq('id', registration.id)
-    }
+
+        if (replacementReg) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Replacement player is already registered'
+          })
+        }
+
+        // Replace player in all tournament matches
+        await tx
+          .update(matches)
+          .set({ player1_id: replacement_player_id })
+          .where(and(eq(matches.tournament_id, tournamentId), eq(matches.player1_id, player_id)))
+        await tx
+          .update(matches)
+          .set({ player2_id: replacement_player_id })
+          .where(and(eq(matches.tournament_id, tournamentId), eq(matches.player2_id, player_id)))
+
+        // Replace in group assignments
+        await tx
+          .update(tournament_group_players)
+          .set({ player_id: replacement_player_id })
+          .where(and(eq(tournament_group_players.tournament_id, tournamentId), eq(tournament_group_players.player_id, player_id)))
+
+        // Replace in registrations, then record the original player as withdrawn
+        await tx
+          .update(tournament_registrations)
+          .set({ player_id: replacement_player_id })
+          .where(eq(tournament_registrations.id, registration.id))
+        await tx.insert(tournament_registrations).values({
+          tournament_id: tournamentId,
+          player_id,
+          status: 'withdrawn',
+          withdrawn_at: new Date()
+        })
+      } else {
+        // Walkover: mark all matches as completed with opponent winning
+        const tournamentMatches = await tx.query.tournament_matches.findMany({
+          columns: { match_id: true },
+          where: eq(tournament_matches.tournament_id, tournamentId),
+          with: { match: { columns: { id: true, player1_id: true, player2_id: true } } },
+        })
+
+        for (const tm of tournamentMatches) {
+          const match = tm.match
+          if (match && (match.player1_id === player_id || match.player2_id === player_id)) {
+            const winnerId = match.player1_id === player_id ? match.player2_id : match.player1_id
+            await tx
+              .update(matches)
+              .set({ winner_id: winnerId, status: 'completed', score: 'Walkover' })
+              .where(eq(matches.id, match.id))
+          }
+        }
+
+        // Mark registration as withdrawn
+        await tx
+          .update(tournament_registrations)
+          .set({ status: 'withdrawn', withdrawn_at: new Date() })
+          .where(eq(tournament_registrations.id, registration.id))
+      }
+    })
 
     return {
       success: true,
@@ -168,4 +148,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

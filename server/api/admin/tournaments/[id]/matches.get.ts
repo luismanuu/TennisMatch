@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournament_matches } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
@@ -14,35 +16,31 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
-    // Get all tournament matches
-    const { data: tournamentMatches, error: tmError } = await supabase
-      .from('tournament_matches')
-      .select(`
-        *,
-        match:matches(
-          id,
-          player1_id,
-          player2_id,
-          status,
-          scheduled_at,
-          played_at,
-          score,
-          winner_id
-        )
-      `)
-      .eq('tournament_id', tournamentId)
-
-    if (tmError) {
+    try {
+      return await useDb().query.tournament_matches.findMany({
+        where: eq(tournament_matches.tournament_id, tournamentId),
+        with: {
+          match: {
+            columns: {
+              id: true,
+              player1_id: true,
+              player2_id: true,
+              status: true,
+              scheduled_at: true,
+              played_at: true,
+              score: true,
+              winner_id: true,
+            },
+          },
+        },
+      })
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch tournament matches',
-        data: tmError
+        data: error
       })
     }
-
-    return tournamentMatches || []
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -50,4 +48,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

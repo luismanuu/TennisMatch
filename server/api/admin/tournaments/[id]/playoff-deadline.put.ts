@@ -1,4 +1,3 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requireAdmin } from '~/server/utils/session'
 import { createPlayoffRoundDeadlines } from '~/server/utils/tournament-scheduling'
 
@@ -14,7 +13,7 @@ export default defineEventHandler(async (event) => {
         deadline: string
       }>
     }>(event)
-    const { bracket_type, rounds } = body
+    const { bracket_type, rounds } = body ?? {}
     const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
@@ -38,9 +37,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
-    await createPlayoffRoundDeadlines(tournamentId, bracket_type, rounds, supabase)
+    await createPlayoffRoundDeadlines(tournamentId, bracket_type, rounds)
 
     return {
       success: true,
@@ -53,4 +50,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-
