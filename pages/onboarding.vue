@@ -1,38 +1,17 @@
 <template>
-  <div class="min-h-screen">
-    <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
-      <div class="container-wide px-6">
-        <div class="flex justify-between items-center h-16">
-          <NuxtLink to="/" class="flex items-center gap-3 group">
-            <div class="relative w-10 h-10 rounded-xl bg-accent flex items-center justify-center hover-bounce overflow-hidden">
-              <span class="text-lg relative z-10">🎾</span>
-              <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-            </div>
-            <span class="text-size-3 font-semibold text-foreground">
-              Tenis Ecuador
-            </span>
-          </NuxtLink>
+  <div class="page-container">
+    <header class="nav-island">
+      <NuxtLink to="/" class="brand" aria-label="Tenis Ecuador, inicio">
+        <BrandMark />
+        <span>Tenis <strong>Ecuador</strong></span>
+      </NuxtLink>
+      <button type="button" class="text-link ml-auto px-2" @click="handleSkip">Omitir</button>
+    </header>
 
-          <button
-            @click="handleSkip"
-            class="text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors"
-          >
-            Omitir
-          </button>
-        </div>
-      </div>
-    </nav>
-
-    <div class="h-16"></div>
-
-    <div class="section-padding">
-      <div class="container-medium px-6">
+    <main id="main" class="te-page te-page--narrow onboarding">
         <!-- Step 1: Welcome -->
         <div v-if="currentStep === 1" class="max-w-2xl mx-auto text-center">
-          <div class="w-24 h-24 rounded-2xl bg-accent-subtle flex items-center justify-center mx-auto mb-8">
-            <span class="text-5xl">👋</span>
-          </div>
+          <div class="onboarding__mark" aria-hidden="true"><BrandMark :size="40" /></div>
           <h1 class="text-size-1 font-semibold text-foreground mb-4">
             ¡Bienvenido a Tenis Ecuador!
           </h1>
@@ -58,7 +37,7 @@
             </p>
           </div>
 
-          <div class="glass-card-elevated p-8">
+          <div class="panel">
             <div class="mb-6">
               <label for="phone_number" class="block text-size-4 font-semibold text-foreground mb-2">
                 Teléfono
@@ -67,7 +46,7 @@
                 id="phone_number"
                 v-model="formData.phone_number"
                 type="tel"
-                class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                class="form-input"
                 placeholder="+593 99 999 9999"
               />
               <p class="text-size-4 font-regular text-foreground-muted mt-2">
@@ -106,7 +85,7 @@
             </p>
           </div>
 
-          <div class="glass-card-elevated p-8">
+          <div class="panel">
             <div v-if="citiesLoading" class="mb-6">
               <div class="flex items-center justify-center py-8">
                 <Icon name="heroicons:arrow-path" class="w-6 h-6 text-accent animate-spin" />
@@ -122,7 +101,7 @@
                 v-model="formData.city_id"
                 required
                 :disabled="citiesLoading"
-                class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                class="form-select"
               >
                 <option value="" disabled>Selecciona tu ciudad</option>
                 <option
@@ -170,12 +149,12 @@
             </p>
           </div>
 
-          <div v-if="categoriesLoading" class="glass-card-elevated p-12 text-center">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+          <div v-if="categoriesLoading" class="panel text-center">
+            <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" aria-hidden="true" />
             <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando categorías...</p>
           </div>
 
-          <div v-else-if="categories.length === 0" class="glass-card-elevated p-8">
+          <div v-else-if="categories.length === 0" class="panel">
             <p class="text-size-4 font-regular text-foreground-muted text-center">
               No hay categorías disponibles en este momento.
             </p>
@@ -187,7 +166,7 @@
               :key="category.id"
               @click="selectCategory(category.id)"
               :class="[
-                'w-full p-6 rounded-xl border-2 text-left transition-all',
+                'w-full p-6 rounded-xl border text-left transition-all',
                 formData.category_id === category.id
                   ? 'border-accent bg-accent-subtle'
                   : 'border-border-subtle bg-surface hover:border-accent/50'
@@ -235,7 +214,7 @@
         <!-- Step 5: Complete -->
         <div v-else-if="currentStep === 5" class="max-w-2xl mx-auto text-center">
           <div class="w-24 h-24 rounded-2xl bg-green-500/20 flex items-center justify-center mx-auto mb-8">
-            <span class="text-5xl">✅</span>
+            <Icon name="heroicons:check-circle" class="w-12 h-12 text-success" aria-hidden="true" />
           </div>
           <h1 class="text-size-1 font-semibold text-foreground mb-4">
             ¡Perfil completado!
@@ -244,14 +223,13 @@
             Ya estás listo para comenzar a competir y seguir tu progreso.
           </p>
           <NuxtLink to="/" class="btn-primary text-size-3 inline-flex items-center">
-            Ir al Dashboard
+            Ir al inicio
             <svg class="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
           </NuxtLink>
         </div>
-      </div>
-    </div>
+    </main>
   </div>
 </template>
 
@@ -325,3 +303,9 @@ watch([isLoaded, () => user.value], async () => {
 }, { immediate: false })
 </script>
 
+
+<style scoped>
+.onboarding { min-height: 100dvh; }
+.onboarding__mark { display: grid; place-items: center; width: 80px; height: 80px; margin: 0 auto 24px; border-radius: 50%; background: var(--accent-subtle); color: var(--accent); }
+.onboarding :deep(h1) { font-size: var(--font-size-1); line-height: 1.12; letter-spacing: -0.035em; text-wrap: balance; }
+</style>

@@ -1,23 +1,13 @@
 <template>
   <div class="auth-page">
-    <!-- Decorative elements -->
-    <div class="auth-decoration">
-      <div class="decoration-ring decoration-ring-1"></div>
-      <div class="decoration-ring decoration-ring-2"></div>
-      <div class="decoration-glow"></div>
-    </div>
+    <AuthVisual />
 
     <div class="auth-container">
       <!-- Logo & Branding -->
-      <div class="auth-brand animate-fade-up">
-        <div class="brand-icon">
-          <span>🎾</span>
-        </div>
-        <span class="brand-name">Tenis Ecuador</span>
-      </div>
+      <NuxtLink to="/" class="auth-brand"><BrandMark :size="26" /><span class="brand-name">Tenis Ecuador</span></NuxtLink>
 
       <!-- Main Card -->
-      <div class="auth-card animate-fade-up animate-delay-1">
+      <div class="auth-card">
         <div class="auth-header">
           <h1 class="auth-title">Bienvenido de vuelta</h1>
           <p class="auth-subtitle">Ingresa a tu cuenta para continuar</p>
@@ -36,7 +26,7 @@
             />
             <template #fallback>
               <div class="flex items-center justify-center p-8">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" aria-hidden="true" />
                 <p class="text-size-4 font-regular text-foreground-muted ml-4">Cargando...</p>
               </div>
             </template>
@@ -61,7 +51,7 @@
       </div>
 
       <!-- Footer -->
-      <p class="auth-footer animate-fade-up animate-delay-2">
+      <p class="auth-footer">
         ¿No tienes cuenta? 
         <NuxtLink to="/sign-up" class="auth-link">Regístrate gratis</NuxtLink>
       </p>
@@ -341,130 +331,6 @@ if (process.client) {
 </script>
 
 <style scoped>
-.auth-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-6) var(--spacing-4);
-  position: relative;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-/* Decorative Elements */
-.auth-decoration {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.decoration-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid var(--border-subtle);
-}
-
-.decoration-ring-1 {
-  width: 500px;
-  height: 500px;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  opacity: 0.2;
-}
-
-.decoration-ring-2 {
-  width: 700px;
-  height: 700px;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  opacity: 0.1;
-}
-
-.decoration-glow {
-  position: absolute;
-  width: 300px;
-  height: 300px;
-  top: 25%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
-  opacity: 0.06;
-  filter: blur(60px);
-}
-
-/* Container */
-.auth-container {
-  width: 100%;
-  max-width: 380px;
-  position: relative;
-  z-index: 1;
-}
-
-/* Brand */
-.auth-brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  margin-bottom: var(--spacing-5);
-}
-
-.brand-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--accent) 0%, oklch(0.60 0.20 150) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.125rem;
-  box-shadow: 0 4px 12px -4px var(--glow-accent);
-}
-
-.brand-name {
-  font-size: 1.125rem;
-  font-weight: var(--font-weight-semibold);
-  color: var(--foreground);
-  letter-spacing: -0.01em;
-}
-
-/* Card */
-.auth-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-6);
-  box-shadow: 
-    0 1px 3px 0 oklch(0 0 0 / 0.1),
-    0 1px 2px -1px oklch(0 0 0 / 0.1);
-  overflow: visible;
-  position: relative;
-}
-
-/* Header */
-.auth-header {
-  text-align: center;
-  margin-bottom: var(--spacing-5);
-}
-
-.auth-title {
-  font-size: 1.375rem;
-  font-weight: var(--font-weight-semibold);
-  color: var(--foreground);
-  margin-bottom: var(--spacing-1);
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-}
-
-.auth-subtitle {
-  font-size: var(--font-size-4);
-  color: var(--foreground-muted);
-  line-height: 1.4;
-}
 
 /* Clerk Wrapper - Constrained width */
 .clerk-wrapper {
@@ -506,38 +372,38 @@ if (process.client) {
 
 .clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput)) {
   background: var(--surface) !important;
-  border: 2px solid var(--border) !important;
+  border: 1px solid var(--edge) !important;
   padding: 0.4375rem 0.75rem !important;
-  font-size: 0.8125rem !important;
-  height: 2.125rem !important;
+  font-size: 1rem !important;
+  min-height: 2.75rem !important; height: auto !important;
   transition: border-color 150ms ease, box-shadow 150ms ease !important;
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput):hover) {
   border-color: var(--border-subtle) !important;
-  border-width: 2px !important;
+  
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput:not(.cl-otpCodeFieldInput):focus) {
   border-color: var(--accent) !important;
-  border-width: 2px !important;
+  
   box-shadow: 0 0 0 3px var(--accent-subtle) !important;
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]) {
-  border-color: oklch(0.60 0.18 25) !important;
-  border-width: 2px !important;
+  border-color: var(--danger) !important;
+  
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:hover) {
-  border-color: oklch(0.65 0.18 25) !important;
-  border-width: 2px !important;
+  border-color: var(--danger) !important;
+  
 }
 
 .clerk-wrapper :deep(.cl-formFieldInput[data-invalid="true"]:focus) {
-  border-color: oklch(0.60 0.18 25) !important;
-  border-width: 2px !important;
-  box-shadow: 0 0 0 3px oklch(0.60 0.18 25 / 0.2) !important;
+  border-color: var(--danger) !important;
+  
+  box-shadow: 0 0 0 3px var(--danger-subtle) !important;
 }
 
 /* Social button compact */
@@ -575,9 +441,9 @@ if (process.client) {
 /* Primary button - Silicon Valley style */
 .clerk-wrapper :deep(.cl-formButtonPrimary),
 .clerk-wrapper :deep(button[class*="formButtonPrimary"]) {
-  background: oklch(0.95 0 0) !important;
-  background-color: oklch(0.95 0 0) !important;
-  color: oklch(0.13 0 0) !important;
+  background: var(--accent) !important;
+  background-color: var(--accent) !important;
+  color: var(--accent-foreground) !important;
   padding: 0.625rem 1.25rem !important;
   font-size: 0.875rem !important;
   margin-top: 0.75rem !important;
@@ -590,11 +456,11 @@ if (process.client) {
 
 .clerk-wrapper :deep(.cl-formButtonPrimary:hover),
 .clerk-wrapper :deep(button[class*="formButtonPrimary"]:hover) {
-  background: oklch(0.70 0.22 150) !important;
-  background-color: oklch(0.70 0.22 150) !important;
-  color: oklch(0.13 0 0) !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 8px 20px -4px oklch(0.70 0.22 150 / 0.4) !important;
+  background: var(--accent-hover) !important;
+  background-color: var(--accent-hover) !important;
+  color: var(--accent-foreground) !important;
+  
+  box-shadow: 0 8px 20px -4px transparent !important;
 }
 
 /* Footer section with proper spacing */
@@ -707,7 +573,7 @@ if (process.client) {
 .clerk-wrapper :deep(.cl-input.cl-otpCodeFieldInput) {
   /* Clean Apple-like appearance */
   background: var(--background) !important;
-  border: 1px solid #d1d5db !important;
+  border: 1px solid var(--edge) !important;
   border-radius: 8px !important;
   color: var(--foreground) !important;
   pointer-events: none !important;
@@ -765,11 +631,11 @@ if (process.client) {
 .clerk-wrapper :deep(.cl-otpCodeInput:not([data-input-otp])),
 .clerk-wrapper :deep(.cl-codeInput:not([data-input-otp])) {
   background: var(--surface) !important;
-  border: 2px solid var(--border) !important;
+  border: 1px solid var(--edge) !important;
   border-radius: var(--radius-md) !important;
   padding: 0.4375rem 0.75rem !important;
   font-size: 0.8125rem !important;
-  height: 2.125rem !important;
+  min-height: 2.75rem !important; height: auto !important;
   width: 2.5rem !important;
   min-width: 2.5rem !important;
   max-width: 2.5rem !important;
@@ -792,14 +658,14 @@ if (process.client) {
 /* Apple-style focus state */
 .clerk-wrapper :deep([data-input-otp-container="true"]:focus-within .cl-otpCodeFieldInput) {
   border-color: var(--accent) !important;
-  border-width: 2px !important;
+  
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
   transform: scale(1.02) !important;
 }
 
 /* Subtle hover state */
 .clerk-wrapper :deep([data-input-otp-container="true"]:hover:not(:focus-within) .cl-otpCodeFieldInput) {
-  border-color: #9ca3af !important;
+  border-color: var(--border) !important;
   box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
 }
 
@@ -808,14 +674,14 @@ if (process.client) {
 .clerk-wrapper :deep(input[type="tel"]:not([data-input-otp]):hover),
 .clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp]):hover) {
   border-color: var(--border-subtle) !important;
-  border-width: 2px !important;
+  
 }
 
 .clerk-wrapper :deep(input[type="text"][inputmode="numeric"]:not([data-input-otp]):focus),
 .clerk-wrapper :deep(input[type="tel"]:not([data-input-otp]):focus),
 .clerk-wrapper :deep(input[type="text"][autocomplete="one-time-code"]:not([data-input-otp]):focus) {
   border-color: var(--accent) !important;
-  border-width: 2px !important;
+  
   box-shadow: 0 0 0 3px var(--accent-subtle) !important;
   outline: none !important;
 }
@@ -823,47 +689,6 @@ if (process.client) {
 /* OTP Code Field container */
 .clerk-wrapper :deep(.cl-otpCodeField) {
   pointer-events: auto !important;
-}
-
-/* Footer */
-.auth-footer {
-  text-align: center;
-  margin-top: var(--spacing-4);
-  font-size: 0.8125rem;
-  color: var(--foreground-muted);
-}
-
-.auth-link {
-  color: var(--accent);
-  font-weight: var(--font-weight-semibold);
-  text-decoration: none;
-  transition: color 200ms ease;
-}
-
-.auth-link:hover {
-  color: oklch(0.75 0.22 150);
-  text-decoration: underline;
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-  .auth-container {
-    max-width: 100%;
-  }
-
-  .auth-card {
-    padding: var(--spacing-5);
-    border-radius: var(--radius-lg);
-  }
-
-  .auth-title {
-    font-size: 1.25rem;
-  }
-
-  .decoration-ring-1,
-  .decoration-ring-2 {
-    display: none;
-  }
 }
 
 /* Code Entry Message */
@@ -894,8 +719,8 @@ if (process.client) {
 }
 
 .continue-button {
-  background: oklch(0.70 0.22 150);
-  color: oklch(0.13 0 0);
+  background: var(--accent-hover);
+  color: var(--accent-foreground);
   padding: 0.625rem 1.25rem;
   font-size: 0.875rem;
   font-weight: var(--font-weight-semibold);
@@ -907,9 +732,9 @@ if (process.client) {
 }
 
 .continue-button:hover {
-  background: oklch(0.65 0.20 150);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px -4px oklch(0.70 0.22 150 / 0.4);
+  background: var(--accent-hover);
+  
+  box-shadow: 0 8px 20px -4px transparent;
 }
 
 .continue-button:active {

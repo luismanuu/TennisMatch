@@ -29,11 +29,11 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | Torneo `/tournaments/:id` | `pages/tournaments/[id].vue` | Torneos (applied) | #7 | in PR | `shots/pr7` |
 | Mis torneos `/organizer/tournaments` | `pages/organizer/tournaments/index.vue` | none | #7 | in PR | `shots/pr7` |
 | Organizar torneo `/organizer/tournaments/:id` | `pages/organizer/tournaments/[id].vue` | none | #7 | in PR | `shots/pr7` |
-| Iniciar sesión `/sign-in`, `/sign-in/*` | `pages/sign-in.vue`, `pages/sign-in/[...slug].vue` | none | #8 | todo | |
-| Crear cuenta `/sign-up`, verificación | `pages/sign-up.vue`, `pages/sign-up/verify-email-address.vue` | none | #8 | todo | |
-| Onboarding `/onboarding` | `pages/onboarding.vue` | none | #8 | todo | |
-| Invitación `/invitation/:token` | `pages/invitation/[token].vue` | none | #8 | todo | |
-| Admin acceso `/admin/sign-in` | `pages/admin/sign-in.vue` | none | #8 | todo | |
+| Iniciar sesión `/sign-in`, `/sign-in/*` | `pages/sign-in.vue`, `pages/sign-in/[...slug].vue` | none | #8 | in PR | `shots/pr8` |
+| Crear cuenta `/sign-up`, verificación | `pages/sign-up.vue`, `pages/sign-up/verify-email-address.vue` | none | #8 | in PR | `shots/pr8` |
+| Onboarding `/onboarding` | `pages/onboarding.vue` | none | #8 | in PR | `shots/pr8` |
+| Invitación `/invitation/:token` | `pages/invitation/[token].vue` | none | #8 | in PR | `shots/pr8` |
+| Admin acceso `/admin/sign-in` | `pages/admin/sign-in.vue` | none | #8 | in PR | `shots/pr8` |
 | Admin panel `/admin` | `pages/admin/index.vue` | none | #9 | todo | |
 | Admin debug `/admin/debug` | `pages/admin/debug.vue` | none | #9 | todo | |
 | Admin rankings (8 routes) `/admin/rankings/**` | `pages/admin/rankings/*` | none | #10 | todo | |
