@@ -1,9 +1,11 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { and, eq, inArray } from 'drizzle-orm'
+import { useDb, type DbOrTx } from '../db'
+import { notifications } from '../db/schema'
 
 /**
  * Notification types for match-related events
  */
-export type NotificationType = 
+export type NotificationType =
   | 'match_proposal'      // Match proposed, needs acceptance
   | 'match_created'       // Match confirmed/created (e.g., tournament)
   | 'score_proposal'      // Score proposed, needs approval
@@ -11,80 +13,59 @@ export type NotificationType =
   | 'reschedule_proposal' // Reschedule requested
   | 'acceptance_change'   // Acceptance with schedule change
 
+// Notifications are non-critical. Inside a caller's transaction they run in a savepoint, so a failed
+// notification is rolled back on its own instead of aborting the caller's transaction.
+function isolated<T>(tx: DbOrTx | undefined, work: (db: DbOrTx) => Promise<T>): Promise<T> {
+  return tx ? tx.transaction(work) : work(useDb())
+}
+
 /**
- * Create a notification for a player about a match event
- * Non-critical operation - logs errors but doesn't throw
- * Uses upsert to handle duplicate notifications gracefully
+ * Create a notification for a player about a match event.
+ * Non-critical operation - logs errors but doesn't throw.
+ * An existing, non-dismissed notification of the same type for the match is returned instead of a duplicate.
  */
 export async function createMatchNotification(
-  supabase: SupabaseClient,
   playerId: string,
   matchId: string,
   type: NotificationType,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>,
+  tx?: DbOrTx
 ) {
   try {
-    // First, check if notification already exists and is not dismissed
-    const { data: existing } = await supabase
-      .from('notifications')
-      .select('id, is_dismissed')
-      .eq('player_id', playerId)
-      .eq('match_id', matchId)
-      .eq('type', type)
-      .eq('is_dismissed', false)
-      .maybeSingle()
-    
-    // If notification exists and is not dismissed, return it (no need to create)
-    if (existing) {
-      console.log(`[Notifications] Notification ${type} already exists for player ${playerId}, match ${matchId}`)
-      return existing
-    }
-    
-    // Create new notification (or re-create if it was dismissed)
-    const { data, error } = await supabase
-      .from('notifications')
-      .insert({
-        player_id: playerId,
-        type,
-        match_id: matchId,
-        metadata: metadata || {}
+    return await isolated(tx, async (db) => {
+      const live = and(
+        eq(notifications.player_id, playerId),
+        eq(notifications.match_id, matchId),
+        eq(notifications.type, type),
+        eq(notifications.is_dismissed, false)
+      )
+
+      const existing = await db.query.notifications.findFirst({
+        columns: { id: true, is_dismissed: true },
+        where: live,
       })
-      .select()
-      .single()
-    
-    if (error) {
-      // Check if it's a duplicate key error (23505) - this is expected in race conditions
-      if (error.code === '23505') {
-        // Duplicate notification detected (race condition) - fetch the existing one
-        const { data: existingNotification } = await supabase
-          .from('notifications')
-          .select()
-          .eq('player_id', playerId)
-          .eq('match_id', matchId)
-          .eq('type', type)
-          .eq('is_dismissed', false)
-          .single()
-        
-        if (existingNotification) {
-          // Successfully handled duplicate - not an error, just a race condition
-          console.log(`[Notifications] Notification ${type} already exists (race condition handled), returning existing for player ${playerId}`)
-          return existingNotification
-        }
-        
-        // If we can't find it, log as warning (shouldn't happen)
-        console.warn(`[Notifications] Duplicate key error but couldn't find existing notification for player ${playerId}, match ${matchId}, type ${type}`)
-        return null
+      if (existing) {
+        return existing
       }
-      
-      // Other errors are actual problems
-      console.error(`[Notifications] Failed to create ${type} notification:`, error)
-      return null
-    }
-    
-    console.log(`[Notifications] Created ${type} notification for player ${playerId}`)
-    return data
+
+      // The partial unique index (player, type, match) where not dismissed makes a concurrent duplicate a no-op
+      const [created] = await db
+        .insert(notifications)
+        .values({ player_id: playerId, type, match_id: matchId, metadata: metadata || {} })
+        .onConflictDoNothing()
+        .returning()
+      if (created) {
+        return created
+      }
+
+      const raced = await db.query.notifications.findFirst({ where: live })
+      if (!raced) {
+        console.warn(`[Notifications] Duplicate key error but couldn't find existing notification for player ${playerId}, match ${matchId}, type ${type}`)
+      }
+      return raced ?? null
+    })
   } catch (err) {
-    console.error('[Notifications] Exception creating notification:', err)
+    console.error(`[Notifications] Failed to create ${type} notification:`, err)
     return null
   }
 }
@@ -94,32 +75,28 @@ export async function createMatchNotification(
  * For example, when match is accepted, dismiss the proposal notification
  */
 export async function dismissExistingNotifications(
-  supabase: SupabaseClient,
   playerId: string,
   matchId: string,
-  types: NotificationType[]
+  types: NotificationType[],
+  tx?: DbOrTx
 ) {
   try {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ 
-        is_dismissed: true, 
-        dismissed_at: new Date().toISOString() 
-      })
-      .eq('player_id', playerId)
-      .eq('match_id', matchId)
-      .in('type', types)
-      .eq('is_dismissed', false) // Only dismiss non-dismissed notifications
-    
-    if (error) {
-      console.error(`[Notifications] Failed to dismiss notifications:`, error)
-      return false
-    }
-    
-    console.log(`[Notifications] Dismissed ${types.join(', ')} notifications for player ${playerId}`)
+    await isolated(tx, (db) =>
+      db
+        .update(notifications)
+        .set({ is_dismissed: true, dismissed_at: new Date() })
+        .where(
+          and(
+            eq(notifications.player_id, playerId),
+            eq(notifications.match_id, matchId),
+            inArray(notifications.type, types),
+            eq(notifications.is_dismissed, false) // Only dismiss non-dismissed notifications
+          )
+        )
+    )
     return true
   } catch (err) {
-    console.error('[Notifications] Exception dismissing notifications:', err)
+    console.error('[Notifications] Failed to dismiss notifications:', err)
     return false
   }
 }
@@ -129,30 +106,26 @@ export async function dismissExistingNotifications(
  * Useful when match is cancelled or completed
  */
 export async function dismissMatchNotifications(
-  supabase: SupabaseClient,
   matchId: string,
-  types: NotificationType[]
+  types: NotificationType[],
+  tx?: DbOrTx
 ) {
   try {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ 
-        is_dismissed: true, 
-        dismissed_at: new Date().toISOString() 
-      })
-      .eq('match_id', matchId)
-      .in('type', types)
-      .eq('is_dismissed', false)
-    
-    if (error) {
-      console.error(`[Notifications] Failed to dismiss match notifications:`, error)
-      return false
-    }
-    
-    console.log(`[Notifications] Dismissed all ${types.join(', ')} notifications for match ${matchId}`)
+    await isolated(tx, (db) =>
+      db
+        .update(notifications)
+        .set({ is_dismissed: true, dismissed_at: new Date() })
+        .where(
+          and(
+            eq(notifications.match_id, matchId),
+            inArray(notifications.type, types),
+            eq(notifications.is_dismissed, false)
+          )
+        )
+    )
     return true
   } catch (err) {
-    console.error('[Notifications] Exception dismissing match notifications:', err)
+    console.error('[Notifications] Failed to dismiss match notifications:', err)
     return false
   }
 }

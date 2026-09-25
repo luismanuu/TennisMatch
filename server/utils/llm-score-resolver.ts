@@ -3,9 +3,11 @@
  * Uses OpenRouter API to calculate ELO changes using LLM analysis
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { and, desc, eq, inArray, ne, or } from 'drizzle-orm'
+import { useDb, type DbOrTx } from '../db'
+import { players, rating_history } from '../db/schema'
 import type { MatchFormat } from './utr-rating-system'
-import type { LlmEloCalculationRequest } from './llm-prompts'
+import type { LlmEloCalculationRequest, LlmHistoryEntry } from './llm-prompts'
 
 export interface LlmEloCalculationResponse {
   player1_elo_change: number
@@ -54,82 +56,61 @@ export interface LlmEloCalculationResult {
  */
 export async function calculateEloWithLLM(
   request: LlmEloCalculationRequest,
-  supabase: SupabaseClient,
-  config: { openRouterApiKey: string }
+  config: { openRouterApiKey: string },
+  tx?: DbOrTx
 ): Promise<LlmEloCalculationResult> {
   try {
-    // Fetch player data with recent matches (including win streaks)
-    const { data: players, error: playersError } = await supabase
-      .from('players')
-      .select(`
-        id,
-        name,
-        elo,
-        utr_rating,
-        total_matches_played,
-        last_match_at,
-        win_streak,
-        loss_streak
-      `)
-      .in('id', [request.player1Id, request.player2Id])
-    
-    if (playersError || !players || players.length !== 2) {
+    const db = tx ?? useDb()
+    // Fetch player data (including win streaks)
+    const playerRows = await db
+      .select({
+        id: players.id,
+        name: players.name,
+        elo: players.elo,
+        utr_rating: players.utr_rating,
+        total_matches_played: players.total_matches_played,
+        last_match_at: players.last_match_at,
+        win_streak: players.win_streak,
+        loss_streak: players.loss_streak,
+      })
+      .from(players)
+      .where(inArray(players.id, [request.player1Id, request.player2Id]))
+
+    const player1 = playerRows.find(p => p.id === request.player1Id)
+    const player2 = playerRows.find(p => p.id === request.player2Id)
+    if (!player1 || !player2) {
       throw new Error('Failed to fetch players')
     }
-    
-    const player1 = players.find(p => p.id === request.player1Id)!
-    const player2 = players.find(p => p.id === request.player2Id)!
-    
-    // Fetch recent matches and head-to-head in parallel for better performance
-    // Reduced to 5 matches per player to improve API response time
-    // IMPORTANT: Exclude reversed ratings and the current match being processed
-    const [player1MatchesResult, player2MatchesResult, headToHeadResult] = await Promise.all([
-      supabase
-        .from('rating_history')
-        .select(`
-          match_id,
-          score:matches(score),
-          was_winner,
-          opponent:players!rating_history_opponent_id_fkey(id, name),
-          created_at
-        `)
-        .eq('player_id', request.player1Id)
-        .eq('rating_reversed', false)
-        .neq('match_id', request.matchId)
-        .order('created_at', { ascending: false })
-        .limit(5),
-      supabase
-        .from('rating_history')
-        .select(`
-          match_id,
-          score:matches(score),
-          was_winner,
-          opponent:players!rating_history_opponent_id_fkey(id, name),
-          created_at
-        `)
-        .eq('player_id', request.player2Id)
-        .eq('rating_reversed', false)
-        .neq('match_id', request.matchId)
-        .order('created_at', { ascending: false })
-        .limit(5),
-      supabase
-        .from('rating_history')
-        .select(`
-          match_id,
-          score:matches(score),
-          was_winner,
-          created_at
-        `)
-        .or(`and(player_id.eq.${request.player1Id},opponent_id.eq.${request.player2Id}),and(player_id.eq.${request.player2Id},opponent_id.eq.${request.player1Id})`)
-        .eq('rating_reversed', false)
-        .neq('match_id', request.matchId)
-        .order('created_at', { ascending: false })
-        .limit(5)
+
+    // Recent matches (5 per player) and head-to-head, excluding reversed ratings and the match being processed
+    const live = and(eq(rating_history.rating_reversed, false), ne(rating_history.match_id, request.matchId))
+    const recent = (playerId: string) =>
+      db.query.rating_history.findMany({
+        columns: { match_id: true, was_winner: true, created_at: true },
+        with: { match: { columns: { score: true } }, opponent: { columns: { id: true, name: true } } },
+        where: and(eq(rating_history.player_id, playerId), live),
+        orderBy: [desc(rating_history.created_at)],
+        limit: 5,
+      })
+    const [player1Matches, player2Matches, headToHead] = await Promise.all([
+      recent(request.player1Id),
+      recent(request.player2Id),
+      db.query.rating_history.findMany({
+        columns: { match_id: true, was_winner: true, created_at: true },
+        with: { match: { columns: { score: true } } },
+        where: and(
+          or(
+            and(eq(rating_history.player_id, request.player1Id), eq(rating_history.opponent_id, request.player2Id)),
+            and(eq(rating_history.player_id, request.player2Id), eq(rating_history.opponent_id, request.player1Id))
+          ),
+          live
+        ),
+        orderBy: [desc(rating_history.created_at)],
+        limit: 5,
+      }),
     ])
-    
-    const player1Matches = player1MatchesResult.data
-    const player2Matches = player2MatchesResult.data
-    const headToHead = headToHeadResult.data
+    const toHistory = (rows: Array<{ was_winner: boolean; created_at: Date | null; match: { score: string | null } | null; opponent?: { name: string } | null }>): LlmHistoryEntry[] =>
+      rows.map(r => ({ score: r.match?.score ?? null, was_winner: r.was_winner, created_at: r.created_at, opponent: r.opponent ?? null }))
     
     // Detect format and calculate match weight factors
     const formatDetected = detectMatchFormatFromScore(request.score)
@@ -137,7 +118,7 @@ export async function calculateEloWithLLM(
     const eloDifference = Math.abs(request.player1Elo - request.player2Elo)
     const competitivenessWeight = getCompetitivenessWeight(eloDifference)
     const reliabilityWeight = getReliabilityWeight(
-      player2.total_matches_played,
+      player2.total_matches_played ?? 0,
       player2.last_match_at
     )
     const finalMatchWeight = formatWeight * competitivenessWeight * reliabilityWeight
@@ -145,8 +126,8 @@ export async function calculateEloWithLLM(
     // Build context
     const context = buildMatchContext(
       request,
-      { ...player1, recentMatches: player1Matches || [], headToHead: headToHead?.filter(h => h.was_winner !== undefined) || [] } as any,
-      { ...player2, recentMatches: player2Matches || [], headToHead: [] } as any,
+      { ...player1, recentMatches: toHistory(player1Matches), headToHead: toHistory(headToHead) },
+      { ...player2, recentMatches: toHistory(player2Matches), headToHead: [] },
       {
         formatWeight,
         competitivenessWeight,
@@ -557,7 +538,7 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
       player2_elo_change: parseFloat(parsed.player2_elo_change) || 0,
       match_rating: parseFloat(parsed.match_rating) || 0,
       match_weight: parseFloat(parsed.match_weight) || 1.0,
-      format_detected: String(parsed.format_detected || 'unknown').substring(0, 50),
+      format_detected: toMatchFormat(parsed.format_detected),
       games_won_p1: parseInt(parsed.games_won_p1) || 0,
       games_lost_p1: parseInt(parsed.games_lost_p1) || 0,
       total_games: parseInt(parsed.total_games) || 0,
@@ -578,6 +559,12 @@ function parseLLMResponse(responseText: string): LlmEloCalculationResponse {
       reasoning: 'JSON parsing failed, using default values'
     }
   }
+}
+
+const MATCH_FORMATS: readonly MatchFormat[] = ['best-of-3', 'best-of-5', 'pro-set-8', 'pro-set-10', 'super-tiebreak', 'walkover', 'unknown']
+
+function toMatchFormat(value: unknown): MatchFormat {
+  return MATCH_FORMATS.find(f => f === value) ?? 'unknown'
 }
 
 /**
