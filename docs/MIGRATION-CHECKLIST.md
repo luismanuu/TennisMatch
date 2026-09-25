@@ -8,7 +8,7 @@ Status legend: `[x]` done in a PR, `[ ]` not yet.
 - [x] Neon branches `main` (production, **empty until the CEO's go**) and `staging`
 - [x] Vercel project `tennis-match` in `luismanuus-projects`, linked to `luismanuu/TennisMatch`, production branch `main`
 - [x] Infisical folder `/luis-factory/tennismatch` (env `dev`) with the database URLs and auth secrets
-- [x] Vercel env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET` for Preview+Development (Neon `staging`) and Production (Neon `main`). `BETTER_AUTH_URL` is not pinned on Vercel: the server derives it from `VERCEL_BRANCH_URL` on previews and `VERCEL_PROJECT_PRODUCTION_URL` in production, so every preview host works. Set it once a custom domain exists.
+- [x] Vercel env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET` for Preview+Development (Neon `staging`) and Production (Neon `main`). `BETTER_AUTH_URL` is not pinned on Vercel: the server derives it from `VERCEL_BRANCH_URL` on previews and `VERCEL_PROJECT_PRODUCTION_URL` in production, never from the request Host. Set it once a custom domain exists.
 - [x] Migrations applied to Neon `staging` from the final schema (3 migrations). Neon `main` is empty until the CEO's go.
 
 ## Schema (PR 1)
@@ -30,9 +30,21 @@ Status legend: `[x]` done in a PR, `[ ]` not yet.
 - [x] Every admin route checks admin server-side and uses the result
 - [x] Security-gate tests
 
+## Production configuration (fail closed)
+
+"Production" means `NODE_ENV=production` **and** `VERCEL_ENV=production`. Previews (`VERCEL_ENV=preview`, i.e. staging) and local dev are not production. The rules live in `server/utils/server-config.ts`.
+
+- **Refuses to boot** in production when `RESEND_API_KEY` or `EMAIL_FROM` is missing, or when no base URL can be pinned (`BETTER_AUTH_URL`, else `VERCEL_PROJECT_PRODUCTION_URL`; it must be https). The Nitro startup plugin `server/plugins/production-config.ts` throws, so the function serves nothing; the auth instance throws the same error, so sign-up can never run unverified.
+- **Email verification** is always required in production. On previews and locally it is required only when both email variables are set; without them sign-up stays open and invitation links are shown to the inviter.
+- **Outbound links** (invitations, auth callbacks) come from configuration only, never the request `Host`/`X-Forwarded-Host`: `BETTER_AUTH_URL`, else `VERCEL_BRANCH_URL`, else `VERCEL_URL` on previews, else `http://localhost:$PORT`. Production never uses the per-deployment hosts.
+- **Rate limits**, stored in Postgres because serverless instances share no memory (migration `0003_rate_limits`):
+  - Better Auth (`rate_limit` table, `rateLimit.storage = 'database'`, see https://www.better-auth.com/docs/concepts/rate-limit): always enabled, 100 requests / 60 s per IP and path by default, `/sign-in/email` 5 / 60 s, `/sign-up/email` 5 / hour. The client IP is read from `x-forwarded-for`, which Vercel sets.
+  - Invitations (`rate_limit_buckets` table, `POST /api/pending-players`): 10 per inviter per hour and 3 per invited email per 24 h; attempts count, not only successes. Over the limit: 429 with `Retry-After`.
+- Before promoting to production: set `RESEND_API_KEY`, `EMAIL_FROM` and (once a custom domain exists) `BETTER_AUTH_URL` on the Vercel Production environment, and apply migration `0003` to the target Neon branch.
+
 ## Open decisions for the CEO
 
-- Email delivery: verification and invitation emails need `RESEND_API_KEY` + `EMAIL_FROM` for a verified sender domain. Until then verification is not enforced and invitation links are shown to the inviter to share.
+- Email delivery: verification and invitation emails need `RESEND_API_KEY` + `EMAIL_FROM` for a verified sender domain. Until then previews do not enforce verification and show invitation links to the inviter; **production refuses to boot without them** (see "Production configuration").
 - `OPENROUTER_API_KEY`: the app's LLM score parsing needs a key of its own. Only Mateo's and EnResumen's exist; not reused. The deterministic fallback runs meanwhile.
 
 ## Data layer

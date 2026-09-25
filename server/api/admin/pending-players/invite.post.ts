@@ -104,7 +104,7 @@ export default defineEventHandler(async (event) => {
           .values({ ...values, email })
           .returning()
 
-    const url = invitationUrl(event, token)
+    const url = invitationUrl(token)
     const emailSent = await sendInvitationEmail({ to: email, name, url })
 
     return {

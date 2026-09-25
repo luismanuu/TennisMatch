@@ -1,5 +1,6 @@
 import { type AnyColumn, relations, sql } from 'drizzle-orm'
 import {
+  bigint,
   boolean,
   check,
   date,
@@ -92,6 +93,29 @@ export const verification = pgTable(
     updatedAt: tz('updated_at').notNull().defaultNow(),
   },
   (t) => [index('verification_identifier_idx').on(t.identifier)],
+)
+
+// Better Auth rate-limit counters (rateLimit.storage = 'database'): one row per client IP and auth path.
+// Serverless instances share no memory, so the counters live here. Field names follow Better Auth's model.
+export const rateLimit = pgTable('rate_limit', {
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  count: integer('count').notNull(),
+  lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+}, (t) => [index('rate_limit_last_request_idx').on(t.lastRequest)])
+
+// ── App rate limits ───────────────────────────────────────────────────────────
+
+// Fixed-window counters for app endpoints (server/utils/rate-limit.ts), e.g. invitations per inviter
+// and per invited email. One row per key; the window restarts once it has fully elapsed.
+export const rate_limit_buckets = pgTable(
+  'rate_limit_buckets',
+  {
+    key: text('key').primaryKey(),
+    count: integer('count').notNull(),
+    window_started_at: tz('window_started_at').notNull(),
+  },
+  (t) => [index('idx_rate_limit_buckets_window_started_at').on(t.window_started_at)],
 )
 
 // ── Catalog ───────────────────────────────────────────────────────────────────

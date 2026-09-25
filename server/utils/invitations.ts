@@ -1,15 +1,20 @@
 import { randomBytes } from 'node:crypto'
-import type { H3Event } from 'h3'
-import { getRequestURL } from 'h3'
 import { sendEmail } from './email'
+import type { RateLimitRule } from './rate-limit'
+import { resolveServerConfig } from './server-config'
+
+// Every invitation emails a stranger from our domain (server/api/pending-players/index.post.ts).
+export const INVITES_PER_INVITER: RateLimitRule = { windowSeconds: 60 * 60, max: 10 }
+export const INVITES_PER_TARGET_EMAIL: RateLimitRule = { windowSeconds: 24 * 60 * 60, max: 3 }
 
 export function newInvitationToken(): string {
   return randomBytes(32).toString('hex')
 }
 
-export function invitationUrl(event: H3Event, token: string): string {
-  const base = process.env.BETTER_AUTH_URL ?? getRequestURL(event).origin
-  return `${base.replace(/\/$/, '')}/invitation/${token}`
+// The link base comes from configuration only, never from the request: a forged Host or
+// X-Forwarded-Host header must not be able to point an emailed link at another site.
+export function invitationUrl(token: string): string {
+  return `${resolveServerConfig().baseURL}/invitation/${token}`
 }
 
 // Returns false when email delivery is not configured; the caller then shares `invitationUrl` by hand.

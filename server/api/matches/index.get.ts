@@ -188,16 +188,11 @@ export default defineEventHandler(async (event) => {
     // Newest first: played_at for completed matches, otherwise scheduled_at; undated matches last
     filteredData.sort((a, b) => compareMatchDates(a, b))
     
-    // One tournament_match per match: flatten the relation to its first row
-    const enrichedData = filteredData.map((match) => ({
-      ...match,
-      tournament_match: match.tournament_match.length > 0 ? match.tournament_match[0] : match.tournament_match,
-    }))
-    
     // Calculate pagination
     const total = filteredData.length
     const totalPages = Math.ceil(total / limit)
-    const paginatedData = enrichedData.slice(offset, offset + limit)
+    // tournament_match stays an array (empty for a friendly), as the API has always returned it.
+    const paginatedData = filteredData.slice(offset, offset + limit)
     
     return {
       matches: paginatedData,

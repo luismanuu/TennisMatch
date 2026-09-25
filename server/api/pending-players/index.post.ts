@@ -1,7 +1,14 @@
 import { eq, sql } from 'drizzle-orm'
 import { requirePlayer } from '~/server/utils/session'
 import { findAccountByEmail } from '~/server/utils/users'
-import { invitationUrl, newInvitationToken, sendInvitationEmail } from '~/server/utils/invitations'
+import {
+  INVITES_PER_INVITER,
+  INVITES_PER_TARGET_EMAIL,
+  invitationUrl,
+  newInvitationToken,
+  sendInvitationEmail,
+} from '~/server/utils/invitations'
+import { enforceRateLimits } from '~/server/utils/rate-limit'
 import { useDb } from '~/server/db'
 import { categories, pending_players } from '~/server/db/schema'
 import type { CreatePendingPlayerPayload } from '~/types'
@@ -43,6 +50,21 @@ export default defineEventHandler(async (event) => {
     }
 
     const db = useDb()
+
+    // Checked before any lookup: attempts count, not only successes, so the limits also cap probing
+    // which emails already have an account (the 409 below).
+    await enforceRateLimits(event, db, [
+      {
+        key: `invite:inviter:${inviter.id}`,
+        rule: INVITES_PER_INVITER,
+        message: 'Too many invitations sent, try again later',
+      },
+      {
+        key: `invite:email:${email.toLowerCase()}`,
+        rule: INVITES_PER_TARGET_EMAIL,
+        message: 'Too many invitations for this email, try again later',
+      },
+    ])
 
     // Verify category exists
     const category = UUID.test(category_id)
@@ -109,7 +131,7 @@ export default defineEventHandler(async (event) => {
       },
     })
 
-    const url = invitationUrl(event, token)
+    const url = invitationUrl(token)
     const emailSent = await sendInvitationEmail({ to: email, name, url })
 
     return {

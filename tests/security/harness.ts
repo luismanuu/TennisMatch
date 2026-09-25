@@ -103,6 +103,13 @@ export type TestApp = {
 }
 
 let seq = 0
+let ipSeq = 0
+
+// 10.0.0.1, 10.0.0.2, ...: a distinct, valid client address per call.
+export function nextClientIp(): string {
+  const n = ++ipSeq
+  return `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`
+}
 
 export async function startTestApp(): Promise<TestApp> {
   process.env.BETTER_AUTH_SECRET = 'test-secret-for-the-security-suite-0123456789'
@@ -159,7 +166,8 @@ export async function startTestApp(): Promise<TestApp> {
   const signUp: TestApp['signUp'] = async (email, role = 'player') => {
     const res = await fetch(`${baseURL}/api/auth/sign-up/email`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', origin: baseURL },
+      // Sign-up is rate limited per client IP (AUTH_RATE_LIMIT); each seeded account comes from its own address.
+      headers: { 'content-type': 'application/json', origin: baseURL, 'x-forwarded-for': nextClientIp() },
       body: JSON.stringify({ name: email.split('@')[0], email, password: 'correct-horse-battery' }),
     })
     if (res.status !== 200) throw new Error(`sign-up failed: ${res.status} ${await res.text()}`)

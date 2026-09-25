@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
       .set({ invitation_token: token, updated_at: new Date() })
       .where(eq(pending_players.id, pendingPlayer.id))
 
-    const url = invitationUrl(event, token)
+    const url = invitationUrl(token)
     const emailSent = await sendInvitationEmail({ to: pendingPlayer.email, name: pendingPlayer.name, url })
 
     return {

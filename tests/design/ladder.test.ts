@@ -5,7 +5,9 @@ import { SEED, int, mulberry32 } from './prng'
 describe('ladderBars (property)', () => {
   it('stays inside the box, never overlaps, sits on the baseline, and rises monotonically to full height', () => {
     const rand = mulberry32(SEED + 40)
-    for (let r = 0; r < 3000; r++) {
+    // 1000 cases: ladderBars itself takes ~9 ms for 3000, but ~400k expect() calls took ~3.9 s and hit the 5 s
+    // timeout under load. 1000 still draws ~50 zero-width and ~50 zero-height boxes per run.
+    for (let r = 0; r < 1000; r++) {
       const n = int(rand, -2, 40)
       const width = rand() < 0.05 ? 0 : int(rand, 1, 1200) + rand()
       const height = rand() < 0.05 ? 0 : int(rand, 1, 600) + rand()
