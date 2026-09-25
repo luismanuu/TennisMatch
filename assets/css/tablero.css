@@ -1,0 +1,303 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLERO · the hand-operated club scoreboard (DESIGN.md)
+   Enamel-green board, white enamel plates hung by hand, one amber lamp.
+   Scoped: nothing here applies outside `.tablero` (PageLayout world="tablero"),
+   so routes not yet migrated keep the previous look until Phase 2.
+   Fonts: Big Shoulders and Archivo, SIL Open Font License 1.1, self-hosted latin subsets.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Big Shoulders';
+  src: url('/fonts/big-shoulders-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ── Night board (default) ───────────────────────────────────────────────── */
+.tablero {
+  --t-board: #0e3a2d;        /* enamel green: the ground, 60%+ of every screen */
+  --t-board-raise: #114234;  /* a painted panel on the board */
+  --t-board-deep: #0a2c22;   /* recessed slot a plate hangs in */
+  --t-plate: #eef0ea;        /* enamel plate */
+  --t-plate-ink: #0e3a2d;
+  --t-lamp: #f4b23e;         /* the one lamp: the thing that needs you, or you */
+  --t-lamp-ink: #0a2c22;
+  --t-ink: #eef0ea;
+  --t-ink-muted: #b4cbbf;
+  --t-chalk: rgba(238, 240, 234, 0.16);
+  --t-chalk-strong: rgba(238, 240, 234, 0.34);
+  --t-clay: #f29a7e;         /* a lost place, painted, never alone: always with an arrow and words */
+  --t-focus: #eef0ea;
+  --t-plate-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -2px 0 rgba(14, 58, 45, 0.14), 0 2px 2px -1px rgba(0, 0, 0, 0.4), 0 10px 18px -12px rgba(0, 0, 0, 0.6);
+  --t-slot-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+
+  --t-display: 'Big Shoulders', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --t-text: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --t-ease: cubic-bezier(0.16, 1, 0.3, 1);     /* exponential out: plates settle, never bounce */
+  --t-ease-in: cubic-bezier(0.55, 0, 0.9, 0.4);
+  --t-nav-h: 64px;
+  --t-tab-h: 64px;
+
+  /* Legacy tokens the shared components read, re-pointed at the board */
+  --background: var(--t-board);
+  --foreground: var(--t-ink);
+  --foreground-muted: var(--t-ink-muted);
+  --accent: var(--t-lamp);
+  --edge: var(--t-chalk);
+  --lens: rgba(238, 240, 234, 0.07);
+  --solid: var(--t-board);
+  --focus: var(--t-focus);
+  --shell-top: calc(var(--t-nav-h) + env(safe-area-inset-top, 0px) + 28px);
+  --shell-bottom: calc(var(--t-tab-h) + env(safe-area-inset-bottom, 0px) + 40px);
+
+  background: var(--t-board);
+  color: var(--t-ink);
+  font-family: var(--t-text);
+  font-optical-sizing: auto;
+  color-scheme: dark;
+}
+@media (min-width: 900px) { .tablero { --shell-bottom: 56px; --shell-top: calc(var(--t-nav-h) + 48px); } }
+
+/* ── Day board (Claro appearance): white painted board, green plates ─────── */
+[data-theme='claro'] .tablero {
+  --t-board: #eef0ea;
+  --t-board-raise: #e4e8e0;
+  --t-board-deep: #d9ded5;
+  --t-plate: #0e3a2d;
+  --t-plate-ink: #eef0ea;
+  --t-lamp-ink: #0a2c22;
+  --t-ink: #0e3a2d;
+  --t-ink-muted: #3f5e51;
+  --t-chalk: rgba(14, 58, 45, 0.16);
+  --t-chalk-strong: rgba(14, 58, 45, 0.36);
+  --t-clay: #a4442a;
+  --t-focus: #0e3a2d;
+  --t-plate-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.2), 0 2px 2px -1px rgba(14, 58, 45, 0.35), 0 10px 18px -12px rgba(14, 58, 45, 0.5);
+  --t-slot-shadow: inset 0 2px 4px rgba(14, 58, 45, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.7);
+  --lens: rgba(14, 58, 45, 0.06);
+  color-scheme: light;
+}
+
+/* The canvas behind overscroll matches the board */
+html:has(.tablero), html:has(.tablero) body { background-color: #0e3a2d; }
+html[data-theme='claro']:has(.tablero), html[data-theme='claro']:has(.tablero) body { background-color: #eef0ea; }
+
+/* Browser surfaces carry the board too */
+.tablero ::selection { background: var(--t-lamp); color: var(--t-lamp-ink); }
+.tablero input, .tablero textarea { caret-color: var(--t-lamp); }
+.tablero, .tablero * { scrollbar-color: var(--t-chalk-strong) transparent; }
+.tablero :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--t-focus);
+  outline-offset: 3px;
+}
+.tablero .num { font-variant-numeric: tabular-nums lining-nums; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+
+/* ── Type ────────────────────────────────────────────────────────────────── */
+.tablero h1, .tablero h2, .tablero h3 { font-family: var(--t-display); font-weight: 800; letter-spacing: 0.005em; text-transform: uppercase; }
+.t-display-xl { font-size: clamp(3.25rem, 1.4rem + 7.4vw, 6rem); line-height: 0.86; }
+.t-display-l { font-size: clamp(2.75rem, 1.6rem + 4.4vw, 5rem); line-height: 0.9; }
+.t-display-m { font-size: clamp(1.75rem, 1.25rem + 1.6vw, 2.5rem); line-height: 0.95; }
+.t-display-s { font-size: 1.5rem; line-height: 1; }
+.tablero p, .tablero li { text-wrap: pretty; }
+.t-lede { font-size: 1.0625rem; line-height: 1.55; color: var(--t-ink-muted); max-width: 46ch; }
+.t-muted { color: var(--t-ink-muted); }
+/* Painted board labels: column heads, units. Not headings, never above a heading. */
+.t-paint { font-family: var(--t-text); font-stretch: 80%; font-weight: 650; font-size: 0.78rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--t-ink-muted); }
+
+/* ── Plates and slots ────────────────────────────────────────────────────── */
+.t-slot {
+  position: relative; display: inline-grid; place-items: center;
+  padding: 3px; border-radius: 4px;
+  background: var(--t-board-deep); box-shadow: var(--t-slot-shadow);
+}
+.t-plate {
+  --pw: 1.05em;
+  position: relative; display: inline-grid; place-items: center;
+  min-width: var(--pw); height: 1.32em; padding: 0 0.16em;
+  border-radius: 3px;
+  background: var(--t-plate); color: var(--t-plate-ink);
+  box-shadow: var(--t-plate-shadow);
+  font-family: var(--t-display); font-weight: 800; line-height: 1; letter-spacing: 0;
+  transform-origin: 50% 0;
+}
+/* Two hooks the plate hangs from */
+.t-plate::before {
+  content: ''; position: absolute; top: 0.12em; left: 50%; width: 46%; height: 3px; translate: -50% 0;
+  background: radial-gradient(circle, rgba(14, 58, 45, 0.28) 1.2px, transparent 1.6px) 0 0 / 50% 100% repeat-x;
+  pointer-events: none;
+}
+[data-theme='claro'] .tablero .t-plate::before { background-image: radial-gradient(circle, rgba(238, 240, 234, 0.35) 1.2px, transparent 1.6px); }
+.t-plate--lamp { background: var(--t-lamp); color: var(--t-lamp-ink); }
+.t-plate--blank { background: transparent; box-shadow: none; }
+.t-plate--blank::before { display: none; }
+.t-plate--word { --pw: auto; padding: 0 0.3em; }
+.t-plates { display: inline-flex; gap: 3px; }
+
+/* A plate being re-hung: the old one swings off its hooks, the new one drops onto them */
+.t-cell { position: relative; display: inline-grid; perspective: 420px; }
+.t-cell > * { grid-area: 1 / 1; }
+.t-flip-enter-active { transition: transform 260ms var(--t-ease), opacity 90ms linear; }
+.t-flip-enter-from { transform: rotateX(-78deg); opacity: 0; }
+.t-flip-leave-active { transition: transform 180ms var(--t-ease-in), opacity 180ms linear; transform-origin: 50% 100%; z-index: 1; }
+.t-flip-leave-to { transform: rotateX(80deg) translateY(12%); opacity: 0; }
+
+/* ── Board (a painted panel) ─────────────────────────────────────────────── */
+.t-board {
+  position: relative;
+  background: var(--t-board-raise);
+  border: 1px solid var(--t-chalk-strong);
+  border-radius: 6px;
+  /* Painted onto the board, not floating above it: an inner highlight only, no drop shadow */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.t-rule { border: 0; border-top: 1px solid var(--t-chalk); margin: 0; }
+
+/* ── Buttons: plates you can press ───────────────────────────────────────── */
+.t-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 48px; max-width: 100%; padding: 12px 20px;
+  border: 0; border-radius: 4px; cursor: pointer; text-decoration: none; text-align: center;
+  font-family: var(--t-text); font-size: 15px; font-weight: 650; line-height: 1.25; letter-spacing: 0.01em;
+  transform-origin: 50% 0;
+}
+.t-btn--lamp { background: var(--t-lamp); color: var(--t-lamp-ink); box-shadow: var(--t-plate-shadow); }
+.t-btn--plate { background: var(--t-plate); color: var(--t-plate-ink); box-shadow: var(--t-plate-shadow); }
+.t-btn--board { background: var(--t-lamp-ink); color: #eef0ea; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4), 0 10px 18px -12px rgba(0, 0, 0, 0.6); }
+.t-btn--line { background: transparent; color: var(--t-ink); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); }
+.t-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.t-link {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 0;
+  border: 0; background: none; cursor: pointer;
+  color: var(--t-ink); font-family: var(--t-text); font-size: 15px; font-weight: 650;
+  text-decoration: underline; text-decoration-color: var(--t-lamp); text-decoration-thickness: 2px; text-underline-offset: 6px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .t-btn { transition: transform 220ms var(--t-ease), box-shadow 220ms var(--t-ease), background-color 160ms linear; }
+  .t-link { transition: text-underline-offset 180ms var(--t-ease), text-decoration-thickness 180ms var(--t-ease); }
+}
+@media (hover: hover) {
+  /* Lifted on its hooks: the bottom edge swings toward you, the shadow lengthens */
+  .t-btn--lamp:hover:not(:disabled), .t-btn--plate:hover:not(:disabled), .t-btn--board:hover:not(:disabled) {
+    transform: perspective(500px) rotateX(7deg);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -2px 0 rgba(14, 58, 45, 0.14), 0 6px 6px -4px rgba(0, 0, 0, 0.35), 0 18px 24px -14px rgba(0, 0, 0, 0.6);
+  }
+  .t-btn--line:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--t-ink); }
+  .t-link:hover { text-underline-offset: 4px; text-decoration-thickness: 3px; }
+}
+/* Pressed flat against the board */
+.t-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 1px rgba(0, 0, 0, 0.35); }
+.t-btn--line:active:not(:disabled) { box-shadow: inset 0 0 0 1px var(--t-ink), inset 0 2px 4px rgba(0, 0, 0, 0.3); }
+
+/* ── Rows: painted lines on the board ────────────────────────────────────── */
+.t-list { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--t-chalk); }
+.t-row {
+  display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 14px 4px;
+  border-top: 1px solid var(--t-chalk); color: inherit; text-decoration: none;
+}
+.t-row__copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.t-row__copy strong { display: block; font-weight: 650; }
+.t-row__copy span { display: block; font-size: 14px; color: var(--t-ink-muted); }
+.t-row__end { color: var(--t-ink-muted); flex-shrink: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  a.t-row .t-row__end { transition: transform 220ms var(--t-ease), color 160ms linear; }
+}
+@media (hover: hover) {
+  a.t-row:hover { background: var(--lens); }
+  a.t-row:hover .t-row__end { color: var(--t-ink); transform: translateX(3px); }
+}
+a.t-row:active { background: rgba(0, 0, 0, 0.12); }
+.t-glyph { display: inline-grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--t-chalk-strong); color: var(--t-ink); font-family: var(--t-display); font-weight: 800; font-size: 17px; }
+
+/* ── Form fields: recessed slots ─────────────────────────────────────────── */
+.t-field {
+  width: 100%; min-height: 48px; padding: 12px 14px;
+  border: 0; border-radius: 4px;
+  background: var(--t-board-deep); color: var(--t-ink);
+  box-shadow: var(--t-slot-shadow), inset 0 0 0 1px var(--t-chalk);
+  font-family: var(--t-text); font-size: 16px; line-height: 1.4;
+}
+.t-field::placeholder { color: var(--t-ink-muted); opacity: 1; }
+.t-field:focus-visible { outline: 2px solid var(--t-lamp); outline-offset: 2px; }
+select.t-field {
+  appearance: none; -webkit-appearance: none; padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b4cbbf' stroke-width='2' stroke-linecap='square'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+}
+[data-theme='claro'] .tablero select.t-field { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233f5e51' stroke-width='2' stroke-linecap='square'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); }
+select.t-field option { background: var(--t-board); color: var(--t-ink); }
+
+/* ── Status marks (was: capsule badges) ──────────────────────────────────── */
+.tablero .status-badge, .tablero .status-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 3px;
+  background: transparent; color: var(--t-ink); box-shadow: inset 0 0 0 1px var(--t-chalk-strong);
+  font-size: 12.5px; font-weight: 600; line-height: 1.4;
+}
+.tablero .status-badge-active { color: var(--t-ink); box-shadow: inset 0 0 0 1px var(--t-ink); }
+.tablero .status-badge-pending { background: var(--t-lamp); color: var(--t-lamp-ink); box-shadow: none; }
+.tablero .status-badge-completed { color: var(--t-ink-muted); }
+
+/* ── Shell: the board's header rail and the bottom rail ──────────────────── */
+.tablero .nav-island {
+  top: 0; left: 0; right: 0;
+  min-height: var(--t-nav-h);
+  padding: env(safe-area-inset-top, 0px) max(var(--gutter), calc((100vw - 1280px) / 2 + var(--gutter))) 0;
+  border: 0; border-bottom: 1px solid var(--t-chalk);
+  border-radius: 0;
+  background: var(--t-board);
+  box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.tablero .nav-island .brand { gap: 10px; font-family: var(--t-display); font-weight: 800; font-size: 21px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--t-ink); }
+.tablero .nav-island .brand > svg { color: var(--t-lamp); }
+.tablero .nav-island .brand strong { font-weight: 800; }
+.tablero .nav-links { gap: 2px; }
+.tablero .nav-links a {
+  border-radius: 3px; padding: 8px 12px; min-height: 40px;
+  font-family: var(--t-display); font-weight: 700; font-size: 18px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--t-ink-muted);
+}
+.tablero .nav-links a[aria-current='page'] { background: var(--t-plate); color: var(--t-plate-ink); box-shadow: var(--t-plate-shadow); font-weight: 800; }
+@media (hover: hover) { .tablero .nav-links a:not([aria-current='page']):hover { background: var(--lens); color: var(--t-ink); } }
+.tablero .nav-island .icon-button { border-radius: 4px; background: transparent; box-shadow: inset 0 0 0 1px var(--t-chalk); color: var(--t-ink); }
+@media (hover: hover) { .tablero .nav-island .icon-button:hover { box-shadow: inset 0 0 0 1px var(--t-chalk-strong); background: var(--lens); } }
+.tablero .nav-dot { background: var(--t-lamp); box-shadow: 0 0 0 2px var(--t-board); border-radius: 1px; }
+.tablero .nav-tools .text-link { color: var(--t-ink); font-family: var(--t-text); white-space: nowrap; }
+.tablero .nav-tools .btn-primary { white-space: nowrap; border-radius: 4px; background: var(--t-lamp); color: var(--t-lamp-ink); box-shadow: var(--t-plate-shadow); font-family: var(--t-text); }
+@media (max-width: 899px) {
+  .tablero .nav-island { left: 0; right: 0; min-height: var(--t-nav-h); padding: env(safe-area-inset-top, 0px) var(--gutter) 0; gap: 8px; }
+  .tablero .nav-island .brand { font-size: 18px; gap: 8px; }
+  .tablero .nav-tools { gap: 4px; }
+  .tablero .nav-tools .text-link { padding: 8px 6px; font-size: 14px; }
+  .tablero .nav-tools .btn-primary { padding: 8px 12px; font-size: 14px; }
+}
+.tablero .site-footer { border-top-color: var(--t-chalk); color: var(--t-ink-muted); font-size: 13px; }
+.tablero .site-footer a { color: var(--t-ink-muted); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--t-chalk-strong); }
+
+html:has(.tablero) .tabbar {
+  left: 0; right: 0; bottom: 0; max-width: none; margin: 0;
+  padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+  border: 0; border-top: 1px solid rgba(238, 240, 234, 0.16);
+  border-radius: 0; background: #0e3a2d; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+html:has(.tablero) .tabbar-item { border-radius: 3px; min-height: 56px; color: #b4cbbf; font-family: 'Archivo', system-ui, sans-serif; }
+html:has(.tablero) .tabbar-item.is-active { background: #eef0ea; color: #0e3a2d; }
+html:has(.tablero) .tabbar-badge { background: #f4b23e; border-radius: 1px; box-shadow: 0 0 0 2px #0e3a2d; }
+html[data-theme='claro']:has(.tablero) .tabbar { background: #eef0ea; border-top-color: rgba(14, 58, 45, 0.16); }
+html[data-theme='claro']:has(.tablero) .tabbar-item { color: #3f5e51; }
+html[data-theme='claro']:has(.tablero) .tabbar-item.is-active { background: #0e3a2d; color: #eef0ea; }
+
+/* ── Motion safety ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .t-flip-enter-active, .t-flip-leave-active { transition: none; }
+  .t-flip-leave-active { display: none; }
+}

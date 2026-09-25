@@ -6,7 +6,9 @@ export default defineNuxtConfig({
   // Load CSS synchronously to prevent FOUC
   css: [
     '@/assets/css/design-system.css',
-    '@/assets/css/main.css'
+    '@/assets/css/main.css',
+    // Tablero world (DESIGN.md): scoped to `.tablero`, inert on routes that have not opted in
+    '@/assets/css/tablero.css'
   ],
   
   // App configuration for better rendering

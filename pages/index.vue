@@ -1,224 +1,243 @@
 <template>
-  <PageLayout>
-    <!-- Authenticated: Inicio (DESIGN.md §7, design/mock/court-Inicio.html) -->
+  <PageLayout world="tablero">
+    <!-- Authenticated: Inicio (DESIGN.md "Inicio") -->
     <template v-if="isAuthenticated">
-      <header class="page-heading">
-        <p class="meta">{{ contextLine }}</p>
-        <h1>{{ greeting }}<span v-if="firstName">, {{ firstName }}</span></h1>
+      <header class="home-head">
+        <p class="t-muted home-head__context">{{ contextLine }}</p>
+        <h1 class="t-display-l">{{ greeting }}<span v-if="firstName">, {{ firstName }}</span></h1>
       </header>
 
-      <div class="split-grid">
-        <div class="flow-stack">
-          <!-- Lead: the most urgent real action, derived from pending notifications -->
-          <PhotoPanel v-if="leadState === 'lead' && leadNotification" photo="clayday" variant="priority" eager>
-            <template #decor><CourtLines rally /></template>
-            <span class="status-pill">{{ leadCopy.status }}</span>
-            <h2>{{ leadCopy.title }}</h2>
-            <p v-if="leadNotification.type === 'score_proposal' && leadMatch?.score" class="score">{{ formatScore(leadMatch.score) }}</p>
-            <p v-if="leadMeta">{{ leadMeta }}</p>
-            <NuxtLink :to="`/matches/${leadNotification.match_id}`" class="btn-primary">
+      <!-- The player's own scoreboard: SR on hung plates, supporting counts as columns -->
+      <section ref="playerBoard" class="player-board t-board" aria-labelledby="player-board-title">
+        <div class="player-board__sr">
+          <h2 id="player-board-title" class="t-paint">Tu nivel de juego</h2>
+          <p v-if="playerLoading" class="player-board__plates" aria-busy="true">
+            <span class="sr-only">Cargando tu nivel</span>
+            <span v-for="n in 4" :key="n" class="t-slot player-board__slot" aria-hidden="true" />
+          </p>
+          <p v-else class="player-board__plates">
+            <TableroPlates :value="player?.elo ?? 0" :label="`${(player?.elo ?? 0).toLocaleString('es-EC')} puntos SR`" />
+            <span class="player-board__unit" aria-hidden="true">SR</span>
+          </p>
+          <p v-if="currentTier" class="player-board__tier">{{ tierName(currentTier.tier) }}</p>
+          <p v-else-if="player && !playerLoading" class="player-board__tier player-board__tier--quiet">Sin nivel todavía: juega tus partidos de colocación</p>
+        </div>
+
+        <dl class="player-board__stats">
+          <div>
+            <dt class="t-paint">Victorias seguidas</dt>
+            <dd><TableroPlates :value="player?.win_streak ?? 0" :label="String(player?.win_streak ?? 0)" /></dd>
+          </div>
+          <div>
+            <dt class="t-paint">Partidos jugados</dt>
+            <dd><TableroPlates :value="player?.total_matches_played ?? 0" :label="String(player?.total_matches_played ?? 0)" /></dd>
+          </div>
+          <div>
+            <dt class="t-paint">Victorias</dt>
+            <dd><TableroPlates :value="winsNumber" :label="String(winsNumber)" /></dd>
+          </div>
+          <div>
+            <dt class="t-paint">Porcentaje de victorias</dt>
+            <dd>
+              <TableroPlates :value="winRateNumber" :label="winRateNumber === null ? 'Sin datos' : `${winRateNumber}%`" />
+              <span v-if="winRateNumber !== null" class="player-board__pct" aria-hidden="true">%</span>
+            </dd>
+          </div>
+        </dl>
+
+        <div class="player-board__links">
+          <NuxtLink to="/my-ranking" class="t-link">
+            Ver mi ranking
+            <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+          </NuxtLink>
+          <button type="button" class="t-link" @click="showRankingInfo = true">
+            Cómo funciona el ranking
+            <Icon name="heroicons:information-circle" class="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+
+      <TableroScoreStrip :target="playerBoard">
+        <span class="strip-name">{{ firstName || 'Tú' }}</span>
+        <TableroPlates :value="player?.elo ?? null" />
+        <span class="t-paint">SR<template v-if="currentTier"> · {{ tierName(currentTier.tier) }}</template></span>
+      </TableroScoreStrip>
+
+      <div class="home-grid">
+        <div class="home-main">
+          <!-- Lead: the most urgent real action, derived from pending notifications. The one lit plate. -->
+          <section v-if="leadState === 'lead' && leadNotification" class="lead lead--lit" aria-labelledby="lead-title">
+            <p class="lead__status">{{ leadCopy.status }}</p>
+            <h2 id="lead-title" class="t-display-m">{{ leadCopy.title }}</h2>
+            <p v-if="leadNotification.type === 'score_proposal' && leadMatch?.score" class="lead__score num">{{ formatScore(leadMatch.score) }}</p>
+            <p v-if="leadMeta" class="lead__meta">{{ leadMeta }}</p>
+            <NuxtLink :to="`/matches/${leadNotification.match_id}`" class="t-btn t-btn--board">
               {{ leadCopy.action }}
               <Icon :name="leadNotification.type === 'score_proposal' ? 'heroicons:check' : 'heroicons:arrow-right'" class="w-5 h-5" aria-hidden="true" />
             </NuxtLink>
-          </PhotoPanel>
+          </section>
 
           <!-- Until the first fetch succeeds an empty list is unknown, not "Todo al día" -->
-          <section v-else-if="leadState === 'loading'" class="panel lead-clear" role="status" aria-busy="true">
-            <div class="lead-clear__copy">
-              <span class="status-pill">Revisando pendientes…</span>
-              <span class="lead-skeleton lead-skeleton--title" aria-hidden="true" />
-              <span class="lead-skeleton lead-skeleton--line" aria-hidden="true" />
-            </div>
+          <section v-else-if="leadState === 'loading'" class="lead t-board" role="status" aria-busy="true">
+            <p class="lead__status lead__status--quiet">Revisando pendientes…</p>
+            <span class="t-slot lead__skeleton lead__skeleton--title" aria-hidden="true" />
+            <span class="t-slot lead__skeleton" aria-hidden="true" />
           </section>
 
-          <section v-else-if="leadState === 'error'" class="panel lead-clear" role="alert">
-            <div class="lead-clear__copy">
-              <span class="status-pill">No disponible</span>
-              <h2>No pudimos revisar tus pendientes</h2>
-              <p class="meta">Puede que tengas partidos por confirmar. Revisa tu conexión e inténtalo de nuevo.</p>
-              <button type="button" class="btn-primary" @click="fetchNotifications">
-                Reintentar
-                <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
-              </button>
-            </div>
+          <section v-else-if="leadState === 'error'" class="lead t-board" role="alert">
+            <p class="lead__status lead__status--quiet">No disponible</p>
+            <h2 class="t-display-m">No pudimos revisar tus pendientes</h2>
+            <p class="lead__meta">Puede que tengas partidos por confirmar. Revisa tu conexión e inténtalo de nuevo.</p>
+            <button type="button" class="t-btn t-btn--plate" @click="fetchNotifications">
+              Reintentar
+              <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+            </button>
           </section>
 
-          <section v-else class="panel lead-clear">
-            <CourtLines class="lead-clear__court" />
-            <div class="lead-clear__copy">
-              <span class="status-pill">Todo al día</span>
-              <h2>Tu próximo punto empieza aquí</h2>
-              <p class="meta">No tienes acciones pendientes. Organiza tu siguiente partido cuando quieras.</p>
-              <NuxtLink to="/matches/new" class="btn-primary">
-                Programar partido
-                <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
-              </NuxtLink>
-            </div>
+          <section v-else class="lead t-board" aria-labelledby="lead-clear-title">
+            <p class="lead__status lead__status--quiet">Todo al día</p>
+            <h2 id="lead-clear-title" class="t-display-m">Tu próximo punto empieza aquí</h2>
+            <p class="lead__meta">No tienes acciones pendientes. Organiza tu siguiente partido cuando quieras.</p>
+            <NuxtLink to="/matches/new" class="t-btn t-btn--lamp">
+              Programar partido
+              <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
+            </NuxtLink>
           </section>
 
           <!-- Profile completion (real state from /api/players/me) -->
-          <section v-if="!playerLoading && (!player || !player.category)" class="panel notice" role="status">
-            <Icon name="heroicons:exclamation-triangle" class="w-6 h-6 text-warning flex-shrink-0" aria-hidden="true" />
+          <section v-if="!playerLoading && (!player || !player.category)" class="notice" role="status">
+            <Icon name="heroicons:exclamation-triangle" class="w-6 h-6 notice__icon" aria-hidden="true" />
             <div class="notice__copy">
-              <h2>Completa tu perfil</h2>
-              <p class="meta">Agrega tu ciudad y categoría para aparecer en el ranking y recibir propuestas.</p>
-              <NuxtLink to="/onboarding" class="text-link">
+              <h2 class="t-display-s">Completa tu perfil</h2>
+              <p class="t-muted">Agrega tu ciudad y categoría para aparecer en el ranking y recibir propuestas.</p>
+              <NuxtLink to="/onboarding" class="t-link">
                 Completar perfil
                 <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
               </NuxtLink>
             </div>
           </section>
 
-          <div class="quick-actions">
-            <NuxtLink v-if="leadState !== 'clear'" to="/matches/new" class="btn-secondary">
+          <div class="home-actions">
+            <NuxtLink v-if="leadState !== 'clear'" to="/matches/new" class="t-btn t-btn--plate">
               Programar partido
               <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
             </NuxtLink>
-            <NuxtLink to="/matchmaking" class="text-link">
+            <NuxtLink to="/matchmaking" class="t-link">
               Buscar rival
               <Icon name="heroicons:magnifying-glass" class="w-5 h-5" aria-hidden="true" />
             </NuxtLink>
           </div>
 
           <!-- Remaining pending actions -->
-          <section v-if="otherNotifications.length" aria-labelledby="pending-title">
-            <div class="section-heading">
-              <h2 id="pending-title">También pendiente</h2>
-              <NuxtLink to="/matches?filter=pending" class="text-link">
+          <section v-if="otherNotifications.length" aria-labelledby="pending-title" class="home-section">
+            <div class="home-section__head">
+              <h2 id="pending-title" class="t-display-s">También pendiente</h2>
+              <NuxtLink to="/matches?filter=pending" class="t-link">
                 Ver todos
                 <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
               </NuxtLink>
             </div>
-            <div class="list-surface">
-              <NuxtLink
-                v-for="notification in otherNotifications"
-                :key="notification.id"
-                :to="`/matches/${notification.match_id}`"
-                class="list-row"
-              >
-                <span class="avatar" aria-hidden="true"><Icon :name="getNotificationIcon(notification.type)" class="w-5 h-5 text-accent" /></span>
-                <span class="row-copy">
-                  <strong>{{ notificationCopy(notification).status }}</strong>
-                  <span class="meta">{{ notificationCopy(notification).title }}</span>
-                </span>
-                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
-              </NuxtLink>
-            </div>
-          </section>
-
-          <section aria-labelledby="shortcuts-title">
-            <div class="section-heading"><h2 id="shortcuts-title">Tus partidos</h2></div>
-            <div class="list-surface">
-              <NuxtLink to="/matches" class="list-row">
-                <span class="avatar" aria-hidden="true"><Icon name="heroicons:calendar-days" class="w-5 h-5 text-accent" /></span>
-                <span class="row-copy"><strong>Próximos e historial</strong><span class="meta">Partidos programados, resultados y propuestas</span></span>
-                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
-              </NuxtLink>
-              <NuxtLink v-if="isStaff" to="/organizer/tournaments" class="list-row">
-                <span class="avatar" aria-hidden="true"><Icon name="heroicons:trophy" class="w-5 h-5 text-accent" /></span>
-                <span class="row-copy"><strong>Crear torneo</strong><span class="meta">Organiza y gestiona tus torneos</span></span>
-                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
-              </NuxtLink>
-              <NuxtLink to="/profile" class="list-row">
-                <span class="avatar" aria-hidden="true">{{ player?.name ? getPlayerInitials(player.name) : '?' }}</span>
-                <span class="row-copy"><strong>Tu perfil de jugador</strong><span class="meta">{{ user?.email }}</span></span>
-                <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
-              </NuxtLink>
-            </div>
+            <ul class="t-list">
+              <li v-for="notification in otherNotifications" :key="notification.id">
+                <NuxtLink :to="`/matches/${notification.match_id}`" class="t-row">
+                  <span class="t-glyph" aria-hidden="true"><Icon :name="getNotificationIcon(notification.type)" class="w-5 h-5" /></span>
+                  <span class="t-row__copy">
+                    <strong>{{ notificationCopy(notification).status }}</strong>
+                    <span>{{ notificationCopy(notification).title }}</span>
+                  </span>
+                  <Icon name="heroicons:chevron-right" class="w-5 h-5 t-row__end" aria-hidden="true" />
+                </NuxtLink>
+              </li>
+            </ul>
           </section>
         </div>
 
-        <aside class="flow-stack" aria-label="Tu nivel">
-          <section class="panel rating">
-            <div class="rating__copy">
-              <h2 class="meta rating__label">Tu nivel de juego</h2>
-              <p v-if="playerLoading" class="rating-number rating-number--loading" aria-busy="true">—</p>
-              <p v-else class="rating-number">{{ (player?.elo ?? 0).toLocaleString('es-EC') }} <span>SR</span></p>
-              <p v-if="currentTier" class="meta">{{ tierName(currentTier.tier) }}</p>
-              <p v-else-if="player && !playerLoading" class="meta">Sin nivel todavía: juega tus partidos de colocación</p>
-              <NuxtLink to="/my-ranking" class="text-link">
-                Ver mi ranking
-                <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+        <section aria-labelledby="shortcuts-title" class="home-section home-side">
+          <div class="home-section__head"><h2 id="shortcuts-title" class="t-display-s">Tus partidos</h2></div>
+          <ul class="t-list">
+            <li>
+              <NuxtLink to="/matches" class="t-row">
+                <span class="t-glyph" aria-hidden="true"><Icon name="heroicons:calendar-days" class="w-5 h-5" /></span>
+                <span class="t-row__copy"><strong>Próximos e historial</strong><span>Partidos programados, resultados y propuestas</span></span>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 t-row__end" aria-hidden="true" />
               </NuxtLink>
-            </div>
-            <img v-if="tierImage" :src="tierImage" width="72" height="72" :alt="`Nivel ${tierName(currentTier?.tier)}`" class="rating__tier">
-          </section>
-
-          <section class="panel" aria-label="Estadísticas recientes">
-            <div class="stats">
-              <div><strong class="stat-value">{{ player?.win_streak ?? 0 }}</strong><span class="meta">Victorias seguidas</span></div>
-              <div><strong class="stat-value">{{ player?.total_matches_played ?? 0 }}</strong><span class="meta">Partidos jugados</span></div>
-              <div><strong class="stat-value">{{ stats[2].value }}</strong><span class="meta">Victorias</span></div>
-              <div><strong class="stat-value">{{ stats[3].value }}</strong><span class="meta">Porcentaje de victorias</span></div>
-            </div>
-            <button type="button" class="text-link mt-2" @click="showRankingInfo = true">
-              Cómo funciona el ranking
-              <Icon name="heroicons:information-circle" class="w-4 h-4" aria-hidden="true" />
-            </button>
-          </section>
-        </aside>
+            </li>
+            <li v-if="isStaff">
+              <NuxtLink to="/organizer/tournaments" class="t-row">
+                <span class="t-glyph" aria-hidden="true"><Icon name="heroicons:trophy" class="w-5 h-5" /></span>
+                <span class="t-row__copy"><strong>Crear torneo</strong><span>Organiza y gestiona tus torneos</span></span>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 t-row__end" aria-hidden="true" />
+              </NuxtLink>
+            </li>
+            <li>
+              <NuxtLink to="/profile" class="t-row">
+                <span class="t-glyph" aria-hidden="true">{{ player?.name ? getPlayerInitials(player.name) : '?' }}</span>
+                <span class="t-row__copy"><strong>Tu perfil de jugador</strong><span>{{ user?.email }}</span></span>
+                <Icon name="heroicons:chevron-right" class="w-5 h-5 t-row__end" aria-hidden="true" />
+              </NuxtLink>
+            </li>
+          </ul>
+        </section>
       </div>
 
       <RankingSystemInfo v-model="showRankingInfo" />
     </template>
 
-    <!-- Guest landing -->
+    <!-- Guest landing (DESIGN.md "Landing") -->
     <template v-else>
-      <PhotoPanel photo="hero" variant="priority" eager tag="section" class="landing-hero" sizes="(max-width: 767px) 320px, 90vw">
-        <template #decor><CourtLines rally /></template>
-        <h1 class="landing-hero__title">Lleva tu juego al siguiente nivel</h1>
-        <p class="landing-hero__lede">Registra tus partidos, sigue tu nivel SR y encuentra rivales de tu nivel en tu ciudad. Rankings y torneos para jugadores amateur de Ecuador.</p>
-        <div class="quick-actions landing-hero__actions">
-          <NuxtLink to="/sign-up" class="btn-primary">
-            Crear cuenta gratis
-            <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
-          </NuxtLink>
-          <NuxtLink to="/sign-in" class="btn-photo">Ya tengo cuenta</NuxtLink>
+      <section class="landing-top" aria-labelledby="landing-title">
+        <div class="landing-copy">
+          <h1 id="landing-title" class="t-display-xl">Lleva tu juego al siguiente nivel</h1>
+          <p class="t-lede">Registra tus partidos, sigue tu nivel SR y encuentra rivales de tu nivel en tu ciudad. Rankings y torneos para jugadores amateur de Ecuador.</p>
+          <div class="landing-actions">
+            <NuxtLink to="/sign-up" class="t-btn t-btn--lamp">
+              Crear cuenta gratis
+              <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+            </NuxtLink>
+            <NuxtLink to="/sign-in" class="t-btn t-btn--line">Ya tengo cuenta</NuxtLink>
+          </div>
         </div>
-      </PhotoPanel>
+        <TableroMatchStage class="landing-stage" />
+      </section>
 
-      <section class="landing-section" aria-labelledby="features-title">
-        <div class="section-heading"><h2 id="features-title">Todo lo que necesitas para competir</h2></div>
-        <ul class="list-surface landing-features">
-          <li v-for="group in featureGroups" :key="group.title" class="landing-feature">
-            <span class="avatar" aria-hidden="true"><Icon :name="group.icon" class="w-5 h-5 text-accent" /></span>
-            <div class="row-copy">
-              <strong>{{ group.title }}</strong>
-              <span class="meta">{{ group.description }}</span>
-              <ul class="landing-feature-points">
-                <li v-for="point in group.points" :key="point">
-                  <Icon name="heroicons:check" class="w-4 h-4 text-accent flex-shrink-0" aria-hidden="true" />
-                  {{ point }}
-                </li>
+      <section class="rules" aria-labelledby="features-title">
+        <h2 id="features-title" class="t-display-l rules__title">Todo lo que necesitas para competir</h2>
+        <ul class="rules__list">
+          <li v-for="group in featureGroups" :key="group.title" class="rules__item">
+            <h3 class="t-display-s rules__name">{{ group.title }}</h3>
+            <div class="rules__body">
+              <p>{{ group.description }}</p>
+              <ul class="rules__points">
+                <li v-for="point in group.points" :key="point">{{ point }}</li>
               </ul>
             </div>
           </li>
         </ul>
       </section>
 
-      <section class="landing-section split-grid even" aria-labelledby="tiers-title">
-        <div>
-          <div class="section-heading"><h2 id="tiers-title">Sube de nivel, de Bronce a Gran Maestro</h2></div>
-          <p class="meta">Cada partido competitivo confirmado mueve tu SR. Tres partidos de colocación te dan tu nivel inicial.</p>
-          <ol class="landing-steps">
-            <li><strong>Crea tu cuenta</strong><span class="meta">Con tu email, en menos de un minuto.</span></li>
-            <li><strong>Completa tu perfil</strong><span class="meta">Ciudad, categoría y nivel de juego.</span></li>
-            <li><strong>Juega tus partidos de colocación</strong><span class="meta">Obtén tu ranking inicial y empieza a subir.</span></li>
+      <section class="tiers" aria-labelledby="tiers-title">
+        <div class="tiers__copy">
+          <h2 id="tiers-title" class="t-display-l">Sube de nivel, de Bronce a Gran Maestro</h2>
+          <p class="t-lede">Cada partido competitivo confirmado mueve tu SR. Tres partidos de colocación te dan tu nivel inicial.</p>
+          <ol class="steps">
+            <li v-for="(step, i) in steps" :key="step.title">
+              <TableroPlate :value="i + 1" />
+              <span><strong>{{ step.title }}</strong><span class="t-muted">{{ step.detail }}</span></span>
+            </li>
           </ol>
         </div>
-        <div class="list-surface">
-          <div v-for="tier in ratingTiers" :key="tier.tier" class="rank-row">
-            <img :src="tierImageFor(tier.tier)" width="36" height="36" alt="" class="landing-tier-icon" loading="lazy">
-            <span class="row-copy"><strong>{{ tierName(tier.tier) }}</strong></span>
-            <span class="rank-score">{{ tier.minElo.toLocaleString('es-EC') }}{{ tier.maxElo === Infinity ? '+' : `–${tier.maxElo.toLocaleString('es-EC')}` }}<small>SR</small></span>
-          </div>
-        </div>
+        <ol class="tier-ladder t-board" aria-label="Niveles por puntos SR">
+          <li v-for="tier in tiersTopDown" :key="tier.tier" class="tier-ladder__rung">
+            <span class="tier-ladder__name">{{ tierName(tier.tier) }}</span>
+            <span class="tier-ladder__range num">{{ tier.minElo.toLocaleString('es-EC') }}{{ tier.maxElo === Infinity ? ' o más' : ` – ${tier.maxElo.toLocaleString('es-EC')}` }} <abbr title="Skill Rating">SR</abbr></span>
+          </li>
+        </ol>
       </section>
 
-      <section class="panel landing-cta">
-        <h2>¿Listo para competir?</h2>
-        <p class="meta">Es gratis. Crea tu cuenta y registra tu primer partido hoy.</p>
-        <NuxtLink to="/sign-up" class="btn-primary">
+      <section class="close t-board" aria-labelledby="close-title">
+        <h2 id="close-title" class="t-display-l">¿Listo para competir?</h2>
+        <p class="t-lede">Es gratis. Crea tu cuenta y registra tu primer partido hoy.</p>
+        <NuxtLink to="/sign-up" class="t-btn t-btn--lamp">
           Crear cuenta gratis
           <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
         </NuxtLink>
@@ -452,8 +471,25 @@ const currentTier = computed(() => {
   if (typeof elo !== 'number' || !player.value?.total_matches_played) return null
   return ratingTiers.find(t => elo >= t.minElo && elo <= t.maxElo) || null
 })
-const tierImageFor = (tier: string) => `/images/ranks/${tier.toLowerCase()}.png`
-const tierImage = computed(() => (currentTier.value ? tierImageFor(currentTier.value.tier) : null))
+// Landing ladder reads top-down, the way a club hangs it: Gran Maestro first
+const tiersTopDown = [...ratingTiers].reverse()
+
+const winsNumber = computed(() => Number(stats.value[2]?.value ?? 0))
+
+// Porcentaje de victorias as a plate number; null when there is no history yet (plates show a dash)
+const winRateNumber = computed(() => {
+  const n = Number.parseInt(stats.value[3]?.value ?? '', 10)
+  return Number.isFinite(n) ? n : null
+})
+
+// The player board the compact rail tracks as it scrolls under the header
+const playerBoard = ref<HTMLElement | null>(null)
+
+const steps = [
+  { title: 'Crea tu cuenta', detail: 'Con tu email, en menos de un minuto.' },
+  { title: 'Completa tu perfil', detail: 'Ciudad, categoría y nivel de juego.' },
+  { title: 'Juega tus partidos de colocación', detail: 'Obtén tu ranking inicial y empieza a subir.' }
+]
 
 // Guest landing feature groups (copy kept from the previous landing, regrouped as lists)
 const featureGroups = [
@@ -467,57 +503,115 @@ const featureGroups = [
 </script>
 
 <style scoped>
-/* Clear state: quiet panel with the court drawn faintly behind the invitation */
-.lead-clear { position: relative; overflow: hidden; min-height: 300px; display: flex; align-items: flex-end; }
-.lead-clear__court { opacity: 0.55; }
-.lead-clear__court :deep(line) { stroke: var(--court-line); }
-.lead-clear__copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-.lead-clear__copy h2 { font-size: clamp(23px, 2.6vw, 32px); line-height: 1.2; max-width: 22ch; }
-.lead-clear__copy .btn-primary { margin-top: 8px; }
-.lead-skeleton { display: block; height: 16px; width: min(100%, 28ch); border-radius: 8px; background: var(--edge); }
-.lead-skeleton--title { height: 30px; width: min(100%, 18ch); }
-.photo .btn-primary { margin-top: 8px; }
+/* ── Inicio ──────────────────────────────────────────────────────────────── */
+.home-head { display: grid; gap: 10px; margin-bottom: 28px; }
+.home-head__context { font-size: 15px; }
+.home-head h1 { overflow-wrap: anywhere; text-wrap: balance; }
 
-.notice { display: flex; gap: 16px; align-items: flex-start; }
-.notice__copy { display: grid; gap: 4px; }
-.notice__copy h2 { font-size: 20px; }
+.player-board {
+  display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 20px 48px; align-items: end;
+  padding: 24px 28px; margin-bottom: 40px;
+}
+.player-board__sr { display: grid; gap: 12px; }
+.player-board__sr h2 { font-family: var(--t-text); font-size: 0.78rem; font-weight: 650; }
+.player-board__plates { display: flex; align-items: flex-end; gap: 12px; font-size: clamp(3.4rem, 2.4rem + 3.6vw, 5.25rem); min-height: 1.4em; }
+.player-board__slot { width: 1.05em; height: 1.32em; padding: 0; margin-right: 3px; }
+.player-board__unit, .player-board__pct { font-family: var(--t-display); font-weight: 800; color: var(--t-ink-muted); font-size: 0.34em; line-height: 1.2; }
+.player-board__tier { font-family: var(--t-display); font-weight: 800; font-size: 1.6rem; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1; }
+.player-board__tier--quiet { font-family: var(--t-text); font-weight: 500; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--t-ink-muted); line-height: 1.4; }
+.player-board__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border-left: 1px solid var(--t-chalk); }
+.player-board__stats > div { display: grid; gap: 12px; align-content: end; padding: 0 16px; border-right: 1px solid var(--t-chalk); }
+.player-board__stats dt { line-height: 1.3; }
+.player-board__stats dd { margin: 0; display: flex; align-items: flex-end; gap: 6px; font-size: 1.9rem; }
+.player-board__links { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 28px; padding-top: 12px; border-top: 1px solid var(--t-chalk); }
 
-.rating { display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: inset 0 1px 0 #ffffff0c; }
-.rating__copy { display: grid; gap: 2px; min-width: 0; }
-.rating__label { font-weight: 500; letter-spacing: 0; font-size: 14px; }
-.rating-number { font-size: clamp(42px, 4vw, 60px); font-weight: 700; letter-spacing: -0.05em; line-height: 1.3; font-variant-numeric: tabular-nums; }
-.rating-number span { font-size: 14px; letter-spacing: 0; font-weight: 500; color: var(--foreground-muted); }
-.rating-number--loading { color: var(--foreground-subtle); }
-.rating__tier { width: 64px; height: 64px; object-fit: contain; flex-shrink: 0; }
-@media (min-width: 768px) and (max-width: 1099px) { .rating { padding: 20px; } .rating__tier { width: 48px; height: 48px; } }
-@media (max-width: 767px) { .rating-number { font-size: 48px; } }
+.strip-name { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; font-size: 1.35rem; }
 
-/* Guest landing */
-.landing-hero { margin-bottom: 40px; }
-.landing-hero :deep(.photo-content) { justify-content: flex-end; min-height: 520px; }
-.landing-hero__title { font-size: clamp(34px, 5vw, 58px); line-height: 1.05; letter-spacing: -0.04em; max-width: 14ch; text-wrap: balance; }
-.landing-hero__lede { max-width: 52ch; font-size: 17px; }
-.landing-hero__actions { width: 100%; max-width: 520px; margin-top: 8px; }
-.landing-hero__actions > .btn-photo { flex-grow: 1; }
-.landing-section { margin-bottom: 48px; }
-.landing-section p.meta, .landing-cta p { max-width: 62ch; }
-.landing-features { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.landing-feature { display: flex; gap: 12px; padding: 24px; border-top: 1px solid var(--edge); }
-.landing-feature:nth-child(-n + 2) { border-top: 0; }
-.landing-feature:nth-child(even) { border-left: 1px solid var(--edge); }
-.landing-feature-points { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; font-size: 15px; color: var(--foreground-muted); }
-.landing-feature-points li { display: flex; align-items: center; gap: 8px; }
-.landing-steps { list-style: none; counter-reset: step; margin: 24px 0 0; padding: 0; display: grid; gap: 20px; }
-.landing-steps li { counter-increment: step; display: grid; grid-template-columns: 40px 1fr; column-gap: 12px; }
-.landing-steps li::before { content: counter(step); grid-row: span 2; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--accent-foreground); font-weight: 700; font-variant-numeric: tabular-nums; }
-.landing-tier-icon { width: 36px; height: 36px; object-fit: contain; }
-.landing-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-.landing-cta h2 { font-size: clamp(24px, 3vw, 34px); }
+.home-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 48px; align-items: start; }
+.home-main { display: grid; gap: 28px; min-width: 0; }
+
+.lead { display: grid; justify-items: start; gap: 12px; padding: 28px; border-radius: 6px; }
+.lead h2 { max-width: 20ch; overflow-wrap: anywhere; }
+.lead--lit { background: var(--t-lamp); color: var(--t-lamp-ink); box-shadow: var(--t-plate-shadow); }
+.lead--lit .lead__meta, .lead--lit .lead__status { color: var(--t-lamp-ink); }
+.lead__status { font-stretch: 80%; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.07em; text-transform: uppercase; }
+.lead__status--quiet { color: var(--t-ink-muted); }
+.lead__score { font-family: var(--t-display); font-weight: 800; font-size: clamp(2rem, 1.6rem + 1.4vw, 2.75rem); line-height: 1; letter-spacing: 0.02em; }
+.lead__meta { font-size: 15px; color: var(--t-ink-muted); max-width: 52ch; }
+.lead .t-btn { margin-top: 8px; }
+.lead__skeleton { display: block; height: 18px; width: min(100%, 28ch); padding: 0; }
+.lead__skeleton--title { height: 36px; width: min(100%, 16ch); }
+
+.notice { display: flex; gap: 16px; align-items: flex-start; padding: 20px 0; border-top: 1px solid var(--t-chalk); border-bottom: 1px solid var(--t-chalk); }
+.notice__icon { color: var(--t-lamp); flex-shrink: 0; margin-top: 2px; }
+.notice__copy { display: grid; gap: 6px; }
+
+.home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; }
+.home-section__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 10px; }
+.home-side { position: sticky; top: calc(var(--t-nav-h) + 76px); }
+
+/* ── Landing ─────────────────────────────────────────────────────────────── */
+.landing-top { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start; margin-bottom: 96px; }
+.landing-copy {
+  position: sticky; top: calc(var(--t-nav-h) + env(safe-area-inset-top, 0px) + 20px);
+  display: grid; gap: 24px; padding-top: 8px;
+}
+.landing-copy h1 { text-wrap: balance; }
+.landing-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+
+.rules { margin-bottom: 112px; }
+.rules__title { max-width: 14ch; margin-bottom: 40px; }
+.rules__list { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--t-chalk); }
+.rules__item { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px 56px; padding: 28px 0; border-top: 1px solid var(--t-chalk); }
+.rules__name { font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); line-height: 1; max-width: 16ch; }
+.rules__body { display: grid; gap: 12px; }
+.rules__body > p { font-size: 17px; line-height: 1.5; max-width: 52ch; }
+.rules__points { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; color: var(--t-ink-muted); font-size: 15px; }
+.rules__points li { display: flex; gap: 12px; align-items: baseline; }
+.rules__points li::before { content: ''; flex-shrink: 0; width: 14px; height: 2px; translate: 0 -4px; background: var(--t-chalk-strong); }
+
+.tiers { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 56px; align-items: start; margin-bottom: 112px; }
+.tiers__copy { display: grid; gap: 24px; }
+.steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 20px; }
+.steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; font-size: 1.6rem; }
+.steps li > span { display: grid; gap: 2px; font-size: 16px; }
+.steps strong { font-weight: 650; }
+.tier-ladder { list-style: none; margin: 0; padding: 8px 24px; }
+.tier-ladder__rung { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--t-chalk); }
+.tier-ladder__rung:first-child { border-top: 0; }
+.tier-ladder__name { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; font-size: 1.75rem; line-height: 1; }
+.tier-ladder__range { font-size: 15px; color: var(--t-ink-muted); white-space: nowrap; }
+.tier-ladder__range abbr { text-decoration: none; }
+
+.close { display: grid; justify-items: start; gap: 18px; padding: 48px; margin-bottom: 24px; }
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .player-board { grid-template-columns: 1fr; }
+  .home-grid { grid-template-columns: 1fr; gap: 40px; }
+  .home-side { position: static; }
+  .landing-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 32px; }
+}
 @media (max-width: 767px) {
-  .landing-hero :deep(.photo-content) { min-height: 460px; }
-  .landing-features { grid-template-columns: 1fr; }
-  .landing-feature { padding: 20px 16px; }
-  .landing-feature:nth-child(2) { border-top: 1px solid var(--edge); }
-  .landing-feature:nth-child(even) { border-left: 0; }
+  .home-head { margin-bottom: 20px; }
+  .player-board { grid-template-columns: 1fr; padding: 18px 16px; gap: 18px; margin-bottom: 32px; }
+  .player-board__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; row-gap: 16px; }
+  .player-board__stats > div { padding: 0 12px 0 0; border-right: 0; }
+  .player-board__stats dd { font-size: 1.6rem; }
+  .home-grid { grid-template-columns: 1fr; gap: 36px; }
+  .home-side { position: static; }
+  .lead { padding: 22px 18px; }
+  .home-actions > .t-btn { width: 100%; }
+
+  .landing-top { grid-template-columns: 1fr; gap: 28px; margin-bottom: 64px; }
+  .landing-copy { position: static; gap: 18px; padding-top: 0; }
+  .landing-actions > .t-btn { flex: 1 1 100%; }
+  .rules { margin-bottom: 72px; }
+  .rules__title { margin-bottom: 24px; }
+  .rules__item { grid-template-columns: 1fr; padding: 22px 0; gap: 10px; }
+  .rules__body > p { font-size: 16px; }
+  .tiers { grid-template-columns: 1fr; gap: 32px; margin-bottom: 72px; }
+  .tier-ladder { padding: 4px 16px; }
+  .tier-ladder__name { font-size: 1.45rem; }
+  .close { padding: 28px 18px; }
 }
 </style>

@@ -2,15 +2,17 @@
   <NuxtLink
     :to="`/players/${player.id}`"
     :data-user-card="player.is_current_user ? 'true' : undefined"
-    class="rank-row lb-row"
-    :class="{ 'own-row': player.is_current_user }"
+    class="lb-row"
+    :class="[{ 'is-own': player.is_current_user }, billing && `is-billing-${billing}`]"
     :aria-current="player.is_current_user ? 'true' : undefined"
   >
-    <span class="rank">{{ player.rank }}</span>
-    <span class="avatar" aria-hidden="true">{{ initials }}</span>
-    <span class="row-copy">
-      <strong>{{ player.name }}<template v-if="player.is_current_user"> (tú)</template></strong>
-      <span class="meta lb-meta">
+    <span class="lb-rank">
+      <span class="sr-only">Puesto {{ player.rank }}</span>
+      <TableroPlate :value="player.rank" :tone="player.is_current_user ? 'lamp' : 'plate'" word />
+    </span>
+    <span class="lb-copy">
+      <strong class="lb-name">{{ player.name }}<template v-if="player.is_current_user"> (tú)</template></strong>
+      <span class="lb-meta">
         <template v-if="player.city">{{ player.city.name }} · </template>{{ player.total_matches_played }} partidos
       </span>
       <span v-if="isInPlacement || (player.near_promotion && player.next_tier) || streak" class="lb-tags">
@@ -25,11 +27,12 @@
       </span>
     </span>
     <span class="lb-end">
-      <span class="rank-score">{{ player.elo.toLocaleString('es-EC') }}<small>SR · {{ tierLabel }}</small></span>
+      <span class="lb-sr num">{{ player.elo.toLocaleString('es-EC') }}</span>
+      <span class="lb-tier">SR · {{ tierLabel }}</span>
       <span
         v-if="player.rank_change"
-        class="lb-change"
-        :class="player.rank_change > 0 ? 'text-success' : 'text-danger'"
+        class="lb-change num"
+        :class="player.rank_change > 0 ? 'is-up' : 'is-down'"
         :aria-label="player.rank_change > 0 ? `Subió ${player.rank_change} puestos` : `Bajó ${Math.abs(player.rank_change)} puestos`"
       >
         <Icon :name="player.rank_change > 0 ? 'heroicons:arrow-up' : 'heroicons:arrow-down'" class="w-3.5 h-3.5" aria-hidden="true" />
@@ -41,23 +44,19 @@
 
 <script setup lang="ts">
 /**
- * Ranking row (DESIGN.md §7: quiet grouped list, names wrap, SR right-aligned,
- * own position tinted with a leading edge; no podium cards).
+ * Ranking row (DESIGN.md "Ranking"): a name painted on the ladder board with its rank on
+ * a hung plate. The viewer's own rank hangs on the amber lamp plate. The first three
+ * rows are billed by size (`billing`), never by podium cards. Names wrap; SR stays
+ * right-aligned in tabular numerals.
  */
 import type { LeaderboardPlayer } from '~/types/leaderboard'
 import { TIERS, tierName } from '~/utils/tiers'
 
-const props = defineProps<{ player: LeaderboardPlayer }>()
+const props = defineProps<{ player: LeaderboardPlayer; billing?: 1 | 2 | 3 }>()
 
 const isInPlacement = computed(() =>
   props.player.total_matches_played === 0 || (props.player.placement_matches_completed || 0) < 3
 )
-
-const initials = computed(() => {
-  const parts = (props.player.name || '').trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return '?'
-  return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1]?.[0] || '' : '')).toUpperCase()
-})
 
 const tierLabel = computed(() => {
   if (props.player.total_matches_played === 0) return 'Sin clasificar'
@@ -73,22 +72,53 @@ const streak = computed(() => {
 </script>
 
 <style scoped>
-.lb-row { color: inherit; text-decoration: none; align-items: flex-start; }
-.lb-row .rank, .lb-row .avatar { margin-top: 2px; }
-@media (hover: hover) { .lb-row:hover { background: var(--lens); } .lb-row.own-row:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); } }
-.lb-meta { font-size: 13px; }
-.lb-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.lb-end { display: grid; justify-items: end; gap: 4px; flex-shrink: 0; }
-.lb-change { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
-@media (prefers-reduced-motion: no-preference) {
-  .lb-change { animation: lb-change-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards; }
-  .lb-change.text-danger { animation-name: lb-change-in-down; }
+.lb-row {
+  display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) auto; align-items: start; gap: 16px;
+  padding: 16px 8px; border-top: 1px solid var(--t-chalk); color: inherit; text-decoration: none;
 }
+.lb-rank { display: grid; justify-items: start; font-size: 1.45rem; padding-top: 1px; }
+.lb-copy { min-width: 0; overflow-wrap: anywhere; display: grid; gap: 3px; }
+.lb-name { font-weight: 650; font-size: 16px; line-height: 1.3; }
+.lb-meta { font-size: 13.5px; color: var(--t-ink-muted); }
+.lb-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.lb-end { display: grid; justify-items: end; gap: 2px; text-align: right; }
+.lb-sr { font-size: 18px; font-weight: 650; line-height: 1.2; }
+.lb-tier { font-size: 12.5px; color: var(--t-ink-muted); white-space: nowrap; }
+.lb-change { display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; font-size: 12.5px; font-weight: 650; }
+.lb-change.is-up { color: var(--t-ink); }
+.lb-change.is-down { color: var(--t-clay); }
+
+/* The viewer's own row: the lamp plate carries it; the row itself only gets a painted frame */
+.lb-row.is-own { background: var(--t-board-raise); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); border-top-color: transparent; }
+
+/* Billing: the top of the board is painted larger, rank 1 largest */
+.is-billing-1 .lb-name, .is-billing-2 .lb-name, .is-billing-3 .lb-name { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1; }
+.is-billing-1 .lb-name { font-size: 2rem; }
+.is-billing-2 .lb-name { font-size: 1.65rem; }
+.is-billing-3 .lb-name { font-size: 1.4rem; }
+.is-billing-1 .lb-rank { font-size: 2rem; }
+
+/* Hover: the rank plate lifts on its hooks; press: the row is pressed into the board */
+.lb-rank :deep(.t-plate) { transform-origin: 50% 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .lb-rank :deep(.t-plate) { transition: transform 240ms var(--t-ease), box-shadow 240ms var(--t-ease); }
+  .lb-change { animation: lb-change-in 0.5s var(--t-ease) 0.2s backwards; }
+  .lb-change.is-down { animation-name: lb-change-in-down; }
+}
+@media (hover: hover) {
+  .lb-row:hover { background: var(--lens); }
+  .lb-row.is-own:hover { background: var(--t-board-raise); }
+  .lb-row:hover .lb-rank :deep(.t-plate) { transform: perspective(300px) rotateX(14deg); }
+}
+.lb-row:active { background: rgba(0, 0, 0, 0.12); }
 @keyframes lb-change-in { from { opacity: 0; transform: translateY(6px); } }
 @keyframes lb-change-in-down { from { opacity: 0; transform: translateY(-6px); } }
 @media (max-width: 767px) {
-  .lb-row { gap: 9px; padding: 16px 12px; }
-  .lb-row .avatar { width: 32px; height: 32px; font-size: 12px; }
-  .lb-row strong { font-size: 14px; }
+  .lb-row { grid-template-columns: 2.9rem minmax(0, 1fr) auto; gap: 12px; padding: 14px 4px; }
+  .lb-rank { font-size: 1.25rem; }
+  .lb-name { font-size: 15px; }
+  .is-billing-1 .lb-name { font-size: 1.6rem; }
+  .is-billing-2 .lb-name { font-size: 1.4rem; }
+  .is-billing-3 .lb-name { font-size: 1.25rem; }
 }
 </style>
