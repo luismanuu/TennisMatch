@@ -1,36 +1,35 @@
 /**
  * Script to reprocess matches that used fallback calculation
- * 
+ * Reverses each match's rating_history and recalculates it (with the LLM when OPENROUTER_API_KEY is set).
+ *
  * Usage:
- *   npx tsx scripts/reprocess-fallback-matches.ts <clerk_id> [options]
- * 
+ *   DATABASE_URL=... npx tsx scripts/reprocess-fallback-matches.ts [options]
+ *   (DATABASE_URL and OPENROUTER_API_KEY may also come from .env.local or .env)
+ *
  * Options:
  *   --match-id <id>     Process a specific match
  *   --limit <number>    Maximum matches to process (default: 100)
  *   --dry-run           Preview without making changes
  */
 
+import { resolve } from 'node:path'
 import { config } from 'dotenv'
+import { and, asc, eq, isNotNull, or } from 'drizzle-orm'
+import { useDb } from '../server/db'
+import { matches } from '../server/db/schema'
+import { clearLlmCalculation, reverseMatchRatings, updateRatingsAfterMatch } from '../server/utils/rating-system'
 
-// Load environment variables
-config()
+config({ path: resolve(process.cwd(), '.env.local') })
+config({ path: resolve(process.cwd(), '.env') })
 
-const CLERK_ID = process.argv[2]
-const args = process.argv.slice(3)
-
-if (!CLERK_ID) {
-  console.error('Error: Clerk ID is required')
-  console.log('\nUsage: npx tsx scripts/reprocess-fallback-matches.ts <clerk_id> [options]')
-  console.log('\nOptions:')
-  console.log('  --match-id <id>     Process a specific match')
-  console.log('  --limit <number>    Maximum matches to process (default: 100)')
-  console.log('  --dry-run           Preview without making changes')
+if (!process.env.DATABASE_URL) {
+  console.error('Missing DATABASE_URL environment variable')
   process.exit(1)
 }
 
-// Parse arguments
+const args = process.argv.slice(2)
 let matchId: string | undefined
-let limit: number = 100
+let limit = 100
 let dryRun = false
 
 for (let i = 0; i < args.length; i++) {
@@ -38,75 +37,80 @@ for (let i = 0; i < args.length; i++) {
     matchId = args[i + 1]
     i++
   } else if (args[i] === '--limit' && args[i + 1]) {
-    limit = parseInt(args[i + 1])
+    limit = parseInt(args[i + 1]) || 100
     i++
   } else if (args[i] === '--dry-run') {
     dryRun = true
   }
 }
 
-// Get base URL from environment or use default
-const BASE_URL = process.env.NUXT_PUBLIC_SITE_URL || process.env.BASE_URL || 'http://localhost:3000'
-
 async function reprocessMatches() {
-  try {
-    console.log('🔄 Reprocessing fallback matches...')
-    console.log(`   Clerk ID: ${CLERK_ID}`)
-    if (matchId) console.log(`   Match ID: ${matchId}`)
-    console.log(`   Limit: ${limit}`)
-    console.log(`   Dry Run: ${dryRun ? 'YES' : 'NO'}`)
-    console.log(`   Base URL: ${BASE_URL}`)
-    console.log('')
+  console.log('Reprocessing fallback matches...')
+  if (matchId) console.log(`   Match ID: ${matchId}`)
+  console.log(`   Limit: ${limit}`)
+  console.log(`   Dry Run: ${dryRun ? 'YES' : 'NO'}\n`)
 
-    // Build query parameters
-    const params = new URLSearchParams({
-      clerk_id: CLERK_ID,
-      limit: limit.toString(),
-      ...(matchId && { match_id: matchId }),
-      ...(dryRun && { dry_run: 'true' })
-    })
+  const db = useDb()
 
-    const url = `${BASE_URL}/api/admin/matches/reprocess-fallback?${params.toString()}`
+  // Fallback: LLM failed, or LLM not attempted (no API key); completed with a score; oldest first
+  const fallbackMatches = await db
+    .select({ id: matches.id, played_at: matches.played_at, score: matches.score })
+    .from(matches)
+    .where(
+      and(
+        eq(matches.status, 'completed'),
+        or(
+          eq(matches.llm_calculation_failed, true),
+          and(eq(matches.llm_elo_calculated, false), eq(matches.llm_calculation_failed, false))
+        ),
+        isNotNull(matches.score),
+        matchId ? eq(matches.id, matchId) : undefined
+      )
+    )
+    .orderBy(asc(matches.created_at))
+    .limit(matchId ? 1 : limit)
 
-    console.log(`📡 Calling: ${url.replace(CLERK_ID, '***')}`)
-    console.log('')
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
-    }
-
-    const result = await response.json()
-
-    console.log('✅ Result:')
-    console.log(JSON.stringify(result, null, 2))
-
-    if (result.results && result.results.length > 0) {
-      console.log('\n📊 Detailed Results:')
-      result.results.forEach((r: any, index: number) => {
-        const icon = r.status === 'success' ? '✅' : r.status === 'error' ? '❌' : '⏭️'
-        console.log(`   ${icon} Match ${r.match_id}: ${r.status} - ${r.message}`)
-        if (r.error) {
-          console.log(`      Error: ${r.error}`)
-        }
-      })
-    }
-
-    console.log('\n✨ Done!')
-  } catch (error: any) {
-    console.error('❌ Error:', error.message)
-    if (error.stack) {
-      console.error(error.stack)
-    }
-    process.exit(1)
+  if (fallbackMatches.length === 0) {
+    console.log('No matches found that used fallback calculation')
+    return
   }
+
+  if (dryRun) {
+    console.log(`DRY RUN: Would reprocess ${fallbackMatches.length} match(es)`)
+    for (const m of fallbackMatches) {
+      console.log(`   ${m.id}  played ${m.played_at?.toISOString() ?? 'N/A'}  score ${m.score}`)
+    }
+    return
+  }
+
+  let succeeded = 0
+  let failed = 0
+  for (const match of fallbackMatches) {
+    try {
+      // Reversal and recalculation apply together or not at all
+      const result = await db.transaction(async (tx) => {
+        await reverseMatchRatings(match.id, tx)
+        await clearLlmCalculation(match.id, tx)
+        const rated = await updateRatingsAfterMatch(match.id, tx)
+        if (!rated) {
+          throw new Error('Recalculation returned null; nothing was changed')
+        }
+        return rated
+      })
+      succeeded++
+      console.log(`   OK   ${match.id}: Player1 ${result.player1.eloChange}, Player2 ${result.player2.eloChange}${result.llmUsed ? ' (LLM)' : ''}`)
+    } catch (error: unknown) {
+      failed++
+      console.error(`   FAIL ${match.id}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  console.log(`\nProcessed ${fallbackMatches.length} match(es): ${succeeded} successful, ${failed} errors`)
 }
 
 reprocessMatches()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error('Error:', error instanceof Error ? error.stack ?? error.message : error)
+    process.exit(1)
+  })
