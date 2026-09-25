@@ -102,17 +102,13 @@ const streak = computed(() => {
 .lb-rank :deep(.t-plate) { transform-origin: 50% 0; }
 @media (prefers-reduced-motion: no-preference) {
   .lb-rank :deep(.t-plate) { transition: transform 240ms var(--t-ease), box-shadow 240ms var(--t-ease); }
-  .lb-change { animation: lb-change-in 0.5s var(--t-ease) 0.2s backwards; }
-  .lb-change.is-down { animation-name: lb-change-in-down; }
 }
 @media (hover: hover) {
   .lb-row:hover { background: var(--lens); }
   .lb-row.is-own:hover { background: var(--t-board-raise); }
   .lb-row:hover .lb-rank :deep(.t-plate) { transform: perspective(300px) rotateX(14deg); }
 }
-.lb-row:active { background: rgba(0, 0, 0, 0.12); }
-@keyframes lb-change-in { from { opacity: 0; transform: translateY(6px); } }
-@keyframes lb-change-in-down { from { opacity: 0; transform: translateY(-6px); } }
+.lb-row:active { background: var(--t-board-deep); }
 @media (max-width: 767px) {
   .lb-row { grid-template-columns: 2.9rem minmax(0, 1fr) auto; gap: 12px; padding: 14px 4px; }
   .lb-rank { font-size: 1.25rem; }

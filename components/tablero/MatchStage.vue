@@ -3,11 +3,8 @@
     <div class="stage__pin">
       <figure class="board t-board">
         <figcaption class="board__head">
-          <span class="board__caption">
-            <span class="t-paint">Partido de ejemplo</span>
-            <span class="t-paint">Competitivo</span>
-          </span>
-          <span class="t-paint board__synthetic">Datos ilustrativos</span>
+          <span class="t-paint">Partido de ejemplo</span>
+          <span class="t-paint board__synthetic">Ilustrativo</span>
         </figcaption>
 
         <p class="sr-only">
@@ -22,7 +19,7 @@
 
           <template v-for="(pl, i) in players" :key="pl.id">
             <span class="board__name">
-              <i class="board__serve" :class="{ 'is-on': server === pl.id }" />
+              <i class="board__serve" :class="{ 'is-on': server === pl.id, 'is-winner': state.match.winner === pl.id }" />
               {{ pl.board }}
             </span>
             <span v-for="n in 3" :key="`${pl.id}${n}`" class="board__cell">
@@ -57,10 +54,10 @@
             v-for="row in LADDER"
             :key="row.name"
             class="ladder__row"
-            :class="{ 'is-climber': row.climber }"
+            :class="{ 'is-climber': row.climber, 'is-passed': row.passed }"
             :style="rowStyle(row)"
           >
-            <TableroPlate :value="rankFor(row)" :tone="row.climber ? 'lamp' : 'plate'" />
+            <TableroPlate :value="rankFor(row)" :tone="row.climber && state.confirm === 2 ? 'lamp' : 'plate'" />
             <span class="ladder__name">{{ row.name }}</span>
             <span class="ladder__sr num">{{ srFor(row).toLocaleString('es-EC') }}</span>
           </li>
@@ -115,6 +112,7 @@ const statusLine = computed(() => {
   const s = state.value
   if (s.confirm === 2) return 'Camila confirma. Andrea suma SR y sube un puesto.'
   if (s.confirm === 1) return 'Andrea propone 6–4, 6–3. Falta que Camila confirme.'
+  if (s.match.winner) return 'Andrea gana 6–4, 6–3.'
   if (s.played === 0) return 'Desliza hacia abajo para jugar el partido.'
   return 'En juego.'
 })
@@ -147,7 +145,6 @@ const rowStyle = (row: typeof LADDER[number]) => {
 
 .board { margin: 0; padding: 18px 20px 16px; }
 .board__head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.board__caption { display: inline-flex; gap: 14px; }
 .board__synthetic { color: var(--t-ink-muted); }
 .board__grid {
   display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 3.1rem) 4.4rem;
@@ -161,7 +158,9 @@ const rowStyle = (row: typeof LADDER[number]) => {
   font-size: clamp(1.25rem, 0.9rem + 1.3vw, 1.9rem); line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .board__serve { width: 9px; height: 9px; flex-shrink: 0; border-radius: 1px; background: var(--t-board-deep); box-shadow: var(--t-slot-shadow); }
-.board__serve.is-on { background: var(--t-lamp); box-shadow: none; }
+.board__serve.is-on { background: var(--t-plate); box-shadow: none; }
+/* The lamp lights only on the result: the winner's marker */
+.board__serve.is-winner { background: var(--t-lamp); box-shadow: none; }
 .board__cell { display: grid; place-items: center; }
 .board__empty { width: 1.05em; height: 1.32em; padding: 0; }
 .board__empty--wide { width: 1.9em; }
@@ -179,7 +178,9 @@ const rowStyle = (row: typeof LADDER[number]) => {
   height: 48px; border-top: 1px solid var(--t-chalk); background: var(--t-board-raise);
   font-size: 1.15rem; will-change: transform;
 }
-.ladder__row.is-climber { z-index: 1; }
+.ladder__row.is-climber { z-index: 2; }
+/* Every row carries its own board paint so a passing row covers the hairline behind it */
+.ladder__row.is-passed { z-index: 1; }
 .ladder__name { font-size: 15px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ladder__row.is-climber .ladder__name { color: var(--t-ink); }
 .ladder__sr { font-size: 15px; font-weight: 600; color: var(--t-ink-muted); }

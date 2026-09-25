@@ -195,7 +195,7 @@ html[data-theme='claro']:has(.tablero), html[data-theme='claro']:has(.tablero) b
 }
 /* Pressed flat against the board */
 .t-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 1px rgba(0, 0, 0, 0.35); }
-.t-btn--line:active:not(:disabled) { box-shadow: inset 0 0 0 1px var(--t-ink), inset 0 2px 4px rgba(0, 0, 0, 0.3); }
+.t-btn--line:active:not(:disabled) { box-shadow: inset 0 0 0 1px var(--t-ink), inset 0 2px 4px var(--t-board-deep); }
 
 /* ── Rows: painted lines on the board ────────────────────────────────────── */
 .t-list { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--t-chalk); }
@@ -214,7 +214,7 @@ html[data-theme='claro']:has(.tablero), html[data-theme='claro']:has(.tablero) b
   a.t-row:hover { background: var(--lens); }
   a.t-row:hover .t-row__end { color: var(--t-ink); transform: translateX(3px); }
 }
-a.t-row:active { background: rgba(0, 0, 0, 0.12); }
+a.t-row:active { background: var(--t-board-deep); }
 .t-glyph { display: inline-grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--t-chalk-strong); color: var(--t-ink); font-family: var(--t-display); font-weight: 800; font-size: 17px; }
 
 /* ── Form fields: recessed slots ─────────────────────────────────────────── */
@@ -242,7 +242,7 @@ select.t-field option { background: var(--t-board); color: var(--t-ink); }
   font-size: 12.5px; font-weight: 600; line-height: 1.4;
 }
 .tablero .status-badge-active { color: var(--t-ink); box-shadow: inset 0 0 0 1px var(--t-ink); }
-.tablero .status-badge-pending { background: var(--t-lamp); color: var(--t-lamp-ink); box-shadow: none; }
+.tablero .status-badge-pending { color: var(--t-ink); box-shadow: inset 0 0 0 1px var(--t-ink); border-style: dashed; }
 .tablero .status-badge-completed { color: var(--t-ink-muted); }
 
 /* ── Shell: the board's header rail and the bottom rail ──────────────────── */
@@ -271,7 +271,9 @@ select.t-field option { background: var(--t-board); color: var(--t-ink); }
 @media (hover: hover) { .tablero .nav-island .icon-button:hover { box-shadow: inset 0 0 0 1px var(--t-chalk-strong); background: var(--lens); } }
 .tablero .nav-dot { background: var(--t-lamp); box-shadow: 0 0 0 2px var(--t-board); border-radius: 1px; }
 .tablero .nav-tools .text-link { color: var(--t-ink); font-family: var(--t-text); white-space: nowrap; }
-.tablero .nav-tools .btn-primary { white-space: nowrap; border-radius: 4px; background: var(--t-lamp); color: var(--t-lamp-ink); box-shadow: var(--t-plate-shadow); font-family: var(--t-text); }
+.tablero .nav-tools .btn-primary { white-space: nowrap; border-radius: 4px; background: var(--t-plate); color: var(--t-plate-ink); box-shadow: var(--t-plate-shadow); font-family: var(--t-text); }
+/* Phones: the landing's own CTA sits right under the header, so the header keeps only Iniciar sesión */
+@media (max-width: 599px) { .tablero .nav-tools .btn-primary { display: none; } }
 @media (max-width: 899px) {
   .tablero .nav-island { left: 0; right: 0; min-height: var(--t-nav-h); padding: env(safe-area-inset-top, 0px) var(--gutter) 0; gap: 8px; }
   .tablero .nav-island .brand { font-size: 18px; gap: 8px; }

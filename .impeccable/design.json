@@ -1,0 +1,440 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-25T21:42:35+00:00",
+  "title": "Design System: Tenis Ecuador · Tablero",
+  "extensions": {
+    "colorMeta": {
+      "enamel-green": {
+        "role": "neutral",
+        "displayName": "Enamel Green",
+        "canonical": "oklch(31.4% 0.053 169.6)",
+        "tonalRamp": [
+          "oklch(15% 0.053 169.6)",
+          "oklch(25% 0.053 169.6)",
+          "oklch(35% 0.053 169.6)",
+          "oklch(48% 0.053 169.6)",
+          "oklch(60% 0.053 169.6)",
+          "oklch(72% 0.053 169.6)",
+          "oklch(84% 0.053 169.6)",
+          "oklch(95% 0.053 169.6)"
+        ]
+      },
+      "board-raise": {
+        "role": "neutral",
+        "displayName": "Board Raise",
+        "canonical": "oklch(34.2% 0.058 170.3)",
+        "tonalRamp": [
+          "oklch(15% 0.058 170.3)",
+          "oklch(25% 0.058 170.3)",
+          "oklch(35% 0.058 170.3)",
+          "oklch(48% 0.058 170.3)",
+          "oklch(60% 0.058 170.3)",
+          "oklch(72% 0.058 170.3)",
+          "oklch(84% 0.058 170.3)",
+          "oklch(95% 0.058 170.3)"
+        ]
+      },
+      "board-deep": {
+        "role": "neutral",
+        "displayName": "Board Deep",
+        "canonical": "oklch(26.5% 0.043 170.1)",
+        "tonalRamp": [
+          "oklch(15% 0.043 170.1)",
+          "oklch(25% 0.043 170.1)",
+          "oklch(35% 0.043 170.1)",
+          "oklch(48% 0.043 170.1)",
+          "oklch(60% 0.043 170.1)",
+          "oklch(72% 0.043 170.1)",
+          "oklch(84% 0.043 170.1)",
+          "oklch(95% 0.043 170.1)"
+        ]
+      },
+      "enamel-white": {
+        "role": "neutral",
+        "displayName": "Enamel White",
+        "canonical": "oklch(95.2% 0.008 121.6)",
+        "tonalRamp": [
+          "oklch(15% 0.008 121.6)",
+          "oklch(25% 0.008 121.6)",
+          "oklch(35% 0.008 121.6)",
+          "oklch(48% 0.008 121.6)",
+          "oklch(60% 0.008 121.6)",
+          "oklch(72% 0.008 121.6)",
+          "oklch(84% 0.008 121.6)",
+          "oklch(95% 0.008 121.6)"
+        ]
+      },
+      "lamp-amber": {
+        "role": "primary",
+        "displayName": "Lamp Amber",
+        "canonical": "oklch(80.6% 0.147 77.4)",
+        "tonalRamp": [
+          "oklch(15% 0.147 77.4)",
+          "oklch(25% 0.147 77.4)",
+          "oklch(35% 0.147 77.4)",
+          "oklch(48% 0.147 77.4)",
+          "oklch(60% 0.147 77.4)",
+          "oklch(72% 0.147 77.4)",
+          "oklch(84% 0.147 77.4)",
+          "oklch(95% 0.147 77.4)"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Ink Muted",
+        "canonical": "oklch(82.1% 0.030 163.1)",
+        "tonalRamp": [
+          "oklch(15% 0.03 163.1)",
+          "oklch(25% 0.03 163.1)",
+          "oklch(35% 0.03 163.1)",
+          "oklch(48% 0.03 163.1)",
+          "oklch(60% 0.03 163.1)",
+          "oklch(72% 0.03 163.1)",
+          "oklch(84% 0.03 163.1)",
+          "oklch(95% 0.03 163.1)"
+        ]
+      },
+      "clay": {
+        "role": "tertiary",
+        "displayName": "Clay",
+        "canonical": "oklch(76.9% 0.113 38.4)",
+        "tonalRamp": [
+          "oklch(15% 0.113 38.4)",
+          "oklch(25% 0.113 38.4)",
+          "oklch(35% 0.113 38.4)",
+          "oklch(48% 0.113 38.4)",
+          "oklch(60% 0.113 38.4)",
+          "oklch(72% 0.113 38.4)",
+          "oklch(84% 0.113 38.4)",
+          "oklch(95% 0.113 38.4)"
+        ]
+      },
+      "day-board-raise": {
+        "role": "neutral",
+        "displayName": "Day Board Raise",
+        "canonical": "oklch(92.6% 0.011 128.6)",
+        "tonalRamp": [
+          "oklch(15% 0.011 128.6)",
+          "oklch(25% 0.011 128.6)",
+          "oklch(35% 0.011 128.6)",
+          "oklch(48% 0.011 128.6)",
+          "oklch(60% 0.011 128.6)",
+          "oklch(72% 0.011 128.6)",
+          "oklch(84% 0.011 128.6)",
+          "oklch(95% 0.011 128.6)"
+        ]
+      },
+      "day-board-deep": {
+        "role": "neutral",
+        "displayName": "Day Board Deep",
+        "canonical": "oklch(89.4% 0.013 130.8)",
+        "tonalRamp": [
+          "oklch(15% 0.013 130.8)",
+          "oklch(25% 0.013 130.8)",
+          "oklch(35% 0.013 130.8)",
+          "oklch(48% 0.013 130.8)",
+          "oklch(60% 0.013 130.8)",
+          "oklch(72% 0.013 130.8)",
+          "oklch(84% 0.013 130.8)",
+          "oklch(95% 0.013 130.8)"
+        ]
+      },
+      "day-ink-muted": {
+        "role": "neutral",
+        "displayName": "Day Ink Muted",
+        "canonical": "oklch(45.3% 0.042 166.5)",
+        "tonalRamp": [
+          "oklch(15% 0.042 166.5)",
+          "oklch(25% 0.042 166.5)",
+          "oklch(35% 0.042 166.5)",
+          "oklch(48% 0.042 166.5)",
+          "oklch(60% 0.042 166.5)",
+          "oklch(72% 0.042 166.5)",
+          "oklch(84% 0.042 166.5)",
+          "oklch(95% 0.042 166.5)"
+        ]
+      },
+      "day-clay": {
+        "role": "tertiary",
+        "displayName": "Day Clay",
+        "canonical": "oklch(51.0% 0.133 36.0)",
+        "tonalRamp": [
+          "oklch(15% 0.133 36.0)",
+          "oklch(25% 0.133 36.0)",
+          "oklch(35% 0.133 36.0)",
+          "oklch(48% 0.133 36.0)",
+          "oklch(60% 0.133 36.0)",
+          "oklch(72% 0.133 36.0)",
+          "oklch(84% 0.133 36.0)",
+          "oklch(95% 0.133 36.0)"
+        ]
+      },
+      "chalk": {
+        "role": "neutral",
+        "displayName": "Chalk"
+      },
+      "chalk-strong": {
+        "role": "neutral",
+        "displayName": "Chalk Strong"
+      },
+      "day-chalk": {
+        "role": "neutral",
+        "displayName": "Day Chalk"
+      },
+      "day-chalk-strong": {
+        "role": "neutral",
+        "displayName": "Day Chalk Strong"
+      }
+    },
+    "typographyMeta": {
+      "display-xl": {
+        "displayName": "Display XL",
+        "purpose": "Landing headline, Ranking title."
+      },
+      "display-l": {
+        "displayName": "Display L",
+        "purpose": "Greeting and section heads."
+      },
+      "display-m": {
+        "displayName": "Display M",
+        "purpose": "Lead panels."
+      },
+      "display-s": {
+        "displayName": "Display S",
+        "purpose": "Small section heads."
+      },
+      "paint": {
+        "displayName": "Paint",
+        "purpose": "Column heads and units painted on the board; never above a heading."
+      },
+      "numerals": {
+        "displayName": "Tabular numerals",
+        "purpose": "Every number not on plates."
+      }
+    },
+    "shadows": [
+      {
+        "name": "hung-plate",
+        "value": "inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 2px 2px -1px rgba(0,0,0,.4), 0 10px 18px -12px rgba(0,0,0,.6)",
+        "purpose": "Plates, lamp/plate buttons, active nav, lit lead panel."
+      },
+      {
+        "name": "lifted-on-hooks",
+        "value": "inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 6px 6px -4px rgba(0,0,0,.35), 0 18px 24px -14px rgba(0,0,0,.6)",
+        "purpose": "Hover on plate-like buttons."
+      },
+      {
+        "name": "pressed-flat",
+        "value": "inset 0 1px 0 rgba(255,255,255,.5), 0 1px 1px rgba(0,0,0,.35)",
+        "purpose": "Active press."
+      },
+      {
+        "name": "recessed-slot",
+        "value": "inset 0 2px 5px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.06)",
+        "purpose": "Empty slots, skeletons, field wells."
+      },
+      {
+        "name": "painted-panel",
+        "value": "inset 0 1px 0 rgba(255,255,255,.05)",
+        "purpose": "Boards: inner highlight, no drop shadow."
+      },
+      {
+        "name": "day-hung-plate",
+        "value": "inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 0 rgba(0,0,0,.2), 0 2px 2px -1px rgba(14,58,45,.35), 0 10px 18px -12px rgba(14,58,45,.5)",
+        "purpose": "Hung plate on the Claro day board."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Exponential out: plates settle, never bounce."
+      },
+      {
+        "name": "ease-unhook",
+        "value": "cubic-bezier(0.55, 0, 0.9, 0.4)",
+        "purpose": "Old plate swinging off its hooks."
+      },
+      {
+        "name": "flip-in",
+        "value": "260ms rotateX(-78deg) → 0",
+        "purpose": "New plate dropping onto hooks."
+      },
+      {
+        "name": "flip-out",
+        "value": "180ms rotateX(80deg) translateY(12%)",
+        "purpose": "Old plate leaving."
+      },
+      {
+        "name": "hover-lift",
+        "value": "220ms perspective(500px) rotateX(7deg)",
+        "purpose": "Button lifted on its hooks."
+      },
+      {
+        "name": "press",
+        "value": "translateY(1px)",
+        "purpose": "Pressed flat against the board."
+      },
+      {
+        "name": "scrub-stage",
+        "value": "half-life 70ms, linger 0.35, play 0–0.64, confirm 0.64–0.8, climb 0.8–1",
+        "purpose": "Landing match stage."
+      },
+      {
+        "name": "scrub-rail",
+        "value": "half-life 55ms",
+        "purpose": "Score rail out/in past the header."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "767px"
+      },
+      {
+        "name": "tablet",
+        "value": "768px–1099px"
+      },
+      {
+        "name": "shell",
+        "value": "900px"
+      },
+      {
+        "name": "max",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Lamp Button",
+      "kind": "button",
+      "refersTo": "button-lamp",
+      "description": "The one action that needs you; one per view.",
+      "html": "<button class=\"ds-btn-lamp\">Crear cuenta gratis</button>",
+      "css": ".ds-btn-lamp { display:inline-flex; align-items:center; gap:10px; min-height:48px; padding:12px 20px; border:0; border-radius:4px; background:#f4b23e; color:#0a2c22; box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 2px 2px -1px rgba(0,0,0,.4), 0 10px 18px -12px rgba(0,0,0,.6); font-family:'Archivo',system-ui,sans-serif; font-size:15px; font-weight:650; letter-spacing:.01em; cursor:pointer; transform-origin:50% 0; transition:transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-lamp:hover { transform:perspective(500px) rotateX(7deg); box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 6px 6px -4px rgba(0,0,0,.35), 0 18px 24px -14px rgba(0,0,0,.6); } .ds-btn-lamp:active { transform:translateY(1px); box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 1px 1px rgba(0,0,0,.35); } .ds-btn-lamp:focus-visible { outline:2px solid #eef0ea; outline-offset:3px; }"
+    },
+    {
+      "name": "Plate Button",
+      "kind": "button",
+      "refersTo": "button-plate",
+      "description": "Secondary action on an enamel plate.",
+      "html": "<button class=\"ds-btn-plate\">Reintentar</button>",
+      "css": ".ds-btn-plate { display:inline-flex; align-items:center; gap:10px; min-height:48px; padding:12px 20px; border:0; border-radius:4px; background:#eef0ea; color:#0e3a2d; box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 2px 2px -1px rgba(0,0,0,.4), 0 10px 18px -12px rgba(0,0,0,.6); font-family:'Archivo',system-ui,sans-serif; font-size:15px; font-weight:650; letter-spacing:.01em; cursor:pointer; transform-origin:50% 0; transition:transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-plate:hover { transform:perspective(500px) rotateX(7deg); box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 6px 6px -4px rgba(0,0,0,.35), 0 18px 24px -14px rgba(0,0,0,.6); } .ds-btn-plate:active { transform:translateY(1px); box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 1px 1px rgba(0,0,0,.35); } .ds-btn-plate:focus-visible { outline:2px solid #eef0ea; outline-offset:3px; }"
+    },
+    {
+      "name": "Board Button",
+      "kind": "button",
+      "refersTo": "button-board",
+      "description": "The action inside a lit lamp panel.",
+      "html": "<div style=\"background:#f4b23e;padding:16px;border-radius:6px\"><button class=\"ds-btn-board\">Confirmar resultado</button></div>",
+      "css": ".ds-btn-board { display:inline-flex; align-items:center; gap:10px; min-height:48px; padding:12px 20px; border:0; border-radius:4px; background:#0a2c22; color:#eef0ea; box-shadow:0 2px 2px -1px rgba(0,0,0,.4), 0 10px 18px -12px rgba(0,0,0,.6); font-family:'Archivo',system-ui,sans-serif; font-size:15px; font-weight:650; letter-spacing:.01em; cursor:pointer; transform-origin:50% 0; transition:transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-board:hover { transform:perspective(500px) rotateX(7deg); box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 6px 6px -4px rgba(0,0,0,.35), 0 18px 24px -14px rgba(0,0,0,.6); } .ds-btn-board:active { transform:translateY(1px); box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 1px 1px rgba(0,0,0,.35); } .ds-btn-board:focus-visible { outline:2px solid #eef0ea; outline-offset:3px; }"
+    },
+    {
+      "name": "Line Button",
+      "kind": "button",
+      "refersTo": "button-line",
+      "description": "Quiet action ringed in chalk.",
+      "html": "<button class=\"ds-btn-line\">Ya tengo cuenta</button>",
+      "css": ".ds-btn-line { display:inline-flex; align-items:center; min-height:48px; padding:12px 20px; border:0; border-radius:4px; background:transparent; color:#eef0ea; box-shadow:inset 0 0 0 1px rgba(238,240,234,.34); font-family:'Archivo',system-ui,sans-serif; font-size:15px; font-weight:650; cursor:pointer; } .ds-btn-line:hover { box-shadow:inset 0 0 0 1px #eef0ea; } .ds-btn-line:active { box-shadow:inset 0 0 0 1px #eef0ea, inset 0 2px 4px rgba(0,0,0,.3); } .ds-btn-line:focus-visible { outline:2px solid #eef0ea; outline-offset:3px; }"
+    },
+    {
+      "name": "Plates (SR)",
+      "kind": "custom",
+      "refersTo": "plate",
+      "description": "A number hung one enamel plate per digit; lamp tone for the viewer.",
+      "html": "<span class=\"ds-plates\"><span class=\"ds-plate\">2</span><span class=\"ds-plate\">3</span><span class=\"ds-plate\">1</span><span class=\"ds-plate\">2</span></span> <span class=\"ds-plates\"><span class=\"ds-plate ds-plate--lamp\">12</span></span>",
+      "css": ".ds-plates { display:inline-flex; gap:3px; font-size:48px; } .ds-plate { position:relative; display:inline-grid; place-items:center; min-width:1.05em; height:1.32em; padding:0 .16em; border-radius:3px; background:#eef0ea; color:#0e3a2d; box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 2px 2px -1px rgba(0,0,0,.4), 0 10px 18px -12px rgba(0,0,0,.6); font-family:'Big Shoulders','Arial Narrow',sans-serif; font-weight:800; line-height:1; transform-origin:50% 0; transition:transform 240ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-plate::before { content:''; position:absolute; top:.12em; left:50%; width:46%; height:3px; translate:-50% 0; background:radial-gradient(circle, rgba(14,58,45,.28) 1.2px, transparent 1.6px) 0 0 / 50% 100% repeat-x; } .ds-plate:hover { transform:perspective(300px) rotateX(14deg); } .ds-plate--lamp { background:#f4b23e; color:#0a2c22; padding:0 .3em; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "A recessed slot; lamp outline on focus.",
+      "html": "<input class=\"ds-field\" placeholder=\"Buscar jugador por nombre\">",
+      "css": ".ds-field { width:100%; min-height:48px; padding:12px 14px; border:0; border-radius:4px; background:#0a2c22; color:#eef0ea; box-shadow:inset 0 2px 5px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.06), inset 0 0 0 1px rgba(238,240,234,.16); font-family:'Archivo',system-ui,sans-serif; font-size:16px; caret-color:#f4b23e; } .ds-field::placeholder { color:#b4cbbf; } .ds-field:focus-visible { outline:2px solid #f4b23e; outline-offset:2px; }"
+    },
+    {
+      "name": "Header Rail",
+      "kind": "nav",
+      "refersTo": "nav-link-active",
+      "description": "Flat board rail; the current page hangs as a plate.",
+      "html": "<nav class=\"ds-nav\"><strong class=\"ds-brand\">Tenis Ecuador</strong><a class=\"ds-nav-link\" aria-current=\"page\" href=\"#\">Inicio</a><a class=\"ds-nav-link\" href=\"#\">Ranking</a><a class=\"ds-nav-link\" href=\"#\">Partidos</a></nav>",
+      "css": ".ds-nav { display:flex; align-items:center; gap:2px; min-height:64px; padding:0 16px; background:#0e3a2d; border-bottom:1px solid rgba(238,240,234,.16); } .ds-brand { margin-right:auto; font-family:'Big Shoulders',sans-serif; font-weight:800; font-size:21px; letter-spacing:.04em; text-transform:uppercase; color:#eef0ea; } .ds-nav-link { padding:8px 12px; min-height:40px; border-radius:3px; font-family:'Big Shoulders',sans-serif; font-weight:700; font-size:18px; letter-spacing:.05em; text-transform:uppercase; color:#b4cbbf; text-decoration:none; } .ds-nav-link:hover { background:rgba(238,240,234,.07); color:#eef0ea; } .ds-nav-link[aria-current=page] { background:#eef0ea; color:#0e3a2d; box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 2px 2px -1px rgba(0,0,0,.4), 0 10px 18px -12px rgba(0,0,0,.6); font-weight:800; } .ds-nav-link:focus-visible { outline:2px solid #eef0ea; outline-offset:3px; }"
+    },
+    {
+      "name": "Ranking Row",
+      "kind": "custom",
+      "refersTo": "plate",
+      "description": "A name painted on the ladder, rank on a hung plate, SR tabular right.",
+      "html": "<a class=\"ds-row\" href=\"#\"><span class=\"ds-rank\">7</span><span class=\"ds-copy\"><strong>Sofía Carrión</strong><span>Quito · 42 partidos</span></span><span class=\"ds-sr\">2.318</span></a>",
+      "css": ".ds-row { display:grid; grid-template-columns:3.4rem 1fr auto; align-items:center; gap:16px; padding:16px 8px; border-top:1px solid rgba(238,240,234,.16); color:#eef0ea; text-decoration:none; font-family:'Archivo',system-ui,sans-serif; background:#0e3a2d; } .ds-row:hover { background:rgba(238,240,234,.07); } .ds-rank { display:inline-grid; place-items:center; height:1.32em; padding:0 .3em; justify-self:start; border-radius:3px; background:#eef0ea; color:#0e3a2d; box-shadow:inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 0 rgba(14,58,45,.14), 0 2px 2px -1px rgba(0,0,0,.4), 0 10px 18px -12px rgba(0,0,0,.6); font:800 1.45rem/1 'Big Shoulders',sans-serif; } .ds-copy strong { display:block; font-weight:650; } .ds-copy span { font-size:13.5px; color:#b4cbbf; } .ds-sr { font-size:18px; font-weight:650; font-variant-numeric:tabular-nums lining-nums; } .ds-row:focus-visible { outline:2px solid #eef0ea; outline-offset:3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Tablero",
+    "overview": "**Creative North Star: \"The Tablero\"** — the hand-operated scoreboard at a club court: a painted enamel-green board, white enamel number plates a person hangs by hand on two hooks, and one amber lamp for whatever needs you. Everything on screen is either the board, something painted on it, a plate hung on it, or a slot a plate can hang in. Nothing floats above the board, nothing glows except the lamp.\n\nThe point of view is the product's own: the number is the product. SR, rank and score are hung as plates, one plate per digit, in Big Shoulders caps, so a rating reads the way a set score reads from the far baseline. Density is club-board density: ruled rows, painted column heads, few containers. Motion only happens because the user did something; the board never moves on its own. This record is taken from the shipped code (`assets/css/tablero.css`, `components/tablero/*`, `composables/useScrub.ts`, `utils/tablero.ts`, `pages/index.vue`, `pages/leaderboard/index.vue`, `components/LeaderboardPlayerCard.vue`), not from intentions. The direction contract ships inside `components/PageLayout.vue` as the first thing in `<body>` on every Tablero route:",
+    "keyCharacteristics": [
+      "Numbers on hung plates (SR, rank, counts, set scores), tabular numerals everywhere else.",
+      "Chalk hairlines instead of cards; rows are painted lines on the board.",
+      "One lamp: amber marks the single thing that needs you, or you.",
+      "Motion is scrubbed by the user's scroll or triggered by their pointer; it rests when they rest.",
+      "Spanish UI copy in neutral tuteo (tú / puedes / tienes), never voseo."
+    ],
+    "rules": [
+      {
+        "name": "The One Lamp Rule",
+        "body": "Amber marks exactly one thing per view: the action that needs you, or where you stand. A second lit thing means one of them is lying about urgency.",
+        "section": "colors"
+      },
+      {
+        "name": "The Swap Rule",
+        "body": "Day board is not a light theme bolted on: board and plate trade places, the lamp stays.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paint Is Not A Heading Rule",
+        "body": "Painted labels name columns and units. They never sit above a heading as a kicker or eyebrow.",
+        "section": "typography"
+      },
+      {
+        "name": "The Plate Numeral Rule",
+        "body": "A number that is the point of the view hangs on plates; a number in a sentence or a row's secondary column is tabular Archivo.",
+        "section": "typography"
+      },
+      {
+        "name": "The Painted-On Rule",
+        "body": "A board is painted onto the board: 1px Chalk Strong frame and an inner highlight, never a drop shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No Capsule Rule",
+        "body": "Nothing is pill-shaped. The largest radius in the world is 6px.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** hang the view's key number on plates and keep every other number in tabular numerals.",
+      "**Do** light exactly one thing amber per view, and give it the action.",
+      "**Do** separate with Chalk hairlines and painted panels; let rows be lines, not boxes.",
+      "**Do** tie every movement to scroll position or pointer, and give reduced motion a composed static final state.",
+      "**Do** use sequence numbers only when order is information, and then on plates (the three sign-up steps).",
+      "**Do** write Spanish copy in neutral tuteo."
+    ],
+    "donts": [
+      "**Don't** use gradient text.",
+      "**Don't** use glass or backdrop-blur cards; the header and tab bar explicitly remove blur.",
+      "**Don't** build identical card grids; feature lists are a ruled table (\"El reglamento\").",
+      "**Don't** use emoji or unicode symbols as icons; icons are Heroicons SVG or plates.",
+      "**Don't** number things 01 / 02 / 03 for decoration.",
+      "**Don't** center everything in a hero; the headline sits left, the board beside it.",
+      "**Don't** add decorative loops, autoplay or timer-driven motion.",
+      "**Don't** put kicker or eyebrow labels above headings.",
+      "**Don't** use pill buttons or capsule badges.",
+      "**Don't** open with a photo hero under a scrim.",
+      "**Don't** use AI medal imagery: the tier PNG medals in `public/images/ranks/` are not used on Tablero surfaces; tiers are named in Big Shoulders caps.",
+      "**Don't** put wide soft shadows under 1px-bordered panels.",
+      "**Don't** light more than one amber lamp per view."
+    ]
+  }
+}

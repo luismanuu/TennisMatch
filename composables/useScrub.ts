@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { clamp01, sectionProgress, smoothToward } from '~/utils/tablero'
+import { sectionProgress, smoothToward } from '~/utils/tablero'
 
 /**
  * Scroll → progress for the Tablero world (DESIGN.md "Motion"). One small rAF loop
@@ -7,9 +7,9 @@ import { clamp01, sectionProgress, smoothToward } from '~/utils/tablero'
  * so an idle page requests no frames.
  *
  *  pinned   0 → 1 while a tall section scrolls under a sticky stage
- *  passing  0 → 1 while the element's bottom edge slides the last `span` px up under
- *           `edge` (the header): the element's own edge pushes the rail out, so the
- *           rail can only rest half-out while that edge is visibly half-under the header
+ *  passing  0 or 1: whether the element's bottom edge has gone under `edge` (the
+ *           header). Scrolling past it sends the rail out, scrolling back reels it in;
+ *           the smoothing carries it across, so the rail never rests half-out
  *
  * Reduced motion: progress jumps straight to the target (no smoothing, no
  * in-between frames); the stage's CSS also drops the pin, so the board shows its
@@ -19,8 +19,6 @@ export interface ScrubOptions {
   mode: 'pinned' | 'passing'
   /** passing: distance from the viewport top where the element counts as gone (the nav height). */
   edge?: number
-  /** passing: scroll distance over which the rail slides out (its own height). */
-  span?: number
   /** ms for the displayed value to close half the gap to the scroll position. */
   halfLife?: number
   /** Value used before mount and during SSR. */
@@ -44,9 +42,7 @@ export function useScrub(target: Ref<HTMLElement | null>, options: ScrubOptions)
     if (!el) return goal
     const rect = el.getBoundingClientRect()
     if (options.mode === 'pinned') return sectionProgress(rect.top, rect.height, window.innerHeight)
-    const edge = options.edge ?? 0
-    const span = Math.max(1, options.span ?? 56)
-    return clamp01((edge - (rect.bottom - span)) / span)
+    return rect.bottom <= (options.edge ?? 0) ? 1 : 0
   }
 
   const tick = (now: number) => {

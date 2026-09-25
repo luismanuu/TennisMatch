@@ -6,7 +6,7 @@
       <slot />
       <footer v-if="footer" class="site-footer">
         <span>Tenis Ecuador</span>
-        <NuxtLink to="/creditos">Créditos de fotografías</NuxtLink>
+        <NuxtLink v-if="world !== 'tablero'" to="/creditos">Créditos de fotografías</NuxtLink>
       </footer>
     </main>
   </div>

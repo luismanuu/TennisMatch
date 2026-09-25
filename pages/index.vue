@@ -3,19 +3,19 @@
     <!-- Authenticated: Inicio (DESIGN.md "Inicio") -->
     <template v-if="isAuthenticated">
       <header class="home-head">
-        <p class="t-muted home-head__context">{{ contextLine }}</p>
         <h1 class="t-display-l">{{ greeting }}<span v-if="firstName">, {{ firstName }}</span></h1>
+        <p class="t-muted home-head__context">{{ contextLine }}</p>
       </header>
 
       <!-- The player's own scoreboard: SR on hung plates, supporting counts as columns -->
-      <section ref="playerBoard" class="player-board t-board" aria-labelledby="player-board-title">
+      <section class="player-board t-board" aria-labelledby="player-board-title">
         <div class="player-board__sr">
           <h2 id="player-board-title" class="t-paint">Tu nivel de juego</h2>
           <p v-if="playerLoading" class="player-board__plates" aria-busy="true">
             <span class="sr-only">Cargando tu nivel</span>
             <span v-for="n in 4" :key="n" class="t-slot player-board__slot" aria-hidden="true" />
           </p>
-          <p v-else class="player-board__plates">
+          <p v-else ref="playerBoard" class="player-board__plates">
             <TableroPlates :value="player?.elo ?? 0" :label="`${(player?.elo ?? 0).toLocaleString('es-EC')} puntos SR`" />
             <span class="player-board__unit" aria-hidden="true">SR</span>
           </p>
@@ -67,8 +67,8 @@
         <div class="home-main">
           <!-- Lead: the most urgent real action, derived from pending notifications. The one lit plate. -->
           <section v-if="leadState === 'lead' && leadNotification" class="lead lead--lit" aria-labelledby="lead-title">
-            <p class="lead__status">{{ leadCopy.status }}</p>
             <h2 id="lead-title" class="t-display-m">{{ leadCopy.title }}</h2>
+            <p class="lead__status">{{ leadCopy.status }}</p>
             <p v-if="leadNotification.type === 'score_proposal' && leadMatch?.score" class="lead__score num">{{ formatScore(leadMatch.score) }}</p>
             <p v-if="leadMeta" class="lead__meta">{{ leadMeta }}</p>
             <NuxtLink :to="`/matches/${leadNotification.match_id}`" class="t-btn t-btn--board">
@@ -85,8 +85,8 @@
           </section>
 
           <section v-else-if="leadState === 'error'" class="lead t-board" role="alert">
-            <p class="lead__status lead__status--quiet">No disponible</p>
             <h2 class="t-display-m">No pudimos revisar tus pendientes</h2>
+            <p class="lead__status lead__status--quiet">No disponible</p>
             <p class="lead__meta">Puede que tengas partidos por confirmar. Revisa tu conexión e inténtalo de nuevo.</p>
             <button type="button" class="t-btn t-btn--plate" @click="fetchNotifications">
               Reintentar
@@ -95,8 +95,8 @@
           </section>
 
           <section v-else class="lead t-board" aria-labelledby="lead-clear-title">
-            <p class="lead__status lead__status--quiet">Todo al día</p>
             <h2 id="lead-clear-title" class="t-display-m">Tu próximo punto empieza aquí</h2>
+            <p class="lead__status lead__status--quiet">Todo al día</p>
             <p class="lead__meta">No tienes acciones pendientes. Organiza tu siguiente partido cuando quieras.</p>
             <NuxtLink to="/matches/new" class="t-btn t-btn--lamp">
               Programar partido
@@ -187,7 +187,7 @@
     <template v-else>
       <section class="landing-top" aria-labelledby="landing-title">
         <div class="landing-copy">
-          <h1 id="landing-title" class="t-display-xl">Lleva tu juego al siguiente nivel</h1>
+          <h1 id="landing-title" class="t-display-xl">Juega. Confirma. Sube.</h1>
           <p class="t-lede">Registra tus partidos, sigue tu nivel SR y encuentra rivales de tu nivel en tu ciudad. Rankings y torneos para jugadores amateur de Ecuador.</p>
           <div class="landing-actions">
             <NuxtLink to="/sign-up" class="t-btn t-btn--lamp">
@@ -200,24 +200,21 @@
         <TableroMatchStage class="landing-stage" />
       </section>
 
-      <section class="rules" aria-labelledby="features-title">
-        <h2 id="features-title" class="t-display-l rules__title">Todo lo que necesitas para competir</h2>
-        <ul class="rules__list">
-          <li v-for="group in featureGroups" :key="group.title" class="rules__item">
-            <h3 class="t-display-s rules__name">{{ group.title }}</h3>
-            <div class="rules__body">
-              <p>{{ group.description }}</p>
-              <ul class="rules__points">
-                <li v-for="point in group.points" :key="point">{{ point }}</li>
-              </ul>
-            </div>
-          </li>
-        </ul>
+      <!-- The sign-up lands straight after the climb, while the board is still in view -->
+      <section class="close" aria-labelledby="close-title">
+        <div>
+          <h2 id="close-title" class="t-display-l">Tu nombre, en el tablero</h2>
+          <p class="t-lede">Es gratis. Crea tu cuenta y registra tu primer partido hoy.</p>
+        </div>
+        <NuxtLink to="/sign-up" class="t-btn t-btn--lamp">
+          Crear cuenta gratis
+          <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
       </section>
 
       <section class="tiers" aria-labelledby="tiers-title">
         <div class="tiers__copy">
-          <h2 id="tiers-title" class="t-display-l">Sube de nivel, de Bronce a Gran Maestro</h2>
+          <h2 id="tiers-title" class="t-display-l">De Bronce a Gran Maestro</h2>
           <p class="t-lede">Cada partido competitivo confirmado mueve tu SR. Tres partidos de colocación te dan tu nivel inicial.</p>
           <ol class="steps">
             <li v-for="(step, i) in steps" :key="step.title">
@@ -234,13 +231,18 @@
         </ol>
       </section>
 
-      <section class="close t-board" aria-labelledby="close-title">
-        <h2 id="close-title" class="t-display-l">¿Listo para competir?</h2>
-        <p class="t-lede">Es gratis. Crea tu cuenta y registra tu primer partido hoy.</p>
-        <NuxtLink to="/sign-up" class="t-btn t-btn--lamp">
-          Crear cuenta gratis
-          <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
-        </NuxtLink>
+      <!-- The club's rules board: a ruled table, read across, not a grid of feature cards -->
+      <section class="rules" aria-labelledby="features-title">
+        <h2 id="features-title" class="t-display-l rules__title">El reglamento</h2>
+        <dl class="rules__table">
+          <div v-for="group in featureGroups" :key="group.title" class="rules__row">
+            <dt class="rules__name">{{ group.title }}</dt>
+            <dd class="rules__body">
+              <p>{{ group.description }}</p>
+              <p class="rules__points">{{ group.points.join(' · ') }}</p>
+            </dd>
+          </div>
+        </dl>
       </section>
     </template>
   </PageLayout>
@@ -457,13 +459,13 @@ watch(() => player.value?.id, (newId) => {
 
 // Rating tiers for display
 const ratingTiers = [
-  { tier: 'Bronze', minElo: 1, maxElo: 1499, color: '#CD7F32' },
-  { tier: 'Silver', minElo: 1500, maxElo: 1999, color: '#C0C0C0' },
-  { tier: 'Gold', minElo: 2000, maxElo: 2499, color: '#FFD700' },
-  { tier: 'Platinum', minElo: 2500, maxElo: 2999, color: '#E5E4E2' },
-  { tier: 'Diamond', minElo: 3000, maxElo: 3499, color: '#B9F2FF' },
-  { tier: 'Master', minElo: 3500, maxElo: 3999, color: '#9932CC' },
-  { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity, color: '#FF4500' },
+  { tier: 'Bronze', minElo: 1, maxElo: 1499 },
+  { tier: 'Silver', minElo: 1500, maxElo: 1999 },
+  { tier: 'Gold', minElo: 2000, maxElo: 2499 },
+  { tier: 'Platinum', minElo: 2500, maxElo: 2999 },
+  { tier: 'Diamond', minElo: 3000, maxElo: 3499 },
+  { tier: 'Master', minElo: 3500, maxElo: 3999 },
+  { tier: 'Grandmaster', minElo: 4000, maxElo: Infinity },
 ]
 
 const currentTier = computed(() => {
@@ -482,7 +484,7 @@ const winRateNumber = computed(() => {
   return Number.isFinite(n) ? n : null
 })
 
-// The player board the compact rail tracks as it scrolls under the header
+// The SR plates the compact rail tracks: once they are under the header, the rail repeats them
 const playerBoard = ref<HTMLElement | null>(null)
 
 const steps = [
@@ -543,7 +545,7 @@ const featureGroups = [
 .lead__skeleton--title { height: 36px; width: min(100%, 16ch); }
 
 .notice { display: flex; gap: 16px; align-items: flex-start; padding: 20px 0; border-top: 1px solid var(--t-chalk); border-bottom: 1px solid var(--t-chalk); }
-.notice__icon { color: var(--t-lamp); flex-shrink: 0; margin-top: 2px; }
+.notice__icon { color: var(--t-ink); flex-shrink: 0; margin-top: 2px; }
 .notice__copy { display: grid; gap: 6px; }
 
 .home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; }
@@ -551,7 +553,7 @@ const featureGroups = [
 .home-side { position: sticky; top: calc(var(--t-nav-h) + 76px); }
 
 /* ── Landing ─────────────────────────────────────────────────────────────── */
-.landing-top { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start; margin-bottom: 96px; }
+.landing-top { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start; margin-bottom: 40px; }
 .landing-copy {
   position: sticky; top: calc(var(--t-nav-h) + env(safe-area-inset-top, 0px) + 20px);
   display: grid; gap: 24px; padding-top: 8px;
@@ -559,18 +561,17 @@ const featureGroups = [
 .landing-copy h1 { text-wrap: balance; }
 .landing-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
 
-.rules { margin-bottom: 112px; }
-.rules__title { max-width: 14ch; margin-bottom: 40px; }
-.rules__list { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--t-chalk); }
-.rules__item { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px 56px; padding: 28px 0; border-top: 1px solid var(--t-chalk); }
-.rules__name { font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); line-height: 1; max-width: 16ch; }
-.rules__body { display: grid; gap: 12px; }
-.rules__body > p { font-size: 17px; line-height: 1.5; max-width: 52ch; }
-.rules__points { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; color: var(--t-ink-muted); font-size: 15px; }
-.rules__points li { display: flex; gap: 12px; align-items: baseline; }
-.rules__points li::before { content: ''; flex-shrink: 0; width: 14px; height: 2px; translate: 0 -4px; background: var(--t-chalk-strong); }
+.rules { margin-bottom: 64px; }
+.rules__title { margin-bottom: 28px; }
+.rules__table { margin: 0; border-bottom: 1px solid var(--t-chalk); }
+.rules__row { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 8px 48px; padding: 20px 0; border-top: 1px solid var(--t-chalk); }
+.rules__name { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; font-size: 1.5rem; line-height: 1; }
+.rules__body { margin: 0; display: grid; gap: 4px; }
+.rules__body > p { max-width: 64ch; }
+.rules__body > p:first-child { font-size: 16.5px; }
+.rules__points { font-size: 14.5px; color: var(--t-ink-muted); }
 
-.tiers { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 56px; align-items: start; margin-bottom: 112px; }
+.tiers { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 56px; align-items: start; margin-bottom: 96px; }
 .tiers__copy { display: grid; gap: 24px; }
 .steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 20px; }
 .steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; font-size: 1.6rem; }
@@ -583,7 +584,8 @@ const featureGroups = [
 .tier-ladder__range { font-size: 15px; color: var(--t-ink-muted); white-space: nowrap; }
 .tier-ladder__range abbr { text-decoration: none; }
 
-.close { display: grid; justify-items: start; gap: 18px; padding: 48px; margin-bottom: 24px; }
+.close { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px 48px; padding: 40px 0; margin-bottom: 96px; border-top: 1px solid var(--t-chalk-strong); border-bottom: 1px solid var(--t-chalk-strong); }
+.close > div { display: grid; gap: 14px; }
 
 @media (min-width: 768px) and (max-width: 1099px) {
   .player-board { grid-template-columns: 1fr; }
@@ -602,16 +604,16 @@ const featureGroups = [
   .lead { padding: 22px 18px; }
   .home-actions > .t-btn { width: 100%; }
 
-  .landing-top { grid-template-columns: 1fr; gap: 28px; margin-bottom: 64px; }
+  .landing-top { grid-template-columns: 1fr; gap: 28px; margin-bottom: 24px; }
   .landing-copy { position: static; gap: 18px; padding-top: 0; }
   .landing-actions > .t-btn { flex: 1 1 100%; }
   .rules { margin-bottom: 72px; }
   .rules__title { margin-bottom: 24px; }
-  .rules__item { grid-template-columns: 1fr; padding: 22px 0; gap: 10px; }
-  .rules__body > p { font-size: 16px; }
+  .rules__row { grid-template-columns: 1fr; padding: 18px 0; }
   .tiers { grid-template-columns: 1fr; gap: 32px; margin-bottom: 72px; }
   .tier-ladder { padding: 4px 16px; }
   .tier-ladder__name { font-size: 1.45rem; }
-  .close { padding: 28px 18px; }
+  .close { padding: 28px 0; margin-bottom: 64px; }
+  .close > .t-btn { width: 100%; }
 }
 </style>

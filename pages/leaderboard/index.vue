@@ -700,7 +700,13 @@ onMounted(() => {
 .rank-top__title { margin-bottom: 8px; font-size: 0.78rem; }
 .rank-list { border-bottom: 1px solid var(--t-chalk); }
 /* Scroll container kept: the page loads more rows above/below and centers the viewer's row inside it */
-.ranking-scroll { position: relative; max-height: min(70vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+.ranking-scroll {
+  position: relative; max-height: min(70vh, 640px); overflow-y: auto; overscroll-behavior: contain;
+  /* A window onto the ladder: rows fade at the window's edges instead of being guillotined */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, var(--t-ink) 44px, var(--t-ink) calc(100% - 44px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, var(--t-ink) 44px, var(--t-ink) calc(100% - 44px), transparent 100%);
+  padding: 12px 0;
+}
 .ranking-more { display: flex; justify-content: center; padding: 10px; color: var(--t-ink-muted); }
 .rank-loading { display: grid; gap: 10px; padding: 12px 0; }
 .rank-loading__bar { display: block; height: 52px; width: 100%; padding: 0; }
@@ -711,8 +717,7 @@ onMounted(() => {
   .rank-head { padding-bottom: 20px; margin-bottom: 24px; }
   .rank-head__count { font-size: 1.6rem; }
   .rank-head__side { width: 100%; justify-content: space-between; }
-  .filters__grid { grid-template-columns: 1fr 1fr; }
-  .filters__search { grid-column: 1 / -1; }
+  .filters__grid { grid-template-columns: 1fr; }
   .ranking-grid { grid-template-columns: 1fr; gap: 32px; }
   .ranking-scroll { max-height: 60vh; }
 }

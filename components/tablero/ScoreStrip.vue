@@ -8,15 +8,15 @@
 
 <script setup lang="ts">
 /**
- * The compact scoreboard rail (DESIGN.md "Signature interaction"). As the page's
- * board slides up under the header, this rail slides out from behind the header in
- * step with it, scrubbed by the scroll, never on a timer. It repeats what the board
+ * The compact scoreboard rail (DESIGN.md "Signature interaction"). When the page's
+ * board has slid fully under the header, this rail slides out from behind it; scroll
+ * back and it reels in. Driven by the scroll position, never by a timer. It repeats what the board
  * already said, so it is hidden from assistive tech and holds no controls.
  */
 const props = defineProps<{ target: HTMLElement | null }>()
 const target = toRef(props, 'target')
 const NAV = 64
-const { progress } = useScrub(target, { mode: 'passing', edge: NAV, span: 64, halfLife: 60, initial: 0 })
+const { progress } = useScrub(target, { mode: 'passing', edge: NAV, halfLife: 55, initial: 0 })
 const style = computed(() => ({
   transform: `translateY(${(progress.value - 1) * 100}%)`,
   visibility: progress.value <= 0.001 ? ('hidden' as const) : undefined
@@ -29,7 +29,7 @@ const style = computed(() => ({
   top: calc(var(--t-nav-h) + env(safe-area-inset-top, 0px));
   background: var(--t-board-raise);
   border-bottom: 1px solid var(--t-chalk-strong);
-  box-shadow: 0 14px 24px -22px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 14px 24px -22px var(--t-board-deep);
   will-change: transform;
 }
 .strip__inner {
