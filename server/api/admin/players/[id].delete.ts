@@ -1,5 +1,9 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -8,69 +12,35 @@ export default defineEventHandler(async (event) => {
     const playerId = getRouterParam(event, 'id')
 
     if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Missing required fields: player_id'
-      })
+      throw createError({ statusCode: 400, statusMessage: 'Missing required fields: player_id' })
     }
 
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
-    // Check if player exists and is not already deleted
-    const { data: player, error: fetchError } = await supabase
-      .from('players')
-      .select('id, user_id, name, status')
-      .eq('id', playerId)
-      .single()
+    const player = UUID.test(playerId)
+      ? await db.query.players.findFirst({ columns: { id: true, name: true, status: true }, where: eq(players.id, playerId) })
+      : undefined
 
-    if (fetchError || !player) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Player not found'
-      })
+    if (!player) {
+      throw createError({ statusCode: 404, statusMessage: 'Player not found' })
     }
 
-    // Check if already deleted
     if (player.status === 'deleted') {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player is already deleted'
-      })
+      throw createError({ statusCode: 400, statusMessage: 'Player is already deleted' })
     }
 
-    // SOFT DELETE: Set status to 'deleted' and set deleted_at timestamp
-    // DO NOT delete matches - preserve all match history
-    // DO NOT delete the account - preserve ability to restore
-    const { error: updateError } = await supabase
-      .from('players')
-      .update({
-        status: 'deleted',
-        deleted_at: new Date().toISOString()
-      })
-      .eq('id', playerId)
-
-    if (updateError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to delete player',
-        data: updateError
-      })
-    }
+    // SOFT DELETE: preserve match history and the account; only the player row's status changes.
+    await db.update(players).set({ status: 'deleted', deleted_at: new Date() }).where(eq(players.id, playerId))
 
     return {
       success: true,
       message: `Player "${player.name}" has been marked as deleted. All match history has been preserved.`,
-      deletedPlayer: {
-        id: player.id,
-        name: player.name,
-        status: 'deleted'
-      }
+      deletedPlayer: { id: player.id, name: player.name, status: 'deleted' },
     }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })
-
