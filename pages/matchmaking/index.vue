@@ -1,350 +1,97 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
+  <PageLayout>
+    <PageHeader title="Buscar rival" subtitle="Jugadores de tu región con un nivel parecido al tuyo." />
+
+    <div v-if="loading" class="panel loading-state" aria-busy="true">
+      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+      <p class="loading-text">Buscando rivales…</p>
     </div>
 
-    <!-- Navigation -->
-    <AppNavigation />
+    <div v-else-if="error" class="panel empty-state" role="alert">
+      <Icon name="heroicons:exclamation-triangle" class="empty-state-icon text-danger" aria-hidden="true" />
+      <h2 class="empty-state-title">No pudimos buscar rivales</h2>
+      <p class="empty-state-description">{{ error.message || 'Ocurrió un error' }}</p>
+      <button type="button" class="btn-primary" @click="loadRecommendations">
+        <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+        Reintentar
+      </button>
+    </div>
 
-    <div class="h-16"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <!-- Header -->
-        <div class="text-center mb-12 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-6">
-            <Icon name="heroicons:magnifying-glass" class="w-4 h-4 text-accent" />
-            <span class="text-size-4 font-semibold text-accent">Matchmaking</span>
-          </div>
-          <h1 class="text-size-1 font-semibold text-foreground mb-4">
-            Encuentra un Oponente
-          </h1>
-          <p class="text-size-3 font-regular text-foreground-muted">
-            Te recomendamos jugadores de tu región con un nivel similar al tuyo
-          </p>
+    <template v-else>
+      <section v-if="playerInfo" class="panel me" aria-label="Tu nivel">
+        <span class="avatar" aria-hidden="true">{{ getInitials(playerInfo.name) }}</span>
+        <div class="row-copy">
+          <strong>{{ playerInfo.name }}</strong>
+          <RatingTierBadge :elo="playerInfo.elo" :total-matches-played="playerInfo.is_unrated ? 0 : 1" :show-elo="true" class="mt-1" />
         </div>
+        <p v-if="searchInfo" class="me__count meta">
+          <strong class="text-foreground numeric">{{ searchInfo.recommendations_count }}</strong> jugadores · {{ searchInfo.matchable_cities_count }} ciudades en tu región
+        </p>
+      </section>
 
-        <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
-          </div>
-          <p class="text-size-3 font-regular text-foreground-muted">Buscando oponentes...</p>
+      <section v-if="message" class="panel notice" role="status">
+        <Icon name="heroicons:information-circle" class="w-6 h-6 text-warning flex-shrink-0" aria-hidden="true" />
+        <div class="notice__copy">
+          <p>{{ message }}</p>
+          <NuxtLink v-if="message.includes('ciudad') || message.includes('Configura tu ciudad')" to="/profile/edit" class="text-link">
+            Configurar mi ciudad
+            <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+          </NuxtLink>
         </div>
+      </section>
 
-        <!-- Error State -->
-        <div v-else-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
-          </div>
-          <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
-          <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message || 'Ocurrió un error' }}</p>
-          <button @click="loadRecommendations" class="btn-primary text-size-3 w-full justify-center group">
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
-            Reintentar
-          </button>
+      <section v-if="topRecommendations.length > 0" aria-labelledby="top-title" class="block">
+        <div class="section-heading">
+          <h2 id="top-title">Recomendados para ti</h2>
+          <span class="meta">Por nivel, cercanía y actividad</span>
         </div>
+        <div class="list-surface">
+          <OpponentRow v-for="rec in topRecommendations" :key="rec.player.id" :rec="rec" :last-match="getLastMatchText(rec.player.last_match_at, rec.last_active_days_ago)" />
+        </div>
+      </section>
 
-        <!-- Content -->
-        <template v-else>
-          <!-- Your Info Card -->
-          <div v-if="playerInfo" class="glass-card-elevated p-6 mb-8 animate-fade-up">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div class="flex items-center gap-4">
-                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 flex items-center justify-center flex-shrink-0">
-                  <span class="text-xl font-bold text-accent">
-                    {{ getInitials(playerInfo.name) }}
-                  </span>
-                </div>
-                <div>
-                  <h3 class="text-size-2 font-semibold text-foreground">{{ playerInfo.name }}</h3>
-                  <div class="flex items-center gap-3 mt-1">
-                    <RatingTierBadge 
-                      :elo="playerInfo.elo" 
-                      :total-matches-played="playerInfo.is_unrated ? 0 : 1"
-                      :show-elo="true"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div v-if="searchInfo" class="text-left md:text-right">
-                <p class="text-size-4 text-foreground-muted">
-                  <span class="font-semibold text-foreground">{{ searchInfo.recommendations_count }}</span> jugadores encontrados
-                </p>
-                <p class="text-size-5 text-foreground-muted">
-                  {{ searchInfo.matchable_cities_count }} ciudades en tu región
-                </p>
-              </div>
-            </div>
-          </div>
+      <section v-if="recommendations.length > 0 && currentPage > 1" aria-labelledby="more-title" class="block">
+        <div class="section-heading"><h2 id="more-title">Más rivales · página {{ currentPage }}</h2></div>
+        <div class="list-surface">
+          <OpponentRow v-for="rec in recommendations" :key="rec.player.id" :rec="rec" :last-match="getLastMatchText(rec.player.last_match_at, rec.last_active_days_ago)" />
+        </div>
+      </section>
 
-          <!-- Message (no city, no segment, etc.) -->
-          <div v-if="message" class="glass-card-elevated p-8 text-center max-w-md mx-auto animate-fade-in-scale mb-8">
-            <div class="w-20 h-20 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center mx-auto mb-6">
-              <Icon name="heroicons:information-circle" class="w-10 h-10 text-yellow-400" />
-            </div>
-            <h3 class="text-size-2 font-semibold text-foreground mb-3">Atención</h3>
-            <p class="text-size-4 font-regular text-foreground-muted mb-6">{{ message }}</p>
-            <NuxtLink 
-              v-if="message.includes('ciudad') || message.includes('Configura tu ciudad')" 
-              to="/profile/edit" 
-              class="btn-primary text-size-4 mt-6 inline-flex items-center group"
-            >
-              <Icon name="heroicons:map-pin" class="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-              Configurar Ciudad en Mi Perfil
-            </NuxtLink>
-          </div>
+      <nav v-if="pagination && pagination.total_pages > 1" class="pager" aria-label="Paginación">
+        <button type="button" class="btn-secondary" :disabled="currentPage === 1" @click="handlePageChange(currentPage - 1)">
+          <Icon name="heroicons:chevron-left" class="w-4 h-4" aria-hidden="true" />
+          Anterior
+        </button>
+        <div class="pager__pages">
+          <template v-for="pageNum in getPageNumbers(pagination.total_pages)" :key="pageNum">
+            <button
+              v-if="pageNum !== -1"
+              type="button"
+              class="pager__page"
+              :aria-current="currentPage === pageNum ? 'page' : undefined"
+              @click="handlePageChange(pageNum)"
+            >{{ pageNum }}</button>
+            <span v-else class="meta" aria-hidden="true">…</span>
+          </template>
+        </div>
+        <button type="button" class="btn-secondary" :disabled="!pagination.has_more" @click="handlePageChange(currentPage + 1)">
+          Siguiente
+          <Icon name="heroicons:chevron-right" class="w-4 h-4" aria-hidden="true" />
+        </button>
+        <p class="meta pager__total">{{ pagination.total }} rivales disponibles</p>
+      </nav>
 
-          <!-- Top Recommendations (Algorithm-based, max 5) -->
-          <div v-if="topRecommendations.length > 0" class="space-y-4 animate-fade-up animate-delay-1 mb-8">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-size-2 font-semibold text-foreground">
-                Top Recomendados
-              </h2>
-              <span class="px-3 py-1 rounded-full bg-accent-subtle/30 border border-accent/30 text-xs font-semibold text-accent">
-                Algoritmo
-              </span>
-            </div>
-            
-            <div 
-              v-for="(rec, index) in topRecommendations" 
-              :key="rec.player.id"
-              class="glass-card-elevated p-6 hover-lift transition-all border-2 border-accent/20"
-              :style="{ animationDelay: `${index * 0.1}s` }"
-            >
-              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                <!-- Player Info Section -->
-                <div class="flex items-center gap-4 flex-1 min-w-0">
-                  <!-- Player Avatar -->
-                  <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border-2 border-border-subtle flex items-center justify-center flex-shrink-0">
-                    <span class="text-xl font-bold text-foreground-muted">
-                      {{ getInitials(rec.player.name) }}
-                    </span>
-                  </div>
-                  
-                  <!-- Player Details -->
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 class="text-size-2 font-semibold text-foreground truncate">
-                        {{ rec.player.name }}
-                      </h3>
-                      <span 
-                        v-if="rec.is_unrated" 
-                        class="px-2 py-0.5 text-xs font-medium rounded bg-gray-500/20 text-gray-400 border border-gray-500/30 whitespace-nowrap"
-                      >
-                        Nuevo
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-3 flex-wrap text-size-4 text-foreground-muted">
-                      <RatingTierBadge 
-                        :elo="rec.player.elo" 
-                        :total-matches-played="rec.is_unrated ? 0 : 1"
-                        :show-elo="true"
-                      />
-                      <span v-if="rec.player.city" class="flex items-center gap-1 whitespace-nowrap">
-                        <Icon name="heroicons:map-pin" class="w-4 h-4 flex-shrink-0" />
-                        <span class="truncate">{{ rec.player.city.name }}</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Actions Section -->
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:flex-shrink-0">
-                  <!-- Last Match Info -->
-                  <div class="text-center px-4 py-3 rounded-lg bg-surface border border-border-subtle min-w-[140px] sm:min-w-[160px]">
-                    <div class="text-size-5 text-foreground-muted mb-1">Último partido</div>
-                    <div class="text-size-4 font-semibold text-foreground whitespace-nowrap">
-                      {{ getLastMatchText(rec.player.last_match_at, rec.last_active_days_ago) }}
-                    </div>
-                  </div>
-                  
-                  <!-- Action Buttons -->
-                  <div class="flex flex-col sm:flex-row gap-3 sm:flex-shrink-0">
-                    <!-- View Profile Button -->
-                    <NuxtLink 
-                      :to="`/players/${rec.player.id}`"
-                      class="px-4 py-2.5 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
-                    >
-                      <Icon name="heroicons:user-circle" class="w-4 h-4 group-hover:scale-110 transition-transform flex-shrink-0" />
-                      <span class="text-size-4 font-semibold">Ver Perfil</span>
-                    </NuxtLink>
-                    
-                    <!-- Challenge Button -->
-                    <NuxtLink 
-                      :to="`/matches/new?opponent=${rec.player.id}`"
-                      class="btn-primary text-size-4 !py-2.5 !px-6 group whitespace-nowrap flex items-center justify-center"
-                    >
-                      <Icon name="heroicons:paper-airplane" class="w-4 h-4 mr-2 group-hover:translate-x-1 transition-transform flex-shrink-0" />
-                      Desafiar
-                    </NuxtLink>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Paginated Recommendations (Rest of opponents) -->
-          <div v-if="recommendations.length > 0 && currentPage > 1" class="space-y-4 animate-fade-up animate-delay-2 mb-8">
-            <h2 class="text-size-2 font-semibold text-foreground mb-4">
-              Más Oponentes (Página {{ currentPage }})
-            </h2>
-            
-            <div 
-              v-for="(rec, index) in recommendations" 
-              :key="rec.player.id"
-              class="glass-card-elevated p-6 hover-lift transition-all"
-              :style="{ animationDelay: `${index * 0.1}s` }"
-            >
-              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                <!-- Player Info Section -->
-                <div class="flex items-center gap-4 flex-1 min-w-0">
-                  <!-- Player Avatar -->
-                  <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-surface to-surface-elevated border-2 border-border-subtle flex items-center justify-center flex-shrink-0">
-                    <span class="text-xl font-bold text-foreground-muted">
-                      {{ getInitials(rec.player.name) }}
-                    </span>
-                  </div>
-                  
-                  <!-- Player Details -->
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 class="text-size-2 font-semibold text-foreground truncate">
-                        {{ rec.player.name }}
-                      </h3>
-                      <span 
-                        v-if="rec.is_unrated" 
-                        class="px-2 py-0.5 text-xs font-medium rounded bg-gray-500/20 text-gray-400 border border-gray-500/30 whitespace-nowrap"
-                      >
-                        Nuevo
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-3 flex-wrap text-size-4 text-foreground-muted">
-                      <RatingTierBadge 
-                        :elo="rec.player.elo" 
-                        :total-matches-played="rec.is_unrated ? 0 : 1"
-                        :show-elo="true"
-                      />
-                      <span v-if="rec.player.city" class="flex items-center gap-1 whitespace-nowrap">
-                        <Icon name="heroicons:map-pin" class="w-4 h-4 flex-shrink-0" />
-                        <span class="truncate">{{ rec.player.city.name }}</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Actions Section -->
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:flex-shrink-0">
-                  <!-- Last Match Info -->
-                  <div class="text-center px-4 py-3 rounded-lg bg-surface border border-border-subtle min-w-[140px] sm:min-w-[160px]">
-                    <div class="text-size-5 text-foreground-muted mb-1">Último partido</div>
-                    <div class="text-size-4 font-semibold text-foreground whitespace-nowrap">
-                      {{ getLastMatchText(rec.player.last_match_at, rec.last_active_days_ago) }}
-                    </div>
-                  </div>
-                  
-                  <!-- Action Buttons -->
-                  <div class="flex flex-col sm:flex-row gap-3 sm:flex-shrink-0">
-                    <!-- View Profile Button -->
-                    <NuxtLink 
-                      :to="`/players/${rec.player.id}`"
-                      class="px-4 py-2.5 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
-                    >
-                      <Icon name="heroicons:user-circle" class="w-4 h-4 group-hover:scale-110 transition-transform flex-shrink-0" />
-                      <span class="text-size-4 font-semibold">Ver Perfil</span>
-                    </NuxtLink>
-                    
-                    <!-- Challenge Button -->
-                    <NuxtLink 
-                      :to="`/matches/new?opponent=${rec.player.id}`"
-                      class="btn-primary text-size-4 !py-2.5 !px-6 group whitespace-nowrap flex items-center justify-center"
-                    >
-                      <Icon name="heroicons:paper-airplane" class="w-4 h-4 mr-2 group-hover:translate-x-1 transition-transform flex-shrink-0" />
-                      Desafiar
-                    </NuxtLink>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Pagination Controls -->
-          <div v-if="pagination && pagination.total_pages > 1" class="flex flex-col items-center gap-4 mt-8 mb-8">
-            <div class="text-center">
-              <p class="text-size-4 text-foreground-muted">
-                Mostrando página <span class="font-semibold text-foreground">{{ currentPage }}</span> de <span class="font-semibold text-foreground">{{ pagination.total_pages }}</span>
-              </p>
-              <p class="text-size-5 text-foreground-muted mt-1">
-                {{ pagination.total }} oponentes disponibles
-              </p>
-            </div>
-            
-            <div class="flex items-center justify-center gap-2 flex-wrap">
-              <button
-                @click="handlePageChange(currentPage - 1)"
-                :disabled="currentPage === 1"
-                class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Icon name="heroicons:chevron-left" class="w-4 h-4" />
-                <span class="text-size-4 font-semibold">Anterior</span>
-              </button>
-              
-              <div class="flex items-center gap-2">
-                <template v-for="pageNum in getPageNumbers(pagination.total_pages)" :key="pageNum">
-                  <button
-                    v-if="pageNum !== -1"
-                    @click="handlePageChange(pageNum)"
-                    :class="[
-                      'px-4 py-2 rounded-xl border-2 transition-all text-size-4 font-semibold min-w-[44px]',
-                      currentPage === pageNum
-                        ? 'border-accent bg-accent-subtle/30 text-accent'
-                        : 'border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated'
-                    ]"
-                  >
-                    {{ pageNum }}
-                  </button>
-                  <span v-else class="px-2 text-foreground-muted text-size-4">
-                    ...
-                  </span>
-                </template>
-              </div>
-              
-              <button
-                @click="handlePageChange(currentPage + 1)"
-                :disabled="!pagination.has_more"
-                class="px-4 py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground hover:bg-surface-elevated transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <span class="text-size-4 font-semibold">Siguiente</span>
-                <Icon name="heroicons:chevron-right" class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Empty State -->
-          <div 
-            v-else-if="!message && topRecommendations.length === 0 && recommendations.length === 0" 
-            class="glass-card-elevated p-12 text-center max-w-md mx-auto animate-fade-in-scale"
-          >
-            <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-6">
-              <Icon name="heroicons:user-group" class="w-12 h-12 text-accent" />
-            </div>
-            <h3 class="text-size-2 font-semibold text-foreground mb-4">No hay oponentes disponibles</h3>
-            <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
-              No encontramos jugadores en tu región con un nivel similar. Intenta de nuevo más tarde o invita a más jugadores.
-            </p>
-            <button @click="loadRecommendations" class="btn-primary text-size-4 mt-6 group">
-              <Icon name="heroicons:arrow-path" class="w-4 h-4 mr-2 group-hover:rotate-180 transition-transform duration-500" />
-              Buscar de nuevo
-            </button>
-          </div>
-        </template>
+      <div v-else-if="!message && topRecommendations.length === 0 && recommendations.length === 0" class="panel empty-state">
+        <Icon name="heroicons:user-group" class="empty-state-icon" aria-hidden="true" />
+        <h2 class="empty-state-title">No hay rivales disponibles</h2>
+        <p class="empty-state-description">No encontramos jugadores de tu nivel en tu región. Intenta más tarde o invita a otros jugadores.</p>
+        <button type="button" class="btn-primary" @click="loadRecommendations">
+          <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+          Buscar de nuevo
+        </button>
       </div>
-    </div>
-  </div>
+    </template>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
@@ -489,3 +236,18 @@ const getPageNumbers = (totalPages: number): number[] => {
   return pages
 }
 </script>
+
+<style scoped>
+.me { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 24px; }
+.me__count { margin-left: auto; }
+.notice { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; }
+.notice__copy { display: grid; gap: 4px; }
+.block { margin-bottom: 28px; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 8px; }
+.pager__pages { display: flex; align-items: center; gap: 4px; }
+.pager__page { min-width: 44px; min-height: 44px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--foreground-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.pager__page[aria-current="page"] { background: var(--accent-subtle); color: var(--accent); }
+@media (hover: hover) { .pager__page:not([aria-current]):hover { background: var(--lens); color: var(--foreground); } }
+.pager__total { width: 100%; text-align: center; }
+@media (max-width: 767px) { .me__count { margin-left: 0; width: 100%; } }
+</style>

@@ -22,9 +22,9 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | Ranking `/leaderboard` | `pages/leaderboard/index.vue` | Ranking | #4 | in PR | `shots/pr4` |
 | Mi ranking `/my-ranking` | `pages/my-ranking/index.vue` | Ranking (applied) | #4 | in PR | `shots/pr4` |
 | Partido + Resultado `/matches/:id` | `pages/matches/[id].vue` | Partido, Resultado | #5 | in PR | `shots/pr5` |
-| Historial `/matches` | `pages/matches/index.vue` | Historial | #6 | todo | |
-| Programar `/matches/new` | `pages/matches/new.vue` | Programar | #6 | todo | |
-| Buscar rival `/matchmaking` | `pages/matchmaking/index.vue` | Buscar | #6 | todo | |
+| Historial `/matches` | `pages/matches/index.vue` | Historial | #6 | in PR | `shots/pr6` |
+| Programar `/matches/new` | `pages/matches/new.vue` | Programar | #6 | in PR | `shots/pr6` |
+| Buscar rival `/matchmaking` | `pages/matchmaking/index.vue` | Buscar | #6 | in PR | `shots/pr6` |
 | Torneos `/tournaments` | `pages/tournaments/index.vue` | Torneos | #7 | todo | |
 | Torneo `/tournaments/:id` | `pages/tournaments/[id].vue` | Torneos (applied) | #7 | todo | |
 | Mis torneos `/organizer/tournaments` | `pages/organizer/tournaments/index.vue` | none | #7 | todo | |

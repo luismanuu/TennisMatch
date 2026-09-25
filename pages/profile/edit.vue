@@ -182,7 +182,7 @@ watch([isLoaded, userId], async () => {
 
 <style scoped>
 .edit-form { display: grid; gap: 24px; }
-.field { display: grid; gap: 6px; min-width: 0; }
+.field { display: grid; gap: 6px; align-content: start; min-width: 0; }
 .field .form-label { margin-bottom: 0; }
 .field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .meta.inline { display: inline; font-weight: 400; }

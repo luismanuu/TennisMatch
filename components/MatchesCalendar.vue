@@ -7,8 +7,8 @@
         :class="[
           'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
           calendarView === 'month'
-            ? 'bg-accent text-background border-2 border-accent'
-            : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+            ? 'bg-accent text-background border border-accent'
+            : 'bg-surface border border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
         ]"
       >
         <Icon name="heroicons:calendar-days" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -19,8 +19,8 @@
         :class="[
           'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
           calendarView === 'week'
-            ? 'bg-accent text-background border-2 border-accent'
-            : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
+            ? 'bg-accent text-background border border-accent'
+            : 'bg-surface border border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
         ]"
       >
         <Icon name="heroicons:calendar" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -34,7 +34,7 @@
       <div class="mb-4 sm:mb-6 flex items-center justify-between">
         <button
           @click="previousMonth"
-          class="p-2 sm:p-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground hover:border-accent hover:bg-surface-elevated transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"
+          class="p-2 sm:p-3 icon-button"
           aria-label="Mes anterior"
         >
           <Icon name="heroicons:chevron-left" class="w-5 h-5 sm:w-6 sm:h-6" />
@@ -52,7 +52,7 @@
         </div>
         <button
           @click="nextMonth"
-          class="p-2 sm:p-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground hover:border-accent hover:bg-surface-elevated transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"
+          class="p-2 sm:p-3 icon-button"
           aria-label="Mes siguiente"
         >
           <Icon name="heroicons:chevron-right" class="w-5 h-5 sm:w-6 sm:h-6" />
@@ -60,7 +60,7 @@
       </div>
 
       <!-- Calendar Grid -->
-      <div class="glass-card-elevated p-3 sm:p-4 md:p-6 rounded-xl">
+      <div class="calendar-grid-wrap">
         <!-- Day Headers (hidden on mobile, shown on tablet+) -->
         <div class="hidden sm:grid grid-cols-7 gap-1 sm:gap-2 mb-2">
           <div
@@ -78,7 +78,7 @@
             v-for="(day, index) in calendarDays"
             :key="index"
             :class="[
-              'min-h-[80px] sm:min-h-[80px] md:min-h-[100px] p-2 sm:p-2 rounded-lg border-2 transition-all',
+              'min-h-[80px] sm:min-h-[80px] md:min-h-[100px] p-2 sm:p-2 rounded-lg border transition-all',
               day.isCurrentMonth
                 ? day.isToday
                   ? 'bg-accent-subtle/30 border-accent/50'
@@ -174,7 +174,7 @@
 
       <!-- Matches Without Date Section -->
       <div v-if="matchesWithoutDate.length > 0" class="mt-4 sm:mt-6">
-        <div class="glass-card-elevated p-4 sm:p-6 rounded-xl border border-yellow-500/30">
+        <div class="action-card action-card--warning">
           <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
             <Icon name="heroicons:exclamation-triangle" class="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400" />
             <h3 class="text-size-3 sm:text-size-2 font-semibold text-foreground">Sin Fecha</h3>
@@ -218,7 +218,7 @@
       <div class="mb-4 sm:mb-6 flex items-center justify-between">
         <button
           @click="previousWeek"
-          class="p-2 sm:p-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground hover:border-accent hover:bg-surface-elevated transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"
+          class="p-2 sm:p-3 icon-button"
           aria-label="Semana anterior"
         >
           <Icon name="heroicons:chevron-left" class="w-5 h-5 sm:w-6 sm:h-6" />
@@ -236,7 +236,7 @@
         </div>
         <button
           @click="nextWeek"
-          class="p-2 sm:p-3 rounded-xl bg-surface border-2 border-border-subtle text-foreground hover:border-accent hover:bg-surface-elevated transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"
+          class="p-2 sm:p-3 icon-button"
           aria-label="Semana siguiente"
         >
           <Icon name="heroicons:chevron-right" class="w-5 h-5 sm:w-6 sm:h-6" />
@@ -249,7 +249,7 @@
           v-for="day in weekDays"
           :key="day.dateKey"
           :class="[
-            'glass-card-elevated p-3 sm:p-4 md:p-4 lg:p-4 rounded-xl border-2 transition-all min-w-0',
+            'glass-card-elevated p-3 sm:p-4 md:p-4 lg:p-4 rounded-xl border transition-all min-w-0',
             day.isToday
               ? 'bg-accent-subtle/30 border-accent/50'
               : 'border-border-subtle'
@@ -324,7 +324,7 @@
 
       <!-- Matches Without Date Section -->
       <div v-if="matchesWithoutDate.length > 0" class="mt-4 sm:mt-6">
-        <div class="glass-card-elevated p-4 sm:p-6 rounded-xl border border-yellow-500/30">
+        <div class="action-card action-card--warning">
           <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
             <Icon name="heroicons:exclamation-triangle" class="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400" />
             <h3 class="text-size-3 sm:text-size-2 font-semibold text-foreground">Sin Fecha</h3>
@@ -367,7 +367,7 @@
       v-if="!loading && filteredMatches.length === 0 && matchesWithoutDate.length === 0"
       class="glass-card-elevated p-8 sm:p-12 text-center animate-fade-in-scale"
     >
-      <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+      <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border border-accent/30 flex items-center justify-center mx-auto mb-4 sm:mb-6">
         <Icon name="heroicons:calendar-x" class="w-8 h-8 sm:w-12 sm:h-12 text-accent" />
       </div>
       <h2 class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-3 sm:mb-4">

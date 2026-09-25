@@ -1,564 +1,224 @@
 <template>
-  <div class="min-h-screen bg-background relative overflow-hidden">
-    <!-- Ambient Background Effects -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="orb orb-accent w-96 h-96 -top-48 -right-48 animate-float opacity-20"></div>
-      <div class="orb orb-secondary w-80 h-80 -bottom-40 -left-40 animate-float-delayed opacity-15"></div>
-      <div class="grid-pattern absolute inset-0 opacity-30"></div>
+  <PageLayout>
+    <PageHeader title="Tus partidos" subtitle="Programados, en curso y completados.">
+      <template v-if="isAuthenticated" #actions>
+        <NuxtLink to="/matches/new" class="btn-primary">
+          Programar partido
+          <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
+        <NuxtLink to="/matchmaking" class="text-link">
+          Buscar rival
+          <Icon name="heroicons:magnifying-glass" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
+      </template>
+    </PageHeader>
+
+    <div v-if="loading" class="panel loading-state" aria-busy="true">
+      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
+      <p class="loading-text">Cargando partidos…</p>
     </div>
 
-    <!-- Navigation -->
-    <AppNavigation />
-    
-    <!-- Additional action button for this page -->
-    <div class="fixed top-16 left-0 right-0 z-40 border-b border-border-subtle bg-background/80 backdrop-blur-xl">
-      <div class="container-wide px-4 sm:px-6 py-2 sm:py-3">
-        <div class="flex justify-end gap-2 sm:gap-3">
-          <NuxtLink 
-            v-if="isAuthenticated"
-            to="/matchmaking" 
-            class="btn-secondary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
+    <div v-else-if="error" class="panel empty-state" role="alert">
+      <Icon name="heroicons:exclamation-triangle" class="empty-state-icon text-danger" aria-hidden="true" />
+      <h2 class="empty-state-title">No pudimos cargar tus partidos</h2>
+      <p class="empty-state-description">{{ error.message }}</p>
+      <button type="button" class="btn-primary" @click="loadMatches">
+        <Icon name="heroicons:arrow-path" class="w-5 h-5" aria-hidden="true" />
+        Reintentar
+      </button>
+    </div>
+
+    <template v-else>
+      <!-- Status + view -->
+      <div class="toolbar">
+        <div class="chips" role="group" aria-label="Filtrar por estado">
+          <button
+            v-for="f in statusFilters"
+            :key="f.label"
+            type="button"
+            class="chip"
+            :aria-pressed="statusFilter === f.value"
+            @click="statusFilter = f.value"
           >
-            <Icon name="heroicons:magnifying-glass" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
-            <span class="hidden sm:inline">Buscar Oponente</span>
-            <span class="sm:hidden">Buscar</span>
-          </NuxtLink>
-          <NuxtLink 
-            v-if="isAuthenticated"
-            to="/matches/new" 
-            class="btn-primary text-xs sm:text-size-4 !py-1.5 sm:!py-2 !px-3 sm:!px-4 group"
-          >
-            <Icon name="heroicons:plus" class="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
-            <span class="hidden sm:inline">Programar Partido</span>
-            <span class="sm:hidden">Nuevo</span>
-          </NuxtLink>
+            <Icon :name="f.icon" class="w-4 h-4" aria-hidden="true" />
+            {{ f.label }}
+          </button>
+        </div>
+        <div class="segmented segmented--two" role="group" aria-label="Vista">
+          <button type="button" :aria-pressed="viewMode === 'list'" @click="viewMode = 'list'">
+            <Icon name="heroicons:list-bullet" class="w-4 h-4" aria-hidden="true" />
+            Lista
+          </button>
+          <button type="button" :aria-pressed="viewMode === 'calendar'" @click="viewMode = 'calendar'">
+            <Icon name="heroicons:calendar-days" class="w-4 h-4" aria-hidden="true" />
+            Calendario
+          </button>
         </div>
       </div>
-    </div>
 
-    <div class="h-16"></div>
-    <div v-if="isAuthenticated" class="h-12"></div>
-
-    <div class="section-padding relative z-10">
-      <div class="container-medium px-6">
-        <!-- Header -->
-        <div class="text-center mb-8 sm:mb-12 animate-fade-up">
-          <div class="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-accent-subtle/30 border border-accent/30 backdrop-blur-sm mb-4 sm:mb-6">
-            <Icon name="heroicons:calendar" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent" />
-            <span class="text-xs sm:text-size-4 font-semibold text-accent">Partidos</span>
+      <!-- Date + opponent filters -->
+      <details class="panel filters" :open="!!(dateFilterStart || dateFilterEnd || opponentFilter)">
+        <summary>
+          Filtrar por fecha o rival
+          <span v-if="appliedDateFilterStart || appliedDateFilterEnd || opponentFilter" class="badge badge-accent ml-2">Activos</span>
+          <Icon name="heroicons:chevron-down" class="filters__chevron w-5 h-5" aria-hidden="true" />
+        </summary>
+        <div class="filters__grid">
+          <div>
+            <label for="m-from" class="form-label">Desde</label>
+            <input id="m-from" v-model="dateFilterStart" type="date" class="form-input" @change="handleDateInputChange" @keyup.enter="applyDateFilter">
           </div>
-          <h1 class="text-size-2 sm:text-size-1 font-semibold text-foreground mb-3 sm:mb-4">
-            Tus Partidos
-          </h1>
-          <p class="text-size-4 sm:text-size-3 font-regular text-foreground-muted px-4">
-            Gestiona tus partidos programados, en curso y completados
-          </p>
-        </div>
-
-        <!-- Loading State -->
-        <div v-if="loading" class="glass-card-elevated p-12 text-center animate-fade-in-scale">
-          <div class="w-16 h-16 rounded-full bg-accent-subtle flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" />
+          <div>
+            <label for="m-to" class="form-label">Hasta</label>
+            <input id="m-to" v-model="dateFilterEnd" type="date" class="form-input" @change="handleDateInputChange" @keyup.enter="applyDateFilter">
           </div>
-          <p class="text-size-3 font-regular text-foreground-muted">Cargando partidos...</p>
-        </div>
-
-        <!-- Error State -->
-        <div v-else-if="error" class="glass-card-elevated p-10 max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
-            <Icon name="heroicons:exclamation-triangle" class="w-10 h-10 text-red-400" />
-          </div>
-          <h3 class="text-size-2 font-semibold text-foreground mb-3 text-center">Error</h3>
-          <p class="text-size-4 font-regular text-foreground-muted mb-6 text-center">{{ error.message }}</p>
-          <button @click="loadMatches" class="btn-primary text-size-3 w-full justify-center group">
-            <Icon name="heroicons:arrow-path" class="w-5 h-5 mr-2 group-hover:rotate-180 transition-transform duration-500" />
-            Reintentar
-          </button>
-        </div>
-
-        <!-- Date Range Filter -->
-        <div v-if="!loading && !error" class="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-3 sm:gap-4 items-center justify-center animate-fade-up">
-          <div class="flex items-center gap-2 sm:gap-3">
-            <Icon name="heroicons:calendar-days" class="w-4 h-4 sm:w-5 sm:h-5 text-foreground-muted flex-shrink-0" />
-            <label class="text-xs sm:text-size-4 text-foreground-muted font-semibold whitespace-nowrap">Desde:</label>
+          <div class="filters__opponent">
+            <label for="m-opp" class="form-label">Rival</label>
             <input
-              v-model="dateFilterStart"
-              type="date"
-              class="px-3 py-1.5 sm:py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground text-xs sm:text-size-4 focus:border-accent focus:outline-none transition-colors"
-              @change="handleDateInputChange"
-              @keyup.enter="applyDateFilter"
-            />
-          </div>
-          <div class="flex items-center gap-2 sm:gap-3">
-            <label class="text-xs sm:text-size-4 text-foreground-muted font-semibold whitespace-nowrap">Hasta:</label>
-            <input
-              v-model="dateFilterEnd"
-              type="date"
-              class="px-3 py-1.5 sm:py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground text-xs sm:text-size-4 focus:border-accent focus:outline-none transition-colors"
-              @change="handleDateInputChange"
-              @keyup.enter="applyDateFilter"
-            />
-          </div>
-          <button
-            v-if="(dateFilterStart || dateFilterEnd) && (dateFilterStart !== appliedDateFilterStart || dateFilterEnd !== appliedDateFilterEnd)"
-            @click="applyDateFilter"
-            class="px-3 py-1.5 sm:py-2 rounded-lg bg-accent border-2 border-accent text-white hover:opacity-90 transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-size-4 font-semibold"
-          >
-            <Icon name="heroicons:check" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Aplicar</span>
-          </button>
-          <button
-            v-if="dateFilterStart || dateFilterEnd"
-            @click="clearDateFilter"
-            class="px-3 py-1.5 sm:py-2 rounded-lg bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent hover:text-foreground transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-size-4"
-          >
-            <Icon name="heroicons:x-mark" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Limpiar</span>
-          </button>
-        </div>
-
-        <!-- Opponent Filter -->
-        <div v-if="!loading && !error" class="mb-4 sm:mb-6 animate-fade-up animate-delay-1 relative z-10">
-          <label class="block text-size-4 font-semibold text-foreground mb-2 text-center sm:text-left">Filtrar por Oponente</label>
-          <div class="relative max-w-md mx-auto sm:mx-0" style="z-index: 100;">
-            <input
+              id="m-opp"
               v-model="opponentSearchQuery"
-              type="text"
+              type="search"
+              class="form-input"
+              placeholder="Buscar por nombre"
+              autocomplete="off"
               @input="handleOpponentSearch"
               @focus="showOpponentSearchResults = true"
               @blur="handleInputBlur"
-              class="w-full px-4 py-3 rounded-xl bg-surface border border-border-subtle text-foreground placeholder-foreground-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-              placeholder="Buscar oponente por nombre..."
-            />
-            <!-- Search Results -->
-            <div 
-              v-if="showOpponentSearchResults && opponentSearchResults.length > 0" 
-              class="absolute z-[100] w-full mt-2 border border-border-subtle rounded-xl bg-surface shadow-2xl max-h-60 overflow-y-auto"
-              style="position: absolute; z-index: 100;"
-              @mousedown.prevent
             >
+            <div v-if="showOpponentSearchResults && opponentSearchResults.length > 0" class="list-surface filters__results" @mousedown.prevent>
               <button
                 v-for="result in opponentSearchResults"
                 :key="result.id"
                 type="button"
+                class="list-row w-full text-left"
                 @click.stop="selectOpponent(result)"
                 @mousedown.stop
-                class="w-full px-4 py-3 text-left hover:bg-accent-subtle/50 active:bg-accent-subtle transition-colors border-b border-border-subtle last:border-b-0 cursor-pointer"
               >
-                <div class="flex items-center gap-2">
-                  <p class="text-size-3 font-semibold text-foreground">{{ result.name }}</p>
-                  <div v-if="getPlayerTier(result)" class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-border-subtle">
-                    <img
-                      v-if="getPlayerRankIcon(result)"
-                      :src="getPlayerRankIcon(result)"
-                      :alt="`${getPlayerTier(result)} tier icon`"
-                      class="w-4 h-4 object-contain"
-                    >
-                    <p class="text-size-4 font-regular text-foreground-muted">
-                      {{ getTierNameInSpanish(getPlayerTier(result)) }}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-          <div v-if="opponentFilter" class="mt-2 p-3 rounded-xl bg-accent-subtle/50 border border-accent/30 max-w-md mx-auto sm:mx-0">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-size-4 text-foreground-muted mb-1">Oponente seleccionado:</p>
-                <p class="text-size-3 font-semibold text-foreground">{{ selectedOpponentName }}</p>
-              </div>
-              <button
-                @click="clearOpponentFilter"
-                class="p-1 rounded-lg hover:bg-accent/20 transition-colors"
-              >
-                <Icon name="heroicons:x-mark" class="w-5 h-5 text-foreground-muted" />
+                <span class="row-copy"><strong>{{ result.name }}</strong></span>
+                <span v-if="getPlayerTier(result)" class="badge">
+                  <img v-if="getPlayerRankIcon(result)" :src="getPlayerRankIcon(result)" alt="" class="w-4 h-4 object-contain">
+                  {{ getTierNameInSpanish(getPlayerTier(result)) }}
+                </span>
               </button>
             </div>
           </div>
         </div>
-
-        <!-- Status Filter -->
-        <div v-if="!loading && !error" class="mb-6 sm:mb-8 flex gap-2 sm:gap-3 flex-wrap justify-center animate-fade-up animate-delay-1">
+        <div class="quick-actions filters__actions">
           <button
-            @click="statusFilter = null"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              statusFilter === null
-                ? 'bg-accent text-background border-2 border-accent'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
-            ]"
+            v-if="(dateFilterStart || dateFilterEnd) && (dateFilterStart !== appliedDateFilterStart || dateFilterEnd !== appliedDateFilterEnd)"
+            type="button"
+            class="btn-primary"
+            @click="applyDateFilter"
           >
-            <Icon name="heroicons:squares-2x2" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span class="hidden sm:inline">Todos</span>
-            <span class="sm:hidden">Todos</span>
+            <Icon name="heroicons:check" class="w-4 h-4" aria-hidden="true" />
+            Aplicar fechas
           </button>
-          <button
-            @click="statusFilter = 'pending'"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              statusFilter === 'pending'
-                ? 'bg-orange-500/20 text-orange-400 border-2 border-orange-500/50 backdrop-blur-sm'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-orange-500/50 hover:bg-surface-elevated'
-            ]"
-          >
-            <Icon name="heroicons:bell-alert" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span class="hidden sm:inline">Acciones Pendientes</span>
-            <span class="sm:hidden">Pendientes</span>
-          </button>
-          <button
-            @click="statusFilter = 'scheduled'"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              statusFilter === 'scheduled'
-                ? 'bg-blue-500/20 text-blue-400 border-2 border-blue-500/50 backdrop-blur-sm'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-blue-500/50 hover:bg-surface-elevated'
-            ]"
-          >
-            <Icon name="heroicons:calendar" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span class="hidden sm:inline">Programados</span>
-            <span class="sm:hidden">Prog.</span>
-          </button>
-          <button
-            @click="statusFilter = 'active'"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              statusFilter === 'active'
-                ? 'bg-yellow-500/20 text-yellow-400 border-2 border-yellow-500/50 backdrop-blur-sm'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-yellow-500/50 hover:bg-surface-elevated'
-            ]"
-          >
-            <Icon name="heroicons:play-circle" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span class="hidden sm:inline">En Curso</span>
-            <span class="sm:hidden">Curso</span>
-          </button>
-          <button
-            @click="statusFilter = 'completed'"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              statusFilter === 'completed'
-                ? 'bg-green-500/20 text-green-400 border-2 border-green-500/50 backdrop-blur-sm'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-green-500/50 hover:bg-surface-elevated'
-            ]"
-          >
-            <Icon name="heroicons:check-circle" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span class="hidden sm:inline">Completados</span>
-            <span class="sm:hidden">Compl.</span>
-          </button>
-          <button
-            @click="statusFilter = 'cancelled'"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              statusFilter === 'cancelled'
-                ? 'bg-red-500/20 text-red-400 border-2 border-red-500/50 backdrop-blur-sm'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-red-500/50 hover:bg-surface-elevated'
-            ]"
-          >
-            <Icon name="heroicons:x-circle" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span class="hidden sm:inline">Cancelados</span>
-            <span class="sm:hidden">Cancel.</span>
-          </button>
+          <button v-if="dateFilterStart || dateFilterEnd" type="button" class="text-link" @click="clearDateFilter">Limpiar fechas</button>
+          <span v-if="opponentFilter" class="badge">
+            Rival: {{ selectedOpponentName }}
+            <button type="button" class="chip-x" aria-label="Quitar filtro de rival" @click="clearOpponentFilter">
+              <Icon name="heroicons:x-mark" class="w-4 h-4" aria-hidden="true" />
+            </button>
+          </span>
         </div>
+      </details>
 
-        <!-- View Toggle (List/Calendar) -->
-        <div v-if="!loading && !error" class="mb-4 sm:mb-6 flex items-center justify-center gap-2 sm:gap-3 animate-fade-up">
-          <button
-            @click="viewMode = 'list'"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              viewMode === 'list'
-                ? 'bg-accent text-background border-2 border-accent'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
-            ]"
-          >
-            <Icon name="heroicons:list-bullet" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Lista</span>
-          </button>
-          <button
-            @click="viewMode = 'calendar'"
-            :class="[
-              'px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-size-4 font-semibold transition-all flex items-center gap-1.5 sm:gap-2',
-              viewMode === 'calendar'
-                ? 'bg-accent text-background border-2 border-accent'
-                : 'bg-surface border-2 border-border-subtle text-foreground-muted hover:border-accent/50 hover:bg-surface-elevated'
-            ]"
-          >
-            <Icon name="heroicons:calendar-days" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Calendario</span>
-          </button>
-        </div>
+      <p v-if="isShowingDefault24HourFilter && viewMode === 'list'" class="meta hint">
+        <Icon name="heroicons:information-circle" class="w-4 h-4 text-accent flex-shrink-0" aria-hidden="true" />
+        Mostrando partidos de las últimas 24 horas por defecto. Usa las fechas para ver más.
+      </p>
 
-        <!-- 24 Hour Filter Info (only show in list view) -->
-        <div 
-          v-if="!loading && !error && isShowingDefault24HourFilter && viewMode === 'list'" 
-          class="mb-4 sm:mb-6 animate-fade-up"
+      <div v-if="viewMode === 'calendar'" class="panel">
+        <MatchesCalendar :matches="filteredMatchesForCalendar" :loading="loading" @navigate="handleMatchNavigate" />
+      </div>
+
+      <!-- Historial -->
+      <div v-if="viewMode === 'list' && paginatedFilteredMatches.length > 0" class="list-surface">
+        <div
+          v-for="match in paginatedFilteredMatches"
+          :key="match.id"
+          class="list-row match-row"
+          role="link"
+          tabindex="0"
+          @click="navigateTo(`/matches/${match.id}`)"
+          @keydown.enter="navigateTo(`/matches/${match.id}`)"
         >
-          <div class="glass-card-elevated p-3 sm:p-4 rounded-xl border border-accent/30 bg-accent-subtle/20 backdrop-blur-sm">
-            <div class="flex items-center gap-2 sm:gap-3">
-              <Icon name="heroicons:information-circle" class="w-4 h-4 sm:w-5 sm:h-5 text-accent flex-shrink-0" />
-              <p class="text-xs sm:text-size-4 text-foreground-muted">
-                <span class="font-semibold text-foreground">Mostrando partidos de las últimas 24 horas</span>
-                <span class="hidden sm:inline"> por defecto. Usa los filtros de fecha para ver más partidos.</span>
-                <span class="sm:hidden"> por defecto.</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Calendar View -->
-        <div v-if="!loading && !error && viewMode === 'calendar'" class="animate-fade-up">
-          <MatchesCalendar
-            :matches="filteredMatchesForCalendar"
-            :loading="loading"
-            @navigate="handleMatchNavigate"
-          />
-        </div>
-
-        <!-- Matches List -->
-        <div v-if="!loading && !error && viewMode === 'list' && paginatedFilteredMatches.length > 0" class="space-y-3 sm:space-y-4">
-          <div 
-            v-for="(match, index) in paginatedFilteredMatches" 
-            :key="match.id"
-            class="glass-card-elevated p-4 sm:p-6 md:p-8 hover-lift cursor-pointer animate-fade-up"
-            :class="getMatchCardClass(match)"
-            :style="{ animationDelay: `${(index + 2) * 0.1}s` }"
-            @click="navigateTo(`/matches/${match.id}`)"
+          <span
+            class="avatar result-mark"
+            :class="match.status === 'completed' && match.winner_id && player ? (didUserWin(match) === true ? 'is-win' : didUserWin(match) === false ? 'is-loss' : '') : ''"
+            :aria-label="match.status === 'completed' && match.winner_id && player ? (didUserWin(match) ? 'Victoria' : 'Derrota') : undefined"
           >
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6">
-              <!-- Players -->
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3 sm:gap-4 md:gap-6 mb-3 md:mb-4">
-                  <!-- Player 1 -->
-                  <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                    <div :class="['w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player1_id)]">
-                      <span class="text-lg sm:text-xl font-bold">
-                        {{ getPlayerInitials(match.player1?.name || 'Jugador 1') }}
-                      </span>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <div v-if="match.player1" class="mb-1">
-                        <NuxtLink
-                          :to="`/players/${match.player1.id}`"
-                          @click.stop
-                          class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent hover:underline transition-all cursor-pointer block truncate"
-                        >
-                          {{ match.player1.name }}
-                        </NuxtLink>
-                        <span 
-                          v-if="match.player1.status === 'deleted'"
-                          class="mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
-                        >
-                          Eliminado
-                        </span>
-                      </div>
-                      <p v-else class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-1 truncate">
-                        Jugador 1
-                      </p>
-                      <div v-if="getPlayerTier(match.player1)" class="flex items-center gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block">
-                        <img
-                          v-if="getPlayerRankIcon(match.player1)"
-                          :src="getPlayerRankIcon(match.player1)"
-                          :alt="`${getPlayerTier(match.player1)} tier icon`"
-                          class="w-4 h-4 sm:w-5 sm:h-5 object-contain"
-                        >
-                        <p class="text-xs sm:text-size-4 font-regular text-foreground-muted">
-                          {{ getTierNameInSpanish(getPlayerTier(match.player1)) }}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- VS Divider -->
-                  <div class="flex flex-col items-center flex-shrink-0 px-1">
-                    <div class="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-surface border-2 border-border-subtle flex items-center justify-center">
-                      <span class="text-xs sm:text-size-3 font-bold text-foreground-muted">VS</span>
-                    </div>
-                  </div>
-
-                  <!-- Player 2 -->
-                  <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                    <div :class="['w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center flex-shrink-0', getPlayerIconClasses(match, match.player2_id)]">
-                      <span class="text-lg sm:text-xl font-bold">
-                        {{ getPlayerInitials(match.player2?.name || match.pending_player2?.name || 'Jugador 2') }}
-                      </span>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <div v-if="match.player2" class="mb-1">
-                        <NuxtLink
-                          :to="`/players/${match.player2.id}`"
-                          @click.stop
-                          class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block truncate"
-                        >
-                          {{ match.player2.name }}
-                        </NuxtLink>
-                        <span 
-                          v-if="match.player2.status === 'deleted'"
-                          class="mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
-                        >
-                          Eliminado
-                        </span>
-                      </div>
-                      <NuxtLink
-                        v-else-if="match.pending_player2"
-                        :to="`/players/${match.pending_player2.id}`"
-                        @click.stop
-                        class="text-size-3 sm:text-size-2 font-semibold text-foreground hover:text-accent-secondary hover:underline transition-all cursor-pointer block mb-1 truncate"
-                      >
-                        {{ match.pending_player2.name }}
-                      </NuxtLink>
-                      <p v-else class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-1 truncate">
-                        Jugador 2
-                      </p>
-                      <div v-if="getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)" class="flex items-center gap-1.5 px-2 py-0.5 sm:py-1 rounded-full bg-surface border border-border-subtle inline-block mb-1">
-                        <img
-                          v-if="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
-                          :src="getPlayerRankIcon(match.player2) || getPlayerRankIcon(match.pending_player2)"
-                          :alt="`${getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)} tier icon`"
-                          class="w-4 h-4 sm:w-5 sm:h-5 object-contain"
-                        >
-                        <p class="text-xs sm:text-size-4 font-regular text-foreground-muted">
-                          {{ getTierNameInSpanish(getPlayerTier(match.player2) || getPlayerTier(match.pending_player2)) }}
-                        </p>
-                      </div>
-                      <div v-if="match.pending_player2" class="px-2 py-0.5 sm:py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30 inline-block">
-                        <p class="text-xs sm:text-size-4 font-semibold text-yellow-400">
-                          Pendiente
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Status Badge and Date -->
-                <div class="flex items-center gap-2 sm:gap-3 md:gap-4 flex-wrap mt-3">
-                  <MatchTournamentBadge :match="match" />
-                  <!-- Competitive/Friendly Badge -->
-                  <div 
-                    class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-full border backdrop-blur-sm"
-                    :class="match.is_competitive !== false ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-500/10 border-gray-500/30'"
-                  >
-                    <Icon 
-                      :name="match.is_competitive !== false ? 'heroicons:trophy' : 'heroicons:hand-raised'" 
-                      class="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                      :class="match.is_competitive !== false ? 'text-green-400' : 'text-gray-400'"
-                    />
-                    <span 
-                      class="text-xs sm:text-size-4 font-semibold"
-                      :class="match.is_competitive !== false ? 'text-green-400' : 'text-gray-400'"
-                    >
-                      {{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-full border backdrop-blur-sm" :class="getStatusBadgeClass(match.status, match.scheduled_at)">
-                    <Icon :name="getStatusIcon(match.status)" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    <span class="text-xs sm:text-size-4 font-semibold">{{ getStatusLabel(match.status, match.scheduled_at) }}</span>
-                  </div>
-                  <!-- Only show date if it exists (to avoid showing "Sin agendar" twice) -->
-                  <div v-if="(match.status === 'completed' && match.played_at) || (match.status !== 'completed' && match.scheduled_at)" class="flex items-center gap-1.5 sm:gap-2 text-foreground-muted">
-                    <Icon name="heroicons:calendar" class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span class="text-xs sm:text-size-4 truncate">{{ formatDate(match.status === 'completed' && match.played_at ? match.played_at : match.scheduled_at) }}</span>
-                  </div>
-                  <div v-if="match.location" class="flex items-center gap-1.5 sm:gap-2 text-foreground-muted">
-                    <Icon name="heroicons:map-pin" class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span class="text-xs sm:text-size-4 truncate">{{ match.location }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Match Details -->
-              <div class="flex flex-col sm:flex-row md:flex-col md:items-end gap-3 sm:gap-4 md:gap-4 md:min-w-[200px] mt-2 md:mt-0">
-                <!-- Show result only if score has been approved (completed match or score_approved_by exists) -->
-                <div v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="text-center sm:text-left md:text-right w-full sm:w-auto md:w-auto">
-                  <div class="p-3 sm:p-4 rounded-xl bg-gradient-to-br from-accent-subtle/30 to-accent-subtle/10 border border-accent/30">
-                    <div class="flex items-center gap-2 mb-2 justify-center sm:justify-start md:justify-end">
-                      <Icon name="heroicons:trophy" class="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
-                      <p class="text-xs sm:text-size-4 font-semibold text-foreground-muted">Resultado</p>
-                    </div>
-                    <p class="text-size-3 sm:text-size-2 font-bold text-foreground mb-2">{{ match.score }}</p>
-                    <div v-if="match.winner" class="flex items-center gap-2 justify-center sm:justify-start md:justify-end flex-wrap">
-                      <span class="text-xs sm:text-size-4 text-foreground-muted">Ganador:</span>
-                      <NuxtLink
-                        :to="`/players/${match.winner.id}`"
-                        @click.stop
-                        class="text-xs sm:text-size-4 font-semibold text-accent hover:underline transition-all"
-                      >
-                        {{ match.winner.name }}
-                      </NuxtLink>
-                    </div>
-                  </div>
-                </div>
-                <!-- Show proposed score if active match has proposed score but not approved yet -->
-                <div v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="text-center sm:text-left md:text-right w-full sm:w-auto md:w-auto">
-                  <div class="p-3 sm:p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
-                    <div class="flex items-center gap-2 mb-2 justify-center sm:justify-start md:justify-end">
-                      <Icon name="heroicons:clock" class="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
-                      <p class="text-xs sm:text-size-4 font-semibold text-foreground-muted">Puntuación Propuesta</p>
-                    </div>
-                    <p class="text-size-3 sm:text-size-2 font-bold text-yellow-400">{{ match.score }}</p>
-                  </div>
-                </div>
-                <div v-else class="flex items-center gap-2 text-foreground-muted justify-center sm:justify-start md:justify-end">
-                  <Icon name="heroicons:arrow-right" class="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
-                  <span class="text-xs sm:text-size-4">Ver detalles</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Pagination -->
-        <div v-if="!loading && !error && viewMode === 'list' && (totalFilteredPages > 1 || (matches.value && matches.value.length >= pageSize && (pagination.value?.hasMore || pagination.value?.totalPages > 1)))" class="flex items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8 animate-fade-up">
-          <button
-            @click="handlePreviousPage"
-            :disabled="currentPage === 1"
-            class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 sm:gap-2"
-          >
-            <Icon name="heroicons:chevron-left" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span class="hidden sm:inline">Anterior</span>
-          </button>
-          <div class="flex items-center gap-1.5 sm:gap-2">
-            <span class="text-xs sm:text-size-4 text-foreground-muted">Página</span>
-            <span class="text-xs sm:text-size-3 font-semibold text-foreground">{{ currentPage }}</span>
-            <span class="text-xs sm:text-size-4 text-foreground-muted">de</span>
-            <span class="text-xs sm:text-size-3 font-semibold text-foreground">{{ totalFilteredPages }}</span>
-          </div>
-          <button
-            @click="handleNextPage"
-            :disabled="currentPage >= totalFilteredPages"
-            class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border-2 border-border-subtle bg-surface text-foreground-muted hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 sm:gap-2"
-          >
-            <span class="hidden sm:inline">Siguiente</span>
-            <Icon name="heroicons:chevron-right" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </button>
-        </div>
-
-        <!-- Empty State (List View) -->
-        <div v-if="!loading && !error && viewMode === 'list' && paginatedFilteredMatches.length === 0" class="glass-card-elevated p-8 sm:p-12 text-center max-w-md mx-auto animate-fade-in-scale">
-          <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-accent-subtle to-accent-subtle/50 border-2 border-accent/30 flex items-center justify-center mx-auto mb-4 sm:mb-6">
-            <Icon name="heroicons:calendar-x" class="w-8 h-8 sm:w-12 sm:h-12 text-accent" />
-          </div>
-          <h2 class="text-size-3 sm:text-size-2 font-semibold text-foreground mb-3 sm:mb-4 px-4">
-            {{ statusFilter === 'pending' ? 'No hay acciones pendientes' : statusFilter ? `No hay partidos ${getStatusLabel(statusFilter).toLowerCase()}` : 'No hay partidos' }}
-          </h2>
-          <p class="text-size-4 sm:text-size-4 font-regular text-foreground-muted mb-6 sm:mb-8 max-w-md mx-auto leading-relaxed px-4">
-            {{ statusFilter === 'pending' ? 'No tienes partidos que requieran tu atención en este momento.' : statusFilter ? 'Intenta cambiar el filtro para ver otros partidos.' : 'Sé el primero en programar un partido en la plataforma.' }}
-          </p>
-          <NuxtLink 
-            v-if="isAuthenticated && !statusFilter"
-            to="/matches/new" 
-            class="btn-primary text-xs sm:text-size-3 inline-flex items-center group !py-2 sm:!py-3 !px-4 sm:!px-6"
-          >
-            <Icon name="heroicons:plus" class="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 group-hover:scale-110 transition-transform" />
-            <span class="hidden sm:inline">Programar Primer Partido</span>
-            <span class="sm:hidden">Programar Partido</span>
-          </NuxtLink>
+            <Icon v-if="match.status === 'completed' && match.winner_id && player && didUserWin(match) !== null" :name="didUserWin(match) ? 'heroicons:check' : 'heroicons:x-mark'" class="w-5 h-5" aria-hidden="true" />
+            <Icon v-else :name="getStatusIcon(match.status)" class="w-5 h-5" aria-hidden="true" />
+          </span>
+          <span class="row-copy">
+            <strong class="match-row__names">
+              <NuxtLink v-if="match.player1" :to="`/players/${match.player1.id}`" @click.stop>{{ match.player1.name }}</NuxtLink>
+              <template v-else>Jugador 1</template>
+              <span class="meta inline"> vs </span>
+              <NuxtLink v-if="match.player2" :to="`/players/${match.player2.id}`" @click.stop>{{ match.player2.name }}</NuxtLink>
+              <NuxtLink v-else-if="match.pending_player2" :to="`/players/${match.pending_player2.id}`" @click.stop>{{ match.pending_player2.name }}</NuxtLink>
+              <template v-else>Jugador 2</template>
+            </strong>
+            <span class="meta">
+              <template v-if="(match.status === 'completed' && match.played_at) || (match.status !== 'completed' && match.scheduled_at)">{{ formatDate(match.status === 'completed' && match.played_at ? match.played_at : match.scheduled_at) }}</template>
+              <template v-if="match.location">{{ ((match.status === 'completed' && match.played_at) || (match.status !== 'completed' && match.scheduled_at)) ? ' · ' : '' }}{{ match.location }}</template>
+            </span>
+            <span class="match-row__tags">
+              <span class="status-badge" :class="getStatusBadgeClass(match.status, match.scheduled_at)">{{ getStatusLabel(match.status, match.scheduled_at) }}</span>
+              <span class="badge">{{ match.is_competitive !== false ? 'Competitivo' : 'Amistoso' }}</span>
+              <MatchTournamentBadge :match="match" />
+              <span v-if="match.pending_player2" class="status-badge status-badge-pending">Rival pendiente de registro</span>
+              <span v-if="match.player1?.status === 'deleted' || match.player2?.status === 'deleted'" class="status-badge status-badge-danger">Jugador eliminado</span>
+            </span>
+          </span>
+          <span v-if="match.score && (match.status === 'completed' || match.score_approved_by)" class="row-end match-row__result">
+            <strong class="numeric">{{ formatScore(match.score) }}</strong>
+            <span v-if="match.winner" class="meta">Ganó <NuxtLink :to="`/players/${match.winner.id}`" @click.stop>{{ match.winner.name }}</NuxtLink></span>
+          </span>
+          <span v-else-if="match.status === 'active' && match.score_proposed_by && !match.score_approved_by" class="row-end match-row__result">
+            <strong class="numeric text-warning">{{ formatScore(match.score) }}</strong>
+            <span class="meta">Marcador propuesto</span>
+          </span>
+          <Icon v-else name="heroicons:chevron-right" class="w-5 h-5 text-foreground-muted" aria-hidden="true" />
         </div>
       </div>
-    </div>
-  </div>
+
+      <nav
+        v-if="viewMode === 'list' && (totalFilteredPages > 1 || (matches.value && matches.value.length >= pageSize && (pagination.value?.hasMore || pagination.value?.totalPages > 1)))"
+        class="pager"
+        aria-label="Paginación"
+      >
+        <button type="button" class="btn-secondary" :disabled="currentPage === 1" @click="handlePreviousPage">
+          <Icon name="heroicons:chevron-left" class="w-4 h-4" aria-hidden="true" />
+          Anterior
+        </button>
+        <span class="meta numeric">Página {{ currentPage }} de {{ totalFilteredPages }}</span>
+        <button type="button" class="btn-secondary" :disabled="currentPage >= totalFilteredPages" @click="handleNextPage">
+          Siguiente
+          <Icon name="heroicons:chevron-right" class="w-4 h-4" aria-hidden="true" />
+        </button>
+      </nav>
+
+      <div v-if="viewMode === 'list' && paginatedFilteredMatches.length === 0" class="panel empty-state">
+        <Icon name="heroicons:calendar" class="empty-state-icon" aria-hidden="true" />
+        <h2 class="empty-state-title">
+          {{ statusFilter === 'pending' ? 'No hay acciones pendientes' : statusFilter ? `No hay partidos ${getStatusLabel(statusFilter).toLowerCase()}` : 'No hay partidos' }}
+        </h2>
+        <p class="empty-state-description">
+          {{ statusFilter === 'pending' ? 'No tienes partidos que requieran tu atención en este momento.' : statusFilter ? 'Prueba con otro filtro para ver más partidos.' : 'Programa tu primer partido y empieza a sumar SR.' }}
+        </p>
+        <NuxtLink v-if="isAuthenticated && !statusFilter" to="/matches/new" class="btn-primary">
+          Programar partido
+          <Icon name="heroicons:plus" class="w-5 h-5" aria-hidden="true" />
+        </NuxtLink>
+      </div>
+    </template>
+  </PageLayout>
 </template>
 
 <script setup lang="ts">
+import { formatScore } from '~/utils/pendingAction'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
 import { usePlayerSearch } from '~/composables/usePlayerSearch'
@@ -1194,43 +854,8 @@ const didUserWin = (match: Match) => {
 }
 
 // Get match card border color based on result
-const getMatchCardClass = (match: Match) => {
-  if (match.status === 'completed' && match.winner_id && player.value) {
-    const won = didUserWin(match)
-    if (won === true) {
-      return 'border-l-4 border-green-500'
-    } else if (won === false) {
-      return 'border-l-4 border-red-500'
-    }
-  }
-  return ''
-}
 
 // Get player icon classes based on match result
-const getPlayerIconClasses = (match: Match, playerId: string | null) => {
-  if (!playerId) {
-    // Default colors for players without ID
-    return 'bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 text-accent'
-  }
-  
-  // For completed matches, show green for winner, red for loser
-  if (match.status === 'completed' && match.winner_id) {
-    if (match.winner_id === playerId) {
-      // Winner: green
-      return 'bg-gradient-to-br from-green-500/20 to-green-500/5 border-2 border-green-500/50 text-green-400'
-    } else {
-      // Loser: red
-      return 'bg-gradient-to-br from-red-500/20 to-red-500/5 border-2 border-red-500/50 text-red-400'
-    }
-  }
-  
-  // Default colors for non-completed matches
-  if (match.player1_id === playerId) {
-    return 'bg-gradient-to-br from-accent/20 to-accent/5 border-2 border-accent/30 text-accent'
-  } else {
-    return 'bg-gradient-to-br from-accent-secondary/20 to-accent-secondary/5 border-2 border-accent-secondary/30 text-accent-secondary'
-  }
-}
 
 const formatDate = (dateString: string | null | undefined) => {
   if (!dateString) return 'Sin agendar'
@@ -1262,18 +887,24 @@ const getStatusLabel = (status: string, scheduledAt?: string | null) => {
 }
 
 const getStatusBadgeClass = (status: string, scheduledAt?: string | null) => {
-  // Si está scheduled pero sin fecha, usar estilo amarillo
-  if (status === 'scheduled' && !scheduledAt) {
-    return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
-  }
+  if (status === 'scheduled' && !scheduledAt) return 'status-badge-pending'
   const classes: Record<string, string> = {
-    scheduled: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-    active: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
-    completed: 'bg-green-500/10 text-green-400 border-green-500/30',
-    cancelled: 'bg-red-500/10 text-red-400 border-red-500/30'
+    scheduled: 'status-badge-upcoming',
+    active: 'status-badge-pending',
+    completed: 'status-badge-active',
+    cancelled: 'status-badge-danger'
   }
-  return classes[status] || 'bg-surface border border-border-subtle text-foreground-muted'
+  return classes[status] || 'status-badge-completed'
 }
+
+const statusFilters = [
+  { value: null, label: 'Todos', icon: 'heroicons:squares-2x2' },
+  { value: 'pending', label: 'Pendientes', icon: 'heroicons:bell-alert' },
+  { value: 'scheduled', label: 'Programados', icon: 'heroicons:calendar' },
+  { value: 'active', label: 'En curso', icon: 'heroicons:play-circle' },
+  { value: 'completed', label: 'Completados', icon: 'heroicons:check-circle' },
+  { value: 'cancelled', label: 'Cancelados', icon: 'heroicons:x-circle' }
+] as const
 
 const getStatusIcon = (status: string) => {
   const icons: Record<string, string> = {
@@ -1403,3 +1034,41 @@ watch(viewMode, (newView) => {
 })
 </script>
 
+
+<style scoped>
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--edge); background: transparent; color: var(--foreground-muted); font-size: 14px; font-weight: 600; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--accent-foreground); }
+@media (hover: hover) { .chip:not([aria-pressed="true"]):hover { background: var(--lens); color: var(--foreground); } }
+.segmented { display: grid; grid-auto-flow: column; gap: 4px; padding: 4px; border-radius: 999px; background: var(--lens); border: 1px solid var(--edge); }
+.segmented button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 0; background: transparent; color: var(--foreground-muted); font-weight: 600; font-size: 14px; }
+.segmented button[aria-pressed="true"] { background: var(--surface); color: var(--foreground); }
+.filters { margin-bottom: 16px; }
+.filters > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; list-style: none; }
+.filters > summary::-webkit-details-marker { display: none; }
+.filters__chevron { margin-left: auto; color: var(--foreground-muted); }
+.filters[open] .filters__chevron { transform: rotate(180deg); }
+.filters__grid { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 16px; margin-top: 12px; }
+.filters__opponent { position: relative; }
+.filters__results { position: absolute; z-index: 20; left: 0; right: 0; margin-top: 8px; max-height: 240px; overflow-y: auto; box-shadow: var(--shadow-lg); }
+.filters__actions { margin-top: 12px; }
+.chip-x { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: -6px; border: 0; border-radius: 50%; background: transparent; color: inherit; }
+.hint { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.match-row { cursor: pointer; align-items: flex-start; }
+@media (hover: hover) { .match-row:hover { background: var(--lens); } }
+.match-row__names a { color: inherit; }
+@media (hover: hover) { .match-row__names a:hover, .match-row__result a:hover { text-decoration: underline; } }
+.match-row__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.match-row__result { display: grid; gap: 2px; justify-items: end; }
+.match-row__result a { color: var(--accent); font-weight: 600; }
+.meta.inline { display: inline; }
+.result-mark.is-win { background: var(--success-subtle); color: var(--success); border-color: transparent; }
+.result-mark.is-loss { background: var(--danger-subtle); color: var(--danger); border-color: transparent; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+@media (max-width: 767px) {
+  .filters__grid { grid-template-columns: 1fr 1fr; }
+  .filters__opponent { grid-column: 1 / -1; }
+  .match-row__result { justify-items: start; }
+}
+</style>
