@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { request as httpRequest } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { vi } from 'vitest'
 import { nextClientIp, startTestApp, type TestApp } from './harness'
 import { activeMatch, createCategory, createPlayer, type Account } from '../data/matches-helpers'
 import { INVITES_PER_INVITER, INVITES_PER_TARGET_EMAIL } from '../../server/utils/invitations'
 import { AUTH_RATE_LIMIT } from '../../server/utils/auth'
+import { ADMIN_INVITES_PER_TARGET_EMAIL } from '../../server/utils/invitations'
 
 let app: TestApp
 let categoryId: string
@@ -170,6 +172,86 @@ describe('Better Auth rate limit (database storage)', () => {
     }
     expect(statuses.slice(0, max)).toEqual(Array(max).fill(200))
     expect(statuses[max]).toBe(429)
+  })
+})
+
+describe('Better Auth rate limit: client IP behind Vercel', () => {
+  const max = AUTH_RATE_LIMIT.customRules['/sign-in/email'].max
+
+  function signIn(headers: Record<string, string>) {
+    return fetch(new URL('/api/auth/sign-in/email', app.baseURL), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: app.baseURL, ...headers },
+      body: JSON.stringify({ email: 'nadie@tenis.ec', password: 'wrong-password-123' }),
+    }).then((r) => r.status)
+  }
+
+  it('regression (PR #47 review): two clients behind a multi-hop x-forwarded-for get separate buckets', async () => {
+    // Vercel-shaped: x-vercel-forwarded-for is the client, x-forwarded-for carries an extra hop.
+    const vercel = (client: string) => ({ 'x-vercel-forwarded-for': client, 'x-forwarded-for': `${client}, 10.200.0.1` })
+    const statuses: number[] = []
+    for (let i = 0; i <= max; i++) statuses.push(await signIn(vercel('203.0.113.10')))
+    expect(statuses[max]).toBe(429)
+    expect(await signIn(vercel('198.51.100.20'))).not.toBe(429)
+  })
+
+  it('regression (PR #47 review): rotating a spoofed x-forwarded-for does not buy a fresh bucket', async () => {
+    const statuses: number[] = []
+    for (let i = 0; i <= max; i++) {
+      statuses.push(await signIn({ 'x-vercel-forwarded-for': '203.0.113.99', 'x-forwarded-for': `192.0.2.${i + 1}` }))
+    }
+    expect(statuses[max]).toBe(429)
+  })
+})
+
+describe('admin invitation paths: per-email limit', () => {
+  it(`an admin gets 429 after ${ADMIN_INVITES_PER_TARGET_EMAIL.max} sends to one email across invite and both resend routes`, async () => {
+    const admin = await createPlayer(app, categoryId, 'admin')
+    await app.setRole(admin.userId, 'admin')
+    const email = freshEmail('admin-objetivo')
+    const created = await app.request('POST', '/api/admin/pending-players/invite', {
+      cookie: admin.cookie,
+      body: { name: 'Invitado', email, category_id: categoryId },
+    })
+    expect(created.status, JSON.stringify(created.body)).toBe(200)
+    const id = (created.body as { invitation: { id: string } }).invitation.id
+    const routes = [`/api/admin/invitations/${id}/resend`, `/api/admin/pending-players/${id}/resend`]
+    const statuses: number[] = []
+    for (let i = 1; i <= ADMIN_INVITES_PER_TARGET_EMAIL.max; i++) {
+      statuses.push((await app.request('POST', routes[i % 2], { cookie: admin.cookie })).status)
+    }
+    expect(statuses.slice(0, -1)).toEqual(Array(ADMIN_INVITES_PER_TARGET_EMAIL.max - 1).fill(200))
+    expect(statuses.at(-1)).toBe(429)
+    // A new invite to the same address (different letter case) is refused before any lookup
+    const again = await app.request('POST', '/api/admin/pending-players/invite', {
+      cookie: admin.cookie,
+      body: { name: 'Invitado', email: email.toUpperCase(), category_id: categoryId },
+    })
+    expect(again.status).toBe(429)
+  })
+})
+
+describe('pending-players: unexpected failures are logged without PII', () => {
+  it('logs inviter id and error code, never the invited email', async () => {
+    const inviter = await createPlayer(app, categoryId, 'fallo')
+    const email = freshEmail('secreto')
+    await app.client.exec(`
+      create function fail_pending_insert() returns trigger language plpgsql as $$
+      begin raise exception 'boom for %', new.email using errcode = 'P0001'; end $$;
+      create trigger fail_pending_insert before insert on pending_players for each row execute function fail_pending_insert();
+    `)
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const res = await invite(inviter, email)
+      expect(res.status).toBe(500)
+      const calls = spy.mock.calls.filter((c) => c[0] === 'Invitation create failed')
+      expect(calls).toHaveLength(1)
+      expect(calls[0][1]).toMatchObject({ inviter_player_id: inviter.playerId, pg_code: 'P0001' })
+      expect(JSON.stringify(spy.mock.calls)).not.toContain(email)
+    } finally {
+      spy.mockRestore()
+      await app.client.exec(`drop trigger fail_pending_insert on pending_players; drop function fail_pending_insert();`)
+    }
   })
 })
 

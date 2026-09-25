@@ -32,14 +32,14 @@ Status legend: `[x]` done in a PR, `[ ]` not yet.
 
 ## Production configuration (fail closed)
 
-"Production" means `NODE_ENV=production` **and** `VERCEL_ENV=production`. Previews (`VERCEL_ENV=preview`, i.e. staging) and local dev are not production. The rules live in `server/utils/server-config.ts`.
+"Production" means `NODE_ENV=production` and either `VERCEL_ENV=production` or no `VERCEL_ENV` at all (a non-Vercel host fails closed too). Previews (`VERCEL_ENV=preview`, i.e. staging), `vercel dev` and `nuxt dev` are not production. A local `nuxt build && node .output/server/index.mjs` has no `VERCEL_ENV`, so it needs `ALLOW_UNSAFE_LOCAL_PRODUCTION=1` to boot without an email sender; the opt-out is ignored whenever `VERCEL_ENV` is set. This relies on Vercel exposing its system environment variables (the project default): if `VERCEL_ENV` were hidden, previews would refuse to boot, loudly. The rules live in `server/utils/server-config.ts`.
 
 - **Refuses to boot** in production when `RESEND_API_KEY` or `EMAIL_FROM` is missing, or when no base URL can be pinned (`BETTER_AUTH_URL`, else `VERCEL_PROJECT_PRODUCTION_URL`; it must be https). The Nitro startup plugin `server/plugins/production-config.ts` throws, so the function serves nothing; the auth instance throws the same error, so sign-up can never run unverified.
 - **Email verification** is always required in production. On previews and locally it is required only when both email variables are set; without them sign-up stays open and invitation links are shown to the inviter.
 - **Outbound links** (invitations, auth callbacks) come from configuration only, never the request `Host`/`X-Forwarded-Host`: `BETTER_AUTH_URL`, else `VERCEL_BRANCH_URL`, else `VERCEL_URL` on previews, else `http://localhost:$PORT`. Production never uses the per-deployment hosts.
 - **Rate limits**, stored in Postgres because serverless instances share no memory (migration `0003_rate_limits`):
-  - Better Auth (`rate_limit` table, `rateLimit.storage = 'database'`, see https://www.better-auth.com/docs/concepts/rate-limit): always enabled, 100 requests / 60 s per IP and path by default, `/sign-in/email` 5 / 60 s, `/sign-up/email` 5 / hour. The client IP is read from `x-forwarded-for`, which Vercel sets.
-  - Invitations (`rate_limit_buckets` table, `POST /api/pending-players`): 10 per inviter per hour and 3 per invited email per 24 h; attempts count, not only successes. Over the limit: 429 with `Retry-After`.
+  - Better Auth (`rate_limit` table, `rateLimit.storage = 'database'`, see https://www.better-auth.com/docs/concepts/rate-limit): always enabled, 100 requests / 60 s per IP and path by default, `/sign-in/email` 5 / 60 s, `/sign-up/email` 5 / hour. The client IP is read from `x-vercel-forwarded-for`, then `x-real-ip`, then `x-forwarded-for` (`advanced.ipAddress.ipAddressHeaders`). Better Auth's default reads only `x-forwarded-for` and puts any multi-hop value into one site-wide bucket.
+  - Invitations (`rate_limit_buckets` table, `POST /api/pending-players`): 10 per inviter per hour and 3 per invited email per 24 h; attempts count, not only successes. The admin invite and both resend routes share a separate bucket of 5 per invited email per 24 h. Over the limit: 429 with `Retry-After`.
 - Before promoting to production: set `RESEND_API_KEY`, `EMAIL_FROM` and (once a custom domain exists) `BETTER_AUTH_URL` on the Vercel Production environment, and apply migration `0003` to the target Neon branch.
 
 ## Open decisions for the CEO

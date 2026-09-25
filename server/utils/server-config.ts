@@ -1,9 +1,15 @@
 // Deployment-dependent settings, resolved from the environment only. Nothing here reads the request:
 // outbound links and the auth origin must never follow a client-supplied Host header.
 //
-// Production (NODE_ENV=production and VERCEL_ENV=production) fails closed: a missing email sender or an
-// unusable base URL throws, and the startup plugin (server/plugins/production-config.ts) refuses to boot.
-// Previews and local dev keep working without an email sender; verification is then not enforced.
+// Production fails closed: a missing email sender or an unusable base URL throws, and the startup plugin
+// (server/plugins/production-config.ts) refuses to boot. Production means NODE_ENV=production and either
+// VERCEL_ENV=production or no VERCEL_ENV at all (a non-Vercel host). Vercel previews (VERCEL_ENV=preview,
+// i.e. staging) and `vercel dev` are not production: they keep working without an email sender and
+// verification is then not enforced.
+//
+// A local `nuxt build && node .output/server/index.mjs` is also NODE_ENV=production without VERCEL_ENV;
+// it needs ALLOW_UNSAFE_LOCAL_PRODUCTION=1 to boot without a sender. The opt-out is ignored whenever
+// VERCEL_ENV is set, so it can never switch the check off on a Vercel deployment.
 // See docs/MIGRATION-CHECKLIST.md, "Production configuration".
 
 type Env = Record<string, string | undefined>
@@ -23,7 +29,9 @@ export class ProductionConfigError extends Error {
 }
 
 export function isProductionDeployment(env: Env = process.env): boolean {
-  return env.NODE_ENV === 'production' && env.VERCEL_ENV === 'production'
+  if (env.NODE_ENV !== 'production') return false
+  if (env.VERCEL_ENV) return env.VERCEL_ENV === 'production'
+  return env.ALLOW_UNSAFE_LOCAL_PRODUCTION !== '1'
 }
 
 const https = (host?: string) => (host ? `https://${host}` : undefined)

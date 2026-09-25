@@ -1,7 +1,8 @@
 import { asc, eq, sql } from 'drizzle-orm'
 import { findPlayerByUserId, requireAdmin } from '~/server/utils/session'
 import { findAccountByEmail } from '~/server/utils/users'
-import { invitationUrl, newInvitationToken, sendInvitationEmail } from '~/server/utils/invitations'
+import { adminTargetEmailLimit, invitationUrl, newInvitationToken, sendInvitationEmail } from '~/server/utils/invitations'
+import { enforceRateLimits } from '~/server/utils/rate-limit'
 import { useDb } from '~/server/db'
 import { categories, pending_players } from '~/server/db/schema'
 
@@ -35,6 +36,9 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Invalid email format'
       })
     }
+
+    // Checked before any lookup, as in the player route: attempts count, not only successes
+    await enforceRateLimits(event, useDb(), [adminTargetEmailLimit(email)])
 
     // pending_players.invited_by_player_id is required, so the admin needs a player profile to invite.
     const inviter = await findPlayerByUserId(admin.id)

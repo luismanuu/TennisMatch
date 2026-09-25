@@ -6,6 +6,17 @@ import { resolveServerConfig } from './server-config'
 // Every invitation emails a stranger from our domain (server/api/pending-players/index.post.ts).
 export const INVITES_PER_INVITER: RateLimitRule = { windowSeconds: 60 * 60, max: 10 }
 export const INVITES_PER_TARGET_EMAIL: RateLimitRule = { windowSeconds: 24 * 60 * 60, max: 3 }
+// Admin sends and resends (server/api/admin/...) have their own per-email bucket, so players probing an
+// address cannot lock an admin out of resending, and an admin account still cannot mail-bomb one address.
+export const ADMIN_INVITES_PER_TARGET_EMAIL: RateLimitRule = { windowSeconds: 24 * 60 * 60, max: 5 }
+
+export function adminTargetEmailLimit(email: string) {
+  return {
+    key: `invite:admin-email:${email.trim().toLowerCase()}`,
+    rule: ADMIN_INVITES_PER_TARGET_EMAIL,
+    message: 'Too many invitations for this email, try again later',
+  }
+}
 
 export function newInvitationToken(): string {
   return randomBytes(32).toString('hex')

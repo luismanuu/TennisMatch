@@ -140,9 +140,19 @@ export default defineEventHandler(async (event) => {
       email_sent: emailSent
     }
   } catch (error: any) {
+    // Unexpected failures are logged with context. Only identifiers and codes: a driver error message
+    // can embed the query parameters (the invited email), so it is never logged.
+    if (!error?.statusCode) {
+      console.error('Invitation create failed', {
+        inviter_player_id: inviter.id,
+        error_name: error?.name,
+        pg_code: error?.code ?? error?.cause?.code,
+      })
+    }
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
+      cause: error,
     })
   }
 })

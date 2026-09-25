@@ -25,11 +25,16 @@ const envArb = fc.record(
     RESEND_API_KEY: fc.constantFrom(undefined, '', 're_test'),
     EMAIL_FROM: fc.constantFrom(undefined, '', 'Tenis Ecuador <hola@tenis.ec>'),
     PORT: fc.constantFrom(undefined, '3000', '4321'),
+    ALLOW_UNSAFE_LOCAL_PRODUCTION: fc.constantFrom(undefined, '', '1', 'true'),
   },
   { requiredKeys: [] },
 )
 
-const isProd = (env: Record<string, string | undefined>) => env.NODE_ENV === 'production' && env.VERCEL_ENV === 'production'
+// Independent statement of the rule: on Vercel only VERCEL_ENV=production; off Vercel every production run
+// unless the local opt-out is exactly '1'.
+const isProd = (env: Record<string, string | undefined>) =>
+  env.NODE_ENV === 'production' &&
+  (env.VERCEL_ENV ? env.VERCEL_ENV === 'production' : env.ALLOW_UNSAFE_LOCAL_PRODUCTION !== '1')
 
 function attempt(env: Record<string, string | undefined>) {
   try {
@@ -95,6 +100,27 @@ describe('resolveServerConfig (property)', () => {
       emailDelivery: false,
       requireEmailVerification: false,
     })
+  })
+
+  it('a non-Vercel production host (no VERCEL_ENV) fails closed too', () => {
+    expect(() => resolveServerConfig({ NODE_ENV: 'production', BETTER_AUTH_URL: 'https://tenis.ec' })).toThrow(
+      /RESEND_API_KEY is missing; EMAIL_FROM is missing/,
+    )
+    expect(() =>
+      resolveServerConfig({ NODE_ENV: 'production', RESEND_API_KEY: 're_test', EMAIL_FROM: 'Tenis <hola@tenis.ec>' }),
+    ).toThrow(/BETTER_AUTH_URL/)
+  })
+
+  it('ALLOW_UNSAFE_LOCAL_PRODUCTION=1 lets a local production build boot, and is ignored on Vercel', () => {
+    expect(resolveServerConfig({ NODE_ENV: 'production', ALLOW_UNSAFE_LOCAL_PRODUCTION: '1', PORT: '4321' })).toEqual({
+      production: false,
+      baseURL: 'http://localhost:4321',
+      emailDelivery: false,
+      requireEmailVerification: false,
+    })
+    expect(() =>
+      resolveServerConfig({ NODE_ENV: 'production', VERCEL_ENV: 'production', ALLOW_UNSAFE_LOCAL_PRODUCTION: '1', BETTER_AUTH_URL: 'https://tenis.ec' }),
+    ).toThrow(ProductionConfigError)
   })
 
   it('production with sender and pinned URL requires verification', () => {
