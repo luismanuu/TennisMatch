@@ -1,74 +1,65 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { categories, cities, players } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
+import { eloToMmr } from '~/server/utils/rating-system'
 import type { CreatePlayerPayload } from '~/types'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
 
+  const body = await readBody<Partial<CreatePlayerPayload>>(event)
+  const name = body?.name?.trim()
+  const phone_number = body?.phone_number
+  const city_id = body?.city_id
+  const category_id = body?.category_id
+
+  if (!name || !category_id || !city_id) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Missing required fields: name, category_id, city_id',
+    })
+  }
+
+  const db = useDb()
+
+  const city = UUID.test(city_id)
+    ? await db.query.cities.findFirst({ columns: { id: true }, where: eq(cities.id, city_id) })
+    : undefined
+  if (!city) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid city_id' })
+  }
+
+  const category = UUID.test(category_id)
+    ? await db.query.categories.findFirst({
+        columns: { id: true, default_elo: true },
+        where: eq(categories.id, category_id),
+      })
+    : undefined
+  if (!category) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid category_id' })
+  }
+
+  // One player profile per account. This check is the fast path; the DB's own unique
+  // constraint on players.user_id is what actually protects against a race between two
+  // concurrent POSTs (see the catch below: a 23505 there means we lost that race).
+  const existingPlayer = await db.query.players.findFirst({
+    columns: { id: true },
+    where: eq(players.user_id, user.id),
+  })
+  if (existingPlayer) {
+    throw createError({ statusCode: 409, statusMessage: 'Player profile already exists' })
+  }
+
+  const initialElo = category.default_elo || 1000
+  const initialMmr = eloToMmr(initialElo)
+
   try {
-    const body = await readBody<CreatePlayerPayload>(event)
-    const { name, phone_number, city_id, category_id } = body
-    
-    if (!name || !category_id || !city_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Missing required fields: name, category_id, city_id'
-      })
-    }
-    
-    // Verify city exists
-    const supabase = getSupabaseAdmin()
-    const { data: city, error: cityError } = await supabase
-      .from('cities')
-      .select('id')
-      .eq('id', city_id)
-      .single()
-    
-    if (cityError || !city) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Invalid city_id'
-      })
-    }
-    
-    // Verify category exists and get default_elo
-    const { data: category, error: categoryError } = await supabase
-      .from('categories')
-      .select('id, default_elo')
-      .eq('id', category_id)
-      .single()
-    
-    if (categoryError || !category) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Invalid category_id'
-      })
-    }
-    
-    // Use category's default_elo or fallback to 1000
-    const initialElo = (category as any).default_elo || 1000
-    
-    // Check if player already exists
-    const { data: existingPlayer } = await supabase
-      .from('players')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
-    
-    if (existingPlayer) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: 'Player profile already exists'
-      })
-    }
-    
-    // Calculate initial MMR from ELO
-    const initialMmr = (initialElo - 2250) / 750
-    
-    // Create player profile with category's default ELO
-    const { data: player, error: insertError } = await supabase
-      .from('players')
-      .insert({
+    const [created] = await db
+      .insert(players)
+      .values({
         user_id: user.id,
         name,
         phone_number: phone_number || null,
@@ -76,39 +67,21 @@ export default defineEventHandler(async (event) => {
         category_id,
         elo: initialElo,
         mmr: initialMmr,
-        mmr_uncertainty: 2.0  // Initial uncertainty for new players
+        mmr_uncertainty: 2.0,
       })
-      .select(`
-        *,
-        category:categories(*),
-        city:cities(*)
-      `)
-      .single()
-    
-    if (insertError) {
-      console.error('Supabase insert error:', insertError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to create player profile',
-        data: insertError
-      })
-    }
-    
-    return player
-  } catch (error: any) {
-    console.error('Error in /api/players/me POST:', error)
-    
-    // If it's already a createError, re-throw it
-    if (error.statusCode) {
-      throw error
-    }
-    
-    // Otherwise, wrap it
-    throw createError({
-      statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
+      .returning({ id: players.id })
+
+    return await db.query.players.findFirst({
+      where: eq(players.id, created.id),
+      with: { category: true, city: true },
     })
+  } catch (error: any) {
+    // node-postgres/pglite/neon drivers all surface the pg error code, but some wrap it in
+    // `.cause` (h3/drizzle) rather than putting it directly on the thrown error.
+    const pgCode = error?.code ?? error?.cause?.code
+    if (pgCode === '23505') {
+      throw createError({ statusCode: 409, statusMessage: 'Player profile already exists' })
+    }
+    throw error
   }
 })
-
