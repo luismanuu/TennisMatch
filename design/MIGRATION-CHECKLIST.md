@@ -25,10 +25,10 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | Historial `/matches` | `pages/matches/index.vue` | Historial | #6 | in PR | `shots/pr6` |
 | Programar `/matches/new` | `pages/matches/new.vue` | Programar | #6 | in PR | `shots/pr6` |
 | Buscar rival `/matchmaking` | `pages/matchmaking/index.vue` | Buscar | #6 | in PR | `shots/pr6` |
-| Torneos `/tournaments` | `pages/tournaments/index.vue` | Torneos | #7 | todo | |
-| Torneo `/tournaments/:id` | `pages/tournaments/[id].vue` | Torneos (applied) | #7 | todo | |
-| Mis torneos `/organizer/tournaments` | `pages/organizer/tournaments/index.vue` | none | #7 | todo | |
-| Organizar torneo `/organizer/tournaments/:id` | `pages/organizer/tournaments/[id].vue` | none | #7 | todo | |
+| Torneos `/tournaments` | `pages/tournaments/index.vue` | Torneos | #7 | in PR | `shots/pr7` |
+| Torneo `/tournaments/:id` | `pages/tournaments/[id].vue` | Torneos (applied) | #7 | in PR | `shots/pr7` |
+| Mis torneos `/organizer/tournaments` | `pages/organizer/tournaments/index.vue` | none | #7 | in PR | `shots/pr7` |
+| Organizar torneo `/organizer/tournaments/:id` | `pages/organizer/tournaments/[id].vue` | none | #7 | in PR | `shots/pr7` |
 | Iniciar sesión `/sign-in`, `/sign-in/*` | `pages/sign-in.vue`, `pages/sign-in/[...slug].vue` | none | #8 | todo | |
 | Crear cuenta `/sign-up`, verificación | `pages/sign-up.vue`, `pages/sign-up/verify-email-address.vue` | none | #8 | todo | |
 | Onboarding `/onboarding` | `pages/onboarding.vue` | none | #8 | todo | |
@@ -49,6 +49,7 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 - [ ] Perfil "Último resultado" / "Tu próximo partido" (mock) are not loaded by the profile page today; left out (no new fetches).
 - [x] `RankIconAnimated` + `useRankAnimation` + `useParticleSystem` (looping tier effects) removed in #4; nothing uses them.
 - [ ] Partido "Impacto estimado" (+SR si ganas / −SR si pierdes) needs an estimate the API doesn't return; left out.
+- [ ] Pre-existing (not a migration regression): on `/tournaments/:id` a registered, non-waitlisted player sees "Ya estás registrado" and the register buttons at once (v-if / v-if / v-else chain). Reproduced on staging. File as a bug.
 - [ ] Real club photography with verified venue IDs (DESIGN.md §8); current photos are credited references.
 
 ## Notes on spec vs. app structure
