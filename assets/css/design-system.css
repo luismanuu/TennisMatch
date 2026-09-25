@@ -365,7 +365,7 @@ a, button, summary { touch-action: manipulation; -webkit-tap-highlight-color: tr
 .photo { position: relative; isolation: isolate; overflow: hidden; border-radius: var(--radius); background: var(--photo-fallback); color: var(--on-photo); --focus: #87e6ae; scroll-margin-top: 100px; }
 .photo > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--focal, center); }
 .photo::after { content: ''; position: absolute; inset: 0; z-index: 0; background: var(--photo-scrim); }
-.photo-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-height: 290px; padding: 28px; }
+.photo-content { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-height: 290px; padding: 28px; }
 .photo-content > h1, .photo-content > h2 { max-width: 25ch; }
 .photo-content > h2 { font-size: clamp(23px, 2.6vw, 32px); line-height: 1.2; }
 .photo-content > p { color: var(--on-photo-muted); }

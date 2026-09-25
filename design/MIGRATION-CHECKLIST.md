@@ -15,7 +15,7 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | App shell (nav island, tab island, tokens, appearance) | `components/*`, `assets/css/*` | all | #1 foundation | in PR | `shots/pr1` |
 | Ajustes `/user-profile` | `pages/user-profile.vue` | Ajustes | #1 foundation | in PR | `shots/pr1` |
 | Créditos `/creditos` (new, required by DESIGN.md §8) | `pages/creditos.vue` | Creditos | #1 foundation | in PR | `shots/pr1` |
-| Inicio `/` (signed in + signed out) | `pages/index.vue` | Inicio, Escritorio | #2 | todo | |
+| Inicio `/` (signed in + signed out) | `pages/index.vue` | Inicio, Escritorio | #2 | in PR | `shots/pr2` |
 | Perfil `/profile` | `pages/profile/index.vue` | Perfil | #3 | todo | |
 | Editar perfil `/profile/edit` | `pages/profile/edit.vue` | Editar | #3 | todo | |
 | Jugador `/players/:id` | `pages/players/[id].vue` | Perfil (applied) | #3 | todo | |
@@ -45,6 +45,7 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 
 - [ ] Remove the transitional `.h-16` shell clearance in `app.vue` once every page renders inside `<PageLayout>` (last PR).
 - [ ] Self-host Geist before production (DESIGN_SYSTEM.md §3); Google Fonts is still linked.
+- [ ] Inicio "Tu próximo partido" and "Puesto N de M" (mock) need data the page doesn't load today (next scheduled match, ranking position); left out rather than adding fetches (brief: no data-fetching changes).
 - [ ] Real club photography with verified venue IDs (DESIGN.md §8); current photos are credited references.
 
 ## Notes on spec vs. app structure
