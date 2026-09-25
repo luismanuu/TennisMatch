@@ -31,7 +31,6 @@ export default defineEventHandler(async (event) => {
 
     for (const player of playersToCheck) {
       if ((player.total_matches_played || 0) > 0) {
-        // validateRatingConsistency belongs to the matches batch; called with the cross-batch signature (playerId, tx?).
         const consistency = await validateRatingConsistency(player.id)
         if (!consistency.isConsistent) {
           consistencyChecks.push({
