@@ -254,7 +254,7 @@ export const useNotifications = () => {
     console.log('[Notifications] Tab active:', isTabActive)
   }
   
-  // Setup polling on mount, or as soon as the Clerk user id arrives after mount
+  // Setup polling on mount, or as soon as the session user id arrives after mount
   // (otherwise the first fetch never runs and consumers wait on it forever)
   onMounted(() => {
     document.addEventListener('visibilitychange', handleVisibilityChange)
