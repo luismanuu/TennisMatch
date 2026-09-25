@@ -1,4 +1,3 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requirePlayer } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { getUnscheduledMatches } from '~/server/utils/tournament-scheduling'
@@ -16,12 +15,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
     // Verify organizer owns this tournament
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
-    const matches = await getUnscheduledMatches(tournamentId, supabase)
+    const matches = await getUnscheduledMatches(tournamentId)
 
     return matches
   } catch (error: any) {

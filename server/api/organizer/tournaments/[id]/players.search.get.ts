@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, asc, eq, ilike, inArray } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players, tournament_registrations } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 
@@ -8,70 +10,48 @@ export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
     const tournamentId = getRouterParam(event, 'id')
-    const searchTerm = (query.q as string) || ''
-    
+    const searchTerm = typeof query.q === 'string' ? query.q : ''
+
     if (!tournamentId) {
       throw createError({
         statusCode: 400,
         statusMessage: 'Tournament ID is required'
       })
     }
-    
+
     if (!searchTerm || searchTerm.trim().length < 2) {
       return []
     }
-    
-    const supabase = getSupabaseAdmin()
-    
+
     // Verify organizer owns this tournament
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
-    
-    // Only return players registered in this tournament
-    // First get all registrations for this tournament
-    const { data: registrations, error: regError } = await supabase
-      .from('tournament_registrations')
-      .select(`
-        player_id
-      `)
-      .eq('tournament_id', tournamentId)
-    
-    if (regError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch tournament registrations',
-        data: regError
+
+    // Only players registered in this tournament, searched by name
+    try {
+      return await useDb().query.players.findMany({
+        columns: { id: true, name: true },
+        with: { category: { columns: { id: true, name: true, description: true, order: true } } },
+        where: and(
+          inArray(
+            players.id,
+            useDb()
+              .select({ id: tournament_registrations.player_id })
+              .from(tournament_registrations)
+              .where(eq(tournament_registrations.tournament_id, tournamentId))
+          ),
+          ilike(players.name, `%${searchTerm.trim()}%`),
+          eq(players.status, 'active')
+        ),
+        orderBy: [asc(players.name)],
+        limit: 20,
       })
-    }
-    
-    const playerIds = (registrations || []).map(reg => reg.player_id)
-    
-    if (playerIds.length === 0) {
-      return []
-    }
-    
-    // Now search players by name within the registered players
-    const { data: players, error } = await supabase
-      .from('players')
-      .select(`
-        id,
-        name,
-        category:categories(id, name, description, order)
-      `)
-      .in('id', playerIds)
-      .ilike('name', `%${searchTerm.trim()}%`)
-      .eq('status', 'active')
-      .limit(20)
-      .order('name', { ascending: true })
-    
-    if (error) {
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to search players',
         data: error
       })
     }
-    
-    return players || []
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -79,4 +59,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

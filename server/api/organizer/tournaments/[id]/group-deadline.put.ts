@@ -1,4 +1,3 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requirePlayer } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { createGroupStageDeadline } from '~/server/utils/tournament-scheduling'
@@ -8,7 +7,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const body = await readBody<{ deadline: string }>(event)
-    const { deadline } = body
+    const deadline = body?.deadline
     const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
@@ -25,12 +24,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
     // Verify organizer owns this tournament
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
-    await createGroupStageDeadline(tournamentId, deadline, supabase)
+    await createGroupStageDeadline(tournamentId, deadline)
 
     return {
       success: true,

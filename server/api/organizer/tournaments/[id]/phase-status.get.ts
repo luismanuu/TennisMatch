@@ -1,4 +1,3 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
 import { requirePlayer } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { getTournamentPhaseStatus } from '~/server/utils/tournament-phases'
@@ -16,13 +15,11 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
     // Verify organizer owns this tournament
     await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
     // Get phase status
-    const phaseStatus = await getTournamentPhaseStatus(tournamentId, supabase)
+    const phaseStatus = await getTournamentPhaseStatus(tournamentId)
 
     return phaseStatus
   } catch (error: any) {
