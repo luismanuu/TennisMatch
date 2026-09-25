@@ -17,17 +17,13 @@
     "typecheck:server": "nuxt prepare && tsc --noEmit -p .nuxt/tsconfig.server.json",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:integration": "vitest run tests/integration",
-    "test:integration:ui": "vitest --ui",
-    "test:integration:real-api": "cross-env VITEST_RUN_REAL_API=true vitest run tests/integration/clerk-real-api.spec.ts",
-    "test:all": "npm run test:integration && npm run test:e2e"
+    "test:all": "vitest run && playwright test"
   },
   "dependencies": {
-    "@clerk/localizations": "^3.32.1",
-    "@clerk/nuxt": "^1.2.0",
     "@neondatabase/serverless": "^1.1.0",
     "@nuxt/ui": "^2.18.0",
     "@supabase/supabase-js": "^2.39.0",
+    "better-auth": "^1.7.6",
     "bracketry": "^1.1.3",
     "drizzle-orm": "^0.45.3",
     "nuxt": "^4.2.2",
@@ -35,7 +31,6 @@
     "vue-router": "latest"
   },
   "devDependencies": {
-    "@clerk/clerk-sdk-node": "^4.13.23",
     "@electric-sql/pglite": "^0.3.2",
     "@nuxt/test-utils": "^3.21.0",
     "@nuxt/typescript-build": "^3.0.2",
@@ -52,5 +47,8 @@
     "vite": "^7.3.0",
     "vitest": "^3.2.4",
     "vue-tsc": "^2.2.12"
+  },
+  "overrides": {
+    "zod": "^4.5.4"
   }
 }
