@@ -41,12 +41,8 @@ const notice = computed(() => {
   return ''
 })
 
-function safeRedirect(value: unknown): string {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/'
-}
-
 function destination(): string {
-  if (invitationToken.value) return `/invitation/${encodeURIComponent(invitationToken.value)}`
+  if (invitationToken.value) return invitationPath(invitationToken.value)
   return safeRedirect(route.query.redirect)
 }
 

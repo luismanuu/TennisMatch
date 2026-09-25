@@ -49,6 +49,7 @@
             :initial-email="invitation.email"
             :initial-name="invitation.name"
             email-locked
+            :invitation-token="token"
             submit-label="Crear cuenta y aceptar"
             @success="onSignedUp"
           />
@@ -109,7 +110,7 @@ async function accept() {
 
 async function onSignedUp({ needsVerification, email }: { needsVerification: boolean; email: string }) {
   if (needsVerification) {
-    await navigateTo({ path: '/sign-up/verify-email-address', query: { email } })
+    await navigateTo({ path: VERIFY_EMAIL_PAGE, query: { email, invitation_token: token } })
     return
   }
   await accept()

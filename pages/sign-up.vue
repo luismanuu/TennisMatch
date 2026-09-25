@@ -15,6 +15,7 @@
           mode="sign-up"
           :initial-email="invitationEmail"
           :email-locked="Boolean(invitationEmail)"
+          :invitation-token="invitationToken"
           @success="onSuccess"
         />
       </div>
@@ -40,14 +41,13 @@ const invitationEmail = computed(() =>
 )
 
 function destination(): string {
-  if (invitationToken.value) return `/invitation/${encodeURIComponent(invitationToken.value)}`
-  const redirect = route.query.redirect
-  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/onboarding'
+  if (invitationToken.value) return invitationPath(invitationToken.value)
+  return safeRedirect(route.query.redirect, '/onboarding')
 }
 
 async function onSuccess({ needsVerification, email }: { needsVerification: boolean; email: string }) {
   if (needsVerification) {
-    await navigateTo({ path: '/sign-up/verify-email-address', query: { email } })
+    await navigateTo({ path: VERIFY_EMAIL_PAGE, query: { email, invitation_token: invitationToken.value } })
     return
   }
   await navigateTo(destination(), { replace: true })

@@ -56,17 +56,17 @@
 
 <script setup lang="ts">
 const MIN_PASSWORD = 8
-const VERIFIED_CALLBACK = '/sign-up/verify-email-address?verified=1'
 
 const props = withDefaults(
   defineProps<{
     mode: 'sign-in' | 'sign-up'
     initialEmail?: string
     initialName?: string
+    invitationToken?: string
     emailLocked?: boolean
     submitLabel?: string
   }>(),
-  { initialEmail: '', initialName: '', emailLocked: false, submitLabel: undefined },
+  { initialEmail: '', initialName: '', invitationToken: undefined, emailLocked: false, submitLabel: undefined },
 )
 
 const emit = defineEmits<{
@@ -90,11 +90,13 @@ watch(
 
 const submitLabel = computed(() => props.submitLabel ?? (props.mode === 'sign-up' ? 'Crear cuenta' : 'Iniciar sesión'))
 
+const PASSWORD_TOO_SHORT = `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.`
+
 const MESSAGES: Record<string, string> = {
   INVALID_EMAIL_OR_PASSWORD: 'El correo o la contraseña no son correctos.',
   USER_ALREADY_EXISTS: 'Ya existe una cuenta con este correo. Inicia sesión.',
   USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: 'Ya existe una cuenta con este correo. Inicia sesión.',
-  PASSWORD_TOO_SHORT: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.`,
+  PASSWORD_TOO_SHORT,
   INVALID_EMAIL: 'Revisa el formato del correo.',
   EMAIL_NOT_VERIFIED: 'Confirma tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.',
 }
@@ -102,19 +104,19 @@ const MESSAGES: Record<string, string> = {
 function validate(): string {
   if (props.mode === 'sign-up' && name.value.length < 2) return 'Escribe tu nombre.'
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) return 'Revisa el formato del correo.'
-  if (password.value.length < MIN_PASSWORD) return MESSAGES.PASSWORD_TOO_SHORT
+  if (password.value.length < MIN_PASSWORD) return PASSWORD_TOO_SHORT
   return ''
 }
 
 async function submit() {
   error.value = validate()
   if (error.value) return
-  pending.value = true
   try {
-    const result =
+    const result = await withPending(pending, async () =>
       props.mode === 'sign-up'
-        ? await authClient.signUp.email({ name: name.value, email: email.value, password: password.value, callbackURL: VERIFIED_CALLBACK })
-        : await authClient.signIn.email({ email: email.value, password: password.value })
+        ? await authClient.signUp.email({ name: name.value, email: email.value, password: password.value, callbackURL: verificationCallback(props.invitationToken) })
+        : await authClient.signIn.email({ email: email.value, password: password.value }),
+    )
     if (result.error) {
       error.value = MESSAGES[result.error.code ?? ''] ?? 'No pudimos completar la solicitud. Inténtalo de nuevo.'
       return
@@ -123,8 +125,6 @@ async function submit() {
     emit('success', { needsVerification: user === null, email: email.value })
   } catch {
     error.value = 'No pudimos conectar con el servidor. Inténtalo de nuevo.'
-  } finally {
-    pending.value = false
   }
 }
 </script>

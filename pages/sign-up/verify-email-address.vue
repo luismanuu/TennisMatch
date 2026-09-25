@@ -70,7 +70,7 @@ async function resend() {
   status.value = ''
   const { error } = await authClient.sendVerificationEmail({
     email: email.value,
-    callbackURL: '/sign-up/verify-email-address?verified=1',
+    callbackURL: verificationCallback(route.query.invitation_token as string | undefined),
   })
   status.value = error ? 'No pudimos reenviar el enlace. Inténtalo en unos minutos.' : 'Listo, revisa tu bandeja de entrada.'
   sending.value = false

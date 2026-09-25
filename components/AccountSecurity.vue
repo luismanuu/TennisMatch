@@ -48,13 +48,15 @@ async function changePassword() {
     error.value = 'La nueva contraseña debe tener al menos 8 caracteres.'
     return
   }
-  pending.value = true
-  const result = await authClient.changePassword({
-    currentPassword: current.value,
-    newPassword: next.value,
-    revokeOtherSessions: true,
-  })
-  pending.value = false
+  let result: Awaited<ReturnType<typeof authClient.changePassword>>
+  try {
+    result = await withPending(pending, () =>
+      authClient.changePassword({ currentPassword: current.value, newPassword: next.value, revokeOtherSessions: true }),
+    )
+  } catch {
+    error.value = 'No pudimos conectar con el servidor. Inténtalo de nuevo.'
+    return
+  }
   if (result.error) {
     error.value =
       result.error.code === 'INVALID_PASSWORD'
