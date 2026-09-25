@@ -1,56 +1,59 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getMonthlyDecayStatus, checkAndApplyMonthlyDecay } from '~/server/utils/rating-system'
-import type { MonthlyDecayStatus } from '~/types'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players } from '~/server/db/schema'
+import { checkAndApplyMonthlyDecay, getMonthlyDecayStatus } from '~/server/utils/rating-system'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default defineEventHandler(async (event) => {
+  const playerId = getRouterParam(event, 'id')
+  const query = getQuery(event)
+  const applyDecay = query.apply_decay === 'true'
+
+  if (!playerId) {
+    throw createError({ statusCode: 400, statusMessage: 'Player ID is required' })
+  }
+
   try {
-    const playerId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const applyDecay = query.apply_decay === 'true'
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
+    const db = useDb()
+    const player = UUID.test(playerId)
+      ? await db.query.players.findFirst({
+          columns: {
+            id: true,
+            elo: true,
+            matches_this_month: true,
+            last_decay_check: true,
+            total_matches_played: true,
+            placement_matches_completed: true,
+            created_at: true,
+          },
+          where: eq(players.id, playerId),
+        })
+      : undefined
+
+    if (!player) {
+      throw createError({ statusCode: 404, statusMessage: 'Player not found' })
     }
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Fetch player data
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('id, elo, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed, created_at')
-      .eq('id', playerId)
-      .single()
-    
-    if (playerError || !player) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Player not found'
-      })
-    }
-    
-    // If requested, check and apply decay
+
     let decayApplied = 0
     let uncertaintyIncrease = 0
-    
+
     if (applyDecay) {
-      const decayResult = await checkAndApplyMonthlyDecay(playerId, supabase)
+      // cross-batch: checkAndApplyMonthlyDecay(playerId, supabase) -> checkAndApplyMonthlyDecay(playerId, tx?) once matches batch lands.
+      const decayResult = await checkAndApplyMonthlyDecay(playerId)
       if (decayResult) {
         decayApplied = decayResult.decayApplied
         uncertaintyIncrease = decayResult.uncertaintyIncrease
       }
     }
-    
-    // Get current status (with proportional requirement if registered mid-month)
+
     const status = getMonthlyDecayStatus(
-      player.matches_this_month,
+      player.matches_this_month ?? 0,
       player.last_decay_check,
       player.placement_matches_completed ?? 0,
-      player.created_at
+      player.created_at,
     )
-    
+
     return {
       success: true,
       status,
@@ -62,7 +65,7 @@ export default defineEventHandler(async (event) => {
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })
