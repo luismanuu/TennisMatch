@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournaments } from '~/server/db/schema'
 import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
@@ -14,33 +16,29 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Verify tournament exists
-    const { data: tournament, error: fetchError } = await supabase
-      .from('tournaments')
-      .select('id')
-      .eq('id', tournamentId)
-      .single()
+    const tournament = await db.query.tournaments.findFirst({
+      columns: { id: true },
+      where: eq(tournaments.id, tournamentId),
+    })
 
-    if (fetchError || !tournament) {
+    if (!tournament) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Tournament not found'
       })
     }
 
-    // Delete tournament (cascade will handle related records)
-    const { error: deleteError } = await supabase
-      .from('tournaments')
-      .delete()
-      .eq('id', tournamentId)
-
-    if (deleteError) {
+    // Related rows cascade; the database also deletes the tournament's unplayed matches (migration 0002)
+    try {
+      await db.delete(tournaments).where(eq(tournaments.id, tournamentId))
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to delete tournament',
-        data: deleteError
+        data: error
       })
     }
 
@@ -55,4 +53,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-
