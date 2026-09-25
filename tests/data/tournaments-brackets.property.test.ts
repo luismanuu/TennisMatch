@@ -32,8 +32,8 @@ describe('bracket generation (property, fixed seed)', () => {
             { weight: 4, arbitrary: fc.integer({ min: minPlayers, max: 16 }) },
             { weight: 1, arbitrary: fc.integer({ min: 0, max: minPlayers - 1 }) },
           ),
-          // Some registrations are withdrawn or waitlisted and must not be grouped
-          notConfirmed: fc.integer({ min: 0, max: 2 }),
+          // Registrations that are not confirmed must not be grouped
+          notConfirmed: fc.array(fc.constantFrom('withdrawn', 'waitlisted', 'registered' as const), { maxLength: 3 }),
         }),
       )
 
@@ -54,11 +54,11 @@ describe('bracket generation (property, fixed seed)', () => {
           })
           expect(res.status).toBe(200)
         }
-        const others = await seedPlayers(app, notConfirmed)
+        const others = await seedPlayers(app, notConfirmed.length)
         for (const [i, playerId] of others.entries()) {
           await app.client.query(
             `insert into tournament_registrations (tournament_id, player_id, status, withdrawn_at) values ($1, $2, $3, $4)`,
-            [tournamentId, playerId, i % 2 === 0 ? 'withdrawn' : 'waitlisted', i % 2 === 0 ? new Date() : null],
+            [tournamentId, playerId, notConfirmed[i], notConfirmed[i] === 'withdrawn' ? new Date() : null],
           )
         }
 
@@ -87,7 +87,7 @@ describe('bracket generation (property, fixed seed)', () => {
         expect(second.status).toBe(400)
         expect(await bracketRowCounts(app, tournamentId)).toEqual(before)
       }),
-      { seed: 20260925, numRuns: 12 },
+      { seed: 20260925, numRuns: 20 },
     )
   }, 300_000)
 })

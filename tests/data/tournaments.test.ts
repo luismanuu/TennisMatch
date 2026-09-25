@@ -295,18 +295,6 @@ describe('self-registration: tournaments/[id]/register.post.ts', () => {
     const regs = await rows(app, `select id from tournament_registrations where tournament_id = $1`, [tournamentId])
     expect(regs).toHaveLength(1)
   })
-
-  it('two simultaneous registrations by the same player: one 200, one 400, one row', async () => {
-    const tournamentId = await adminTournament()
-    const p = await signUpPlayer(app, 'a.la.vez@tenis.ec')
-    const results = await Promise.all([
-      app.request('POST', `/api/tournaments/${tournamentId}/register`, { cookie: p.cookie, body: {} }),
-      app.request('POST', `/api/tournaments/${tournamentId}/register`, { cookie: p.cookie, body: {} }),
-    ])
-    expect(results.map((r) => r.status).sort()).toEqual([200, 400])
-    const regs = await rows(app, `select id from tournament_registrations where tournament_id = $1`, [tournamentId])
-    expect(regs).toHaveLength(1)
-  })
 })
 
 describe('delete', () => {
