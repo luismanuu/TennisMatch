@@ -1,134 +1,112 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { and, asc, desc, eq, isNull } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players, rating_history } from '~/server/db/schema'
+import { requireAdmin } from '~/server/utils/session'
 import { getRatingTier, getNextTierProgress, getMonthlyDecayStatus } from '~/server/utils/rating-system'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const playerId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const playerId = getRouterParam(event, 'id')
 
     if (!playerId) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Player ID is required'
+        statusMessage: 'Player ID is required',
       })
     }
 
-    await requireAdmin(clerkId)
-
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Get player data
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select(`
-        id,
-        name,
-        elo,
-        mmr,
-        mmr_uncertainty,
-        total_matches_played,
-        placement_matches_completed,
-        win_streak,
-        loss_streak,
-        matches_this_month,
-        last_match_at,
-        last_decay_check,
-        created_at,
-        category:categories(id, name, default_elo),
-        city:cities(id, name)
-      `)
-      .eq('id', playerId)
-      .eq('status', 'active')
-      .single()
+    const player = await db.query.players.findFirst({
+      where: and(eq(players.id, playerId), eq(players.status, 'active'), isNull(players.deleted_at)),
+      columns: {
+        id: true,
+        name: true,
+        elo: true,
+        mmr: true,
+        mmr_uncertainty: true,
+        total_matches_played: true,
+        placement_matches_completed: true,
+        win_streak: true,
+        loss_streak: true,
+        matches_this_month: true,
+        last_match_at: true,
+        last_decay_check: true,
+        created_at: true,
+      },
+      with: {
+        category: { columns: { id: true, name: true, default_elo: true } },
+        city: { columns: { id: true, name: true } },
+      },
+    })
 
-    if (playerError || !player) {
+    if (!player) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Player not found',
-        data: playerError
       })
     }
 
     // Get current ranking position
-    const { data: allPlayers, error: playersError } = await supabase
-      .from('players')
-      .select('id, elo')
-      .eq('status', 'active')
-      .order('elo', { ascending: false })
-
-    if (playersError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch players for ranking',
-        data: playersError
-      })
-    }
+    const allPlayers = await db.query.players.findMany({
+      where: and(eq(players.status, 'active'), isNull(players.deleted_at)),
+      orderBy: [desc(players.elo), asc(players.id)],
+      columns: { id: true, elo: true },
+    })
 
     let currentRank = 1
     if (allPlayers) {
-      const playerIndex = allPlayers.findIndex(p => p.id === playerId)
+      const playerIndex = allPlayers.findIndex((p) => p.id === playerId)
       if (playerIndex !== -1) {
         currentRank = playerIndex + 1
       }
     }
 
     // Get rating history
-    const { data: ratingHistory, error: historyError } = await supabase
-      .from('rating_history')
-      .select(`
-        id,
-        match_id,
-        elo_before,
-        elo_after,
-        elo_change,
-        mmr_before,
-        mmr_after,
-        mmr_change,
-        created_at,
-        is_placement_match,
-        is_unrated_match,
-        win_streak_bonus,
-        was_winner,
-        opponent_id,
-        opponent_elo,
-        match:matches(id, player1_id, player2_id, winner_id, score, played_at)
-      `)
-      .eq('player_id', playerId)
-      .order('created_at', { ascending: true })
-
-    if (historyError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch rating history',
-        data: historyError
-      })
-    }
+    const ratingHistory = await db.query.rating_history.findMany({
+      where: eq(rating_history.player_id, playerId),
+      orderBy: [asc(rating_history.created_at)],
+      columns: {
+        id: true,
+        match_id: true,
+        elo_before: true,
+        elo_after: true,
+        elo_change: true,
+        mmr_before: true,
+        mmr_after: true,
+        mmr_change: true,
+        created_at: true,
+        is_placement_match: true,
+        is_unrated_match: true,
+        win_streak_bonus: true,
+        was_winner: true,
+        opponent_id: true,
+        opponent_elo: true,
+      },
+      with: {
+        match: { columns: { id: true, player1_id: true, player2_id: true, winner_id: true, score: true, played_at: true } },
+      },
+    })
 
     // Calculate ranking position over time
     const rankingHistory: Array<{ date: string; rank: number; elo: number }> = []
-    
+
     if (ratingHistory && ratingHistory.length > 0) {
       // Get all players' ELO at each point in time
-      const allHistoryEntries = await supabase
-        .from('rating_history')
-        .select('player_id, elo_after, created_at')
-        .order('created_at', { ascending: true })
+      const allHistoryEntries = await db.query.rating_history.findMany({
+        orderBy: [asc(rating_history.created_at)],
+        columns: { player_id: true, elo_after: true, created_at: true },
+      })
 
-      if (allHistoryEntries.data) {
+      if (allHistoryEntries) {
         // Group by date and calculate rankings
         const dateGroups: Record<string, Record<string, number>> = {}
-        
-        allHistoryEntries.data.forEach(entry => {
-          const dateKey = new Date(entry.created_at).toISOString().split('T')[0]
+
+        allHistoryEntries.forEach((entry) => {
+          const dateKey = new Date(entry.created_at ?? 0).toISOString().split('T')[0]
           if (!dateGroups[dateKey]) {
             dateGroups[dateKey] = {}
           }
@@ -136,20 +114,19 @@ export default defineEventHandler(async (event) => {
         })
 
         // Calculate rank for each date where player had a change
-        ratingHistory.forEach(entry => {
-          const dateKey = new Date(entry.created_at).toISOString().split('T')[0]
+        ratingHistory.forEach((entry) => {
+          const dateKey = new Date(entry.created_at ?? 0).toISOString().split('T')[0]
           const elosOnDate = dateGroups[dateKey] || {}
-          
+
           // Sort players by ELO on this date
-          const sortedPlayers = Object.entries(elosOnDate)
-            .sort((a, b) => b[1] - a[1])
-          
+          const sortedPlayers = Object.entries(elosOnDate).sort((a, b) => b[1] - a[1])
+
           const playerRank = sortedPlayers.findIndex(([id]) => id === playerId) + 1
-          
+
           rankingHistory.push({
             date: dateKey,
             rank: playerRank || currentRank,
-            elo: entry.elo_after
+            elo: entry.elo_after,
           })
         })
       }
@@ -163,46 +140,42 @@ export default defineEventHandler(async (event) => {
     const decayStatus = getMonthlyDecayStatus(
       player.matches_this_month || 0,
       player.last_decay_check,
-      player.placement_matches_completed,
-      player.created_at
+      player.placement_matches_completed ?? undefined,
+      player.created_at,
     )
 
     // Get recent match impact (last 10 matches)
-    const recentMatches = ratingHistory
-      ? ratingHistory.slice(-10).reverse()
-      : []
+    const recentMatches = ratingHistory ? ratingHistory.slice(-10).reverse() : []
 
     // Calculate ELO progression data for chart
     const eloProgression = ratingHistory
-      ? ratingHistory.map(entry => ({
+      ? ratingHistory.map((entry) => ({
           date: entry.created_at,
           elo: entry.elo_after,
-          change: entry.elo_change
+          change: entry.elo_change,
         }))
       : []
 
     // Get placement match status
-    const isInPlacement = (player.total_matches_played || 0) === 0 || 
-      ((player.placement_matches_completed || 0) < 3)
+    const isInPlacement = (player.total_matches_played || 0) === 0 || (player.placement_matches_completed || 0) < 3
     const placementMatchesRemaining = Math.max(0, 3 - (player.placement_matches_completed || 0))
 
     // Get opponent information for recent matches
     const recentMatchDetails = await Promise.all(
       recentMatches.map(async (entry) => {
         if (entry.opponent_id) {
-          const { data: opponent } = await supabase
-            .from('players')
-            .select('id, name, elo')
-            .eq('id', entry.opponent_id)
-            .single()
-          
+          const opponent = await db.query.players.findFirst({
+            where: eq(players.id, entry.opponent_id),
+            columns: { id: true, name: true, elo: true },
+          })
+
           return {
             ...entry,
-            opponent: opponent || null
+            opponent: opponent || null,
           }
         }
         return entry
-      })
+      }),
     )
 
     return {
@@ -226,19 +199,19 @@ export default defineEventHandler(async (event) => {
         last_match_at: player.last_match_at,
         category: player.category,
         city: player.city,
-        created_at: player.created_at
+        created_at: player.created_at,
       },
       decay_status: decayStatus,
       elo_progression: eloProgression,
       ranking_history: rankingHistory,
       recent_match_impact: recentMatchDetails,
-      rating_history: ratingHistory || []
+      rating_history: ratingHistory || [],
     }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
       statusMessage: error.statusMessage || error.message || 'Internal server error',
-      data: error.data || error
+      data: error.data || error,
     })
   }
 })

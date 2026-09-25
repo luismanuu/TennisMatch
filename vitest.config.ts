@@ -1,26 +1,17 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+const root = fileURLToPath(new URL('.', import.meta.url))
+
 export default defineConfig({
+  resolve: {
+    alias: { '~~': root, '~': root },
+  },
   test: {
-    // Default to happy-dom for mocked tests, but real API tests use node environment
+    // DOM-free tests declare `// @vitest-environment node` at the top of the file.
     environment: 'happy-dom',
     globals: true,
-    setupFiles: ['./tests/integration/setup.ts'],
-    // Include all integration tests and UTR rating system tests
-    include: ['tests/integration/**/*.spec.ts', 'tests/**/*.test.ts'],
-    exclude: [
-      // Only exclude real API tests when running default integration tests
-      // They can still be run explicitly via: npm run test:integration:real-api
-      ...(process.env.VITEST_RUN_REAL_API !== 'true' 
-        ? ['tests/integration/clerk-real-api.spec.ts'] 
-        : []),
-      'node_modules',
-      'dist',
-    ],
-    // Configure environment per test file
-    environmentMatchGlobs: [
-      ['tests/integration/clerk-real-api.spec.ts', 'node'],
-    ],
+    include: ['tests/**/*.test.ts'],
+    exclude: ['node_modules', 'dist', 'tests/e2e/**'],
   },
 })
-

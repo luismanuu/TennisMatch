@@ -1,10 +1,84 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { and, desc, eq, exists, gte, isNotNull, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, pending_players, players } from '~/server/db/schema'
+import { requireUser } from '~/server/utils/session'
+
+const categoryColumns = { columns: { id: true, name: true, description: true, order: true } } as const
+const listedPlayer = {
+  columns: { id: true, name: true, elo: true, total_matches_played: true, placement_matches_completed: true },
+  with: { category: categoryColumns },
+} as const
+
+// The nested keys the matches pages read
+const matchListRelations = {
+  player1: listedPlayer,
+  player2: listedPlayer,
+  pending_player2: {
+    columns: { id: true, name: true, email: true, status: true, invited_by_player_id: true },
+    with: { category: categoryColumns },
+  },
+  winner: { columns: { id: true, name: true, status: true } },
+  tournament: { columns: { id: true, name: true, category_id: true } },
+  tournament_match: {
+    columns: { id: true, bracket_type: true, round_number: true, group_id: true, round_deadline: true },
+    with: { group: { columns: { id: true, group_name: true } } },
+  },
+} as const
+
+const namedPlayer = { columns: { id: true, name: true } } as const
+
+// Without an opponent filter the list also names who proposed, accepted or rejected each step
+const matchListWithActorsRelations = {
+  ...matchListRelations,
+  match_proposed_by_player: namedPlayer,
+  match_accepted_by_player: namedPlayer,
+  match_rejected_by_player: namedPlayer,
+  acceptance_change_approved_by_player: namedPlayer,
+  acceptance_change_rejected_by_player: namedPlayer,
+  score_proposed_by_player: namedPlayer,
+  score_approved_by_player: namedPlayer,
+  reschedule_proposed_by_player: namedPlayer,
+  reschedule_approved_by_player: namedPlayer,
+  reschedule_rejected_by_player: namedPlayer,
+} as const
+
+// scheduled_at descending with NULLS LAST, then newest created first
+const matchListOrder = [sql`${matches.scheduled_at} desc nulls last`, desc(matches.created_at)]
+
+// Matches in the date range, or without scheduled_at (pending proposals). The conditions are OR-ed, as they always were.
+function dateRangeFilter(startDate: string | undefined, endDate: string | undefined): SQL | undefined {
+  const conditions: SQL[] = []
+  if (startDate) conditions.push(gte(matches.scheduled_at, new Date(startDate)))
+  if (endDate) conditions.push(lte(matches.scheduled_at, new Date(endDate)))
+  if (conditions.length === 0) return undefined
+  return or(...conditions, isNull(matches.scheduled_at))
+}
+
+type MatchSortable = { status: string; played_at: Date | null; scheduled_at: Date | null; created_at: Date | null }
+
+function sortTime(date: Date | null): number | null {
+  if (!date) return null
+  const time = date.getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+// Newest first by played_at (completed) or scheduled_at; matches without a date go last
+function compareMatchDates(a: MatchSortable, b: MatchSortable, fallbackToCreated = false): number {
+  const pick = (m: MatchSortable) =>
+    m.status === 'completed' && m.played_at ? m.played_at : (fallbackToCreated ? m.scheduled_at || m.created_at : m.scheduled_at)
+  const dateA = sortTime(pick(a))
+  const dateB = sortTime(pick(b))
+  if (dateA === null && dateB === null) return 0
+  if (dateA === null) return 1
+  if (dateB === null) return -1
+  return dateB - dateA
+}
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
     const page = parseInt(query.page as string) || 1
     const limit = parseInt(query.limit as string) || 10
     const offset = (page - 1) * limit
@@ -15,26 +89,15 @@ export default defineEventHandler(async (event) => {
     const skip24hFilter = query.skip_24h_filter === 'true'
     const opponentId = query.opponent_id as string | undefined
     
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
     
     // Get current player
-    const { data: currentPlayer, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
+    const currentPlayer = await db.query.players.findFirst({
+      columns: { id: true },
+      where: eq(players.user_id, user.id),
+    })
     
-    if (playerError || !currentPlayer) {
+    if (!currentPlayer) {
       // If player doesn't exist, return empty array (user hasn't created profile yet)
       return {
         matches: [],
@@ -48,260 +111,33 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Build query for matches where user is player1, player2, or invited a pending_player2
-    let matchesQuery = supabase
-      .from('matches')
-      .select(`
-        *,
-        player1:players!player1_id(
-          id,
-          name,
-          elo,
-          total_matches_played,
-          placement_matches_completed,
-          category:categories(id, name, description, order)
-        ),
-        player2:players!player2_id(
-          id,
-          name,
-          elo,
-          total_matches_played,
-          placement_matches_completed,
-          category:categories(id, name, description, order)
-        ),
-        pending_player2:pending_players!pending_player2_id(
-          id,
-          name,
-          email,
-          category:categories(id, name, description, order),
-          status,
-          invited_by_player_id
-        ),
-        winner:players!winner_id(
-          id,
-          name,
-          status
-        ),
-        tournament:tournaments(
-          id,
-          name,
-          category_id
-        ),
-        tournament_match:tournament_matches(
-          id,
-          bracket_type,
-          round_number,
-          group_id,
-          round_deadline,
-          group:tournament_groups(
-            id,
-            group_name
-          )
-        )
-      `)
+    const statusFilter = status ? eq(matches.status, status as typeof matches.$inferSelect.status) : ne(matches.status, 'cancelled')
+    const last24h = () => or(gte(matches.scheduled_at, new Date(Date.now() - 24 * 60 * 60 * 1000)), isNull(matches.scheduled_at))
+    const dateFilter = dateRangeFilter(startDate, endDate) ?? (!status && !skip24hFilter ? last24h() : undefined)
     
-    // Apply opponent filter if provided
-    // Filter matches where current player is one player and opponent is the other
+    // Opponent filter: matches between the current player and the opponent, in either seat
     if (opponentId) {
-      // Use two separate queries and combine results
-      // Match where current player is player1 and opponent is player2
-      let query1 = supabase
-        .from('matches')
-        .select(`
-          *,
-          player1:players!player1_id(
-            id,
-            name,
-            elo,
-            total_matches_played,
-            placement_matches_completed,
-            category:categories(id, name, description, order)
+      const rows = await db.query.matches.findMany({
+        with: matchListRelations,
+        where: and(
+          or(
+            and(eq(matches.player1_id, currentPlayer.id), eq(matches.player2_id, opponentId)),
+            and(eq(matches.player1_id, opponentId), eq(matches.player2_id, currentPlayer.id))
           ),
-          player2:players!player2_id(
-            id,
-            name,
-            elo,
-            total_matches_played,
-            placement_matches_completed,
-            category:categories(id, name, description, order)
-          ),
-          pending_player2:pending_players!pending_player2_id(
-            id,
-            name,
-            email,
-            category:categories(id, name, description, order),
-            status,
-            invited_by_player_id
-          ),
-          winner:players!winner_id(
-            id,
-            name,
-            status
-          ),
-          tournament:tournaments(
-            id,
-            name,
-            category_id
-          ),
-          tournament_match:tournament_matches(
-            id,
-            bracket_type,
-            round_number,
-            group_id,
-            round_deadline,
-            group:tournament_groups(
-              id,
-              group_name
-            )
-          )
-        `)
-        .eq('player1_id', currentPlayer.id)
-        .eq('player2_id', opponentId)
-      
-      // Match where current player is player2 and opponent is player1
-      let query2 = supabase
-        .from('matches')
-        .select(`
-          *,
-          player1:players!player1_id(
-            id,
-            name,
-            elo,
-            total_matches_played,
-            placement_matches_completed,
-            category:categories(id, name, description, order)
-          ),
-          player2:players!player2_id(
-            id,
-            name,
-            elo,
-            total_matches_played,
-            placement_matches_completed,
-            category:categories(id, name, description, order)
-          ),
-          pending_player2:pending_players!pending_player2_id(
-            id,
-            name,
-            email,
-            category:categories(id, name, description, order),
-            status,
-            invited_by_player_id
-          ),
-          winner:players!winner_id(
-            id,
-            name,
-            status
-          ),
-          tournament:tournaments(
-            id,
-            name,
-            category_id
-          ),
-          tournament_match:tournament_matches(
-            id,
-            bracket_type,
-            round_number,
-            group_id,
-            round_deadline,
-            group:tournament_groups(
-              id,
-              group_name
-            )
-          )
-        `)
-        .eq('player1_id', opponentId)
-        .eq('player2_id', currentPlayer.id)
-      
-      // Apply status filter if provided
-      if (status) {
-        query1 = query1.eq('status', status)
-        query2 = query2.eq('status', status)
-      } else {
-        query1 = query1.neq('status', 'cancelled')
-        query2 = query2.neq('status', 'cancelled')
-      }
-      
-      // Apply date filters if provided
-      if (startDate || endDate) {
-        if (startDate && endDate) {
-          query1 = query1.or(`scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`)
-          query2 = query2.or(`scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`)
-        } else if (startDate) {
-          query1 = query1.or(`scheduled_at.gte.${startDate},scheduled_at.is.null`)
-          query2 = query2.or(`scheduled_at.gte.${startDate},scheduled_at.is.null`)
-        } else if (endDate) {
-          query1 = query1.or(`scheduled_at.lte.${endDate},scheduled_at.is.null`)
-          query2 = query2.or(`scheduled_at.lte.${endDate},scheduled_at.is.null`)
-        }
-      } else if (!status && !skip24hFilter) {
-        const now = new Date()
-        const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
-        query1 = query1.or(`scheduled_at.gte.${twentyFourHoursAgo.toISOString()},scheduled_at.is.null`)
-        query2 = query2.or(`scheduled_at.gte.${twentyFourHoursAgo.toISOString()},scheduled_at.is.null`)
-      }
-      
-      // Execute both queries
-      const [result1, result2] = await Promise.all([
-        query1.order('scheduled_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
-        query2.order('scheduled_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
-      ])
-      
-      if (result1.error || result2.error) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Failed to fetch matches',
-          data: {
-            error1: result1.error,
-            error2: result2.error
-          }
-        })
-      }
-      
-      // Combine results and remove duplicates
-      const allMatches = [...(result1.data || []), ...(result2.data || [])]
-      const uniqueMatches = Array.from(
-        new Map(allMatches.map((m: any) => [m.id, m])).values()
-      )
-      
-      // Sort combined results
-      uniqueMatches.sort((a: any, b: any) => {
-        const getSortDate = (match: any) => {
-          if (match.status === 'completed' && match.played_at) {
-            return match.played_at
-          }
-          return match.scheduled_at || match.created_at
-        }
-        
-        const dateAStr = getSortDate(a)
-        const dateBStr = getSortDate(b)
-        
-        if (!dateAStr && !dateBStr) return 0
-        if (!dateAStr) return 1
-        if (!dateBStr) return -1
-        
-        const dateA = new Date(dateAStr).getTime()
-        const dateB = new Date(dateBStr).getTime()
-        
-        if (isNaN(dateA) && isNaN(dateB)) return 0
-        if (isNaN(dateA)) return 1
-        if (isNaN(dateB)) return -1
-        
-        return dateB - dateA
+          statusFilter,
+          dateFilter
+        ),
+        orderBy: matchListOrder,
       })
       
-      // Continue with the rest of the logic using uniqueMatches
-      let filteredData = uniqueMatches.map((match: any) => ({ ...match }))
+      rows.sort((a, b) => compareMatchDates(a, b, true))
       
-      // Handle pending matches query separately if needed (only if not filtering by opponent)
-      // For opponent filter, we skip pending matches as they're not relevant
-      
-      // Calculate pagination
-      const total = filteredData.length
+      // Pending-player matches are not relevant for an opponent filter
+      const total = rows.length
       const totalPages = Math.ceil(total / limit)
-      const paginatedData = filteredData.slice(offset, offset + limit)
       
       return {
-        matches: paginatedData,
+        matches: rows.slice(offset, offset + limit),
         pagination: {
           page,
           limit,
@@ -310,310 +146,58 @@ export default defineEventHandler(async (event) => {
           hasMore: page < totalPages
         }
       }
-    } else {
-      // No opponent filter: show all matches where user is player1 or player2
-      matchesQuery = matchesQuery.or(`player1_id.eq.${currentPlayer.id},player2_id.eq.${currentPlayer.id}`)
     }
     
-    // Apply status filter if provided
-    if (status) {
-      matchesQuery = matchesQuery.eq('status', status)
-    } else {
-      // Default: exclude cancelled matches unless explicitly requested
-      matchesQuery = matchesQuery.neq('status', 'cancelled')
-    }
-    
-    // Apply date filters if provided
-    // Include matches with scheduled_at in range OR matches without scheduled_at (for pending proposals)
-    if (startDate || endDate) {
-      let dateFilter = ''
-      if (startDate && endDate) {
-        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`
-      } else if (startDate) {
-        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.is.null`
-      } else if (endDate) {
-        dateFilter = `scheduled_at.lte.${endDate},scheduled_at.is.null`
-      }
-      if (dateFilter) {
-        matchesQuery = matchesQuery.or(dateFilter)
-      }
-    } else if (!status && !skip24hFilter) {
-      // Default: show matches from last 24 hours ONLY when no status filter is set (Todos)
-      // But also include matches without scheduled_at (pending proposals)
-      // Skip this filter if skip_24h_filter is true (e.g., when filtering for pending actions)
-      const now = new Date()
-      const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
-      // Include matches with scheduled_at >= 24 hours ago OR matches without scheduled_at
-      matchesQuery = matchesQuery.or(`scheduled_at.gte.${twentyFourHoursAgo.toISOString()},scheduled_at.is.null`)
-    }
-    
-    const { data: allMatches, error: matchesError } = await matchesQuery
-      .order('scheduled_at', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-    
-    if (matchesError) {
-      console.error('Error fetching matches:', {
-        message: matchesError.message,
-        details: matchesError.details,
-        hint: matchesError.hint,
-        code: matchesError.code,
-        fullError: JSON.stringify(matchesError, null, 2)
-      })
-      
-      throw createError({
-        statusCode: 500,
-        statusMessage: `Failed to fetch matches: ${matchesError.message || 'Unknown error'}`,
-        data: {
-          error: matchesError.message,
-          details: matchesError.details,
-          hint: matchesError.hint,
-          code: matchesError.code
-        }
-      })
-    }
-    
-    // Also fetch matches where user invited a pending_player2
-    let pendingMatchesQuery = supabase
-      .from('matches')
-      .select(`
-        *,
-        player1:players!player1_id(
-          id,
-          name,
-          elo,
-          total_matches_played,
-          placement_matches_completed,
-          category:categories(id, name, description, order)
-        ),
-        player2:players!player2_id(
-          id,
-          name,
-          elo,
-          total_matches_played,
-          placement_matches_completed,
-          category:categories(id, name, description, order)
-        ),
-        pending_player2:pending_players!pending_player2_id(
-          id,
-          name,
-          email,
-          category:categories(id, name, description, order),
-          status,
-          invited_by_player_id
-        ),
-        winner:players!winner_id(
-          id,
-          name,
-          status
-        ),
-        tournament:tournaments(
-          id,
-          name,
-          category_id
-        ),
-        tournament_match:tournament_matches(
-          id,
-          bracket_type,
-          round_number,
-          group_id,
-          round_deadline,
-          group:tournament_groups(
-            id,
-            group_name
-          )
-        )
-      `)
-      .not('pending_player2_id', 'is', null)
-    
-    // Apply same filters to pending matches query
-    if (status) {
-      pendingMatchesQuery = pendingMatchesQuery.eq('status', status)
-    } else {
-      pendingMatchesQuery = pendingMatchesQuery.neq('status', 'cancelled')
-    }
-    
-    // Apply date filters if provided
-    // Include matches with scheduled_at in range OR matches without scheduled_at (for pending proposals)
-    if (startDate || endDate) {
-      let dateFilter = ''
-      if (startDate && endDate) {
-        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.lte.${endDate},scheduled_at.is.null`
-      } else if (startDate) {
-        dateFilter = `scheduled_at.gte.${startDate},scheduled_at.is.null`
-      } else if (endDate) {
-        dateFilter = `scheduled_at.lte.${endDate},scheduled_at.is.null`
-      }
-      if (dateFilter) {
-        pendingMatchesQuery = pendingMatchesQuery.or(dateFilter)
-      }
-    }
-    
-    // Don't apply 24-hour filter to pending matches query - it should show all pending matches
-    
-    const { data: pendingMatches, error: pendingError } = await pendingMatchesQuery
-      .order('scheduled_at', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-    
-    // Combine matches and filter pending matches where user is the inviter
-    let filteredData = (allMatches || []).map((match: any) => ({ ...match }))
-    
-    if (!pendingError && pendingMatches) {
-      // Filter to only include matches where user invited the pending_player2
-      const userPendingMatches = pendingMatches.filter((match: any) => 
-        match.pending_player2?.invited_by_player_id === currentPlayer.id
-      )
-      
-      // Merge and remove duplicates
-      const existingIds = new Set(filteredData.map((m: any) => m.id))
-      const newMatches = userPendingMatches.filter((m: any) => !existingIds.has(m.id))
-      filteredData = [...filteredData, ...newMatches]
-    }
-    
-    // Sort by scheduled_at descending BEFORE enriching (to maintain order)
-    // This ensures proper ordering even after merging results from different queries
-    // For completed matches, use played_at if available, otherwise scheduled_at
-    filteredData.sort((a: any, b: any) => {
-      // Get the appropriate date for sorting
-      const getSortDate = (match: any) => {
-        // For completed matches, prefer played_at if available, otherwise scheduled_at
-        if (match.status === 'completed' && match.played_at) {
-          return match.played_at
-        }
-        return match.scheduled_at
-      }
-      
-      const dateAStr = getSortDate(a)
-      const dateBStr = getSortDate(b)
-      
-      // Only compare if both have dates
-      if (!dateAStr && !dateBStr) return 0
-      if (!dateAStr) return 1 // Put matches without date at the end
-      if (!dateBStr) return -1 // Put matches without date at the end
-      
-      // Parse dates and handle invalid dates
-      const dateA = dateAStr ? new Date(dateAStr).getTime() : 0
-      const dateB = dateBStr ? new Date(dateBStr).getTime() : 0
-      
-      // Handle invalid dates
-      if (isNaN(dateA) && isNaN(dateB)) return 0
-      if (isNaN(dateA)) return 1
-      if (isNaN(dateB)) return -1
-      
-      // Descending order (newest first) - most recent date first
-      return dateB - dateA
+    // Matches where the user is player1 or player2
+    const ownMatches = await db.query.matches.findMany({
+      with: matchListWithActorsRelations,
+      where: and(
+        or(eq(matches.player1_id, currentPlayer.id), eq(matches.player2_id, currentPlayer.id)),
+        statusFilter,
+        dateFilter
+      ),
+      orderBy: matchListOrder,
     })
     
-    // Collect all player IDs from optional relationships for batch lookup
-    const allPlayerIds = new Set<string>()
-    filteredData.forEach((match: any) => {
-      if (match.match_proposed_by) allPlayerIds.add(match.match_proposed_by)
-      if (match.match_accepted_by) allPlayerIds.add(match.match_accepted_by)
-      if (match.match_rejected_by) allPlayerIds.add(match.match_rejected_by)
-      if (match.acceptance_change_approved_by) allPlayerIds.add(match.acceptance_change_approved_by)
-      if (match.acceptance_change_rejected_by) allPlayerIds.add(match.acceptance_change_rejected_by)
-      if (match.score_proposed_by) allPlayerIds.add(match.score_proposed_by)
-      if (match.score_approved_by) allPlayerIds.add(match.score_approved_by)
-      if (match.reschedule_proposed_by) allPlayerIds.add(match.reschedule_proposed_by)
-      if (match.reschedule_approved_by) allPlayerIds.add(match.reschedule_approved_by)
-      if (match.reschedule_rejected_by) allPlayerIds.add(match.reschedule_rejected_by)
+    // Also matches where the user invited the pending_player2 (no 24-hour filter: show all pending matches)
+    const invitedMatches = await db.query.matches.findMany({
+      with: matchListWithActorsRelations,
+      where: and(
+        isNotNull(matches.pending_player2_id),
+        exists(
+          db
+            .select({ id: pending_players.id })
+            .from(pending_players)
+            .where(
+              and(
+                eq(pending_players.id, matches.pending_player2_id),
+                eq(pending_players.invited_by_player_id, currentPlayer.id)
+              )
+            )
+        ),
+        statusFilter,
+        dateRangeFilter(startDate, endDate)
+      ),
+      orderBy: matchListOrder,
     })
     
-    // Batch fetch all optional player relationships in a single query
-    let playerMap = new Map<string, { id: string; name: string }>()
-    if (allPlayerIds.size > 0) {
-      const { data: players, error: playersError } = await supabase
-        .from('players')
-        .select('id, name')
-        .in('id', Array.from(allPlayerIds))
-      
-      if (!playersError && players) {
-        playerMap = new Map(players.map((p: any) => [p.id, p]))
-      }
-    }
+    // Merge and remove duplicates
+    const existingIds = new Set(ownMatches.map((m) => m.id))
+    const filteredData = [...ownMatches, ...invitedMatches.filter((m) => !existingIds.has(m.id))]
     
-    // Enrich matches with optional player relationships using the batched data
-    filteredData = filteredData.map((match: any) => {
-      const enriched: any = { ...match }
-      
-      enriched.match_proposed_by_player = match.match_proposed_by 
-        ? playerMap.get(match.match_proposed_by) || null 
-        : null
-      enriched.match_accepted_by_player = match.match_accepted_by 
-        ? playerMap.get(match.match_accepted_by) || null 
-        : null
-      enriched.match_rejected_by_player = match.match_rejected_by 
-        ? playerMap.get(match.match_rejected_by) || null 
-        : null
-      enriched.acceptance_change_approved_by_player = match.acceptance_change_approved_by 
-        ? playerMap.get(match.acceptance_change_approved_by) || null 
-        : null
-      enriched.acceptance_change_rejected_by_player = match.acceptance_change_rejected_by 
-        ? playerMap.get(match.acceptance_change_rejected_by) || null 
-        : null
-      enriched.score_proposed_by_player = match.score_proposed_by 
-        ? playerMap.get(match.score_proposed_by) || null 
-        : null
-      enriched.score_approved_by_player = match.score_approved_by 
-        ? playerMap.get(match.score_approved_by) || null 
-        : null
-      enriched.reschedule_proposed_by_player = match.reschedule_proposed_by 
-        ? playerMap.get(match.reschedule_proposed_by) || null 
-        : null
-      enriched.reschedule_approved_by_player = match.reschedule_approved_by 
-        ? playerMap.get(match.reschedule_approved_by) || null 
-        : null
-      enriched.reschedule_rejected_by_player = match.reschedule_rejected_by 
-        ? playerMap.get(match.reschedule_rejected_by) || null 
-        : null
-      
-      // Flatten tournament_match if it exists
-      if (match.tournament_match && Array.isArray(match.tournament_match) && match.tournament_match.length > 0) {
-        enriched.tournament_match = match.tournament_match[0]
-      } else if (match.tournament_match && !Array.isArray(match.tournament_match)) {
-        enriched.tournament_match = match.tournament_match
-      }
-      
-      return enriched
-    })
+    // Newest first: played_at for completed matches, otherwise scheduled_at; undated matches last
+    filteredData.sort((a, b) => compareMatchDates(a, b))
     
-    // Re-sort after enriching to ensure correct order (in case enrichment changed anything)
-    // For completed matches, use played_at if available, otherwise scheduled_at
-    // For other matches, use scheduled_at
-    filteredData.sort((a: any, b: any) => {
-      // Get the appropriate date for sorting
-      const getSortDate = (match: any) => {
-        // For completed matches, prefer played_at if available, otherwise scheduled_at
-        if (match.status === 'completed' && match.played_at) {
-          return match.played_at
-        }
-        return match.scheduled_at
-      }
-      
-      const dateAStr = getSortDate(a)
-      const dateBStr = getSortDate(b)
-      
-      // Only compare if both have dates
-      if (!dateAStr && !dateBStr) return 0
-      if (!dateAStr) return 1 // Put matches without date at the end
-      if (!dateBStr) return -1 // Put matches without date at the end
-      
-      // Parse dates and handle invalid dates
-      const dateA = dateAStr ? new Date(dateAStr).getTime() : 0
-      const dateB = dateBStr ? new Date(dateBStr).getTime() : 0
-      
-      // Handle invalid dates
-      if (isNaN(dateA) && isNaN(dateB)) return 0
-      if (isNaN(dateA)) return 1
-      if (isNaN(dateB)) return -1
-      
-      // Descending order (newest first) - most recent date first
-      return dateB - dateA
-    })
+    // One tournament_match per match: flatten the relation to its first row
+    const enrichedData = filteredData.map((match) => ({
+      ...match,
+      tournament_match: match.tournament_match.length > 0 ? match.tournament_match[0] : match.tournament_match,
+    }))
     
     // Calculate pagination
     const total = filteredData.length
     const totalPages = Math.ceil(total / limit)
-    const paginatedData = filteredData.slice(offset, offset + limit)
+    const paginatedData = enrichedData.slice(offset, offset + limit)
     
     return {
       matches: paginatedData,

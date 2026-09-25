@@ -1,148 +1,68 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { and, count, desc, eq, exists, inArray, not } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, rating_history } from '~/server/db/schema'
+import { fallbackMatchCondition } from '~/server/utils/rating-system'
+import { requireAdmin } from '~/server/utils/session'
+
+const categoryColumns = { columns: { id: true, name: true, description: true, order: true } } as const
+const listedPlayer = { columns: { id: true, name: true, status: true }, with: { category: categoryColumns } } as const
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     
     // Pagination parameters
     const limit = Math.min(query.limit ? parseInt(query.limit as string) : 50, 500)
     const offset = query.offset ? parseInt(query.offset as string) : 0
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const db = useDb()
 
-    await requireAdmin(clerkId)
-
-    const supabase = getSupabaseAdmin()
-
-    // Build query for fallback matches
-    // Fallback matches are:
-    // 1. llm_calculation_failed = true (LLM attempted but failed)
-    // 2. OR (llm_elo_calculated = false AND llm_calculation_failed = false) (no API key/not attempted)
-    let queryBuilder = supabase
-      .from('matches')
-      .select(`
-        *,
-        player1:players!player1_id(
-          id,
-          name,
-          status,
-          category:categories(id, name, description, order)
-        ),
-        player2:players!player2_id(
-          id,
-          name,
-          status,
-          category:categories(id, name, description, order)
-        ),
-        pending_player2:pending_players(
-          id,
-          name,
-          email,
-          category:categories(id, name, description, order),
-          status
-        ),
-        winner:players!winner_id(
-          id,
-          name,
-          status
+    // Fallback matches (see fallbackMatchCondition; friendly matches are not among them).
+    // Matches that already have an active (non-reversed) rating are left out.
+    const where = and(
+      fallbackMatchCondition(),
+      not(
+        exists(
+          db
+            .select({ id: rating_history.id })
+            .from(rating_history)
+            .where(and(eq(rating_history.match_id, matches.id), eq(rating_history.rating_reversed, false)))
         )
-      `)
-      .or('llm_calculation_failed.eq.true,and(llm_elo_calculated.eq.false,llm_calculation_failed.eq.false)')
-      .eq('status', 'completed')
-      .not('score', 'is', null)
+      )
+    )
 
-    // First, get all match IDs that have active rating to exclude them
-    // We'll use this to filter both the query and the count
-    const { data: allFallbackMatchIds } = await supabase
-      .from('matches')
-      .select('id')
-      .or('llm_calculation_failed.eq.true,and(llm_elo_calculated.eq.false,llm_calculation_failed.eq.false)')
-      .eq('status', 'completed')
-      .not('score', 'is', null)
+    const [{ total }] = await db.select({ total: count() }).from(matches).where(where)
 
-    let matchesWithRatingIds: string[] = []
-    if (allFallbackMatchIds && allFallbackMatchIds.length > 0) {
-      const allMatchIds = allFallbackMatchIds.map((m: any) => m.id)
-      const { data: ratingHistoryForAll } = await supabase
-        .from('rating_history')
-        .select('match_id')
-        .in('match_id', allMatchIds)
-        .eq('rating_reversed', false)
-      
-      if (ratingHistoryForAll && Array.isArray(ratingHistoryForAll)) {
-        matchesWithRatingIds = ratingHistoryForAll
-          .map((entry: any) => entry.match_id)
-          .filter((id: string) => id) // Remove null/undefined
-      }
-    }
+    const paginatedMatches = await db.query.matches.findMany({
+      where,
+      with: {
+        player1: listedPlayer,
+        player2: listedPlayer,
+        pending_player2: {
+          columns: { id: true, name: true, email: true, status: true },
+          with: { category: categoryColumns },
+        },
+        winner: { columns: { id: true, name: true, status: true } },
+      },
+      orderBy: [desc(matches.created_at)],
+      limit,
+      offset,
+    })
 
-    // Get total count excluding matches with rating
-    const totalFallbackMatches = allFallbackMatchIds ? allFallbackMatchIds.length : 0
-    const count = totalFallbackMatches - matchesWithRatingIds.length
-
-    // Apply pagination and ordering
-    // Note: We'll filter out matches with rating after fetching
-    // Fetch a bit more to account for filtered matches
-    const fetchLimit = matchesWithRatingIds.length > 0 ? Math.min(limit * 3, 500) : limit
-    const { data: matches, error: fetchError } = await queryBuilder
-      .order('created_at', { ascending: false })
-      .range(0, fetchLimit - 1)
-
-    if (fetchError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch fallback matches',
-        data: fetchError
-      })
-    }
-
-    if (!matches || matches.length === 0) {
-      return {
-        data: [],
-        total: 0,
-        page: Math.floor(offset / limit) + 1,
-        page_size: limit
-      }
-    }
-
-    // Filter out matches that already have active rating
-    const matchesWithRatingSet = new Set(matchesWithRatingIds)
-    let matchesWithoutRating = matches.filter((match: any) => !matchesWithRatingSet.has(match.id))
-    
-    // Apply pagination after filtering
-    const paginatedMatches = matchesWithoutRating.slice(offset, offset + limit)
-
-    // Get rating history for remaining matches to check reprocessed status
-    const matchIds = paginatedMatches.map((m: any) => m.id)
-    const { data: ratingHistory, error: historyError } = await supabase
-      .from('rating_history')
-      .select('match_id, rating_reversed')
-      .in('match_id', matchIds)
-      .eq('rating_reversed', true) // Only get reprocessed ones
-
-    if (historyError) {
-      console.error('Error fetching rating history for reprocessed status:', historyError)
-    }
-
-    // Create set of match IDs that have been reprocessed
-    const reprocessedMatchIds = new Set<string>()
-    if (ratingHistory && Array.isArray(ratingHistory)) {
-      ratingHistory.forEach((entry: any) => {
-        if (entry.match_id) {
-          reprocessedMatchIds.add(entry.match_id)
-        }
-      })
-    }
+    // Matches with reversed rating history have been reprocessed before
+    const matchIds = paginatedMatches.map((m) => m.id)
+    const reprocessed = matchIds.length > 0
+      ? await db
+          .selectDistinct({ match_id: rating_history.match_id })
+          .from(rating_history)
+          .where(and(inArray(rating_history.match_id, matchIds), eq(rating_history.rating_reversed, true)))
+      : []
+    const reprocessedMatchIds = new Set(reprocessed.map((r) => r.match_id))
 
     // Enrich matches with reprocessed status and fallback reason
-    const enrichedMatches = paginatedMatches.map((match: any) => {
+    const enrichedMatches = paginatedMatches.map((match) => {
       const isReprocessed = reprocessedMatchIds.has(match.id)
       
       // Determine fallback reason
@@ -178,7 +98,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       data: enrichedMatches,
-      total: count,
+      total,
       page: Math.floor(offset / limit) + 1,
       page_size: limit
     }

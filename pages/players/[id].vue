@@ -221,7 +221,6 @@
         </span>
         <div class="list-surface">
           <div class="list-row"><span class="row-copy"><strong>Categoría</strong><span class="meta">{{ publicPendingPlayer.category?.name || 'No seleccionada' }}<template v-if="publicPendingPlayer.category?.description"> · {{ publicPendingPlayer.category.description }}</template></span></span></div>
-          <div class="list-row"><span class="row-copy"><strong>Correo electrónico</strong><span class="meta">{{ publicPendingPlayer.email || 'No proporcionado' }}</span></span></div>
           <div class="list-row"><span class="row-copy"><strong>Estado</strong><span class="meta">{{ getStatusLabel(publicPendingPlayer.status) }}</span></span></div>
         </div>
         <p class="meta">Este jugador fue invitado a un partido pero aún no completa su registro. Cuando lo haga, verás su perfil con estadísticas y puntuación SR.</p>

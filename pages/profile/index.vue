@@ -30,7 +30,7 @@
           <div class="identity">
             <span class="avatar avatar-lg" aria-hidden="true">{{ getPlayerInitials(player.name) }}</span>
             <h1>{{ player.name }}</h1>
-            <p v-if="user?.primaryEmailAddress?.emailAddress">{{ user.primaryEmailAddress.emailAddress }}</p>
+            <p v-if="user?.email">{{ user.email }}</p>
             <p v-if="player.category?.name">
               {{ player.category.name }}<template v-if="player.category.description"> · {{ player.category.description }}</template>
             </p>
@@ -136,7 +136,7 @@
         <section class="panel account" aria-labelledby="account-title">
           <div class="account__copy">
             <h2 id="account-title">Cuenta</h2>
-            <p class="meta">{{ player.phone_number || 'Sin teléfono' }} · {{ user?.primaryEmailAddress?.emailAddress || 'Email no disponible' }}</p>
+            <p class="meta">{{ player.phone_number || 'Sin teléfono' }} · {{ user?.email || 'Email no disponible' }}</p>
           </div>
           <button type="button" class="btn-secondary" @click="openUserProfileModal">
             Gestionar cuenta
@@ -156,7 +156,7 @@
       </NuxtLink>
     </div>
 
-    <!-- Account management (Clerk) -->
+    <!-- Account management -->
     <Transition name="modal">
       <div v-if="showUserProfileModal" class="account-modal" role="dialog" aria-modal="true" aria-label="Gestionar cuenta">
         <div class="account-modal__backdrop" @click="closeUserProfileModal"></div>
@@ -164,17 +164,9 @@
           <button type="button" class="icon-button account-modal__close" aria-label="Cerrar" @click="closeUserProfileModal">
             <Icon name="heroicons:x-mark" class="w-5 h-5" aria-hidden="true" />
           </button>
-          <ClientOnly>
-            <div class="user-profile-wrapper">
-              <UserProfile :routing="'hash'" />
-            </div>
-            <template #fallback>
-              <div class="loading-state">
-                <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
-                <p class="loading-text">Cargando tu cuenta…</p>
-              </div>
-            </template>
-          </ClientOnly>
+          <div class="user-profile-wrapper">
+            <AccountSecurity />
+          </div>
         </div>
       </div>
     </Transition>
@@ -182,7 +174,6 @@
 </template>
 
 <script setup lang="ts">
-import { UserProfile } from '@clerk/vue'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { tierName } from '~/utils/tiers'
 
@@ -190,14 +181,10 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const auth = useAuth()
-const { isLoaded: authLoaded, isSignedIn } = auth
-const { isLoaded: userLoaded, user } = useUser()
+const { isLoaded, isSignedIn, user, userId } = useAuthState()
 const { player, loading, error, fetchPlayer } = usePlayer()
 const { status: decayStatus, fetchDecayStatus, checkDecayOnLogin } = useMonthlyDecay()
 
-const isLoaded = computed(() => authLoaded.value && userLoaded.value)
-const userId = computed(() => user.value?.id || null)
 const showUserProfileModal = ref(false)
 
 // Rating stats from history

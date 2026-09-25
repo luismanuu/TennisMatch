@@ -284,7 +284,6 @@ const handleInviteOrganizer = async () => {
     await $fetch('/api/admin/organizers', {
       method: 'POST',
       body: {
-        clerk_id: userId.value,
         ...organizerForm.value
       }
     })
@@ -310,7 +309,6 @@ const handleDeleteOrganizer = async (organizerId: string, organizerName: string)
     await $fetch(`/api/admin/organizers/${organizerId}`, {
       method: 'DELETE',
       query: {
-        clerk_id: userId.value
       }
     })
     toast.success(`Organizador "${organizerName}" eliminado exitosamente`)
@@ -330,7 +328,6 @@ const handleResendInvitation = async (invitationId: string) => {
     await $fetch(`/api/admin/invitations/${invitationId}/resend`, {
       method: 'POST',
       body: {
-        clerk_id: userId.value
       }
     })
     toast.success('Invitación reenviada exitosamente')
@@ -352,7 +349,6 @@ const handleDeleteInvitation = async (invitationId: string) => {
     await $fetch(`/api/admin/invitations/${invitationId}`, {
       method: 'DELETE',
       body: {
-        clerk_id: userId.value
       }
     })
     toast.success('Invitación eliminada exitosamente')

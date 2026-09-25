@@ -26,7 +26,7 @@ export interface City {
 
 export interface Player {
   id: string
-  clerk_id: string
+  user_id: string
   name: string
   phone_number?: string
   city_id?: string
@@ -78,7 +78,6 @@ export interface PendingPlayer {
   category?: Category
   invited_by_player_id?: string | null
   invited_by_player?: Player
-  clerk_invitation_id?: string
   invitation_token?: string
   status: 'pending' | 'accepted' | 'expired' | 'revoked'
   created_at: string
@@ -255,7 +254,7 @@ export interface TournamentStanding {
 
 export interface TournamentOrganizer {
   id: string
-  clerk_id: string
+  user_id: string
   name: string
   email?: string
   created_at: string

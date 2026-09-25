@@ -459,7 +459,6 @@ const loadTournamentStats = async () => {
     // Get tournament matches
     const matches = await $fetch(`/api/admin/tournaments/${tournamentId}/matches`, {
       query: {
-        clerk_id: userId.value
       }
     }).catch(() => [])
 

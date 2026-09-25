@@ -1,14 +1,47 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
-import { checkIsOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
-import { checkIsAdmin } from '~/server/utils/admin'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, players, tournament_matches } from '~/server/db/schema'
+import { requireUser } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { updateBracketAfterMatch, recalculateGroupStandings } from '~/server/utils/tournament-brackets'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { createMatchNotification, dismissExistingNotifications } from '~/server/utils/notifications'
 import { datetimeLocalToISO, isDateInFuture } from '~/server/utils/timezone'
 import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
+const namedPlayer = { columns: { id: true, name: true } } as const
+const playerWithCategory = {
+  columns: { id: true, name: true },
+  with: { category: { columns: { id: true, name: true, description: true, order: true } } },
+} as const
+
+// The match as this route has always returned it (the Vue pages read these nested keys)
+const matchResponseRelations = {
+  player1: playerWithCategory,
+  player2: playerWithCategory,
+  pending_player2: {
+    columns: { id: true, name: true, email: true, status: true },
+    with: { category: { columns: { id: true, name: true, description: true, order: true } } },
+  },
+  match_proposed_by_player: namedPlayer,
+  match_accepted_by_player: namedPlayer,
+  match_rejected_by_player: namedPlayer,
+  acceptance_change_approved_by_player: namedPlayer,
+  acceptance_change_rejected_by_player: namedPlayer,
+  score_proposed_by_player: namedPlayer,
+  score_approved_by_player: namedPlayer,
+  schedule_proposed_by_player: namedPlayer,
+  schedule_approved_by_player: namedPlayer,
+  schedule_rejected_by_player: namedPlayer,
+  reschedule_proposed_by_player: namedPlayer,
+  reschedule_approved_by_player: namedPlayer,
+  reschedule_rejected_by_player: namedPlayer,
+  winner: namedPlayer,
+} as const
+
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const matchId = getRouterParam(event, 'id')
     
@@ -20,33 +53,21 @@ export default defineEventHandler(async (event) => {
     }
     
     const body = await readBody<{
-      clerk_id: string
       action: 'update_status' | 'propose_score' | 'approve_score' | 'reject_score' | 'cancel' | 'accept_match' | 'reject_match' | 'propose_schedule' | 'approve_schedule' | 'reject_schedule' | 'propose_reschedule' | 'approve_reschedule' | 'reject_reschedule' | 'approve_acceptance_change' | 'reject_acceptance_change' | 'organizer_set_result'
       data?: UpdateMatchStatusPayload | ProposeScorePayload | ApproveScorePayload | ProposeReschedulePayload | { score?: string, winner_id: string, is_wo?: boolean } | { scheduled_at?: string, location?: string }
     }>(event)
     
-    const { clerk_id, action, data } = body
+    const { action, data } = body
     
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
     
     // Get current player
-    const { data: currentPlayer, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
+    const currentPlayer = await db.query.players.findFirst({
+      columns: { id: true },
+      where: eq(players.user_id, user.id),
+    })
     
-    if (playerError || !currentPlayer) {
+    if (!currentPlayer) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Player not found'
@@ -54,25 +75,15 @@ export default defineEventHandler(async (event) => {
     }
     
     // Fetch match to verify user is part of it or is organizer
-    const { data: match, error: matchError } = await supabase
-      .from('matches')
-      .select(`
-        *,
-        pending_player2:pending_players(
-          id,
-          status,
-          invited_by_player_id
-        ),
-        tournament:tournaments(
-          id,
-          organizer_id,
-          created_by
-        )
-      `)
-      .eq('id', matchId)
-      .single()
+    const match = await db.query.matches.findFirst({
+      where: eq(matches.id, matchId),
+      with: {
+        pending_player2: { columns: { id: true, status: true, invited_by_player_id: true } },
+        tournament: { columns: { id: true, organizer_id: true, created_by: true } },
+      },
+    })
     
-    if (matchError || !match) {
+    if (!match) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Match not found'
@@ -82,11 +93,9 @@ export default defineEventHandler(async (event) => {
     // Check if user is organizer of the tournament (if match belongs to a tournament)
     let isTournamentOrganizer = false
     if (match.tournament_id && match.tournament) {
-      const clerkUser = await getClerkUser(clerk_id)
-      const role = clerkUser.publicMetadata?.role as string | undefined
-      if (role === 'tournament_organizer') {
+      if (user.role === 'tournament_organizer') {
         try {
-          await verifyOrganizerOwnsTournament(currentPlayer.id, match.tournament_id, supabase)
+          await verifyOrganizerOwnsTournament(currentPlayer.id, match.tournament_id)
           isTournamentOrganizer = true
         } catch (err) {
           // Not organizer of this tournament
@@ -96,14 +105,14 @@ export default defineEventHandler(async (event) => {
     }
     
     // Check if user is admin
-    const isAdmin = await checkIsAdmin(clerk_id)
+    const isAdmin = user.role === 'admin'
     
     // Verify user is part of the match (unless they're organizer and action is organizer-specific, or admin)
     if (body.action !== 'organizer_set_result' && !isAdmin) {
       const isPlayer1 = match.player1_id === currentPlayer.id
       const isPlayer2 = match.player2_id === currentPlayer.id
-      const isPendingPlayerInviter = match.pending_player2_id && 
-        (match.pending_player2 as any)?.invited_by_player_id === currentPlayer.id
+      const isPendingPlayerInviter = match.pending_player2_id &&
+        match.pending_player2?.invited_by_player_id === currentPlayer.id
       
       if (!isPlayer1 && !isPlayer2 && !isPendingPlayerInviter) {
         throw createError({
@@ -119,13 +128,13 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    let updateData: any = {}
+    const updateData: Partial<typeof matches.$inferInsert> = {}
     
     // Track notifications to create after match update
     const pendingNotifications: Array<{
       playerId: string
       type: 'match_proposal' | 'match_created' | 'score_proposal' | 'schedule_proposal' | 'reschedule_proposal' | 'acceptance_change'
-      metadata?: Record<string, any>
+      metadata?: Record<string, unknown>
     }> = []
     
     // Track notifications to dismiss after match update
@@ -144,10 +153,25 @@ export default defineEventHandler(async (event) => {
           })
         }
         
+        // A match is completed only by an approved score or an organizer result, which also rates it;
+        // a completed match keeps its status, so its ratings never belong to a match that is not completed.
+        if (statusData.status === 'completed') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'A match is completed by approving its score'
+          })
+        }
+        if (match.status === 'completed') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Cannot change the status of a completed match'
+          })
+        }
+
         // Validate status transition
         if (statusData.status === 'active' && match.status === 'scheduled') {
           // Cannot activate if opponent is pending
-          if (match.pending_player2_id && (match.pending_player2 as any)?.status === 'pending') {
+          if (match.pending_player2_id && match.pending_player2?.status === 'pending') {
             throw createError({
               statusCode: 400,
               statusMessage: 'Cannot activate match: opponent is still pending registration'
@@ -208,7 +232,7 @@ export default defineEventHandler(async (event) => {
         updateData.score = scoreData.score
         updateData.winner_id = scoreData.winner_id
         updateData.score_proposed_by = currentPlayer.id
-        updateData.score_proposed_at = new Date().toISOString()
+        updateData.score_proposed_at = new Date()
         
         // Notify opponent about score proposal (after update completes)
         const opponentId = match.player1_id === currentPlayer.id ? match.player2_id : match.player1_id
@@ -252,7 +276,7 @@ export default defineEventHandler(async (event) => {
         
         updateData.score_approved_by = currentPlayer.id
         updateData.status = 'completed'
-        updateData.played_at = new Date().toISOString()
+        updateData.played_at = new Date()
         
         // Dismiss score proposal notifications for both players
         if (match.player1_id) {
@@ -407,7 +431,7 @@ export default defineEventHandler(async (event) => {
                 statusMessage: 'Proposed scheduled date must be in the future'
               })
             }
-            updateData.acceptance_proposed_scheduled_at = scheduledAtISO
+            updateData.acceptance_proposed_scheduled_at = new Date(scheduledAtISO)
           }
           
           if (acceptanceData.location !== undefined) {
@@ -686,14 +710,13 @@ export default defineEventHandler(async (event) => {
         
         // Check if this is a tournament match and validate round deadline
         if (match.tournament_id) {
-          const { data: tournamentMatch } = await supabase
-            .from('tournament_matches')
-            .select('round_deadline')
-            .eq('match_id', matchId)
-            .single()
+          const tournamentMatch = await db.query.tournament_matches.findFirst({
+            columns: { round_deadline: true },
+            where: eq(tournament_matches.match_id, matchId),
+          })
           
           if (tournamentMatch?.round_deadline) {
-            const deadline = new Date(tournamentMatch.round_deadline)
+            const deadline = tournamentMatch.round_deadline
             if (scheduledDate > deadline) {
               throw createError({
                 statusCode: 400,
@@ -704,8 +727,8 @@ export default defineEventHandler(async (event) => {
         }
         
         updateData.schedule_proposed_by = currentPlayer.id
-        updateData.schedule_proposed_at = new Date().toISOString()
-        updateData.schedule_proposed_scheduled_at = scheduledAtISO
+        updateData.schedule_proposed_at = new Date()
+        updateData.schedule_proposed_scheduled_at = scheduledDate
         // Clear any previous approval/rejection
         updateData.schedule_approved_by = null
         updateData.schedule_rejected_by = null
@@ -868,14 +891,13 @@ export default defineEventHandler(async (event) => {
         
         // Check if this is a tournament match and validate round deadline
         if (match.tournament_id) {
-          const { data: tournamentMatch } = await supabase
-            .from('tournament_matches')
-            .select('round_deadline')
-            .eq('match_id', matchId)
-            .single()
+          const tournamentMatch = await db.query.tournament_matches.findFirst({
+            columns: { round_deadline: true },
+            where: eq(tournament_matches.match_id, matchId),
+          })
           
           if (tournamentMatch?.round_deadline) {
-            const deadline = new Date(tournamentMatch.round_deadline)
+            const deadline = tournamentMatch.round_deadline
             if (newDate > deadline) {
               throw createError({
                 statusCode: 400,
@@ -886,8 +908,8 @@ export default defineEventHandler(async (event) => {
         }
         
         updateData.reschedule_proposed_by = currentPlayer.id
-        updateData.reschedule_proposed_at = new Date().toISOString()
-        updateData.reschedule_proposed_scheduled_at = rescheduledAtISO
+        updateData.reschedule_proposed_at = new Date()
+        updateData.reschedule_proposed_scheduled_at = newDate
         // Clear any previous approval/rejection
         updateData.reschedule_approved_by = null
         updateData.reschedule_rejected_by = null
@@ -1007,6 +1029,14 @@ export default defineEventHandler(async (event) => {
       case 'organizer_set_result': {
         // Only organizers can use this action (already verified above)
         const resultData = data as { score?: string, winner_id: string, is_wo?: boolean }
+
+        // A completed match is already rated; a new result would disagree with its ratings
+        if (match.status === 'completed') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Este partido ya está completado: no puedes cambiar su resultado.'
+          })
+        }
         
         if (!resultData?.winner_id) {
           throw createError({
@@ -1038,7 +1068,7 @@ export default defineEventHandler(async (event) => {
         
         updateData.winner_id = resultData.winner_id
         updateData.status = 'completed'
-        updateData.played_at = new Date().toISOString()
+        updateData.played_at = new Date()
         
         // Clear any pending proposals
         updateData.score_proposed_by = null
@@ -1052,7 +1082,7 @@ export default defineEventHandler(async (event) => {
         
         // If match was scheduled but never played, set scheduled_at to now
         if (!match.scheduled_at) {
-          updateData.scheduled_at = new Date().toISOString()
+          updateData.scheduled_at = new Date()
         }
         
         break
@@ -1066,88 +1096,13 @@ export default defineEventHandler(async (event) => {
     }
     
     // Update the match
-    const { data: updatedMatch, error: updateError } = await supabase
-      .from('matches')
-      .update(updateData)
-      .eq('id', matchId)
-      .select(`
-        *,
-        player1:players!matches_player1_id_fkey(
-          id,
-          name,
-          category:categories(id, name, description, order)
-        ),
-        player2:players!matches_player2_id_fkey(
-          id,
-          name,
-          category:categories(id, name, description, order)
-        ),
-        pending_player2:pending_players(
-          id,
-          name,
-          email,
-          category:categories(id, name, description, order),
-          status
-        ),
-        match_proposed_by_player:players!matches_match_proposed_by_fkey(
-          id,
-          name
-        ),
-        match_accepted_by_player:players!matches_match_accepted_by_fkey(
-          id,
-          name
-        ),
-        match_rejected_by_player:players!matches_match_rejected_by_fkey(
-          id,
-          name
-        ),
-        acceptance_change_approved_by_player:players!matches_acceptance_change_approved_by_fkey(
-          id,
-          name
-        ),
-        acceptance_change_rejected_by_player:players!matches_acceptance_change_rejected_by_fkey(
-          id,
-          name
-        ),
-        score_proposed_by_player:players!matches_score_proposed_by_fkey(
-          id,
-          name
-        ),
-        score_approved_by_player:players!matches_score_approved_by_fkey(
-          id,
-          name
-        ),
-        reschedule_proposed_by_player:players!matches_reschedule_proposed_by_fkey(
-          id,
-          name
-        ),
-        reschedule_approved_by_player:players!matches_reschedule_approved_by_fkey(
-          id,
-          name
-        ),
-        reschedule_rejected_by_player:players!matches_reschedule_rejected_by_fkey(
-          id,
-          name
-        ),
-        winner:players!matches_winner_id_fkey(
-          id,
-          name
-        )
-      `)
-      .single()
+    const [updatedRow] = await db
+      .update(matches)
+      .set(updateData)
+      .where(eq(matches.id, matchId))
+      .returning({ id: matches.id })
     
-    if (updateError) {
-      console.error('Update match error:', updateError)
-      console.error('Update data:', JSON.stringify(updateData, null, 2))
-      console.error('Action:', action)
-      throw createError({
-        statusCode: 500,
-        statusMessage: `Failed to update match: ${updateError.message || 'Unknown error'}. ${updateError.details || ''}`,
-        data: updateError
-      })
-    }
-    
-    if (!updatedMatch) {
+    if (!updatedRow) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Match not found after update'
@@ -1156,84 +1111,42 @@ export default defineEventHandler(async (event) => {
     
     // Process pending notifications (create new ones)
     for (const notification of pendingNotifications) {
-      await createMatchNotification(
-        supabase,
-        notification.playerId,
-        matchId,
-        notification.type,
-        notification.metadata
-      )
+      await createMatchNotification(notification.playerId, matchId, notification.type, notification.metadata)
     }
     
     // Process dismiss notifications (auto-dismiss when action is taken)
     for (const dismiss of dismissNotifications) {
-      await dismissExistingNotifications(
-        supabase,
-        dismiss.playerId,
-        matchId,
-        dismiss.types
-      )
+      await dismissExistingNotifications(dismiss.playerId, matchId, dismiss.types)
     }
     
-    // Fetch schedule-related players separately if needed (in case FK constraints don't exist)
-    if ((updatedMatch as any).schedule_proposed_by) {
-      const { data: scheduleProposer } = await supabase
-        .from('players')
-        .select('id, name')
-        .eq('id', (updatedMatch as any).schedule_proposed_by)
-        .single()
-      if (scheduleProposer) {
-        (updatedMatch as any).schedule_proposed_by_player = scheduleProposer
-      }
-    }
+    const updatedMatch = await db.query.matches.findFirst({
+      where: eq(matches.id, matchId),
+      with: matchResponseRelations,
+    })
     
-    if ((updatedMatch as any).schedule_approved_by) {
-      const { data: scheduleApprover } = await supabase
-        .from('players')
-        .select('id, name')
-        .eq('id', (updatedMatch as any).schedule_approved_by)
-        .single()
-      if (scheduleApprover) {
-        (updatedMatch as any).schedule_approved_by_player = scheduleApprover
-      }
-    }
-    
-    if ((updatedMatch as any).schedule_rejected_by) {
-      const { data: scheduleRejecter } = await supabase
-        .from('players')
-        .select('id, name')
-        .eq('id', (updatedMatch as any).schedule_rejected_by)
-        .single()
-      if (scheduleRejecter) {
-        (updatedMatch as any).schedule_rejected_by_player = scheduleRejecter
-      }
+    if (!updatedMatch) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Match not found after update'
+      })
     }
     
     // If match was completed and belongs to a tournament, update bracket and standings
     if (updatedMatch.status === 'completed' && updatedMatch.winner_id && updatedMatch.tournament_id) {
-      console.log(`[PUT /api/matches/${matchId}] Match completed, checking if tournament match...`)
       try {
-        // Get tournament match info to check if it's a group stage match
-        const { data: tournamentMatch } = await supabase
-          .from('tournament_matches')
-          .select('tournament_id, bracket_type, group_id')
-          .eq('match_id', matchId)
-          .single()
+        const tournamentMatch = await db.query.tournament_matches.findFirst({
+          columns: { tournament_id: true, bracket_type: true, group_id: true },
+          where: eq(tournament_matches.match_id, matchId),
+        })
 
         if (tournamentMatch) {
-          console.log(`[PUT /api/matches/${matchId}] Tournament match found, bracket_type: ${tournamentMatch.bracket_type}, calling updateBracketAfterMatch...`)
           // Update bracket progression
-          await updateBracketAfterMatch(matchId, updatedMatch.winner_id, supabase)
-          console.log(`[PUT /api/matches/${matchId}] updateBracketAfterMatch completed`)
+          await updateBracketAfterMatch(matchId, updatedMatch.winner_id)
 
           // If it's a group stage match, recalculate standings
           if (tournamentMatch.bracket_type === 'group' && tournamentMatch.group_id) {
             try {
-              await recalculateGroupStandings(
-                tournamentMatch.tournament_id,
-                tournamentMatch.group_id,
-                supabase
-              )
+              await recalculateGroupStandings(tournamentMatch.tournament_id, tournamentMatch.group_id)
             } catch (standingsError) {
               // Log error but don't fail the request
               console.error('Error recalculating standings after match:', standingsError)
@@ -1246,23 +1159,19 @@ export default defineEventHandler(async (event) => {
       }
     }
     
-    // Update player ratings after match completion (for ALL matches - tournament and regular)
-    // Execute asynchronously in background to avoid blocking the response
+    // Update player ratings after match completion (for ALL matches - tournament and regular).
+    // Awaited so the work finishes before a serverless function is frozen; it runs in its own transaction,
+    // so a failure leaves both players' ratings untouched. The match stays completed either way, and
+    // admin/matches/process-missing-rating-history picks up matches whose rating failed.
     if (updatedMatch.status === 'completed' && updatedMatch.winner_id && updatedMatch.player1_id && updatedMatch.player2_id) {
-      console.log(`[PUT /api/matches/${matchId}] Match completed, updating player ratings asynchronously...`)
-      // Execute in background without blocking the response
-      updateRatingsAfterMatch(matchId, supabase)
-        .then((ratingResult) => {
-          if (ratingResult) {
-            console.log(`[PUT /api/matches/${matchId}] Ratings updated - Player1: ${ratingResult.player1.eloChange > 0 ? '+' : ''}${ratingResult.player1.eloChange} ELO, Player2: ${ratingResult.player2.eloChange > 0 ? '+' : ''}${ratingResult.player2.eloChange} ELO`)
-          } else {
-            console.warn(`[PUT /api/matches/${matchId}] Rating update returned null - check logs for errors`)
-          }
-        })
-        .catch((ratingError) => {
-          // Log error but don't fail the request - ratings are important but not critical to match flow
-          console.error('Error updating ratings after match:', ratingError)
-        })
+      try {
+        const ratingResult = await updateRatingsAfterMatch(matchId)
+        if (!ratingResult) {
+          console.warn(`[PUT /api/matches/${matchId}] Rating update returned null - check logs for errors`)
+        }
+      } catch (ratingError) {
+        console.error('Error updating ratings after match:', ratingError)
+      }
     }
     
     return updatedMatch

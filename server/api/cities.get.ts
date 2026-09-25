@@ -1,27 +1,14 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { asc } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { cities } from '~/server/db/schema'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async () => {
   try {
-    const supabase = getSupabaseAdmin()
-    
-    const { data, error } = await supabase
-      .from('cities')
-      .select('*')
-      .order('order', { ascending: true })
-    
-    if (error) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch cities',
-        data: error
-      })
-    }
-    
-    return data
+    return await useDb().query.cities.findMany({ orderBy: asc(cities.order) })
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })

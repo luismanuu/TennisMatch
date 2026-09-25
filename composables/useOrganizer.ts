@@ -2,7 +2,7 @@ import { useAuthState } from './useAuthState'
 import type { CreateTournamentPayload, UpdateTournamentPayload, RegisterPlayerPayload } from '~/types'
 
 export const useOrganizer = () => {
-  const { userId, user } = useAuthState()
+  const { userId, role } = useAuthState()
   
   const loading = ref(false)
   const error = ref<Error | null>(null)
@@ -11,8 +11,7 @@ export const useOrganizer = () => {
   
   // Check if current user is tournament organizer
   const isOrganizer = computed(() => {
-    const role = user.value?.publicMetadata?.role as string | undefined
-    return role === 'tournament_organizer'
+    return role.value === 'tournament_organizer'
   })
 
   const fetchOrganizerTournaments = async () => {
@@ -24,7 +23,7 @@ export const useOrganizer = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any[]>(`/api/organizer/tournaments?clerk_id=${userId.value}`)
+      const data = await $fetch<any[]>(`/api/organizer/tournaments`)
       tournaments.value = data
       return data
     } catch (err: any) {
@@ -46,7 +45,6 @@ export const useOrganizer = () => {
     try {
       const data = await $fetch<any>(`/api/organizer/tournaments/${tournamentId}`, {
         query: {
-          clerk_id: userId.value
         }
       })
       currentTournament.value = data
@@ -73,7 +71,6 @@ export const useOrganizer = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -103,7 +100,6 @@ export const useOrganizer = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -140,7 +136,6 @@ export const useOrganizer = () => {
         {
           method: 'DELETE',
           query: {
-            clerk_id: userId.value
           }
         }
       )
@@ -169,7 +164,6 @@ export const useOrganizer = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value
           }
         }
       )
@@ -198,7 +192,6 @@ export const useOrganizer = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -228,7 +221,6 @@ export const useOrganizer = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             deadline
           }
         }
@@ -261,7 +253,6 @@ export const useOrganizer = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             bracket_type: bracketType,
             rounds
           }
@@ -290,7 +281,6 @@ export const useOrganizer = () => {
         `/api/organizer/tournaments/${tournamentId}/unscheduled-matches`,
         {
           query: {
-            clerk_id: userId.value
           }
         }
       )
@@ -312,7 +302,6 @@ export const useOrganizer = () => {
     try {
       const data = await $fetch<any>(`/api/organizer/tournaments/${tournamentId}/phase-status`, {
         query: {
-          clerk_id: userId.value
         }
       })
       return data
@@ -336,7 +325,6 @@ export const useOrganizer = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value
           }
         }
       )
@@ -363,7 +351,6 @@ export const useOrganizer = () => {
       const data = await $fetch<any>(`/api/organizer/tournaments/${tournamentId}/advance-phase`, {
         method: 'POST',
         body: {
-          clerk_id: userId.value
         }
       })
       // Reload tournament to get updated phase
@@ -391,7 +378,6 @@ export const useOrganizer = () => {
         {
           method: 'POST',
           query: {
-            clerk_id: userId.value
           },
           body: {
             bracketType

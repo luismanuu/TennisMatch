@@ -1,19 +1,14 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { createGroupStageDeadline } from '~/server/utils/tournament-scheduling'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<{ clerk_id: string; deadline: string }>(event)
-    const { clerk_id, deadline } = body
-    const tournamentId = getRouterParam(event, 'id')
+  const { player: organizer } = await requirePlayer(event, 'organizer')
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<{ deadline: string }>(event)
+    const deadline = body?.deadline
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -29,28 +24,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireOrganizer(clerk_id)
-
-    const supabase = getSupabaseAdmin()
-
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
-
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
-    await createGroupStageDeadline(tournamentId, deadline, supabase)
+    await createGroupStageDeadline(tournamentId, deadline)
 
     return {
       success: true,

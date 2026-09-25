@@ -133,7 +133,6 @@ export const useTournaments = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             waitlist
           }
         }
@@ -173,7 +172,6 @@ export const useTournaments = () => {
     try {
       const offset = (adminTournamentsPage.value - 1) * adminTournamentsPageSize.value
       const queryParams = new URLSearchParams()
-      queryParams.append('clerk_id', userId.value)
       queryParams.append('limit', adminTournamentsPageSize.value.toString())
       queryParams.append('offset', offset.toString())
       if (filters?.status) queryParams.append('status', filters.status)
@@ -209,7 +207,6 @@ export const useTournaments = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -239,7 +236,6 @@ export const useTournaments = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -277,7 +273,6 @@ export const useTournaments = () => {
         {
           method: 'DELETE',
           query: {
-            clerk_id: userId.value
           }
         }
       )
@@ -306,7 +301,6 @@ export const useTournaments = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value
           }
         }
       )
@@ -337,7 +331,6 @@ export const useTournaments = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -369,7 +362,6 @@ export const useTournaments = () => {
         {
           method: 'POST',
           body: {
-            clerk_id: userId.value,
             ...payload
           }
         }
@@ -401,7 +393,6 @@ export const useTournaments = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             deadline
           }
         }
@@ -434,7 +425,6 @@ export const useTournaments = () => {
         {
           method: 'PUT',
           body: {
-            clerk_id: userId.value,
             bracket_type: bracketType,
             rounds
           }
@@ -463,7 +453,6 @@ export const useTournaments = () => {
         `/api/admin/tournaments/${tournamentId}/unscheduled-matches`,
         {
           query: {
-            clerk_id: userId.value
           }
         }
       )

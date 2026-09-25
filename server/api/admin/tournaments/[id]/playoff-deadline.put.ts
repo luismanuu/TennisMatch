@@ -1,11 +1,11 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { createPlayoffRoundDeadlines } from '~/server/utils/tournament-scheduling'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
     const body = await readBody<{
-      clerk_id: string
       bracket_type: 'main' | 'backdraw'
       rounds: Array<{
         round_number: number
@@ -13,15 +13,8 @@ export default defineEventHandler(async (event) => {
         deadline: string
       }>
     }>(event)
-    const { clerk_id, bracket_type, rounds } = body
+    const { bracket_type, rounds } = body ?? {}
     const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
 
     if (!tournamentId) {
       throw createError({
@@ -44,11 +37,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireAdmin(clerk_id)
-
-    const supabase = getSupabaseAdmin()
-
-    await createPlayoffRoundDeadlines(tournamentId, bracket_type, rounds, supabase)
+    await createPlayoffRoundDeadlines(tournamentId, bracket_type, rounds)
 
     return {
       success: true,
@@ -61,4 +50,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

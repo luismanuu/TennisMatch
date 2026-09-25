@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790340412139,
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790340412946,
+      "tag": "0001_updated_at_triggers_and_seeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790341075605,
+      "tag": "0002_delete_unplayed_matches_with_tournament",
+      "breakpoints": true
+    }
+  ]
+}

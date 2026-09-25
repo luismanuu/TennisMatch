@@ -1,181 +1,125 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { and, desc, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { notifications } from '~/server/db/schema'
+import { requirePlayer } from '~/server/utils/session'
 
-/**
- * GET /api/notifications/pending
- * 
- * Returns all unread, non-dismissed notifications for the current player
- * Includes full match details and categorization by type
- */
+// GET /api/notifications/pending — unread, non-dismissed notifications for the current player,
+// filtered to only those where the current player has a pending action, and categorized by type.
 export default defineEventHandler(async (event) => {
+  const { player: currentPlayer } = await requirePlayer(event)
+
   try {
     const query = getQuery(event)
-    const clerk_id = query.clerk_id as string
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Get current player
-    const { data: currentPlayer, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
-    
-    if (playerError || !currentPlayer) {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Player not found'
-      })
-    }
-    
-    // Get limit from query (default 50, max 200 for performance)
-    // Reduced from 100 to improve load time
+    // Reduced from 100 to improve load time.
     const limit = Math.min(parseInt(query.limit as string) || 50, 200)
-    
-    // Fetch pending notifications (not read and not dismissed)
-    // Limit to most recent to handle large volumes efficiently
-    // Only load essential match fields to improve performance
-    const { data: notifications, error: notificationsError } = await supabase
-      .from('notifications')
-      .select(`
-        id,
-        player_id,
-        type,
-        match_id,
-        is_read,
-        is_dismissed,
-        created_at,
-        read_at,
-        dismissed_at,
-        metadata,
-        match:matches!notifications_match_id_fkey(
-          id,
-          player1_id,
-          player2_id,
-          scheduled_at,
-          location,
-          status,
-          score,
-          tournament_id,
-          match_proposed_by,
-          match_accepted_by,
-          match_rejected_by,
-          score_proposed_by,
-          score_approved_by,
-          schedule_proposed_by,
-          schedule_approved_by,
-          schedule_rejected_by,
-          reschedule_proposed_by,
-          reschedule_approved_by,
-          reschedule_rejected_by,
-          acceptance_proposed_scheduled_at,
-          acceptance_change_approved_by,
-          acceptance_change_rejected_by,
-          player1:players!matches_player1_id_fkey(
-            id,
-            name
-          ),
-          player2:players!matches_player2_id_fkey(
-            id,
-            name
-          )
-        )
-      `)
-      .eq('player_id', currentPlayer.id)
-      .eq('is_dismissed', false)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    
-    if (notificationsError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch notifications',
-        data: notificationsError
-      })
-    }
-    
-    // Ensure notifications is an array (safety check)
-    const notificationsList = notifications || []
-    
-    // Filter notifications to only include those where current user has a pending action
-    // This matches the logic from the "Acciones Pendientes" filter
-    // Filter cancelled matches first to reduce processing
-    const actionableNotifications = notificationsList.filter((n: any) => {
+
+    const rows = await useDb().query.notifications.findMany({
+      columns: {
+        id: true,
+        player_id: true,
+        type: true,
+        match_id: true,
+        is_read: true,
+        is_dismissed: true,
+        created_at: true,
+        read_at: true,
+        dismissed_at: true,
+        metadata: true,
+      },
+      with: {
+        match: {
+          columns: {
+            id: true,
+            player1_id: true,
+            player2_id: true,
+            scheduled_at: true,
+            location: true,
+            status: true,
+            score: true,
+            tournament_id: true,
+            match_proposed_by: true,
+            match_accepted_by: true,
+            match_rejected_by: true,
+            score_proposed_by: true,
+            score_approved_by: true,
+            schedule_proposed_by: true,
+            schedule_approved_by: true,
+            schedule_rejected_by: true,
+            reschedule_proposed_by: true,
+            reschedule_approved_by: true,
+            reschedule_rejected_by: true,
+            acceptance_proposed_scheduled_at: true,
+            acceptance_change_approved_by: true,
+            acceptance_change_rejected_by: true,
+          },
+          with: {
+            player1: { columns: { id: true, name: true } },
+            player2: { columns: { id: true, name: true } },
+          },
+        },
+      },
+      where: and(eq(notifications.player_id, currentPlayer.id), eq(notifications.is_dismissed, false)),
+      orderBy: desc(notifications.created_at),
+      limit,
+    })
+
+    // Filter to notifications where the current user has a pending action (mirrors "Acciones Pendientes").
+    const actionableNotifications = rows.filter((n) => {
       const match = n.match
-      if (!match) return false
-      
-      // Exclude cancelled matches early
-      if (match.status === 'cancelled') return false
-      
+      if (!match || match.status === 'cancelled') return false
+
       const isPlayer1 = match.player1_id === currentPlayer.id
       const isPlayer2 = match.player2_id === currentPlayer.id
-      
-      // User must be involved in the match
       if (!isPlayer1 && !isPlayer2) return false
-      
-      // 1. Match proposal - only count if user is player2 (needs to accept)
+
       if (n.type === 'match_proposal') {
-        return isPlayer2 && match.match_proposed_by && match.match_proposed_by !== currentPlayer.id && !match.match_accepted_by && !match.match_rejected_by
+        return Boolean(isPlayer2 && match.match_proposed_by && match.match_proposed_by !== currentPlayer.id && !match.match_accepted_by && !match.match_rejected_by)
       }
-      
-      // 2. Score proposal - only count if user is NOT the proposer (needs to approve)
       if (n.type === 'score_proposal') {
-        return match.score_proposed_by && match.score_proposed_by !== currentPlayer.id && !match.score_approved_by
+        return Boolean(match.score_proposed_by && match.score_proposed_by !== currentPlayer.id && !match.score_approved_by)
       }
-      
-      // 3. Schedule proposal - only count if user is NOT the proposer (needs to approve)
       if (n.type === 'schedule_proposal') {
-        return match.schedule_proposed_by && match.schedule_proposed_by !== currentPlayer.id && !match.schedule_approved_by && !match.schedule_rejected_by
+        return Boolean(
+          match.schedule_proposed_by && match.schedule_proposed_by !== currentPlayer.id && !match.schedule_approved_by && !match.schedule_rejected_by,
+        )
       }
-      
-      // 4. Reschedule proposal - only count if user is NOT the proposer (needs to approve)
       if (n.type === 'reschedule_proposal') {
-        return match.reschedule_proposed_by && match.reschedule_proposed_by !== currentPlayer.id && !match.reschedule_approved_by && !match.reschedule_rejected_by
+        return Boolean(
+          match.reschedule_proposed_by &&
+            match.reschedule_proposed_by !== currentPlayer.id &&
+            !match.reschedule_approved_by &&
+            !match.reschedule_rejected_by,
+        )
       }
-      
-      // 5. Acceptance change - only count if user is player1 (needs to approve)
       if (n.type === 'acceptance_change') {
-        return isPlayer1 && match.match_proposed_by === currentPlayer.id && match.acceptance_proposed_scheduled_at && !match.acceptance_change_approved_by && !match.acceptance_change_rejected_by
+        return Boolean(
+          isPlayer1 &&
+            match.match_proposed_by === currentPlayer.id &&
+            match.acceptance_proposed_scheduled_at &&
+            !match.acceptance_change_approved_by &&
+            !match.acceptance_change_rejected_by,
+        )
       }
-      
-      // 6. Match created - don't count (informational only, no action required)
-      if (n.type === 'match_created') {
-        return false
-      }
-      
+      // match_created is informational only, no action required.
       return false
     })
-    
-    // Categorize actionable notifications by type
+
     const categorized = {
-      match_proposals: actionableNotifications.filter((n: any) => n.type === 'match_proposal'),
-      match_created: actionableNotifications.filter((n: any) => n.type === 'match_created'),
-      score_proposals: actionableNotifications.filter((n: any) => n.type === 'score_proposal'),
-      schedule_proposals: actionableNotifications.filter((n: any) => n.type === 'schedule_proposal'),
-      reschedule_proposals: actionableNotifications.filter((n: any) => n.type === 'reschedule_proposal'),
-      acceptance_changes: actionableNotifications.filter((n: any) => n.type === 'acceptance_change')
+      match_proposals: actionableNotifications.filter((n) => n.type === 'match_proposal'),
+      match_created: actionableNotifications.filter((n) => n.type === 'match_created'),
+      score_proposals: actionableNotifications.filter((n) => n.type === 'score_proposal'),
+      schedule_proposals: actionableNotifications.filter((n) => n.type === 'schedule_proposal'),
+      reschedule_proposals: actionableNotifications.filter((n) => n.type === 'reschedule_proposal'),
+      acceptance_changes: actionableNotifications.filter((n) => n.type === 'acceptance_change'),
     }
-    
-    // Count totals (only actionable notifications)
+
     const totalCount = actionableNotifications.length
-    const unreadCount = actionableNotifications.filter((n: any) => !n.is_read).length
-    
-    // Check if there are more notifications beyond the limit
+    const unreadCount = actionableNotifications.filter((n) => !n.is_read).length
     const hasMore = actionableNotifications.length >= limit
-    
+
     return {
       success: true,
-      notifications: actionableNotifications, // Only return actionable notifications
+      notifications: actionableNotifications,
       categorized,
       count: {
         total: totalCount,
@@ -187,14 +131,13 @@ export default defineEventHandler(async (event) => {
         reschedule_proposals: categorized.reschedule_proposals.length,
         acceptance_changes: categorized.acceptance_changes.length,
         hasMore,
-        displayed: actionableNotifications.length
-      }
+        displayed: actionableNotifications.length,
+      },
     }
   } catch (error: any) {
-    console.error('[API] Get pending notifications error:', error)
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })

@@ -20,21 +20,21 @@ export const useMatches = () => {
     opponent_id?: string
   }
   
-  const fetchMatches = async (clerkId?: string, page: number = 1, limit: number = 10, filters?: MatchFilters) => {
+  const fetchMatches = async (accountId?: string, page: number = 1, limit: number = 10, filters?: MatchFilters) => {
     loading.value = true
     error.value = null
     
     try {
-      // Get clerkId from auth state if not provided
-      if (!clerkId) {
+      // Get the account id from auth state if not provided
+      if (!accountId) {
         const { userId } = useAuthState()
         if (!userId.value) {
           throw new Error('User not authenticated')
         }
-        clerkId = userId.value
+        accountId = userId.value
       }
       
-      const queryParams: any = { clerk_id: clerkId, page, limit }
+      const queryParams: any = { page, limit }
       if (filters?.status) queryParams.status = filters.status
       if (filters?.start_date) queryParams.start_date = filters.start_date
       if (filters?.end_date) queryParams.end_date = filters.end_date
@@ -66,7 +66,7 @@ export const useMatches = () => {
     }
   }
   
-  const createMatch = async (clerkId: string, payload: CreateMatchPayload) => {
+  const createMatch = async (accountId: string, payload: CreateMatchPayload) => {
     loading.value = true
     error.value = null
     
@@ -74,7 +74,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>('/api/matches', {
         method: 'POST',
         body: {
-          clerk_id: clerkId,
           ...payload
         }
       })
@@ -89,22 +88,22 @@ export const useMatches = () => {
     }
   }
   
-  const getMatch = async (id: string, clerkId?: string) => {
+  const getMatch = async (id: string, accountId?: string) => {
     loading.value = true
     error.value = null
     
     try {
-      // Get clerkId from auth state if not provided
-      if (!clerkId) {
+      // Get the account id from auth state if not provided
+      if (!accountId) {
         const { userId } = useAuthState()
         if (!userId.value) {
           throw new Error('User not authenticated')
         }
-        clerkId = userId.value
+        accountId = userId.value
       }
       
       const data = await $fetch<Match>(`/api/matches/${id}`, {
-        query: { clerk_id: clerkId }
+        query: {}
       })
       // Update match in cache if it exists
       const index = matches.value.findIndex(m => m.id === id)
@@ -120,7 +119,7 @@ export const useMatches = () => {
     }
   }
   
-  const updateMatchStatus = async (clerkId: string, matchId: string, status: UpdateMatchStatusPayload['status']) => {
+  const updateMatchStatus = async (accountId: string, matchId: string, status: UpdateMatchStatusPayload['status']) => {
     loading.value = true
     error.value = null
     
@@ -128,7 +127,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'update_status',
           data: { status }
         }
@@ -147,7 +145,7 @@ export const useMatches = () => {
     }
   }
   
-  const proposeScore = async (clerkId: string, matchId: string, payload: ProposeScorePayload) => {
+  const proposeScore = async (accountId: string, matchId: string, payload: ProposeScorePayload) => {
     loading.value = true
     error.value = null
     
@@ -155,7 +153,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'propose_score',
           data: payload
         }
@@ -174,7 +171,7 @@ export const useMatches = () => {
     }
   }
   
-  const approveScore = async (clerkId: string, matchId: string) => {
+  const approveScore = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -182,7 +179,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'approve_score'
         }
       })
@@ -200,7 +196,7 @@ export const useMatches = () => {
     }
   }
   
-  const rejectScore = async (clerkId: string, matchId: string) => {
+  const rejectScore = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -208,7 +204,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'reject_score'
         }
       })
@@ -226,7 +221,7 @@ export const useMatches = () => {
     }
   }
   
-  const cancelMatch = async (clerkId: string, matchId: string) => {
+  const cancelMatch = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -234,7 +229,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'cancel'
         }
       })
@@ -252,7 +246,7 @@ export const useMatches = () => {
     }
   }
   
-  const fetchScheduledMatches = async (clerkId: string) => {
+  const fetchScheduledMatches = async (accountId: string) => {
     loading.value = true
     error.value = null
     
@@ -268,7 +262,7 @@ export const useMatches = () => {
     }
   }
   
-  const proposeSchedule = async (clerkId: string, matchId: string, payload: { scheduled_at: string }) => {
+  const proposeSchedule = async (accountId: string, matchId: string, payload: { scheduled_at: string }) => {
     loading.value = true
     error.value = null
     
@@ -276,7 +270,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'propose_schedule',
           data: payload
         }
@@ -295,7 +288,7 @@ export const useMatches = () => {
     }
   }
   
-  const approveSchedule = async (clerkId: string, matchId: string) => {
+  const approveSchedule = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -303,7 +296,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'approve_schedule'
         }
       })
@@ -321,7 +313,7 @@ export const useMatches = () => {
     }
   }
   
-  const rejectSchedule = async (clerkId: string, matchId: string) => {
+  const rejectSchedule = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -329,7 +321,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'reject_schedule'
         }
       })
@@ -347,7 +338,7 @@ export const useMatches = () => {
     }
   }
   
-  const proposeReschedule = async (clerkId: string, matchId: string, payload: ProposeReschedulePayload) => {
+  const proposeReschedule = async (accountId: string, matchId: string, payload: ProposeReschedulePayload) => {
     loading.value = true
     error.value = null
     
@@ -355,7 +346,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'propose_reschedule',
           data: payload
         }
@@ -374,7 +364,7 @@ export const useMatches = () => {
     }
   }
   
-  const approveReschedule = async (clerkId: string, matchId: string) => {
+  const approveReschedule = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -382,7 +372,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'approve_reschedule'
         }
       })
@@ -400,7 +389,7 @@ export const useMatches = () => {
     }
   }
   
-  const rejectReschedule = async (clerkId: string, matchId: string) => {
+  const rejectReschedule = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -408,7 +397,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'reject_reschedule'
         }
       })
@@ -426,7 +414,7 @@ export const useMatches = () => {
     }
   }
   
-  const organizerSetResult = async (clerkId: string, matchId: string, payload: { score?: string, winner_id: string, is_wo?: boolean }) => {
+  const organizerSetResult = async (accountId: string, matchId: string, payload: { score?: string, winner_id: string, is_wo?: boolean }) => {
     loading.value = true
     error.value = null
     
@@ -434,7 +422,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'organizer_set_result',
           data: payload
         }
@@ -453,7 +440,7 @@ export const useMatches = () => {
     }
   }
   
-  const acceptMatch = async (clerkId: string, matchId: string, payload?: { scheduled_at?: string, location?: string }) => {
+  const acceptMatch = async (accountId: string, matchId: string, payload?: { scheduled_at?: string, location?: string }) => {
     loading.value = true
     error.value = null
     
@@ -461,7 +448,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'accept_match',
           data: payload
         }
@@ -480,7 +466,7 @@ export const useMatches = () => {
     }
   }
   
-  const rejectMatch = async (clerkId: string, matchId: string) => {
+  const rejectMatch = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -488,7 +474,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'reject_match'
         }
       })
@@ -506,7 +491,7 @@ export const useMatches = () => {
     }
   }
   
-  const approveAcceptanceChange = async (clerkId: string, matchId: string) => {
+  const approveAcceptanceChange = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -514,7 +499,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'approve_acceptance_change'
         }
       })
@@ -532,7 +516,7 @@ export const useMatches = () => {
     }
   }
   
-  const rejectAcceptanceChange = async (clerkId: string, matchId: string) => {
+  const rejectAcceptanceChange = async (accountId: string, matchId: string) => {
     loading.value = true
     error.value = null
     
@@ -540,7 +524,6 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           action: 'reject_acceptance_change'
         }
       })

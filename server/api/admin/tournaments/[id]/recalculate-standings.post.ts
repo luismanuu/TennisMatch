@@ -1,19 +1,14 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournament_groups, tournaments } from '~/server/db/schema'
+import { requireAdmin } from '~/server/utils/session'
 import { recalculateGroupStandings } from '~/server/utils/tournament-brackets'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -22,43 +17,40 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireAdmin(clerkId)
-
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // Verify tournament exists
-    const { data: tournament, error: tournamentError } = await supabase
-      .from('tournaments')
-      .select('id')
-      .eq('id', tournamentId)
-      .single()
+    const tournament = await db.query.tournaments.findFirst({
+      columns: { id: true },
+      where: eq(tournaments.id, tournamentId),
+    })
 
-    if (tournamentError || !tournament) {
+    if (!tournament) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Tournament not found'
       })
     }
 
-    // Get all groups for this tournament
-    const { data: groups, error: groupsError } = await supabase
-      .from('tournament_groups')
-      .select('id')
-      .eq('tournament_id', tournamentId)
-
-    if (groupsError) {
+    let groups
+    try {
+      groups = await db.query.tournament_groups.findMany({
+        columns: { id: true },
+        where: eq(tournament_groups.tournament_id, tournamentId),
+      })
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch tournament groups',
-        data: groupsError
+        data: error
       })
     }
 
     // Recalculate standings for each group
     const results = []
-    for (const group of groups || []) {
+    for (const group of groups) {
       try {
-        await recalculateGroupStandings(tournamentId, group.id, supabase)
+        await recalculateGroupStandings(tournamentId, group.id)
         results.push({ groupId: group.id, success: true })
       } catch (error: any) {
         results.push({ groupId: group.id, success: false, error: error.message })
@@ -77,5 +69,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-
-

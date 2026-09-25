@@ -1,4 +1,8 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, asc, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournament_matches } from '~/server/db/schema'
+
+const playerName = { columns: { id: true, name: true } } as const
 
 export default defineEventHandler(async (event) => {
   try {
@@ -19,96 +23,39 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
-
-    // Get group matches - First get tournament_matches
-    const { data: tournamentMatches, error: tmError } = await supabase
-      .from('tournament_matches')
-      .select(`
-        *,
-        group:tournament_groups(
-          id,
-          group_name,
-          group_number
-        )
-      `)
-      .eq('tournament_id', tournamentId)
-      .eq('group_id', groupId)
-      .eq('bracket_type', 'group')
-      .order('round_number', { ascending: true })
-      .order('id', { ascending: true })
-
-    if (tmError) {
-      console.error('Error fetching tournament matches:', {
-        message: tmError.message,
-        details: tmError.details,
-        hint: tmError.hint,
-        code: tmError.code,
-        tournamentId,
-        groupId
+    try {
+      // The match embed is null when a row has no match
+      return await useDb().query.tournament_matches.findMany({
+        where: and(
+          eq(tournament_matches.tournament_id, tournamentId),
+          eq(tournament_matches.group_id, groupId),
+          eq(tournament_matches.bracket_type, 'group')
+        ),
+        orderBy: [asc(tournament_matches.round_number), asc(tournament_matches.id)],
+        with: {
+          group: { columns: { id: true, group_name: true, group_number: true } },
+          match: {
+            columns: {
+              id: true,
+              player1_id: true,
+              player2_id: true,
+              winner_id: true,
+              status: true,
+              score: true,
+              scheduled_at: true,
+            },
+            with: { player1: playerName, player2: playerName, winner: playerName },
+          },
+        },
       })
+    } catch (error) {
+      console.error('Error fetching group matches:', { error, tournamentId, groupId })
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch tournament matches',
-        data: tmError
+        data: error
       })
     }
-
-    if (!tournamentMatches || tournamentMatches.length === 0) {
-      return []
-    }
-
-    // Get match IDs
-    const matchIds = tournamentMatches.map(tm => tm.match_id).filter(Boolean)
-
-    if (matchIds.length === 0) {
-      return tournamentMatches.map(tm => ({
-        ...tm,
-        match: null
-      }))
-    }
-
-    // Get matches with player details
-    const { data: matches, error: matchesError } = await supabase
-      .from('matches')
-      .select(`
-        id,
-        player1_id,
-        player2_id,
-        winner_id,
-        status,
-        score,
-        scheduled_at,
-        player1:players!matches_player1_id_fkey(id, name),
-        player2:players!matches_player2_id_fkey(id, name),
-        winner:players!matches_winner_id_fkey(id, name)
-      `)
-      .in('id', matchIds)
-
-    if (matchesError) {
-      console.error('Error fetching matches:', {
-        message: matchesError.message,
-        details: matchesError.details,
-        hint: matchesError.hint,
-        code: matchesError.code
-      })
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch matches',
-        data: matchesError
-      })
-    }
-
-    // Combine tournament_matches with match data
-    const result = tournamentMatches.map(tm => {
-      const match = matches?.find(m => m.id === tm.match_id)
-      return {
-        ...tm,
-        match: match || null
-      }
-    })
-
-    return result
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -116,4 +63,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

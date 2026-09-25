@@ -1,11 +1,13 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
-import { 
-  getRatingTier, 
-  getExpectedWinProbability, 
-  isPlayerUnrated, 
+import { and, eq, gte, inArray, isNull, lt, lte, ne, sql } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { city_segment_cities, matches, players } from '~/server/db/schema'
+import { requireUser } from '~/server/utils/session'
+import {
+  getRatingTier,
+  getExpectedWinProbability,
+  isPlayerUnrated,
   eloToMmr,
-  RATING_TIERS
+  RATING_TIERS,
 } from '~/server/utils/rating-system'
 import type { MatchmakingRecommendation, Player, RatingTier } from '~/types'
 
@@ -20,51 +22,41 @@ import type { MatchmakingRecommendation, Player, RatingTier } from '~/types'
 // ============================================
 
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const limit = parseInt(query.limit as string) || 20 // Increased default for pagination
     const page = parseInt(query.page as string) || 1
     const offset = (page - 1) * limit
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-
-    // Verify Clerk user exists
-    await getClerkUser(clerkId)
-
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
 
     // ============================================
     // STEP 1: Get current player
     // ============================================
-    const { data: currentPlayer, error: playerError } = await supabase
-      .from('players')
-      .select(`
-        id,
-        name,
-        elo,
-        mmr,
-        mmr_uncertainty,
-        city_id,
-        category_id,
-        total_matches_played,
-        last_match_at,
-        category:categories(id, name, order, default_elo)
-      `)
-      .eq('clerk_id', clerkId)
-      .eq('status', 'active')
-      .is('deleted_at', null)
-      .single()
+    const currentPlayer = await db.query.players.findFirst({
+      where: and(eq(players.user_id, user.id), eq(players.status, 'active'), isNull(players.deleted_at)),
+      columns: {
+        id: true,
+        name: true,
+        elo: true,
+        mmr: true,
+        mmr_uncertainty: true,
+        city_id: true,
+        category_id: true,
+        total_matches_played: true,
+        last_match_at: true,
+      },
+      with: {
+        category: { columns: { id: true, name: true, order: true, default_elo: true } },
+      },
+    })
 
-    if (playerError || !currentPlayer) {
+    if (!currentPlayer) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Player not found'
+        statusMessage: 'Player not found',
       })
     }
 
@@ -73,7 +65,7 @@ export default defineEventHandler(async (event) => {
       return {
         success: true,
         recommendations: [],
-        message: 'Configura tu ciudad en tu perfil para encontrar oponentes en tu área'
+        message: 'Configura tu ciudad en tu perfil para encontrar oponentes en tu área',
       }
     }
 
@@ -81,65 +73,47 @@ export default defineEventHandler(async (event) => {
     // STEP 2: Get city segments and cities
     // ============================================
     // Get segments containing player's city, then get all cities in those segments
-    const { data: citySegments, error: segmentsError } = await supabase
-      .from('city_segment_cities')
-      .select('city_segment_id')
-      .eq('city_id', currentPlayer.city_id)
-
-    if (segmentsError) {
-      console.error('Error fetching city segments:', segmentsError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch city segments'
-      })
-    }
+    const citySegments = await db
+      .select({ city_segment_id: city_segment_cities.city_segment_id })
+      .from(city_segment_cities)
+      .where(eq(city_segment_cities.city_id, currentPlayer.city_id))
 
     // If no city segments, return empty
     if (!citySegments || citySegments.length === 0) {
       return {
         success: true,
         recommendations: [],
-        message: 'No hay región de matchmaking configurada para tu ciudad. Por favor contacta a un administrador.'
+        message: 'No hay región de matchmaking configurada para tu ciudad. Por favor contacta a un administrador.',
       }
     }
 
-    const segmentIds = citySegments.map(s => s.city_segment_id)
+    const segmentIds = citySegments.map((s) => s.city_segment_id)
 
     // Get all cities in these segments
-    const { data: segmentCities, error: citiesError } = await supabase
-      .from('city_segment_cities')
-      .select('city_id')
-      .in('city_segment_id', segmentIds)
+    const segmentCities = await db
+      .select({ city_id: city_segment_cities.city_id })
+      .from(city_segment_cities)
+      .where(inArray(city_segment_cities.city_segment_id, segmentIds))
 
-    if (citiesError) {
-      console.error('Error fetching segment cities:', citiesError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch segment cities'
-      })
-    }
-
-    const matchableCityIds = [...new Set(segmentCities?.map(c => c.city_id) || [])]
+    const matchableCityIds = [...new Set(segmentCities?.map((c) => c.city_id) || [])]
 
     // ============================================
     // STEP 3: Calculate ELO range for filtering
     // ============================================
-    const currentIsUnrated = isPlayerUnrated(currentPlayer.total_matches_played)
-    const categoryDefaultElo = (currentPlayer.category as any)?.default_elo ?? 1000
+    const currentIsUnrated = isPlayerUnrated(currentPlayer.total_matches_played ?? 0)
+    const categoryDefaultElo = currentPlayer.category?.default_elo ?? 1000
     const currentEffectiveElo = currentIsUnrated ? categoryDefaultElo : currentPlayer.elo
-    
+
     // Get current player's tier
     const currentTierInfo = getRatingTier(currentEffectiveElo)
-    const currentTierIndex = RATING_TIERS.findIndex(t => t.tier === currentTierInfo.tier)
-    
+    const currentTierIndex = RATING_TIERS.findIndex((t) => t.tier === currentTierInfo.tier)
+
     // Calculate allowed tier range: 2 tiers above, same tier, 1 tier below
     const minTierIndex = Math.max(0, currentTierIndex - 1)
     const maxTierIndex = Math.min(RATING_TIERS.length - 1, currentTierIndex + 2)
-    
+
     const minAllowedElo = RATING_TIERS[minTierIndex].minElo
-    const maxAllowedElo = RATING_TIERS[maxTierIndex].maxElo === Infinity 
-      ? 10000 
-      : RATING_TIERS[maxTierIndex].maxElo
+    const maxAllowedElo = RATING_TIERS[maxTierIndex].maxElo === Infinity ? 10000 : RATING_TIERS[maxTierIndex].maxElo
 
     // ============================================
     // STEP 4: Pre-calculate date boundaries (MOVED OUTSIDE LOOP)
@@ -151,126 +125,112 @@ export default defineEventHandler(async (event) => {
     // ============================================
     // STEP 5: Fetch players WITH ELO filter at DB level
     // ============================================
-    const { data: players, error: playersError } = await supabase
-      .from('players')
-      .select(`
-        id,
-        name,
-        elo,
-        mmr,
-        city_id,
-        category_id,
-        total_matches_played,
-        last_match_at,
-        category:categories(id, name, order, default_elo),
-        city:cities(id, name)
-      `)
-      .eq('status', 'active')
-      .is('deleted_at', null)
-      .neq('id', currentPlayer.id)
-      .in('city_id', matchableCityIds)
-      .gte('elo', minAllowedElo)  // ELO filter at DB level
-      .lte('elo', maxAllowedElo)  // ELO filter at DB level
-      .order('last_match_at', { ascending: false, nullsFirst: false })
-      .limit(500) // Fetch up to 500 for better pagination support
-
-    if (playersError) {
-      console.error('Error fetching players:', playersError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch players for matchmaking'
-      })
-    }
+    const candidatePlayers = await db.query.players.findMany({
+      where: and(
+        eq(players.status, 'active'),
+        isNull(players.deleted_at),
+        ne(players.id, currentPlayer.id),
+        inArray(players.city_id, matchableCityIds),
+        gte(players.elo, minAllowedElo),
+        lte(players.elo, maxAllowedElo),
+      ),
+      orderBy: [sql`${players.last_match_at} desc nulls last`],
+      limit: 500, // Fetch up to 500 for better pagination support
+      columns: {
+        id: true,
+        name: true,
+        elo: true,
+        mmr: true,
+        city_id: true,
+        category_id: true,
+        total_matches_played: true,
+        last_match_at: true,
+      },
+      with: {
+        category: { columns: { id: true, name: true, order: true, default_elo: true } },
+        city: { columns: { id: true, name: true } },
+      },
+    })
 
     let recommendations: MatchmakingRecommendation[] = []
 
-    if (players && players.length > 0) {
+    if (candidatePlayers && candidatePlayers.length > 0) {
       // ============================================
       // STEP 6: BATCH QUERY for monthly match counts
       // Single query instead of N+1 queries
       // ============================================
-      const playerIds = players.map(p => p.id)
-      
+      const playerIds = candidatePlayers.map((p) => p.id)
+
       // Fetch all matches involving current player this month in ONE query
       // Use two separate queries and combine results to avoid .or() filter conflicts
       const [matchesAsPlayer1, matchesAsPlayer2] = await Promise.all([
-        supabase
-          .from('matches')
-          .select('player1_id, player2_id')
-          .eq('status', 'completed')
-          .eq('player1_id', currentPlayer.id)
-          .gte('played_at', firstDayOfMonth.toISOString())
-          .lt('played_at', firstDayOfNextMonth.toISOString()),
-        supabase
-          .from('matches')
-          .select('player1_id, player2_id')
-          .eq('status', 'completed')
-          .eq('player2_id', currentPlayer.id)
-          .gte('played_at', firstDayOfMonth.toISOString())
-          .lt('played_at', firstDayOfNextMonth.toISOString())
+        db
+          .select({ player1_id: matches.player1_id, player2_id: matches.player2_id })
+          .from(matches)
+          .where(
+            and(
+              eq(matches.status, 'completed'),
+              eq(matches.player1_id, currentPlayer.id),
+              gte(matches.played_at, firstDayOfMonth),
+              lt(matches.played_at, firstDayOfNextMonth),
+            ),
+          ),
+        db
+          .select({ player1_id: matches.player1_id, player2_id: matches.player2_id })
+          .from(matches)
+          .where(
+            and(
+              eq(matches.status, 'completed'),
+              eq(matches.player2_id, currentPlayer.id),
+              gte(matches.played_at, firstDayOfMonth),
+              lt(matches.played_at, firstDayOfNextMonth),
+            ),
+          ),
       ])
 
-      if (matchesAsPlayer1.error) {
-        console.error('Error fetching matches as player1:', matchesAsPlayer1.error)
-      }
-      if (matchesAsPlayer2.error) {
-        console.error('Error fetching matches as player2:', matchesAsPlayer2.error)
-      }
-
       // Combine results from both queries
-      const monthlyMatches = [
-        ...(matchesAsPlayer1.data || []),
-        ...(matchesAsPlayer2.data || [])
-      ]
+      const monthlyMatches = [...matchesAsPlayer1, ...matchesAsPlayer2]
 
       // Build a map of opponent -> match count
       const matchCountMap = new Map<string, number>()
-      if (monthlyMatches) {
-        for (const match of monthlyMatches) {
-          // Determine who the opponent is
-          const opponentId = match.player1_id === currentPlayer.id 
-            ? match.player2_id 
-            : match.player1_id
-          
-          // Only count if opponent is in our potential player list
-          if (opponentId && playerIds.includes(opponentId)) {
-            matchCountMap.set(opponentId, (matchCountMap.get(opponentId) || 0) + 1)
-          }
+      for (const match of monthlyMatches) {
+        // Determine who the opponent is
+        const opponentId = match.player1_id === currentPlayer.id ? match.player2_id : match.player1_id
+
+        // Only count if opponent is in our potential player list
+        if (opponentId && playerIds.includes(opponentId)) {
+          matchCountMap.set(opponentId, (matchCountMap.get(opponentId) || 0) + 1)
         }
       }
 
       // ============================================
       // STEP 7: Filter and transform to recommendations
       // ============================================
-      const currentEffectiveMmr = currentIsUnrated 
-        ? eloToMmr(categoryDefaultElo)
-        : Number(currentPlayer.mmr)
+      const currentEffectiveMmr = currentIsUnrated ? eloToMmr(categoryDefaultElo) : Number(currentPlayer.mmr)
 
-      const eligiblePlayers = players.filter(player => {
+      const eligiblePlayers = candidatePlayers.filter((player) => {
         // Check: haven't played 4+ times this month
         const matchesWithOpponent = matchCountMap.get(player.id) || 0
         if (matchesWithOpponent >= 4) return false
-        
+
         // Check: filter by effective ELO within tier range (for unrated players)
-        const playerIsUnrated = isPlayerUnrated(player.total_matches_played)
+        const playerIsUnrated = isPlayerUnrated(player.total_matches_played ?? 0)
         if (playerIsUnrated) {
-          const playerEffectiveElo = (player.category as any)?.default_elo ?? 1000
+          const playerEffectiveElo = player.category?.default_elo ?? 1000
           if (playerEffectiveElo < minAllowedElo || playerEffectiveElo > maxAllowedElo) {
             return false
           }
         }
-        
+
         return true
       })
 
       // Convert to recommendations
-      recommendations = eligiblePlayers.map(player => {
-        const playerIsUnrated = isPlayerUnrated(player.total_matches_played)
-        const playerDefaultElo = (player.category as any)?.default_elo ?? 1000
+      recommendations = eligiblePlayers.map((player) => {
+        const playerIsUnrated = isPlayerUnrated(player.total_matches_played ?? 0)
+        const playerDefaultElo = player.category?.default_elo ?? 1000
         const playerEffectiveElo = playerIsUnrated ? playerDefaultElo : player.elo
-        const playerEffectiveMmr = playerIsUnrated 
-          ? eloToMmr(playerDefaultElo)
-          : Number(player.mmr)
+        const playerEffectiveMmr = playerIsUnrated ? eloToMmr(playerDefaultElo) : Number(player.mmr)
 
         // Calculate expected win probability
         const expectedWinProb = getExpectedWinProbability(currentEffectiveElo, playerEffectiveElo)
@@ -279,9 +239,7 @@ export default defineEventHandler(async (event) => {
         const mmrDiff = Math.abs(currentEffectiveMmr - playerEffectiveMmr)
 
         // Get rating tier
-        const tier = playerIsUnrated 
-          ? 'Unrated' as RatingTier 
-          : getRatingTier(playerEffectiveElo).tier
+        const tier = playerIsUnrated ? ('Unrated' as RatingTier) : getRatingTier(playerEffectiveElo).tier
 
         // Calculate days since last active
         let lastActiveDaysAgo: number | undefined
@@ -302,7 +260,7 @@ export default defineEventHandler(async (event) => {
             category: player.category,
             total_matches_played: player.total_matches_played,
             last_match_at: player.last_match_at,
-          } as Player,
+          } as unknown as Player,
           expected_win_probability: expectedWinProb,
           mmr_difference: mmrDiff,
           rating_tier: tier,
@@ -338,7 +296,7 @@ export default defineEventHandler(async (event) => {
       const topRecommendations = recommendations.slice(0, 5)
       const restRecommendations = recommendations.slice(5)
       const totalCount = recommendations.length
-      
+
       // Apply pagination
       let paginatedRecommendations: MatchmakingRecommendation[] = []
       if (page === 1) {
@@ -349,19 +307,18 @@ export default defineEventHandler(async (event) => {
         const startIndex = (page - 2) * limit // page 2 starts at index 0 of restRecommendations
         paginatedRecommendations = restRecommendations.slice(startIndex, startIndex + limit)
       }
-      
+
       // Calculate pagination info
       // Total pages = 1 (for top 5) + pages for the rest
       const restCount = restRecommendations.length
-      const totalPages = restCount > 0 
-        ? Math.ceil(restCount / limit) + 1 // +1 for first page with top 5
-        : 1 // Only top 5, no additional pages
-      
+      const totalPages =
+        restCount > 0
+          ? Math.ceil(restCount / limit) + 1 // +1 for first page with top 5
+          : 1 // Only top 5, no additional pages
+
       // Calculate currentTier for player_info (needed before return)
-      const currentTier = currentIsUnrated 
-        ? 'Unrated' as RatingTier
-        : currentTierInfo.tier
-      
+      const currentTier = currentIsUnrated ? ('Unrated' as RatingTier) : currentTierInfo.tier
+
       return {
         success: true,
         recommendations: paginatedRecommendations,
@@ -372,7 +329,7 @@ export default defineEventHandler(async (event) => {
           total: totalCount,
           total_pages: totalPages,
           has_more: page < totalPages,
-          top_recommendations_count: topRecommendations.length
+          top_recommendations_count: topRecommendations.length,
         },
         player_info: {
           id: currentPlayer.id,
@@ -387,16 +344,14 @@ export default defineEventHandler(async (event) => {
           city_segments_count: segmentIds.length,
           matchable_cities_count: matchableCityIds.length,
           recommendations_count: totalCount,
-        }
+        },
       }
     }
 
     // ============================================
     // STEP 9: Return response (no recommendations found)
     // ============================================
-    const currentTier = currentIsUnrated 
-      ? 'Unrated' as RatingTier
-      : currentTierInfo.tier
+    const currentTier = currentIsUnrated ? ('Unrated' as RatingTier) : currentTierInfo.tier
 
     return {
       success: true,
@@ -408,7 +363,7 @@ export default defineEventHandler(async (event) => {
         total: 0,
         total_pages: 1,
         has_more: false,
-        top_recommendations_count: 0
+        top_recommendations_count: 0,
       },
       player_info: {
         id: currentPlayer.id,
@@ -423,13 +378,13 @@ export default defineEventHandler(async (event) => {
         city_segments_count: segmentIds.length,
         matchable_cities_count: matchableCityIds.length,
         recommendations_count: 0,
-      }
+      },
     }
   } catch (error: any) {
     console.error('Matchmaking error:', error)
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })

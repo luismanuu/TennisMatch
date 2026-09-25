@@ -23,7 +23,7 @@ export default defineNuxtPlugin(() => {
       return
     }
     
-    // Wait a bit for Clerk to fully initialize
+    // Wait a bit for the session to settle
     await new Promise(resolve => setTimeout(resolve, 500))
     
     // Check if user has a player profile

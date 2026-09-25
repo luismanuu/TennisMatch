@@ -1,204 +1,130 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, count, eq, gte, inArray, isNull, lte, or, type SQL } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, players, rating_history, type MatchStatus } from '~/server/db/schema'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function endOfDay(dateStr: string): Date {
+  const d = new Date(dateStr)
+  d.setHours(23, 59, 59, 999)
+  return d
+}
+
+// scheduled_at in [start,end] OR (scheduled_at is null AND created_at in [start,end])
+function scheduledOrCreatedRange(startDate?: string, endDate?: string): SQL {
+  const scheduled: SQL[] = []
+  const created: SQL[] = []
+  if (startDate) {
+    scheduled.push(gte(matches.scheduled_at, new Date(startDate)))
+    created.push(gte(matches.created_at, new Date(startDate)))
+  }
+  if (endDate) {
+    const end = endOfDay(endDate)
+    scheduled.push(lte(matches.scheduled_at, end))
+    created.push(lte(matches.created_at, end))
+  }
+  return or(and(...scheduled), and(isNull(matches.scheduled_at), ...created))!
+}
+
+const playerColumns = { id: true, name: true } as const
+const categoryColumns = { id: true, name: true, description: true, order: true } as const
 
 export default defineEventHandler(async (event) => {
+  const playerId = getRouterParam(event, 'id')
+  const query = getQuery(event)
+  const limit = parseInt(query.limit as string) || 10
+  const offset = parseInt(query.offset as string) || 0
+  const status = query.status as string | undefined
+  const startDate = query.start_date as string | undefined
+  const endDate = query.end_date as string | undefined
+
+  if (!playerId) {
+    throw createError({ statusCode: 400, statusMessage: 'Player ID is required' })
+  }
+
   try {
-    const playerId = getRouterParam(event, 'id')
-    const query = getQuery(event)
-    const limit = parseInt(query.limit as string) || 10
-    const offset = parseInt(query.offset as string) || 0
-    const status = query.status as string | undefined
-    const startDate = query.start_date as string | undefined
-    const endDate = query.end_date as string | undefined
-    
-    if (!playerId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Player ID is required'
-      })
+    const db = useDb()
+
+    const player = UUID.test(playerId)
+      ? await db.query.players.findFirst({ columns: { id: true }, where: eq(players.id, playerId) })
+      : undefined
+    if (!player) {
+      throw createError({ statusCode: 404, statusMessage: 'Player not found' })
     }
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Verify player exists
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('id', playerId)
-      .single()
-    
-    if (playerError || !player) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Player not found'
-      })
-    }
-    
-    // Build base query for matches
-    let matchesQuery = supabase
-      .from('matches')
-      .select(`
-        *,
-        player1:players!player1_id(
-          id,
-          name,
-          category:categories(id, name, description, order)
-        ),
-        player2:players!player2_id(
-          id,
-          name,
-          category:categories(id, name, description, order)
-        ),
-        pending_player2:pending_players!pending_player2_id(
-          id,
-          name,
-          email,
-          category:categories(id, name, description, order),
-          status
-        ),
-        winner:players!winner_id(
-          id,
-          name,
-          status
-        ),
-        tournament:tournaments(
-          id,
-          name,
-          category_id
-        )
-      `, { count: 'exact' })
-      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
-    
-    // Apply status filter
+
+    const conditions = [or(eq(matches.player1_id, playerId), eq(matches.player2_id, playerId))!]
     if (status) {
-      matchesQuery = matchesQuery.eq('status', status)
+      conditions.push(eq(matches.status, status as MatchStatus))
     }
-    
-    // Apply date filters
-    // For date filtering, we use played_at for completed matches and scheduled_at/created_at for others
     if (startDate || endDate) {
       if (status === 'completed') {
-        // For completed matches, filter by played_at
-        if (startDate) {
-          matchesQuery = matchesQuery.gte('played_at', startDate)
-        }
-        if (endDate) {
-          // Set end date to end of day
-          const endDateValue = new Date(endDate)
-          endDateValue.setHours(23, 59, 59, 999)
-          matchesQuery = matchesQuery.lte('played_at', endDateValue.toISOString())
-        }
+        if (startDate) conditions.push(gte(matches.played_at, new Date(startDate)))
+        if (endDate) conditions.push(lte(matches.played_at, endOfDay(endDate)))
       } else {
-        // For other statuses, filter by scheduled_at (preferred) or created_at (fallback)
-        // Include matches with scheduled_at in range OR matches without scheduled_at but created_at in range
-        if (startDate && endDate) {
-          const endDateValue = new Date(endDate)
-          endDateValue.setHours(23, 59, 59, 999)
-          // Matches with scheduled_at in range OR (no scheduled_at AND created_at in range)
-          matchesQuery = matchesQuery.or(`and(scheduled_at.gte.${startDate},scheduled_at.lte.${endDateValue.toISOString()}),and(scheduled_at.is.null,created_at.gte.${startDate},created_at.lte.${endDateValue.toISOString()})`)
-        } else if (startDate) {
-          // scheduled_at >= start OR (no scheduled_at AND created_at >= start)
-          matchesQuery = matchesQuery.or(`scheduled_at.gte.${startDate},and(scheduled_at.is.null,created_at.gte.${startDate})`)
-        } else if (endDate) {
-          const endDateValue = new Date(endDate)
-          endDateValue.setHours(23, 59, 59, 999)
-          // scheduled_at <= end OR (no scheduled_at AND created_at <= end)
-          matchesQuery = matchesQuery.or(`scheduled_at.lte.${endDateValue.toISOString()},and(scheduled_at.is.null,created_at.lte.${endDateValue.toISOString()})`)
-        }
+        conditions.push(scheduledOrCreatedRange(startDate, endDate))
       }
     }
-    
-    // Get total count with same filters
-    let countQuery = supabase
-      .from('matches')
-      .select('id', { count: 'exact', head: true })
-      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
-    
-    if (status) {
-      countQuery = countQuery.eq('status', status)
-    }
-    
-    if (startDate || endDate) {
-      if (status === 'completed') {
-        if (startDate) {
-          countQuery = countQuery.gte('played_at', startDate)
-        }
-        if (endDate) {
-          const endDateValue = new Date(endDate)
-          endDateValue.setHours(23, 59, 59, 999)
-          countQuery = countQuery.lte('played_at', endDateValue.toISOString())
-        }
-      } else {
-        if (startDate && endDate) {
-          const endDateValue = new Date(endDate)
-          endDateValue.setHours(23, 59, 59, 999)
-          countQuery = countQuery.or(`and(scheduled_at.gte.${startDate},scheduled_at.lte.${endDateValue.toISOString()}),and(scheduled_at.is.null,created_at.gte.${startDate},created_at.lte.${endDateValue.toISOString()})`)
-        } else if (startDate) {
-          countQuery = countQuery.or(`scheduled_at.gte.${startDate},and(scheduled_at.is.null,created_at.gte.${startDate})`)
-        } else if (endDate) {
-          const endDateValue = new Date(endDate)
-          endDateValue.setHours(23, 59, 59, 999)
-          countQuery = countQuery.or(`scheduled_at.lte.${endDateValue.toISOString()},and(scheduled_at.is.null,created_at.lte.${endDateValue.toISOString()})`)
-        }
-      }
-    }
-    
-    const { count: totalMatches } = await countQuery
-    
-    // Fetch matches with filters applied
-    const { data: matches, error: matchesError } = await matchesQuery
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
-    
-    if (matchesError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch matches'
+    const where = and(...conditions)
+
+    const [{ n: totalMatches }] = await db.select({ n: count() }).from(matches).where(where)
+
+    const rawMatches = await db.query.matches.findMany({
+      with: {
+        player1: { columns: playerColumns, with: { category: { columns: categoryColumns } } },
+        player2: { columns: playerColumns, with: { category: { columns: categoryColumns } } },
+        // Public route: the invited player's email is personal data and stays out
+        pending_player2: {
+          columns: { id: true, name: true, status: true },
+          with: { category: { columns: categoryColumns } },
+        },
+        winner: { columns: { id: true, name: true, status: true } },
+        tournament: { columns: { id: true, name: true, category_id: true } },
+      },
+      where,
+      orderBy: (t, { desc }) => desc(t.created_at),
+      limit,
+      offset,
+    })
+
+    // Attach this player's rating-history entry (elo_change, was_winner) for competitive completed matches.
+    const competitiveIds = rawMatches.filter((m) => m.is_competitive && m.status === 'completed').map((m) => m.id)
+    const historyByMatch = new Map<string, { elo_change: number; was_winner: boolean }>()
+    if (competitiveIds.length > 0) {
+      const history = await db.query.rating_history.findMany({
+        columns: { match_id: true, elo_change: true, was_winner: true },
+        where: and(
+          eq(rating_history.player_id, playerId),
+          inArray(rating_history.match_id, competitiveIds),
+          eq(rating_history.rating_reversed, false),
+        ),
       })
+      for (const h of history) historyByMatch.set(h.match_id, { elo_change: h.elo_change, was_winner: h.was_winner })
     }
-    
-    // For competitive completed matches, get rating history
-    const matchesWithRating = await Promise.all((matches || []).map(async (match: any) => {
-      if (match.is_competitive && match.status === 'completed' && match.id) {
-        try {
-          // Get rating history for this match
-          const { data: ratingHistory } = await supabase
-            .from('rating_history')
-            .select('player_id, elo_change, was_winner')
-            .eq('match_id', match.id)
-            .eq('rating_reversed', false)
-            .eq('player_id', playerId)
-            .single()
-          
-          if (ratingHistory) {
-            match.elo_change = ratingHistory.elo_change
-            match.was_winner = ratingHistory.was_winner
-          }
-        } catch (err) {
-          // Silently fail - rating history is optional
-        }
-      }
-      return match
-    }))
-    
-    const totalPages = Math.ceil((totalMatches || 0) / limit)
-    
+
+    const matchesWithRating = rawMatches.map((match) => {
+      const h = historyByMatch.get(match.id)
+      return h ? { ...match, elo_change: h.elo_change, was_winner: h.was_winner } : match
+    })
+
+    const totalPages = Math.ceil(totalMatches / limit)
+
     return {
       success: true,
-      matches: matchesWithRating || [],
+      matches: matchesWithRating,
       pagination: {
-        total: totalMatches || 0,
+        total: totalMatches,
         limit,
         offset,
         total_pages: totalPages,
         current_page: Math.floor(offset / limit) + 1,
-        has_next: offset + limit < (totalMatches || 0),
-        has_previous: offset > 0
-      }
+        has_next: offset + limit < totalMatches,
+        has_previous: offset > 0,
+      },
     }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })

@@ -1,149 +1,47 @@
 # Tennis Match Platform
 
-A platform for amateur tennis players in Ecuador to track matches, ELO ratings, and tournaments.
+A platform for amateur tennis players in Ecuador to track matches, ratings and tournaments.
 
-## Tech Stack
+## Tech stack
 
-- **Nuxt 3** - Vue.js framework
-- **TypeScript** - Type safety
-- **Clerk** - Authentication
-- **Supabase** - Database
-- **Nuxt UI** - UI component library
+- **Nuxt 4** (Vue, Nitro server routes), TypeScript
+- **Neon Postgres** through **Drizzle ORM** (`server/db`)
+- **Better Auth**: email and password, database sessions (`server/utils/auth.ts`)
+- **Nuxt UI** and the design system in `assets/css/design-system.css`
+- Hosted on **Vercel** (project `tennis-match`)
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
-- Clerk account (for authentication)
-- Supabase account (for database)
-
-### Installation
-
-1. Clone the repository and install dependencies:
+## Getting started
 
 ```bash
 npm install
-```
-
-2. Create a `.env` file in the root directory with the following variables:
-
-```env
-# Clerk Authentication
-NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key_here
-NUXT_CLERK_SECRET_KEY=sk_test_your_secret_key_here
-
-# Or use the alternative naming:
-# CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key_here
-# CLERK_SECRET_KEY=sk_test_your_secret_key_here
-
-# Supabase Database
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_anon_key_here
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
-```
-
-3. Get your Clerk keys:
-   - Sign up at [clerk.com](https://clerk.com)
-   - Create a new application
-   - Copy your Publishable Key and Secret Key from the dashboard
-
-4. Get your Supabase keys:
-   - Sign up at [supabase.com](https://supabase.com)
-   - Create a new project
-   - Go to Settings > API
-   - Copy your Project URL, anon/public key, and service_role key
-
-### Development
-
-Start the development server:
-
-```bash
+cp .env.example .env   # fill in the values
+npm run db:migrate     # applies server/db/migrations to DATABASE_URL_UNPOOLED
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`
-
-### Build
-
-Build for production:
-
-```bash
-npm run build
-```
-
-Preview the production build:
-
-```bash
-npm run preview
-```
-
-## Project Structure
-
-```
-TennisMatch/
-├── composables/          # Reusable composables (useClerk, useSupabase)
-├── middleware/          # Route middleware (auth protection)
-├── pages/               # Application pages
-│   ├── index.vue       # Home page
-│   ├── sign-in/        # Sign in page
-│   └── sign-up/        # Sign up page
-├── types/              # TypeScript type definitions
-└── server/             # Server-side code (API routes)
-```
-
-## Features
-
-### Current Implementation
-
-- ✅ User authentication with Clerk (sign up, sign in, sign out)
-- ✅ Protected routes with middleware
-- ✅ Supabase connection setup
-- ✅ TypeScript support
-- ✅ Nuxt UI components
-
-### Coming Soon
-
-- User profile management
-- Match registration
-- ELO rating system
-- Tournament brackets
-- Player statistics
-
-## Authentication
-
-The application uses Clerk for authentication. Users can:
-
-- Sign up with email/password or social providers (configured in Clerk dashboard)
-- Sign in to their account
-- Access protected routes (automatically redirected to sign-in if not authenticated)
-
-### Development Email Limits
-
-⚠️ **Important**: Clerk limits development instances to 100 emails per month. If you hit this limit:
-
-1. **Enable Test Emails** (Recommended):
-   - Go to Clerk Dashboard → **Configure** → **Email & SMS** → Enable test emails
-   - View test emails at [https://go.clerk.com/test-emails](https://go.clerk.com/test-emails)
-   - See `CLERK_TEST_EMAILS.md` for detailed instructions
-
-2. **Benefits of Test Emails**:
-   - Unlimited testing (no email limit)
-   - View emails in dashboard without sending
-   - Faster development workflow
-   - Better debugging capabilities
+Environment variables are listed in `.env.example`. The team keeps the real values in Infisical
+(`/luis-factory/tennismatch`). Never point a local run at the Neon `main` branch.
 
 ## Database
 
-Supabase is used as the database. The connection is configured and ready for:
+- The schema lives in `server/db/schema.ts`. `npm run db:generate` writes a new migration after a schema change,
+  and `npm run db:check` validates the migration history.
+- `docs/schema-decisions.md` explains how the old Supabase SQL files were reconciled.
 
-- Player profiles
-- Match records
-- Tournament data
-- ELO ratings
+## Auth and authorisation
 
-## License
+- The server takes identity only from the session: `requireUser`, `requireAdmin`, `requireOrganizer` and
+  `requirePlayer` in `server/utils/session.ts`. Never read a user id from a request body, query or header.
+- Roles (`player`, `admin`, `tournament_organizer`) live in `user.role`. Promote an admin with SQL on the
+  intended branch: `update "user" set role = 'admin' where email = '...'`.
 
-MIT
+## Tests
 
+```bash
+npm run test:run          # all Vitest suites
+npm run typecheck:server  # server-side TypeScript
+npm run build
+```
+
+`tests/security` runs every API route against real sessions on an in-process Postgres. A new route must be
+classified in `tests/security/route-access.ts`, or the suite fails.

@@ -1,88 +1,40 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { and, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { notifications } from '~/server/db/schema'
+import { requirePlayer } from '~/server/utils/session'
 
-/**
- * POST /api/notifications/[id]/read
- * 
- * Mark a notification as read
- */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// POST /api/notifications/[id]/read — mark a notification as read.
 export default defineEventHandler(async (event) => {
+  const { player: currentPlayer } = await requirePlayer(event)
+
   try {
     const notificationId = getRouterParam(event, 'id')
-    
+
     if (!notificationId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Notification ID is required'
-      })
+      throw createError({ statusCode: 400, statusMessage: 'Notification ID is required' })
     }
-    
-    const body = await readBody<{ clerk_id: string }>(event)
-    const { clerk_id } = body
-    
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'clerk_id is required'
-      })
-    }
-    
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Get current player
-    const { data: currentPlayer, error: playerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
-    
-    if (playerError || !currentPlayer) {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Player not found'
-      })
-    }
-    
-    // Verify notification belongs to player and mark as read
-    const { data: notification, error: updateError } = await supabase
-      .from('notifications')
-      .update({
-        is_read: true,
-        read_at: new Date().toISOString()
-      })
-      .eq('id', notificationId)
-      .eq('player_id', currentPlayer.id)
-      .select()
-      .single()
-    
-    if (updateError) {
-      console.error('[API] Mark notification as read error:', updateError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to mark notification as read',
-        data: updateError
-      })
-    }
-    
+
+    // Ownership is enforced in the WHERE clause: a notification id that belongs to another
+    // player updates zero rows and reads back as 404, never revealing whether it exists.
+    const [notification] = UUID.test(notificationId)
+      ? await useDb()
+          .update(notifications)
+          .set({ is_read: true, read_at: new Date() })
+          .where(and(eq(notifications.id, notificationId), eq(notifications.player_id, currentPlayer.id)))
+          .returning()
+      : []
+
     if (!notification) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Notification not found or unauthorized'
-      })
+      throw createError({ statusCode: 404, statusMessage: 'Notification not found or unauthorized' })
     }
-    
-    return {
-      success: true,
-      notification
-    }
+
+    return { success: true, notification }
   } catch (error: any) {
-    console.error('[API] Mark as read error:', error)
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })

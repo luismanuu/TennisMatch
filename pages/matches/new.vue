@@ -245,7 +245,7 @@ const handleSubmit = async () => {
 
     if (opponentType.value === 'new') {
       // Create pending player and send invitation
-      const pendingPlayer = await createPendingPlayer(userId.value, {
+      const pendingPlayer = await createPendingPlayer({
         name: newOpponent.value.name,
         email: newOpponent.value.email,
         category_id: newOpponent.value.category_id,

@@ -99,7 +99,7 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const { user } = useUser()
+const { user } = useAuthState()
 const { 
   recommendations, 
   topRecommendations,

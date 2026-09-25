@@ -1,19 +1,16 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { and, count, eq, isNull } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournament_registrations, tournaments } from '~/server/db/schema'
+import { requirePlayer } from '~/server/utils/session'
 import { checkSelfRegistrationAllowed } from '~/server/utils/tournament-status'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<{ clerk_id: string; waitlist?: boolean }>(event)
-    const { clerk_id, waitlist = false } = body
-    const tournamentId = getRouterParam(event, 'id')
+  const { player } = await requirePlayer(event)
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<{ waitlist?: boolean }>(event)
+    const { waitlist = false } = body ?? {}
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -22,27 +19,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-
-    const supabase = getSupabaseAdmin()
-
-    // Get player ID
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('id, category_id')
-      .eq('clerk_id', clerk_id)
-      .single()
-
-    if (playerError || !player) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Player profile not found'
-      })
-    }
+    const db = useDb()
 
     // Check if self-registration is allowed
-    const allowed = await checkSelfRegistrationAllowed(tournamentId, supabase)
+    const allowed = await checkSelfRegistrationAllowed(tournamentId)
     if (!allowed) {
       throw createError({
         statusCode: 403,
@@ -50,14 +30,9 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Get tournament
-    const { data: tournament, error: tournamentError } = await supabase
-      .from('tournaments')
-      .select('*')
-      .eq('id', tournamentId)
-      .single()
+    const tournament = await db.query.tournaments.findFirst({ where: eq(tournaments.id, tournamentId) })
 
-    if (tournamentError || !tournament) {
+    if (!tournament) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Tournament not found'
@@ -73,39 +48,51 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Check if already registered
-    const { data: existingRegistration } = await supabase
-      .from('tournament_registrations')
-      .select('id, status')
-      .eq('tournament_id', tournamentId)
-      .eq('player_id', player.id)
-      .single()
-
-    if (existingRegistration) {
-      throw createError({
+    const alreadyRegistered = () =>
+      createError({
         statusCode: 400,
         statusMessage: 'You are already registered for this tournament'
       })
+
+    // Check if already registered
+    const existingRegistration = await db.query.tournament_registrations.findFirst({
+      columns: { id: true, status: true },
+      where: and(
+        eq(tournament_registrations.tournament_id, tournamentId),
+        eq(tournament_registrations.player_id, player.id)
+      ),
+    })
+
+    if (existingRegistration) {
+      throw alreadyRegistered()
+    }
+
+    // The unique (tournament, player) index settles a concurrent double registration: the loser inserts nothing
+    const insertRegistration = async (status: 'waitlisted' | 'confirmed', statusMessage: string) => {
+      let inserted
+      try {
+        inserted = await db
+          .insert(tournament_registrations)
+          .values({
+            tournament_id: tournamentId,
+            player_id: player.id,
+            status,
+            ...(status === 'confirmed' ? { confirmed_at: new Date() } : {})
+          })
+          .onConflictDoNothing()
+          .returning({ id: tournament_registrations.id })
+      } catch (error) {
+        throw createError({ statusCode: 500, statusMessage, data: error })
+      }
+      if (inserted.length === 0) {
+        throw alreadyRegistered()
+      }
+      return inserted[0].id
     }
 
     // If player explicitly wants to join waitlist
     if (waitlist) {
-      const { error: waitlistError } = await supabase
-        .from('tournament_registrations')
-        .insert({
-          tournament_id: tournamentId,
-          player_id: player.id,
-          status: 'waitlisted'
-        })
-
-      if (waitlistError) {
-        throw createError({
-          statusCode: 500,
-          statusMessage: 'Failed to add to waitlist',
-          data: waitlistError
-        })
-      }
-
+      await insertRegistration('waitlisted', 'Failed to add to waitlist')
       return {
         success: true,
         message: 'Added to waitlist',
@@ -115,31 +102,20 @@ export default defineEventHandler(async (event) => {
 
     // Check max players limit
     if (tournament.max_players) {
-      const { count } = await supabase
-        .from('tournament_registrations')
-        .select('*', { count: 'exact', head: true })
-        .eq('tournament_id', tournamentId)
-        .eq('status', 'confirmed')
-        .is('withdrawn_at', null)
+      const [{ n }] = await db
+        .select({ n: count() })
+        .from(tournament_registrations)
+        .where(
+          and(
+            eq(tournament_registrations.tournament_id, tournamentId),
+            eq(tournament_registrations.status, 'confirmed'),
+            isNull(tournament_registrations.withdrawn_at)
+          )
+        )
 
-      if (count && count >= tournament.max_players) {
+      if (n >= tournament.max_players) {
         // Add to waitlist automatically if tournament is full
-        const { error: waitlistError } = await supabase
-          .from('tournament_registrations')
-          .insert({
-            tournament_id: tournamentId,
-            player_id: player.id,
-            status: 'waitlisted'
-          })
-
-        if (waitlistError) {
-          throw createError({
-            statusCode: 500,
-            statusMessage: 'Failed to add to waitlist',
-            data: waitlistError
-          })
-        }
-
+        await insertRegistration('waitlisted', 'Failed to add to waitlist')
         return {
           success: true,
           message: 'Added to waitlist',
@@ -149,27 +125,11 @@ export default defineEventHandler(async (event) => {
     }
 
     // Register player
-    const { data: registration, error: registerError } = await supabase
-      .from('tournament_registrations')
-      .insert({
-        tournament_id: tournamentId,
-        player_id: player.id,
-        status: 'confirmed',
-        confirmed_at: new Date().toISOString()
-      })
-      .select(`
-        *,
-        player:players(*)
-      `)
-      .single()
-
-    if (registerError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to register',
-        data: registerError
-      })
-    }
+    const registrationId = await insertRegistration('confirmed', 'Failed to register')
+    const registration = await db.query.tournament_registrations.findFirst({
+      where: eq(tournament_registrations.id, registrationId),
+      with: { player: true },
+    })
 
     return {
       success: true,
@@ -183,4 +143,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

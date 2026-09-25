@@ -1,19 +1,15 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
-import { getClerkClient } from '~/server/utils/clerk'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournaments } from '~/server/db/schema'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { getAccountsByIds } from '~/server/utils/users'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
+  const { player: organizer } = await requirePlayer(event, 'organizer')
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -22,95 +18,43 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireOrganizer(clerkId)
-
-    const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
-
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerkId)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
-
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
-    const { data: tournament, error } = await supabase
-      .from('tournaments')
-      .select(`
-        *,
-        category:categories(*),
-        registrations:tournament_registrations(
-          *,
-          player:players(
-            id,
-            name,
-            phone_number,
-            clerk_id,
-            category:categories(id, name, description, order)
-          )
-        ),
-        groups:tournament_groups(
-          *,
-          players:tournament_group_players(
-            *,
-            player:players(*)
-          )
-        ),
-        rounds:tournament_rounds(*)
-      `)
-      .eq('id', tournamentId)
-      .single()
+    const tournament = await useDb().query.tournaments.findFirst({
+      where: eq(tournaments.id, tournamentId),
+      with: {
+        category: true,
+        registrations: {
+          with: {
+            player: {
+              columns: { id: true, name: true, phone_number: true, user_id: true },
+              with: { category: { columns: { id: true, name: true, description: true, order: true } } },
+            },
+          },
+        },
+        groups: { with: { players: { with: { player: true } } } },
+        rounds: true,
+      },
+    })
 
-    if (error || !tournament) {
+    if (!tournament) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Tournament not found'
       })
     }
 
-    // Enrich registrations with email from Clerk
-    if (tournament.registrations && tournament.registrations.length > 0) {
-      const enrichedRegistrations = await Promise.all(
-        tournament.registrations.map(async (reg: any) => {
-          if (reg.player?.clerk_id) {
-            try {
-              const clerkUser = await clerkClient.users.getUser(reg.player.clerk_id)
-              const email = clerkUser.emailAddresses[0]?.emailAddress || null
-              return {
-                ...reg,
-                player: {
-                  ...reg.player,
-                  email
-                }
-              }
-            } catch (err) {
-              // If we can't get Clerk user, just return without email
-              return {
-                ...reg,
-                player: {
-                  ...reg.player,
-                  email: null
-                }
-              }
-            }
-          }
-          return reg
-        })
-      )
-      tournament.registrations = enrichedRegistrations
-    }
+    // Enrich registrations with the account email
+    const accounts = await getAccountsByIds(tournament.registrations.map((reg) => reg.player.user_id))
 
-    return tournament
+    return {
+      ...tournament,
+      registrations: tournament.registrations.map((reg) => ({
+        ...reg,
+        player: { ...reg.player, email: accounts.get(reg.player.user_id)?.email ?? null },
+      })),
+    }
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -118,4 +62,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

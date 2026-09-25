@@ -8,8 +8,8 @@ export const usePlayer = () => {
   const publicLoading = ref(false)
   const publicError = ref<Error | null>(null)
   
-  const fetchPlayer = async (clerkId: string) => {
-    if (!clerkId) {
+  const fetchPlayer = async (accountId: string) => {
+    if (!accountId) {
       player.value = null
       return null
     }
@@ -19,7 +19,7 @@ export const usePlayer = () => {
     
     try {
       const data = await $fetch<Player | null>('/api/players/me', {
-        query: { clerk_id: clerkId }
+        query: {}
       }).catch((err: any) => {
         // Handle 404/401 gracefully - profile doesn't exist yet
         if (err.statusCode === 404 || err.statusCode === 401) {
@@ -44,7 +44,7 @@ export const usePlayer = () => {
     }
   }
   
-  const createPlayer = async (clerkId: string, payload: CreatePlayerPayload) => {
+  const createPlayer = async (accountId: string, payload: CreatePlayerPayload) => {
     loading.value = true
     error.value = null
     
@@ -52,7 +52,6 @@ export const usePlayer = () => {
       const data = await $fetch<Player>('/api/players/me', {
         method: 'POST',
         body: {
-          clerk_id: clerkId,
           ...payload
         }
       })
@@ -66,7 +65,7 @@ export const usePlayer = () => {
     }
   }
   
-  const updatePlayer = async (playerId: string, clerkId: string, payload: UpdatePlayerPayload) => {
+  const updatePlayer = async (playerId: string, accountId: string, payload: UpdatePlayerPayload) => {
     loading.value = true
     error.value = null
     
@@ -74,7 +73,6 @@ export const usePlayer = () => {
       const data = await $fetch<Player>(`/api/players/${playerId}`, {
         method: 'PUT',
         body: {
-          clerk_id: clerkId,
           ...payload
         }
       })

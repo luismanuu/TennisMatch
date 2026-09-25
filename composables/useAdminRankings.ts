@@ -51,7 +51,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/stats?clerk_id=${userId.value}`)
+      const data = await $fetch<any>(`/api/admin/rankings/stats`)
       rankingStats.value = data
       return data
     } catch (err: any) {
@@ -76,7 +76,6 @@ export const useAdminRankings = () => {
     
     try {
       const params = new URLSearchParams()
-      params.append('clerk_id', userId.value)
       if (options.time_range) params.append('time_range', options.time_range)
       if (options.granularity) params.append('granularity', options.granularity)
       
@@ -101,7 +100,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/players/${playerId}?clerk_id=${userId.value}`)
+      const data = await $fetch<any>(`/api/admin/rankings/players/${playerId}`)
       playerRankingDetails.value = data
       return data
     } catch (err: any) {
@@ -122,7 +121,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/health?clerk_id=${userId.value}`)
+      const data = await $fetch<any>(`/api/admin/rankings/health`)
       rankingHealth.value = data
       return data
     } catch (err: any) {
@@ -151,7 +150,6 @@ export const useAdminRankings = () => {
     
     try {
       const params = new URLSearchParams()
-      params.append('clerk_id', userId.value)
       if (filters.city_id) params.append('city_id', filters.city_id)
       if (filters.category_id) params.append('category_id', filters.category_id)
       if (filters.tier) params.append('tier', filters.tier)
@@ -192,7 +190,7 @@ export const useAdminRankings = () => {
     
     try {
       const offset = (placementPage.value - 1) * placementPageSize.value
-      const data = await $fetch<any>(`/api/admin/rankings/placement?clerk_id=${userId.value}&limit=${placementPageSize.value}&offset=${offset}`)
+      const data = await $fetch<any>(`/api/admin/rankings/placement?limit=${placementPageSize.value}&offset=${offset}`)
       placementMatches.value = data.players || []
       placementStats.value = data.statistics || null
       placementTotal.value = data.total || 0
@@ -215,7 +213,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/placement/${playerId}?clerk_id=${userId.value}`, {
+      const data = await $fetch<any>(`/api/admin/rankings/placement/${playerId}`, {
         method: 'PUT',
         body: {
           action: 'reset'
@@ -244,7 +242,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/placement/${playerId}?clerk_id=${userId.value}`, {
+      const data = await $fetch<any>(`/api/admin/rankings/placement/${playerId}`, {
         method: 'PUT',
         body: {
           action: 'complete'
@@ -278,7 +276,6 @@ export const useAdminRankings = () => {
     try {
       const offset = (decayPage.value - 1) * decayPageSize.value
       const params = new URLSearchParams()
-      params.append('clerk_id', userId.value)
       params.append('limit', decayPageSize.value.toString())
       params.append('offset', offset.toString())
       if (onlyAtRisk) params.append('only_at_risk', 'true')
@@ -306,7 +303,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/decay/${playerId}?clerk_id=${userId.value}`, {
+      const data = await $fetch<any>(`/api/admin/rankings/decay/${playerId}`, {
         method: 'POST',
         body: {
           action: 'trigger'
@@ -335,7 +332,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/decay/${playerId}?clerk_id=${userId.value}`, {
+      const data = await $fetch<any>(`/api/admin/rankings/decay/${playerId}`, {
         method: 'POST',
         body: {
           action: 'exempt'
@@ -364,7 +361,7 @@ export const useAdminRankings = () => {
     error.value = null
     
     try {
-      const data = await $fetch<any>(`/api/admin/rankings/matches/${matchId}/impact?clerk_id=${userId.value}`)
+      const data = await $fetch<any>(`/api/admin/rankings/matches/${matchId}/impact`)
       matchImpact.value = data
       return data
     } catch (err: any) {

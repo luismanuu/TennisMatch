@@ -1,23 +1,13 @@
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 
 /**
  * Debug endpoint to check if API key is configured
  * Admin only - for troubleshooting
  */
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
-
-    await requireAdmin(clerkId)
-
     const config = useRuntimeConfig()
     const hasApiKey = !!config.openRouterApiKey
     const apiKeyLength = config.openRouterApiKey?.length || 0

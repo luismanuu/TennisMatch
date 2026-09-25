@@ -1,19 +1,41 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { getClerkUser } from '~/server/utils/clerk'
+import { and, count, eq, gte, lt, or } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { matches, pending_players, players } from '~/server/db/schema'
+import { requireUser } from '~/server/utils/session'
 import { validateAndSetMatchScheduling } from '~/server/utils/tournament-scheduling'
 import { createMatchNotification } from '~/server/utils/notifications'
 import { datetimeLocalToISO, isDateInPast } from '~/server/utils/timezone'
 import type { CreateMatchPayload } from '~/types'
 
+const namedPlayer = { columns: { id: true, name: true } } as const
+const categoryColumns = { columns: { id: true, name: true, description: true, order: true } } as const
+
+// The match as this route has always returned it (the Vue pages read these nested keys)
+const matchResponseRelations = {
+  player1: { columns: { id: true, name: true }, with: { category: categoryColumns } },
+  player2: { columns: { id: true, name: true }, with: { category: categoryColumns } },
+  pending_player2: { columns: { id: true, name: true, email: true, status: true }, with: { category: categoryColumns } },
+  match_proposed_by_player: namedPlayer,
+  match_accepted_by_player: namedPlayer,
+  match_rejected_by_player: namedPlayer,
+  acceptance_change_approved_by_player: namedPlayer,
+  acceptance_change_rejected_by_player: namedPlayer,
+  score_proposed_by_player: namedPlayer,
+  score_approved_by_player: namedPlayer,
+  winner: namedPlayer,
+} as const
+
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
+
   try {
-    const body = await readBody<CreateMatchPayload & { clerk_id: string }>(event)
-    const { clerk_id, player1_id, player2_id, pending_player2_id, scheduled_at, location, is_competitive } = body
+    const body = await readBody<CreateMatchPayload>(event)
+    const { player1_id, player2_id, pending_player2_id, scheduled_at, location, is_competitive } = body
     
-    if (!clerk_id || !player1_id || !scheduled_at) {
+    if (!player1_id || !scheduled_at) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Missing required fields: clerk_id, player1_id, scheduled_at'
+        statusMessage: 'Missing required fields: player1_id, scheduled_at'
       })
     }
     
@@ -54,20 +76,15 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Verify Clerk user exists
-    await getClerkUser(clerk_id)
-    
-    const supabase = getSupabaseAdmin()
+    const db = useDb()
     
     // Verify player1 exists and belongs to the authenticated user
-    const { data: player1, error: player1Error } = await supabase
-      .from('players')
-      .select('id, clerk_id')
-      .eq('id', player1_id)
-      .eq('clerk_id', clerk_id)
-      .single()
+    const player1 = await db.query.players.findFirst({
+      columns: { id: true, user_id: true },
+      where: and(eq(players.id, player1_id), eq(players.user_id, user.id)),
+    })
     
-    if (player1Error || !player1) {
+    if (!player1) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Unauthorized: player1_id does not match authenticated user'
@@ -76,85 +93,65 @@ export default defineEventHandler(async (event) => {
     
     // If player2_id is provided, verify it exists
     if (player2_id) {
-      const { data: player2, error: player2Error } = await supabase
-        .from('players')
-        .select('id')
-        .eq('id', player2_id)
-        .single()
+      const player2 = await db.query.players.findFirst({
+        columns: { id: true },
+        where: eq(players.id, player2_id),
+      })
       
-      if (player2Error || !player2) {
+      if (!player2) {
         throw createError({
           statusCode: 400,
           statusMessage: 'Invalid player2_id'
         })
       }
       
-      // Validate: if competitive match, check if players already played 4+ times this month
-      // Only apply this restriction to competitive matches, friendly matches are allowed
+      // Competitive matches only: at most 4 completed competitive matches between the same players per month.
+      // Friendly matches are allowed.
       const isCompetitive = is_competitive !== undefined ? is_competitive : true
       if (isCompetitive) {
-        // Calculate date boundaries for current month
         const now = new Date()
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
         const firstDayOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
         
-        // Fetch all competitive completed matches between these two players this month
-        const [matchesAsPlayer1, matchesAsPlayer2] = await Promise.all([
-          supabase
-            .from('matches')
-            .select('id')
-            .eq('status', 'completed')
-            .eq('is_competitive', true)
-            .eq('player1_id', player1_id)
-            .eq('player2_id', player2_id)
-            .gte('played_at', firstDayOfMonth.toISOString())
-            .lt('played_at', firstDayOfNextMonth.toISOString()),
-          supabase
-            .from('matches')
-            .select('id')
-            .eq('status', 'completed')
-            .eq('is_competitive', true)
-            .eq('player1_id', player2_id)
-            .eq('player2_id', player1_id)
-            .gte('played_at', firstDayOfMonth.toISOString())
-            .lt('played_at', firstDayOfNextMonth.toISOString())
-        ])
+        // A failed count logs and does not block match creation (as before)
+        const monthlyMatches = await db
+          .select({ n: count() })
+          .from(matches)
+          .where(
+            and(
+              eq(matches.status, 'completed'),
+              eq(matches.is_competitive, true),
+              or(
+                and(eq(matches.player1_id, player1_id), eq(matches.player2_id, player2_id)),
+                and(eq(matches.player1_id, player2_id), eq(matches.player2_id, player1_id))
+              ),
+              gte(matches.played_at, firstDayOfMonth),
+              lt(matches.played_at, firstDayOfNextMonth)
+            )
+          )
+          .then(([row]) => row?.n ?? 0)
+          .catch((countError: unknown) => {
+            console.error('Error counting monthly matches:', countError)
+            return 0
+          })
         
-        // Check for errors in queries
-        if (matchesAsPlayer1.error) {
-          console.error('Error fetching matches as player1:', matchesAsPlayer1.error)
-        }
-        if (matchesAsPlayer2.error) {
-          console.error('Error fetching matches as player2:', matchesAsPlayer2.error)
-        }
-        
-        // If there are errors, don't block match creation but log them
-        // Only validate if queries succeeded
-        if (!matchesAsPlayer1.error && !matchesAsPlayer2.error) {
-          const monthlyMatches = [
-            ...(matchesAsPlayer1.data || []),
-            ...(matchesAsPlayer2.data || [])
-          ]
-          
-          if (monthlyMatches.length >= 4) {
-            throw createError({
-              statusCode: 400,
-              statusMessage: 'No puedes programar más de 4 partidos competitivos con el mismo jugador en un mes. Puedes programar un partido amistoso en su lugar.'
-            })
-          }
+        if (monthlyMatches >= 4) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'No puedes programar más de 4 partidos competitivos con el mismo jugador en un mes. Puedes programar un partido amistoso en su lugar.'
+          })
         }
       }
     }
     
     // If pending_player2_id is provided, verify it exists
     if (pending_player2_id) {
-      const { data: pendingPlayer, error: pendingPlayerError } = await supabase
-        .from('pending_players')
-        .select('id, invited_by_player_id, status')
-        .eq('id', pending_player2_id)
-        .single()
+      const pendingPlayer = await db.query.pending_players.findFirst({
+        columns: { id: true, invited_by_player_id: true, status: true },
+        where: eq(pending_players.id, pending_player2_id),
+      })
       
-      if (pendingPlayerError || !pendingPlayer) {
+      if (!pendingPlayer) {
         throw createError({
           statusCode: 400,
           statusMessage: 'Invalid pending_player2_id'
@@ -176,18 +173,20 @@ export default defineEventHandler(async (event) => {
     // Tournament matches don't require acceptance - they're assigned by admin/organizer
     
     // scheduledAtISO is already converted above using datetimeLocalToISO
-    const matchData: any = {
+    const matchData: typeof matches.$inferInsert = {
       player1_id,
-      scheduled_at: scheduledAtISO,
+      scheduled_at: new Date(scheduledAtISO),
       status: 'scheduled',
       location: location || null,
       is_competitive: is_competitive !== undefined ? is_competitive : true
     }
     
     // Only set match_proposed_by for non-tournament matches
-    // Tournament matches are assigned by admin/organizer and don't need acceptance
-    const bodyWithTournament = body as CreateMatchPayload & { clerk_id: string; tournament_id?: string }
-    if (!bodyWithTournament.tournament_id) {
+    // Tournament matches are assigned by admin/organizer and don't need acceptance.
+    // A client-sent tournament_id skips the opponent's acceptance, so only those roles may use it.
+    const bodyWithTournament = body as CreateMatchPayload & { tournament_id?: string }
+    const canAssignTournamentMatch = user.role === 'admin' || user.role === 'tournament_organizer'
+    if (!bodyWithTournament.tournament_id || !canAssignTournamentMatch) {
       matchData.match_proposed_by = player1_id // The creator proposes the match
     }
     
@@ -197,74 +196,21 @@ export default defineEventHandler(async (event) => {
       matchData.pending_player2_id = pending_player2_id
     }
     
-    const { data: match, error: matchInsertError } = await supabase
-      .from('matches')
-      .insert(matchData)
-      .select(`
-        *,
-        player1:players!matches_player1_id_fkey(
-          id,
-          name,
-          category:categories(id, name, description, order)
-        ),
-        player2:players!matches_player2_id_fkey(
-          id,
-          name,
-          category:categories(id, name, description, order)
-        ),
-        pending_player2:pending_players(
-          id,
-          name,
-          email,
-          category:categories(id, name, description, order),
-          status
-        ),
-        match_proposed_by_player:players!matches_match_proposed_by_fkey(
-          id,
-          name
-        ),
-        match_accepted_by_player:players!matches_match_accepted_by_fkey(
-          id,
-          name
-        ),
-        match_rejected_by_player:players!matches_match_rejected_by_fkey(
-          id,
-          name
-        ),
-        acceptance_change_approved_by_player:players!matches_acceptance_change_approved_by_fkey(
-          id,
-          name
-        ),
-        acceptance_change_rejected_by_player:players!matches_acceptance_change_rejected_by_fkey(
-          id,
-          name
-        ),
-        score_proposed_by_player:players!matches_score_proposed_by_fkey(
-          id,
-          name
-        ),
-        score_approved_by_player:players!matches_score_approved_by_fkey(
-          id,
-          name
-        ),
-        winner:players!matches_winner_id_fkey(
-          id,
-          name
-        )
-      `)
-      .single()
+    const [inserted] = await db.insert(matches).values(matchData).returning({ id: matches.id })
+    const match = inserted
+      ? await db.query.matches.findFirst({ where: eq(matches.id, inserted.id), with: matchResponseRelations })
+      : undefined
     
-    if (matchInsertError) {
+    if (!match) {
       throw createError({
         statusCode: 500,
-        statusMessage: 'Failed to create match',
-        data: matchInsertError
+        statusMessage: 'Failed to create match'
       })
     }
     
     // If this is a tournament match, validate round deadline
     if (match.tournament_id) {
-      await validateAndSetMatchScheduling(match.id, scheduled_at, supabase)
+      await validateAndSetMatchScheduling(match.id, scheduled_at)
     }
     
     // Create notifications for both players
@@ -274,7 +220,6 @@ export default defineEventHandler(async (event) => {
       if (match.match_proposed_by) {
         // Non-tournament match: notify player2 they have a proposal to accept
         await createMatchNotification(
-          supabase,
           player2_id,
           match.id,
           'match_proposal',
@@ -287,7 +232,6 @@ export default defineEventHandler(async (event) => {
         
         // Notify player1 that match was created (informational)
         await createMatchNotification(
-          supabase,
           player1_id,
           match.id,
           'match_created',
@@ -300,7 +244,6 @@ export default defineEventHandler(async (event) => {
         // Tournament match: notify both players that match is confirmed
         await Promise.all([
           createMatchNotification(
-            supabase,
             player1_id,
             match.id,
             'match_created',
@@ -311,7 +254,6 @@ export default defineEventHandler(async (event) => {
             }
           ),
           createMatchNotification(
-            supabase,
             player2_id,
             match.id,
             'match_created',
@@ -326,7 +268,6 @@ export default defineEventHandler(async (event) => {
     } else if (pending_player2_id) {
       // Match with pending player: notify player1 that match was created
       await createMatchNotification(
-        supabase,
         player1_id,
         match.id,
         'match_created',

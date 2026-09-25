@@ -41,14 +41,14 @@ export function useMatchmaking() {
   const error = ref<Error | null>(null)
   const message = ref<string | null>(null)
 
-  const fetchRecommendations = async (clerkId: string, page: number = 1, limit: number = 20) => {
+  const fetchRecommendations = async (accountId: string, page: number = 1, limit: number = 20) => {
     try {
       loading.value = true
       error.value = null
       message.value = null
       
       const response = await $fetch<MatchmakingResponse>('/api/matchmaking/recommendations', {
-        query: { clerk_id: clerkId, page, limit }
+        query: { page, limit }
       })
       
       recommendations.value = response.recommendations || []

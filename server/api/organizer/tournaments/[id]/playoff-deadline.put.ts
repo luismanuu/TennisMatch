@@ -1,11 +1,12 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { createPlayoffRoundDeadlines } from '~/server/utils/tournament-scheduling'
 
 export default defineEventHandler(async (event) => {
+  const { player: organizer } = await requirePlayer(event, 'organizer')
+
   try {
     const body = await readBody<{
-      clerk_id: string
       bracket_type: 'main' | 'backdraw'
       rounds: Array<{
         round_number: number
@@ -13,15 +14,8 @@ export default defineEventHandler(async (event) => {
         deadline: string
       }>
     }>(event)
-    const { clerk_id, bracket_type, rounds } = body
+    const { bracket_type, rounds } = body ?? {}
     const tournamentId = getRouterParam(event, 'id')
-
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
 
     if (!tournamentId) {
       throw createError({
@@ -44,28 +38,10 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireOrganizer(clerk_id)
-
-    const supabase = getSupabaseAdmin()
-
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerk_id)
-      .single()
-
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
-
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
 
-    await createPlayoffRoundDeadlines(tournamentId, bracket_type, rounds, supabase)
+    await createPlayoffRoundDeadlines(tournamentId, bracket_type, rounds)
 
     return {
       success: true,

@@ -1,19 +1,19 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
-import { getClerkClient } from '~/server/utils/clerk'
+import { count, eq } from 'drizzle-orm'
+import { requireAdmin } from '~/server/utils/session'
+import { getAccountById, setAccountRole } from '~/server/utils/users'
+import { useDb } from '~/server/db'
+import { players, tournaments } from '~/server/db/schema'
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// [id] is the organizer's player id, or the account id for an organizer without a player profile
+// (see organizers/index.get). Removing an organizer demotes the account to 'player'; the player
+// profile and its history stay.
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const organizerId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const organizerId = getRouterParam(event, 'id')
 
     if (!organizerId) {
       throw createError({
@@ -22,19 +22,13 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireAdmin(clerkId)
+    const db = useDb()
+    const player = UUID.test(organizerId)
+      ? await db.query.players.findFirst({ columns: { id: true, user_id: true }, where: eq(players.id, organizerId) })
+      : undefined
+    const account = await getAccountById(player?.user_id ?? organizerId)
 
-    const supabase = getSupabaseAdmin()
-    const clerkClient = getClerkClient()
-
-    // Get organizer player record
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id, clerk_id, name')
-      .eq('id', organizerId)
-      .single()
-
-    if (organizerError || !organizer) {
+    if (!account || account.role !== 'tournament_organizer') {
       throw createError({
         statusCode: 404,
         statusMessage: 'Organizer not found'
@@ -42,51 +36,21 @@ export default defineEventHandler(async (event) => {
     }
 
     // Check if organizer has created any tournaments
-    const { data: tournaments, error: tournamentsError } = await supabase
-      .from('tournaments')
-      .select('id, name')
-      .eq('organizer_id', organizerId)
+    if (player) {
+      const [{ value: tournamentCount }] = await db
+        .select({ value: count() })
+        .from(tournaments)
+        .where(eq(tournaments.organizer_id, player.id))
 
-    if (tournamentsError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to check tournaments',
-        data: tournamentsError
-      })
+      if (tournamentCount > 0) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: `Cannot delete organizer: they have created ${tournamentCount} tournament(s). Please transfer or delete tournaments first.`
+        })
+      }
     }
 
-    if (tournaments && tournaments.length > 0) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: `Cannot delete organizer: they have created ${tournaments.length} tournament(s). Please transfer or delete tournaments first.`
-      })
-    }
-
-    // Remove tournament_organizer role from Clerk user
-    try {
-      await clerkClient.users.updateUser(organizer.clerk_id, {
-        publicMetadata: {
-          role: 'player' // Revert to player role
-        }
-      })
-    } catch (clerkError: any) {
-      console.warn('Could not update Clerk user role:', clerkError)
-      // Continue with deletion even if Clerk update fails
-    }
-
-    // Delete player record (this will cascade to related records)
-    const { error: deleteError } = await supabase
-      .from('players')
-      .delete()
-      .eq('id', organizerId)
-
-    if (deleteError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to delete organizer',
-        data: deleteError
-      })
-    }
+    await setAccountRole(account.id, 'player')
 
     return {
       success: true,
@@ -99,4 +63,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

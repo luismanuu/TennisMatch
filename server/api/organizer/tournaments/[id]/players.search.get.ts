@@ -1,19 +1,16 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireOrganizer, verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { and, asc, eq, ilike, inArray } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players, tournament_registrations } from '~/server/db/schema'
+import { requirePlayer } from '~/server/utils/session'
+import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 
 export default defineEventHandler(async (event) => {
+  const { player: organizer } = await requirePlayer(event, 'organizer')
+
   try {
     const query = getQuery(event)
-    const clerkId = query.clerk_id as string
     const tournamentId = getRouterParam(event, 'id')
-    const searchTerm = (query.q as string) || ''
-    
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+    const searchTerm = typeof query.q === 'string' ? query.q : ''
 
     if (!tournamentId) {
       throw createError({
@@ -21,78 +18,40 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'Tournament ID is required'
       })
     }
-    
+
     if (!searchTerm || searchTerm.trim().length < 2) {
       return []
     }
-    
-    await requireOrganizer(clerkId)
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Get organizer's player ID
-    const { data: organizer, error: organizerError } = await supabase
-      .from('players')
-      .select('id')
-      .eq('clerk_id', clerkId)
-      .single()
-    
-    if (organizerError || !organizer) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Organizer not found'
-      })
-    }
-    
+
     // Verify organizer owns this tournament
-    await verifyOrganizerOwnsTournament(organizer.id, tournamentId, supabase)
-    
-    // Only return players registered in this tournament
-    // First get all registrations for this tournament
-    const { data: registrations, error: regError } = await supabase
-      .from('tournament_registrations')
-      .select(`
-        player_id
-      `)
-      .eq('tournament_id', tournamentId)
-    
-    if (regError) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to fetch tournament registrations',
-        data: regError
+    await verifyOrganizerOwnsTournament(organizer.id, tournamentId)
+
+    // Only players registered in this tournament, searched by name
+    try {
+      return await useDb().query.players.findMany({
+        columns: { id: true, name: true },
+        with: { category: { columns: { id: true, name: true, description: true, order: true } } },
+        where: and(
+          inArray(
+            players.id,
+            useDb()
+              .select({ id: tournament_registrations.player_id })
+              .from(tournament_registrations)
+              .where(eq(tournament_registrations.tournament_id, tournamentId))
+          ),
+          ilike(players.name, `%${searchTerm.trim()}%`),
+          eq(players.status, 'active')
+        ),
+        orderBy: [asc(players.name)],
+        limit: 20,
       })
-    }
-    
-    const playerIds = (registrations || []).map(reg => reg.player_id)
-    
-    if (playerIds.length === 0) {
-      return []
-    }
-    
-    // Now search players by name within the registered players
-    const { data: players, error } = await supabase
-      .from('players')
-      .select(`
-        id,
-        name,
-        category:categories(id, name, description, order)
-      `)
-      .in('id', playerIds)
-      .ilike('name', `%${searchTerm.trim()}%`)
-      .eq('status', 'active')
-      .limit(20)
-      .order('name', { ascending: true })
-    
-    if (error) {
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to search players',
         data: error
       })
     }
-    
-    return players || []
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -100,4 +59,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

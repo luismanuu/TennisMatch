@@ -121,7 +121,7 @@
               </NuxtLink>
               <NuxtLink to="/profile" class="list-row">
                 <span class="avatar" aria-hidden="true">{{ player?.name ? getPlayerInitials(player.name) : '?' }}</span>
-                <span class="row-copy"><strong>Tu perfil de jugador</strong><span class="meta">{{ user?.primaryEmailAddress?.emailAddress }}</span></span>
+                <span class="row-copy"><strong>Tu perfil de jugador</strong><span class="meta">{{ user?.email }}</span></span>
                 <Icon name="heroicons:chevron-right" class="w-4 h-4 text-foreground-muted" aria-hidden="true" />
               </NuxtLink>
             </div>
@@ -271,8 +271,8 @@ const leadMeta = computed(() => {
   return [m.location, when].filter(Boolean).join(' · ')
 })
 
-// Greeting (client time; this branch only renders once Clerk has loaded in the browser)
-const firstName = computed(() => (player.value?.name || user.value?.firstName || '').trim().split(' ')[0] || '')
+// Greeting (client time; this branch only renders once the session has loaded in the browser)
+const firstName = computed(() => (player.value?.name || user.value?.name || '').trim().split(' ')[0] || '')
 const greeting = computed(() => {
   const h = new Date().getHours()
   return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'
@@ -353,7 +353,7 @@ watch(shouldLoadProfile, async (shouldLoad) => {
   }
 }, { immediate: false })
 
-// Also check on mount in case Clerk is already loaded
+// Also check on mount in case the session is already loaded
 onMounted(async () => {
   if (isLoaded.value && userId.value && !playerLoading.value) {
     await loadPlayerProfile()

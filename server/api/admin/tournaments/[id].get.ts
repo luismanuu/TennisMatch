@@ -1,18 +1,13 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournaments } from '~/server/db/schema'
+import { requireAdmin } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const query = getQuery(event)
-    const clerkId = query.clerk_id as string
-    const tournamentId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerkId) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -21,34 +16,19 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireAdmin(clerkId)
+    const tournament = await useDb().query.tournaments.findFirst({
+      where: eq(tournaments.id, tournamentId),
+      with: {
+        category: true,
+        created_by_player: true,
+        organizer: true,
+        registrations: { with: { player: true } },
+        groups: { with: { players: { with: { player: true } } } },
+        rounds: true,
+      },
+    })
 
-    const supabase = getSupabaseAdmin()
-
-    const { data: tournament, error } = await supabase
-      .from('tournaments')
-      .select(`
-        *,
-        category:categories(*),
-        created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*),
-        registrations:tournament_registrations(
-          *,
-          player:players(*)
-        ),
-        groups:tournament_groups(
-          *,
-          players:tournament_group_players(
-            *,
-            player:players(*)
-          )
-        ),
-        rounds:tournament_rounds(*)
-      `)
-      .eq('id', tournamentId)
-      .single()
-
-    if (error || !tournament) {
+    if (!tournament) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Tournament not found'
@@ -63,4 +43,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

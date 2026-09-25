@@ -238,15 +238,11 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const auth = useAuth()
-const { isLoaded: authLoaded } = auth
-const { isLoaded: userLoaded, user } = useUser()
+const { isLoaded, user, userId } = useAuthState()
 const { loading, createPlayer } = usePlayer()
 const { categories, loading: categoriesLoading, fetchCategories } = useCategories()
 const { cities, loading: citiesLoading, fetchCities } = useCities()
 
-const isLoaded = computed(() => authLoaded.value && userLoaded.value)
-const userId = computed(() => user.value?.id || null)
 
 const currentStep = ref(1)
 const formData = ref({
@@ -265,7 +261,7 @@ const handleComplete = async () => {
 
   try {
     await createPlayer(userId.value, {
-      name: user.value?.fullName || user.value?.firstName || 'Usuario',
+      name: formData.value.name || user.value?.name || 'Usuario',
       phone_number: formData.value.phone_number || undefined,
       city_id: formData.value.city_id,
       category_id: formData.value.category_id
@@ -284,7 +280,7 @@ const handleSkip = () => {
 
 onMounted(async () => {
   if (isLoaded.value && user.value) {
-    formData.value.name = user.value.fullName || user.value.firstName || ''
+    formData.value.name = user.value.name || ''
     await Promise.all([
       fetchCategories(),
       fetchCities()
@@ -294,7 +290,7 @@ onMounted(async () => {
 
 watch([isLoaded, () => user.value], async () => {
   if (isLoaded.value && user.value) {
-    formData.value.name = user.value.fullName || user.value.firstName || ''
+    formData.value.name = user.value.name || ''
     await Promise.all([
       fetchCategories(),
       fetchCities()

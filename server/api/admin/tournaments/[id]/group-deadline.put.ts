@@ -1,19 +1,13 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
-import { requireAdmin } from '~/server/utils/admin'
+import { requireAdmin } from '~/server/utils/session'
 import { createGroupStageDeadline } from '~/server/utils/tournament-scheduling'
 
 export default defineEventHandler(async (event) => {
-  try {
-    const body = await readBody<{ clerk_id: string; deadline: string }>(event)
-    const { clerk_id, deadline } = body
-    const tournamentId = getRouterParam(event, 'id')
+  await requireAdmin(event)
 
-    if (!clerk_id) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Unauthorized - Clerk ID required'
-      })
-    }
+  try {
+    const body = await readBody<{ deadline: string }>(event)
+    const deadline = body?.deadline
+    const tournamentId = getRouterParam(event, 'id')
 
     if (!tournamentId) {
       throw createError({
@@ -29,11 +23,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await requireAdmin(clerk_id)
-
-    const supabase = getSupabaseAdmin()
-
-    await createGroupStageDeadline(tournamentId, deadline, supabase)
+    await createGroupStageDeadline(tournamentId, deadline)
 
     return {
       success: true,
@@ -46,4 +36,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

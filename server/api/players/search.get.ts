@@ -1,54 +1,43 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, asc, eq, ilike, ne } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { players } from '~/server/db/schema'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
-    const searchTerm = (query.q as string) || ''
+    const searchTerm = ((query.q as string) || '').trim()
     const excludePlayerId = query.exclude_player_id as string | undefined
-    
-    if (!searchTerm || searchTerm.trim().length < 2) {
+
+    if (searchTerm.length < 2) {
       return []
     }
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Build query - only search active players
-    let queryBuilder = supabase
-      .from('players')
-      .select(`
-        id,
-        name,
-        elo,
-        total_matches_played,
-        placement_matches_completed,
-        category:categories(id, name, description, order)
-      `)
-      .ilike('name', `%${searchTerm.trim()}%`)
-      .eq('status', 'active')
-    
-    // Exclude current player if provided
-    if (excludePlayerId) {
-      queryBuilder = queryBuilder.neq('id', excludePlayerId)
+
+    const conditions = [ilike(players.name, `%${searchTerm}%`), eq(players.status, 'active')]
+    if (excludePlayerId && UUID.test(excludePlayerId)) {
+      conditions.push(ne(players.id, excludePlayerId))
     }
-    
-    const { data, error } = await queryBuilder
-      .limit(20)
-      .order('name', { ascending: true })
-    
-    if (error) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to search players',
-        data: error
-      })
-    }
-    
-    return data || []
+
+    return await useDb().query.players.findMany({
+      columns: {
+        id: true,
+        name: true,
+        elo: true,
+        total_matches_played: true,
+        placement_matches_completed: true,
+      },
+      with: {
+        category: { columns: { id: true, name: true, description: true, order: true } },
+      },
+      where: and(...conditions),
+      orderBy: asc(players.name),
+      limit: 20,
+    })
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })
-
