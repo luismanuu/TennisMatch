@@ -1,71 +1,70 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, asc, eq, gte, ilike, inArray, isNull, lte, type SQL } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournaments } from '~/server/db/schema'
+
+const TOURNAMENT_STATUSES = ['upcoming', 'active', 'completed'] as const
 
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
-    const supabase = getSupabaseAdmin()
-
-    // Build query with optional filters
-    let queryBuilder = supabase
-      .from('tournaments')
-      .select(`
-        *,
-        category:categories(*),
-        created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*),
-        registrations:tournament_registrations(
-          *,
-          player:players(*)
-        )
-      `)
-      .order('start_date', { ascending: true })
 
     // Apply filters
+    const filters: SQL[] = []
+
     if (query.status) {
-      queryBuilder = queryBuilder.eq('status', query.status)
+      const status = TOURNAMENT_STATUSES.find((s) => s === query.status)
+      if (!status) {
+        return [] // No tournament has that status
+      }
+      filters.push(eq(tournaments.status, status))
+    } else {
+      // Only show upcoming and active tournaments by default (unless status filter is set)
+      filters.push(inArray(tournaments.status, ['upcoming', 'active']))
     }
 
     if (query.category_id !== undefined) {
       if (query.category_id === null || query.category_id === 'null') {
         // Filter for tournaments without category (open to all)
-        queryBuilder = queryBuilder.is('category_id', null)
+        filters.push(isNull(tournaments.category_id))
       } else {
-        queryBuilder = queryBuilder.eq('category_id', query.category_id)
+        filters.push(eq(tournaments.category_id, String(query.category_id)))
       }
     }
 
     if (query.organizer_id) {
-      queryBuilder = queryBuilder.eq('organizer_id', query.organizer_id)
+      filters.push(eq(tournaments.organizer_id, String(query.organizer_id)))
     }
 
     if (query.start_date_from) {
-      queryBuilder = queryBuilder.gte('start_date', query.start_date_from)
+      filters.push(gte(tournaments.start_date, new Date(String(query.start_date_from))))
     }
 
     if (query.start_date_to) {
-      queryBuilder = queryBuilder.lte('start_date', query.start_date_to)
+      filters.push(lte(tournaments.start_date, new Date(String(query.start_date_to))))
     }
 
     if (query.search) {
-      queryBuilder = queryBuilder.ilike('name', `%${query.search}%`)
+      filters.push(ilike(tournaments.name, `%${query.search}%`))
     }
 
-    // Only show upcoming and active tournaments by default (unless status filter is set)
-    if (!query.status) {
-      queryBuilder = queryBuilder.in('status', ['upcoming', 'active'])
-    }
-
-    const { data: tournaments, error } = await queryBuilder
-
-    if (error) {
+    try {
+      return await useDb().query.tournaments.findMany({
+        where: and(...filters),
+        orderBy: [asc(tournaments.start_date)],
+        with: {
+          category: true,
+          created_by_player: true,
+          organizer: true,
+          registrations: { with: { player: true } },
+        },
+      })
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch tournaments',
         data: error
       })
     }
-
-    return tournaments || []
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -73,4 +72,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

@@ -1,55 +1,50 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, desc, eq, ilike, isNull, type SQL } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournaments } from '~/server/db/schema'
 
 export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
-    const supabase = getSupabaseAdmin()
 
-    // Build query for completed tournaments
-    let queryBuilder = supabase
-      .from('tournaments')
-      .select(`
-        *,
-        category:categories(*),
-        created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*),
-        registrations:tournament_registrations(
-          *,
-          player:players(*)
-        )
-      `)
-      .eq('status', 'completed')
-      .order('end_date', { ascending: false })
+    // Completed tournaments only
+    const filters: SQL[] = [eq(tournaments.status, 'completed')]
 
     // Apply optional filters
     if (query.category_id !== undefined) {
       if (query.category_id === null || query.category_id === 'null') {
         // Filter for tournaments without category (open to all)
-        queryBuilder = queryBuilder.is('category_id', null)
+        filters.push(isNull(tournaments.category_id))
       } else {
-        queryBuilder = queryBuilder.eq('category_id', query.category_id)
+        filters.push(eq(tournaments.category_id, String(query.category_id)))
       }
     }
 
     if (query.organizer_id) {
-      queryBuilder = queryBuilder.eq('organizer_id', query.organizer_id)
+      filters.push(eq(tournaments.organizer_id, String(query.organizer_id)))
     }
 
     if (query.search) {
-      queryBuilder = queryBuilder.ilike('name', `%${query.search}%`)
+      filters.push(ilike(tournaments.name, `%${query.search}%`))
     }
 
-    const { data: tournaments, error } = await queryBuilder
-
-    if (error) {
+    try {
+      return await useDb().query.tournaments.findMany({
+        where: and(...filters),
+        orderBy: [desc(tournaments.end_date)],
+        with: {
+          category: true,
+          created_by_player: true,
+          organizer: true,
+          registrations: { with: { player: true } },
+        },
+      })
+    } catch (error) {
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to fetch past tournaments',
         data: error
       })
     }
-
-    return tournaments || []
   } catch (error: any) {
     throw createError({
       statusCode: error.statusCode || 500,
@@ -57,4 +52,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-

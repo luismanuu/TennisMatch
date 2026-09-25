@@ -1,4 +1,6 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { tournaments } from '~/server/db/schema'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -11,35 +13,19 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    const supabase = getSupabaseAdmin()
+    const tournament = await useDb().query.tournaments.findFirst({
+      where: eq(tournaments.id, tournamentId),
+      with: {
+        category: true,
+        created_by_player: true,
+        organizer: true,
+        registrations: { with: { player: { with: { category: true } } } },
+        groups: { with: { players: { with: { player: true } } } },
+        rounds: true,
+      },
+    })
 
-    const { data: tournament, error } = await supabase
-      .from('tournaments')
-      .select(`
-        *,
-        category:categories(*),
-        created_by_player:players!tournaments_created_by_fkey(*),
-        organizer:players!tournaments_organizer_id_fkey(*),
-        registrations:tournament_registrations(
-          *,
-          player:players(
-            *,
-            category:categories(*)
-          )
-        ),
-        groups:tournament_groups(
-          *,
-          players:tournament_group_players(
-            *,
-            player:players(*)
-          )
-        ),
-        rounds:tournament_rounds(*)
-      `)
-      .eq('id', tournamentId)
-      .single()
-
-    if (error || !tournament) {
+    if (!tournament) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Tournament not found'
@@ -54,4 +40,3 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
-
