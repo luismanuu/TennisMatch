@@ -553,7 +553,9 @@ a, button, summary { touch-action: manipulation; -webkit-tap-highlight-color: tr
 .auth-visual .photo-content { flex: 1; padding: 40px; }
 .auth-visual .photo-credit { margin-top: 0; }
 .auth-visual__kicker { margin-top: auto; color: var(--on-photo-muted); font-size: 15px; }
-.auth-visual__title { font-size: clamp(34px, 3.6vw, 52px); line-height: 1.06; letter-spacing: -0.04em; font-weight: 650; color: var(--on-photo); max-width: 14ch; }
+.auth-visual__title { font-size: clamp(34px, 3.6vw, 52px); line-height: 1.06; letter-spacing: -0.04em; font-weight: 650; max-width: 14ch; }
+/* Colour only, at (0,2,0) so it outranks `.photo-content > p` (0,1,1) without also beating the phone font-size rule below. */
+.auth-visual .auth-visual__title { color: var(--on-photo); }
 .auth-container { align-self: center; justify-self: center; width: 100%; max-width: 420px; padding: 24px 0; }
 .auth-brand { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; margin-bottom: 20px; color: var(--accent); }
 .auth-brand .brand-name { font-size: 17px; letter-spacing: -0.04em; font-weight: 600; color: var(--foreground); }

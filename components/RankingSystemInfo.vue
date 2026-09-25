@@ -10,10 +10,10 @@
       class="te-modal__panel te-modal__panel--xl relative"
       @click.stop
     >
-      <!-- Close Button -->
+      <!-- Close Button. `!absolute`: .icon-button sets position: relative and loads after the Tailwind utilities, so plain `absolute` loses. -->
       <button
         type="button"
-        class="icon-button absolute top-4 right-4"
+        class="icon-button !absolute top-4 right-4"
         aria-label="Cerrar"
         @click.stop="close"
       >

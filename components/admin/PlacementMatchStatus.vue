@@ -14,7 +14,7 @@
         </div>
         <div class="w-full bg-surface border border-border-subtle rounded-full h-3 overflow-hidden">
           <div 
-            class="h-full bg-surface-elevated transition-all duration-300"
+            class="h-full bg-accent transition-all duration-300"
             :style="{ width: `${(completed / total) * 100}%` }"
           />
         </div>
