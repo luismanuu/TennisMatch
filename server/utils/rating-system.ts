@@ -1458,21 +1458,31 @@ function getUpdatedMatchCount(currentCount: number, matchPlayedAt: Date | null):
     return currentCount
   }
 
-  const now = new Date()
-
   // If match is in a different month than current, reset count
-  if (matchPlayedAt.getMonth() !== now.getMonth() || matchPlayedAt.getFullYear() !== now.getFullYear()) {
+  if (!isInCurrentMonth(matchPlayedAt)) {
     return 0
   }
 
   return currentCount
 }
 
+function isInCurrentMonth(date: Date): boolean {
+  const now = new Date()
+  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
+}
+
 /**
- * Mark a match's non-reversed rating_history rows as reversed and undo what they applied to each player
- * (ELO, MMR, uncertainty, total and placement match counts). Win/loss streaks are left for the
- * recalculation to set. Runs in one transaction; pass `tx` to join the caller's.
- * Returns how many rating_history rows were reversed.
+ * Mark a match's non-reversed rating_history rows as reversed and undo what they applied to each player.
+ * Runs in one transaction; pass `tx` to join the caller's. Returns how many rating_history rows were reversed.
+ *
+ * Per player:
+ * - ELO, MMR and uncertainty: when the reversed row is the player's latest live rating and nothing has touched
+ *   those values since (no decay, no manual edit), they are restored exactly from its elo_before / mmr_before /
+ *   uncertainty_before. Otherwise its deltas are subtracted, with the real bounds only: ELO at least ELO_MIN, MMR
+ *   unbounded (it is negative below 2250 ELO), uncertainty inside its 0.5-2.0 CHECK.
+ * - total and placement match counts go down by one.
+ * - win_streak / loss_streak are rebuilt from the player's remaining live rating_history, and matches_this_month
+ *   loses the match if it counted it, so a re-rate that adds the match back does not count it twice.
  */
 export async function reverseMatchRatings(matchId: string, tx?: DbOrTx): Promise<number> {
   return (tx ?? useDb()).transaction(async (t) => {
@@ -1485,25 +1495,43 @@ export async function reverseMatchRatings(matchId: string, tx?: DbOrTx): Promise
       return 0
     }
 
+    const [match] = await t.select({ played_at: matches.played_at }).from(matches).where(eq(matches.id, matchId))
+
+    // Lock the players (in id order) before reading their latest rating, so none is added meanwhile
+    const playerIds = [...new Set(live.map((entry) => entry.player_id))].sort()
+    const lockedPlayers = await t
+      .select({
+        id: players.id,
+        elo: players.elo,
+        mmr: players.mmr,
+        mmr_uncertainty: players.mmr_uncertainty,
+        total_matches_played: players.total_matches_played,
+        placement_matches_completed: players.placement_matches_completed,
+        matches_this_month: players.matches_this_month,
+      })
+      .from(players)
+      .where(inArray(players.id, playerIds))
+      .orderBy(asc(players.id))
+      .for('update')
+
+    const latestLiveId = new Map<string, string>()
+    for (const playerId of playerIds) {
+      const [latest] = await t
+        .select({ id: rating_history.id })
+        .from(rating_history)
+        .where(and(eq(rating_history.player_id, playerId), eq(rating_history.rating_reversed, false)))
+        .orderBy(desc(rating_history.created_at))
+        .limit(1)
+      if (latest) latestLiveId.set(playerId, latest.id)
+    }
+
     await t
       .update(rating_history)
       .set({ rating_reversed: true, reversed_at: new Date() })
       .where(inArray(rating_history.id, live.map((entry) => entry.id)))
 
-    const playerIds = [...new Set(live.map((entry) => entry.player_id))].sort()
     for (const playerId of playerIds) {
-      const [player] = await t
-        .select({
-          elo: players.elo,
-          mmr: players.mmr,
-          mmr_uncertainty: players.mmr_uncertainty,
-          total_matches_played: players.total_matches_played,
-          placement_matches_completed: players.placement_matches_completed,
-        })
-        .from(players)
-        .where(eq(players.id, playerId))
-        .for('update')
-
+      const player = lockedPlayers.find((p) => p.id === playerId)
       if (!player) {
         throw new Error(`Failed to fetch player ${playerId}`)
       }
@@ -1511,16 +1539,40 @@ export async function reverseMatchRatings(matchId: string, tx?: DbOrTx): Promise
       const entry = live.find((h) => h.player_id === playerId)
       if (!entry) continue
 
+      const untouchedSinceEntry =
+        latestLiveId.get(playerId) === entry.id &&
+        player.elo === entry.elo_after &&
+        Number(player.mmr) === Number(entry.mmr_after) &&
+        Number(player.mmr_uncertainty) === Number(entry.uncertainty_after)
+      const ratings = untouchedSinceEntry
+        ? {
+            elo: entry.elo_before,
+            mmr: Number(entry.mmr_before),
+            mmr_uncertainty: Number(entry.uncertainty_before),
+          }
+        : {
+            elo: Math.max(ELO_MIN, player.elo - entry.elo_change),
+            mmr: Number(player.mmr) - Number(entry.mmr_change),
+            mmr_uncertainty: Math.min(
+              UNCERTAINTY_MAX,
+              Math.max(
+                UNCERTAINTY_MIN,
+                Number(player.mmr_uncertainty) - (Number(entry.uncertainty_after) - Number(entry.uncertainty_before))
+              )
+            ),
+          }
+
+      // Rating added this match to matches_this_month only when it was played this month (or has no date)
+      const matchesThisMonth = player.matches_this_month ?? 0
+      const countedThisMonth = !match?.played_at || isInCurrentMonth(match.played_at)
+
       const placementCompleted = player.placement_matches_completed ?? 0
       await t
         .update(players)
         .set({
-          elo: Math.max(1000, player.elo - entry.elo_change),
-          mmr: Math.max(0, Number(player.mmr) - Number(entry.mmr_change)),
-          mmr_uncertainty: Math.max(
-            0,
-            Number(player.mmr_uncertainty) - (Number(entry.uncertainty_after) - Number(entry.uncertainty_before))
-          ),
+          ...ratings,
+          ...(await liveStreaks(playerId, t)),
+          matches_this_month: countedThisMonth ? Math.max(0, matchesThisMonth - 1) : matchesThisMonth,
           total_matches_played: Math.max(0, (player.total_matches_played ?? 0) - 1),
           placement_matches_completed:
             entry.is_placement_match && placementCompleted > 0 ? Math.max(0, placementCompleted - 1) : placementCompleted,
@@ -1532,6 +1584,20 @@ export async function reverseMatchRatings(matchId: string, tx?: DbOrTx): Promise
   })
 }
 
+// win_streak / loss_streak as the rating writes them: the run of equal results at the end of the live history
+async function liveStreaks(playerId: string, t: DbOrTx): Promise<{ win_streak: number; loss_streak: number }> {
+  const results = await t
+    .select({ was_winner: rating_history.was_winner })
+    .from(rating_history)
+    .where(and(eq(rating_history.player_id, playerId), eq(rating_history.rating_reversed, false)))
+    .orderBy(desc(rating_history.created_at))
+  let run = 0
+  while (run < results.length && results[run].was_winner === results[0].was_winner) run++
+  const lastWon = results[0]?.was_winner === true
+  return { win_streak: lastWon ? run : 0, loss_streak: lastWon ? 0 : run }
+}
+
+/**
 /**
  * Completed competitive matches with both players and a winner that have no non-reversed rating_history
  * (updateRatingsAfterMatch never ran for them, or failed). Self-matches are left out. Oldest first.
