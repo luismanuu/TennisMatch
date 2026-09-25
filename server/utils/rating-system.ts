@@ -1,4 +1,7 @@
+import { and, asc, count, desc, eq, exists, inArray, isNotNull, ne, not, or } from 'drizzle-orm'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { useDb, type DbOrTx } from '../db'
+import { categories, matches, players, rating_history } from '../db/schema'
 import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayStatus } from '~/types'
 import { 
   calculateEloWithLLM, 
@@ -612,278 +615,269 @@ export function shouldApplyDecay(lastDecayCheck: Date | null): boolean {
 // DATABASE UPDATE FUNCTIONS
 // ============================================
 
+// The maintenance scripts run outside Nitro, where useRuntimeConfig does not exist.
+function openRouterApiKey(): string {
+  if (typeof useRuntimeConfig === 'function') {
+    return useRuntimeConfig().openRouterApiKey || ''
+  }
+  return process.env.OPENROUTER_API_KEY || ''
+}
+
+const WALKOVER_MULTIPLIER = 0.25 // Walkovers give only 25% of normal points
+
 /**
- * Main function to update ratings after a match completes
+ * Main function to update ratings after a match completes.
+ * Every write (match LLM flags, both players, both rating_history rows) happens in one transaction:
+ * pass `tx` to join the caller's, otherwise one is opened here. A failure rolls all of it back.
+ * Returns null, without writing anything, when the match cannot be rated or was already rated.
  */
 export async function updateRatingsAfterMatch(
   matchId: string,
-  supabase: SupabaseClient
+  tx?: DbOrTx
 ): Promise<RatingCalculationResult | null> {
-  // Fetch match data (including score for UTR/LLM calculations)
-  const { data: match, error: matchError } = await supabase
-    .from('matches')
-    .select(`
-      id,
-      player1_id,
-      player2_id,
-      winner_id,
-      status,
-      played_at,
-      tournament_id,
-      score
-    `)
-    .eq('id', matchId)
-    .single()
-  
-  if (matchError || !match) {
-    console.error('Failed to fetch match:', matchError)
+  return (tx ?? useDb()).transaction((t) => applyRatingsForMatch(matchId, t))
+}
+
+async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<RatingCalculationResult | null> {
+  // Lock the match row so two concurrent calls cannot both rate it.
+  const [match] = await db
+    .select({
+      id: matches.id,
+      player1_id: matches.player1_id,
+      player2_id: matches.player2_id,
+      winner_id: matches.winner_id,
+      status: matches.status,
+      played_at: matches.played_at,
+      tournament_id: matches.tournament_id,
+      score: matches.score,
+      is_competitive: matches.is_competitive,
+    })
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .for('update')
+
+  if (!match) {
+    console.error('Failed to fetch match:', matchId)
     return null
   }
-  
+
   // Validate match state
   if (match.status !== 'completed' || !match.winner_id) {
     console.error('Match is not completed or has no winner')
     return null
   }
-  
+
   // Both players must exist
   if (!match.player1_id || !match.player2_id) {
     console.error('Match must have both players')
     return null
   }
-  
+  const player1Id = match.player1_id
+  const player2Id = match.player2_id
+  const matchWinnerId = match.winner_id
+
   // Prevent self-match
-  if (match.player1_id === match.player2_id) {
+  if (player1Id === player2Id) {
     console.error('Invalid match: player1_id equals player2_id')
     return null
   }
-  
-  // Only competitive matches affect ratings
-  // Friendly matches (is_competitive = false) don't count
+
+  // Only competitive matches affect ratings; friendly matches (is_competitive = false) don't count
   if (match.is_competitive === false) {
-    console.log('Match is not competitive (friendly match), skipping rating update')
     return null
   }
-  
-  // Fetch both players with their categories
-  const { data: players, error: playersError } = await supabase
-    .from('players')
-    .select(`
-      id,
-      elo,
-      mmr,
-      mmr_uncertainty,
-      placement_matches_completed,
-      win_streak,
-      loss_streak,
-      total_matches_played,
-      matches_this_month,
-      last_match_at,
-      category_id,
-      category:categories(id, order, default_elo)
-    `)
-    .in('id', [match.player1_id, match.player2_id])
-  
-  // Also fetch actual placement match count from rating_history to ensure accuracy
-  // This prevents issues when matches are processed out of chronological order
-  const { count: player1PlacementCount } = await supabase
-    .from('rating_history')
-    .select('*', { count: 'exact', head: true })
-    .eq('player_id', match.player1_id)
-    .eq('is_placement_match', true)
-    .eq('rating_reversed', false)
-  
-  const { count: player2PlacementCount } = await supabase
-    .from('rating_history')
-    .select('*', { count: 'exact', head: true })
-    .eq('player_id', match.player2_id)
-    .eq('is_placement_match', true)
-    .eq('rating_reversed', false)
-  
-  const player1ActualPlacementCount = player1PlacementCount || 0
-  const player2ActualPlacementCount = player2PlacementCount || 0
-  
-  if (playersError || !players || players.length !== 2) {
-    console.error('Failed to fetch players:', playersError)
+
+  // If non-reversed rating history already exists for both players, the match was already rated.
+  const existingHistory = await db
+    .select({ player_id: rating_history.player_id })
+    .from(rating_history)
+    .where(and(eq(rating_history.match_id, matchId), eq(rating_history.rating_reversed, false)))
+  if (
+    existingHistory.some((h) => h.player_id === player1Id) &&
+    existingHistory.some((h) => h.player_id === player2Id)
+  ) {
+    console.warn(`[updateRatingsAfterMatch] Rating history already exists for match ${matchId}. Skipping duplicate calculation.`)
     return null
   }
-  
-  const player1 = players.find(p => p.id === match.player1_id)!
-  const player2 = players.find(p => p.id === match.player2_id)!
-  
+
+  // Fetch both players with their category default, locked in id order so concurrent matches cannot deadlock.
+  const playerRows = await db
+    .select({
+      id: players.id,
+      elo: players.elo,
+      mmr: players.mmr,
+      mmr_uncertainty: players.mmr_uncertainty,
+      placement_matches_completed: players.placement_matches_completed,
+      win_streak: players.win_streak,
+      loss_streak: players.loss_streak,
+      total_matches_played: players.total_matches_played,
+      matches_this_month: players.matches_this_month,
+      last_match_at: players.last_match_at,
+      category_default_elo: categories.default_elo,
+    })
+    .from(players)
+    .leftJoin(categories, eq(players.category_id, categories.id))
+    .where(inArray(players.id, [player1Id, player2Id]))
+    .orderBy(asc(players.id))
+    .for('update', { of: players })
+
+  const player1 = playerRows.find((p) => p.id === player1Id)
+  const player2 = playerRows.find((p) => p.id === player2Id)
+  if (!player1 || !player2) {
+    console.error('Failed to fetch players for match', matchId)
+    return null
+  }
+
+  // Actual placement match count from rating_history, so matches processed out of chronological order stay correct
+  const placementCount = async (playerId: string) => {
+    const [row] = await db
+      .select({ n: count() })
+      .from(rating_history)
+      .where(
+        and(
+          eq(rating_history.player_id, playerId),
+          eq(rating_history.is_placement_match, true),
+          eq(rating_history.rating_reversed, false)
+        )
+      )
+    return row?.n ?? 0
+  }
+  const player1ActualPlacementCount = await placementCount(player1Id)
+  const player2ActualPlacementCount = await placementCount(player2Id)
+
+  const player1TotalMatches = player1.total_matches_played ?? 0
+  const player2TotalMatches = player2.total_matches_played ?? 0
+  const player1WinStreak = player1.win_streak ?? 0
+  const player2WinStreak = player2.win_streak ?? 0
+  const player1PlacementCompleted = player1.placement_matches_completed ?? 0
+  const player2PlacementCompleted = player2.placement_matches_completed ?? 0
+
   // Determine winner
-  const winnerId: 1 | 2 = match.winner_id === match.player1_id ? 1 : 2
-  
+  const winnerId: 1 | 2 = matchWinnerId === player1Id ? 1 : 2
+
   // Check if players are unrated
-  const player1IsUnrated = isPlayerUnrated(player1.total_matches_played)
-  const player2IsUnrated = isPlayerUnrated(player2.total_matches_played)
-  
-  // Check if placement match (all matches count as placement until 3 are completed)
-  // This includes the first match (unrated) - all 3 placement matches should be marked
-  // IMPORTANT: Use actual count from rating_history, not from players table
-  // This prevents bugs when matches are processed out of chronological order
-  // If a player has 2 placement matches in history, the next match should be placement
-  // even if placement_matches_completed in players table is already 3 (due to out-of-order processing)
+  const player1IsUnrated = isPlayerUnrated(player1TotalMatches)
+  const player2IsUnrated = isPlayerUnrated(player2TotalMatches)
+
+  // All matches count as placement until 3 are completed, counted from rating_history (see above)
   const isPlayer1PlacementMatch = player1ActualPlacementCount < 3
   const isPlayer2PlacementMatch = player2ActualPlacementCount < 3
-  
+
   // Get default ELO from category
-  const player1DefaultElo = (player1.category as any)?.default_elo ?? 1000
-  const player2DefaultElo = (player2.category as any)?.default_elo ?? 1000
-  
+  const player1DefaultElo = player1.category_default_elo ?? 1000
+  const player2DefaultElo = player2.category_default_elo ?? 1000
+
   // Get effective ratings (use category defaults for unrated)
-  const player1Effective = getEffectiveRatings(
-    player1.elo,
-    Number(player1.mmr),
-    player1IsUnrated,
-    player1DefaultElo
-  )
-  const player2Effective = getEffectiveRatings(
-    player2.elo,
-    Number(player2.mmr),
-    player2IsUnrated,
-    player2DefaultElo
-  )
-  
+  const player1Effective = getEffectiveRatings(player1.elo, Number(player1.mmr), player1IsUnrated, player1DefaultElo)
+  const player2Effective = getEffectiveRatings(player2.elo, Number(player2.mmr), player2IsUnrated, player2DefaultElo)
+
   // Try LLM ELO calculation first (if API key available)
-  const config = useRuntimeConfig()
+  const apiKey = openRouterApiKey()
   let llmResult: LlmEloCalculationResult | null = null
   let llmUsed = false
   let llmFailed = false
   let fallbackReason: string | null = null
-  
+
   // Retry configuration for LLM calls
   const LLM_MAX_RETRIES = 2
   const LLM_RETRY_DELAY_MS = 2000 // 2 seconds between retries
-  
+
   // Check if score is a walkover (WO) - walkovers don't need LLM calculation
   const isWalkover = match.score?.trim().toUpperCase() === 'WO'
-  
-  if (config.openRouterApiKey && match.score && !isWalkover) {
+
+  if (apiKey && match.score && !isWalkover) {
     let retryCount = 0
-    
+
     while (retryCount <= LLM_MAX_RETRIES) {
       try {
         llmResult = await calculateEloWithLLM(
           {
             matchId: match.id,
-            player1Id: match.player1_id,
-            player2Id: match.player2_id,
+            player1Id,
+            player2Id,
             player1Elo: player1Effective.elo,
             player2Elo: player2Effective.elo,
             score: match.score,
-            winnerId: match.winner_id,
+            winnerId: matchWinnerId,
             tournamentId: match.tournament_id || undefined
           },
-          supabase,
-          { openRouterApiKey: config.openRouterApiKey }
+          { openRouterApiKey: apiKey },
+          db
         )
-        
+
         if (llmResult.success) {
           llmUsed = true
           break // Success, exit retry loop
-        } else {
+        } else if (retryCount < LLM_MAX_RETRIES) {
           // If validation or parsing failed, retry might help
-          if (retryCount < LLM_MAX_RETRIES) {
-            console.warn(`[LLM] Calculation failed (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, llmResult.error)
-            await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS))
-            retryCount++
-            continue
-          } else {
-            llmFailed = true
-            fallbackReason = `LLM calculation failed after ${LLM_MAX_RETRIES + 1} attempts: ${llmResult.error || 'Unknown error'}`
-            console.warn('LLM calculation failed after retries, using fallback:', llmResult.error)
-            break
-          }
-        }
-      } catch (error: any) {
-        // Check if it's a rate limiting error
-        if (error?.message?.includes('rate limited') || error?.message?.includes('429')) {
-          // Rate limiting already has retry logic in callOpenRouterAPI, but if it still fails, retry the whole call
-          if (retryCount < LLM_MAX_RETRIES) {
-            console.warn(`[LLM] Rate limited (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying entire call...`)
-            await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS * (retryCount + 1))) // Exponential backoff
-            retryCount++
-            continue
-          } else {
-            llmFailed = true
-            fallbackReason = 'LLM calculation rate limited after retries. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.'
-            console.warn('LLM calculation rate limited after retries, using fallback. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.')
-            break
-          }
+          console.warn(`[LLM] Calculation failed (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, llmResult.error)
+          await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS))
+          retryCount++
+          continue
         } else {
-          // Other errors - retry might help (network issues, timeouts, etc.)
-          if (retryCount < LLM_MAX_RETRIES) {
-            console.warn(`[LLM] Error (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, error.message)
-            await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS * (retryCount + 1))) // Exponential backoff
-            retryCount++
-            continue
-          } else {
-            llmFailed = true
-            fallbackReason = `LLM calculation error after ${LLM_MAX_RETRIES + 1} attempts: ${error?.message || 'Unknown error'}`
-            console.error('LLM calculation error after retries:', error)
-            break
-          }
+          llmFailed = true
+          fallbackReason = `LLM calculation failed after ${LLM_MAX_RETRIES + 1} attempts: ${llmResult.error || 'Unknown error'}`
+          console.warn('LLM calculation failed after retries, using fallback:', llmResult.error)
+          break
         }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        const rateLimited = message.includes('rate limited') || message.includes('429')
+        if (retryCount < LLM_MAX_RETRIES) {
+          console.warn(`[LLM] ${rateLimited ? 'Rate limited' : 'Error'} (attempt ${retryCount + 1}/${LLM_MAX_RETRIES + 1}), retrying...`, message)
+          await new Promise(resolve => setTimeout(resolve, LLM_RETRY_DELAY_MS * (retryCount + 1))) // Exponential backoff
+          retryCount++
+          continue
+        }
+        llmFailed = true
+        fallbackReason = rateLimited
+          ? 'LLM calculation rate limited after retries. The free model is temporarily unavailable. Consider configuring your own OpenRouter API key for better reliability.'
+          : `LLM calculation error after ${LLM_MAX_RETRIES + 1} attempts: ${message || 'Unknown error'}`
+        console.error('LLM calculation error after retries:', error)
+        break
       }
     }
   } else if (isWalkover) {
     // Walkover matches don't use LLM - they use standard ELO calculation
     fallbackReason = 'Walkover (WO) match - using standard ELO calculation (no LLM needed).'
-  } else if (!config.openRouterApiKey) {
-    // No API key configured
+  } else if (!apiKey) {
     fallbackReason = 'No OpenRouter API key configured. LLM calculation was not attempted.'
-    console.warn('[LLM] No API key found. Check OPENROUTER_API_KEY environment variable.')
-    console.warn('[LLM] Config check:', {
-      hasApiKey: !!config.openRouterApiKey,
-      apiKeyType: typeof config.openRouterApiKey,
-      apiKeyLength: config.openRouterApiKey?.length || 0
-    })
   } else if (!match.score) {
-    // No score available
     fallbackReason = 'Match score not available. LLM calculation requires a score to analyze.'
   }
-  
+
   // Calculate ELO changes (use LLM result if available, otherwise fallback)
   let eloResult: ReturnType<typeof calculateELOChange>
-  
+
   if (llmUsed && llmResult) {
-    // Use LLM-calculated ELO changes
-    // The LLM should already include win streak bonuses in its calculation
-    // Calculate what the bonus would be for tracking purposes (only applies after 2 consecutive wins)
+    // The LLM should already include win streak bonuses; compute them for tracking only
     let player1WinStreakBonus = 0
     let player2WinStreakBonus = 0
-    
+
     if (winnerId === 1 && !player1IsUnrated) {
-      const newStreak = player1.win_streak + 1
+      const newStreak = player1WinStreak + 1
       if (newStreak >= WIN_STREAK_BONUS_MIN_WINS) {
-        player1WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player1.win_streak)
+        player1WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player1WinStreak)
       }
     }
-    
+
     if (winnerId === 2 && !player2IsUnrated) {
-      const newStreak = player2.win_streak + 1
+      const newStreak = player2WinStreak + 1
       if (newStreak >= WIN_STREAK_BONUS_MIN_WINS) {
-        player2WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player2.win_streak)
+        player2WinStreakBonus = calculateWinStreakBonus(newStreak) - calculateWinStreakBonus(player2WinStreak)
       }
     }
-    
+
     eloResult = {
       player1Change: Math.round(llmResult.player1EloChange),
       player2Change: Math.round(llmResult.player2EloChange),
-      player1WinStreakBonus, // Track for display, but LLM should have included it
-      player2WinStreakBonus  // Track for display, but LLM should have included it
+      player1WinStreakBonus,
+      player2WinStreakBonus
     }
   } else {
-    // Use fallback ELO calculation
     if (llmFailed && match.score) {
-      // Try simple fallback from LLM utility
-      const fallback = getDefaultEloCalculation(
-        player1Effective.elo,
-        player2Effective.elo,
-        match.winner_id,
-        match.player1_id
-      )
+      // Simple fallback from the LLM utility
+      const fallback = getDefaultEloCalculation(player1Effective.elo, player2Effective.elo, matchWinnerId, player1Id)
       eloResult = {
         player1Change: fallback.player1EloChange,
         player2Change: fallback.player2EloChange,
@@ -891,34 +885,31 @@ export async function updateRatingsAfterMatch(
         player2WinStreakBonus: 0
       }
     } else {
-      // Use existing comprehensive ELO calculation
+      // Comprehensive ELO calculation
       eloResult = calculateELOChange(
         player1Effective.elo,
         player2Effective.elo,
         winnerId,
         isPlayer1PlacementMatch,
         isPlayer2PlacementMatch,
-        player1.win_streak,
-        player2.win_streak,
+        player1WinStreak,
+        player2WinStreak,
         player1IsUnrated,
         player2IsUnrated,
         player1Effective.mmr,
         player2Effective.mmr
       )
     }
-    
-    // Apply walkover penalty: walkovers should give minimal points (25% of normal)
-    // This prevents walkovers from being treated as full matches
+
+    // Walkovers give minimal points and no win streak bonus
     if (isWalkover) {
-      const WALKOVER_MULTIPLIER = 0.25 // Walkovers give only 25% of normal points
       eloResult.player1Change = Math.round(eloResult.player1Change * WALKOVER_MULTIPLIER)
       eloResult.player2Change = Math.round(eloResult.player2Change * WALKOVER_MULTIPLIER)
-      // No win streak bonus for walkovers
       eloResult.player1WinStreakBonus = 0
       eloResult.player2WinStreakBonus = 0
     }
   }
-  
+
   // Calculate UTR match rating and weight (if score available)
   let utrData: {
     matchRatingP1: number
@@ -929,44 +920,26 @@ export async function updateRatingsAfterMatch(
     totalGames: number
     format: string
   } | null = null
-  
+
   if (match.score) {
     try {
       const format = detectMatchFormatFromScore(match.score)
       const gamesData = parseGamesFromScore(match.score, 1)
-      
-      // Calculate match rating for both players
-      const matchRatingP1 = calculateMatchRating(
-        player1Effective.elo,
-        player2Effective.elo,
-        gamesData.gamesWon,
-        gamesData.totalGames
-      )
-      const matchRatingP2 = calculateMatchRating(
-        player2Effective.elo,
-        player1Effective.elo,
-        gamesData.gamesLost,
-        gamesData.totalGames
-      )
-      
-      // Calculate match weight
+
+      const matchRatingP1 = calculateMatchRating(player1Effective.elo, player2Effective.elo, gamesData.gamesWon, gamesData.totalGames)
+      const matchRatingP2 = calculateMatchRating(player2Effective.elo, player1Effective.elo, gamesData.gamesLost, gamesData.totalGames)
+
       const formatWeight = getFormatWeight(format)
       const competitivenessWeight = getCompetitivenessWeight(Math.abs(player1Effective.elo - player2Effective.elo))
-      const reliabilityWeightP1 = getReliabilityWeight(
-        player2.total_matches_played,
-        player2.last_match_at
-      )
-      const reliabilityWeightP2 = getReliabilityWeight(
-        player1.total_matches_played,
-        player1.last_match_at
-      )
-      
-      // Use average reliability for match weight (or use LLM's match weight if available)
+      const reliabilityWeightP1 = getReliabilityWeight(player2TotalMatches, player2.last_match_at)
+      const reliabilityWeightP2 = getReliabilityWeight(player1TotalMatches, player1.last_match_at)
+
+      // Use average reliability for match weight (or the LLM's match weight if available)
       const avgReliability = (reliabilityWeightP1 + reliabilityWeightP2) / 2
-      const matchWeight = llmUsed && llmResult 
-        ? llmResult.matchWeight 
+      const matchWeight = llmUsed && llmResult
+        ? llmResult.matchWeight
         : formatWeight * competitivenessWeight * avgReliability
-      
+
       utrData = {
         matchRatingP1,
         matchRatingP2,
@@ -980,21 +953,21 @@ export async function updateRatingsAfterMatch(
       console.error('Error calculating UTR data:', error)
     }
   }
-  
-  // Update match with LLM calculation metadata
+
+  // Record how this match was rated (LLM, LLM failure with fallback, or the reason it was not attempted)
   if (llmUsed || llmFailed || fallbackReason) {
-    await supabase
-      .from('matches')
-      .update({
+    await db
+      .update(matches)
+      .set({
         llm_elo_calculated: llmUsed,
         llm_calculation_failed: llmFailed,
         llm_calculation_reasoning: llmUsed ? (llmResult?.reasoning || null) : fallbackReason,
         llm_calculation_model: llmUsed ? 'google/gemini-2.5-flash' : null,
-        llm_calculation_timestamp: llmUsed || llmFailed || fallbackReason ? new Date().toISOString() : null
+        llm_calculation_timestamp: new Date()
       })
-      .eq('id', matchId)
+      .where(eq(matches.id, matchId))
   }
-  
+
   // Calculate MMR changes
   const mmrResult = calculateMMRChange(
     player1Effective.mmr,
@@ -1007,264 +980,141 @@ export async function updateRatingsAfterMatch(
     isPlayer1PlacementMatch,
     isPlayer2PlacementMatch
   )
-  
+
   // Apply walkover penalty to MMR changes as well
   if (isWalkover) {
-    const WALKOVER_MULTIPLIER = 0.25 // Walkovers give only 25% of normal points
     mmrResult.player1MmrChange = mmrResult.player1MmrChange * WALKOVER_MULTIPLIER
     mmrResult.player2MmrChange = mmrResult.player2MmrChange * WALKOVER_MULTIPLIER
   }
-  
-  // Check if rating history already exists for this match (prevent duplicates)
-  // This prevents double-counting if updateRatingsAfterMatch is called multiple times
-  // IMPORTANT: Check BEFORE calculating any new values to prevent incorrect updates
-  const { data: existingHistory, error: historyCheckError } = await supabase
-    .from('rating_history')
-    .select('id, player_id, rating_reversed')
-    .eq('match_id', matchId)
-    .eq('rating_reversed', false)
-    .limit(2) // We expect 2 entries (one per player) if they exist
-  
-  if (historyCheckError) {
-    console.error('Error checking existing rating history:', historyCheckError)
-    // Continue anyway - this is just a safety check
-  }
-  
-  // If rating history already exists and hasn't been reversed, skip calculation
-  // This prevents duplicate calculations if updateRatingsAfterMatch is called multiple times
-  if (existingHistory && existingHistory.length >= 2) {
-    const player1HistoryExists = existingHistory.some(h => h.player_id === player1.id)
-    const player2HistoryExists = existingHistory.some(h => h.player_id === player2.id)
-    
-    if (player1HistoryExists && player2HistoryExists) {
-      console.warn(`[updateRatingsAfterMatch] Rating history already exists for match ${matchId}. Skipping duplicate calculation.`)
-      // Return null to indicate no calculation was performed (match already processed)
-      return null
-    }
-  }
-  
-  // Calculate new values
-  const now = new Date()
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear()
-  
-  // Check if we need to reset matches_this_month (new month)
-  const player1MatchesThisMonth = getUpdatedMatchCount(player1.matches_this_month, match.played_at)
-  const player2MatchesThisMonth = getUpdatedMatchCount(player2.matches_this_month, match.played_at)
-  
-  const player1NewElo = Math.max(ELO_MIN, (player1IsUnrated ? player1DefaultElo : player1.elo) + eloResult.player1Change)
-  const player2NewElo = Math.max(ELO_MIN, (player2IsUnrated ? player2DefaultElo : player2.elo) + eloResult.player2Change)
-  
+
+  // Reset matches_this_month when the match is in a different month
+  const player1MatchesThisMonth = getUpdatedMatchCount(player1.matches_this_month ?? 0, match.played_at)
+  const player2MatchesThisMonth = getUpdatedMatchCount(player2.matches_this_month ?? 0, match.played_at)
+
+  const player1EloBefore = player1IsUnrated ? player1DefaultElo : player1.elo
+  const player2EloBefore = player2IsUnrated ? player2DefaultElo : player2.elo
+  const player1NewElo = Math.max(ELO_MIN, player1EloBefore + eloResult.player1Change)
+  const player2NewElo = Math.max(ELO_MIN, player2EloBefore + eloResult.player2Change)
+
   const player1NewMmr = (player1IsUnrated ? player1Effective.mmr : Number(player1.mmr)) + mmrResult.player1MmrChange
   const player2NewMmr = (player2IsUnrated ? player2Effective.mmr : Number(player2.mmr)) + mmrResult.player2MmrChange
-  
-  // Update streaks
-  // IMPORTANT: win_streak should be the number of consecutive wins, not total wins
-  // If player wins: increment by 1 (max should be total_matches_played if all wins)
-  // If player loses: reset to 0
-  // Safety check: win_streak should never exceed total_matches_played + 1 (for this new match)
-  const currentPlayer1Matches = player1.total_matches_played || 0
-  const currentPlayer2Matches = player2.total_matches_played || 0
-  
-  const player1NewWinStreak = winnerId === 1 
-    ? Math.min((player1.win_streak || 0) + 1, currentPlayer1Matches + 1) // Cap at total matches + 1
-    : 0
-  const player1NewLossStreak = winnerId === 1 ? 0 : (player1.loss_streak || 0) + 1
-  const player2NewWinStreak = winnerId === 2 
-    ? Math.min((player2.win_streak || 0) + 1, currentPlayer2Matches + 1) // Cap at total matches + 1
-    : 0
-  const player2NewLossStreak = winnerId === 2 ? 0 : (player2.loss_streak || 0) + 1
-  
-  // Debug logging for win streak calculation
-  console.log(`[Win Streak Debug] Match ${matchId}:`)
-  console.log(`  Player1: ${player1.name} - Current matches: ${currentPlayer1Matches}, Old streak: ${player1.win_streak || 0}, New streak: ${player1NewWinStreak}, Winner: ${winnerId === 1 ? 'YES' : 'NO'}`)
-  console.log(`  Player2: ${player2.name} - Current matches: ${currentPlayer2Matches}, Old streak: ${player2.win_streak || 0}, New streak: ${player2NewWinStreak}, Winner: ${winnerId === 2 ? 'YES' : 'NO'}`)
-  
+
+  // win_streak is consecutive wins, capped at total matches + 1 (this match); a loss resets it
+  const player1NewWinStreak = winnerId === 1 ? Math.min(player1WinStreak + 1, player1TotalMatches + 1) : 0
+  const player1NewLossStreak = winnerId === 1 ? 0 : (player1.loss_streak ?? 0) + 1
+  const player2NewWinStreak = winnerId === 2 ? Math.min(player2WinStreak + 1, player2TotalMatches + 1) : 0
+  const player2NewLossStreak = winnerId === 2 ? 0 : (player2.loss_streak ?? 0) + 1
+
   // Update placement matches count (only increment if was in placement)
-  const player1NewPlacementCount = isPlayer1PlacementMatch 
-    ? player1.placement_matches_completed + 1 
-    : (player1IsUnrated ? 1 : player1.placement_matches_completed)
-  const player2NewPlacementCount = isPlayer2PlacementMatch 
-    ? player2.placement_matches_completed + 1 
-    : (player2IsUnrated ? 1 : player2.placement_matches_completed)
-  
-  // Update player 1
-  const { error: update1Error } = await supabase
-    .from('players')
-    .update({
+  const player1NewPlacementCount = isPlayer1PlacementMatch
+    ? player1PlacementCompleted + 1
+    : (player1IsUnrated ? 1 : player1PlacementCompleted)
+  const player2NewPlacementCount = isPlayer2PlacementMatch
+    ? player2PlacementCompleted + 1
+    : (player2IsUnrated ? 1 : player2PlacementCompleted)
+
+  const lastMatchAt = match.played_at ?? new Date()
+
+  await db
+    .update(players)
+    .set({
       elo: player1NewElo,
       mmr: player1NewMmr,
       mmr_uncertainty: mmrResult.player1NewUncertainty,
       placement_matches_completed: Math.min(3, player1NewPlacementCount),
       win_streak: player1NewWinStreak,
       loss_streak: player1NewLossStreak,
-      last_match_at: match.played_at || now.toISOString(),
+      last_match_at: lastMatchAt,
       matches_this_month: player1MatchesThisMonth + 1,
-      total_matches_played: player1.total_matches_played + 1,
+      total_matches_played: player1TotalMatches + 1,
     })
-    .eq('id', player1.id)
-  
-  if (update1Error) {
-    console.error('Failed to update player 1:', update1Error)
-    return null
-  }
-  
-  // Update player 2
-  const { error: update2Error } = await supabase
-    .from('players')
-    .update({
+    .where(eq(players.id, player1Id))
+
+  await db
+    .update(players)
+    .set({
       elo: player2NewElo,
       mmr: player2NewMmr,
       mmr_uncertainty: mmrResult.player2NewUncertainty,
       placement_matches_completed: Math.min(3, player2NewPlacementCount),
       win_streak: player2NewWinStreak,
       loss_streak: player2NewLossStreak,
-      last_match_at: match.played_at || now.toISOString(),
+      last_match_at: lastMatchAt,
       matches_this_month: player2MatchesThisMonth + 1,
-      total_matches_played: player2.total_matches_played + 1,
+      total_matches_played: player2TotalMatches + 1,
     })
-    .eq('id', player2.id)
-  
-  if (update2Error) {
-    console.error('Failed to update player 2:', update2Error)
-    return null
-  }
-  
-  // Generate brief reasoning preview from LLM reasoning (max 1500 chars)
-  // This creates a concise summary for quick display in rating history
-  // We use a larger limit to capture more of the reasoning while still being manageable
-  const generateReasoningPreview = (reasoning: string | null | undefined): string | null => {
-    if (!reasoning) return null
-    
-    // Remove extra whitespace and newlines, normalize spaces
-    const cleaned = reasoning.replace(/\s+/g, ' ').trim()
-    
-    // If already short enough, return as is
-    if (cleaned.length <= 1500) return cleaned
-    
-    // Try to find a good breaking point (sentence end, period, etc.)
-    const maxLength = 1500
-    let preview = cleaned.substring(0, maxLength)
-    
-    // Try to break at sentence boundary (preferred)
-    // Look for sentence endings within the last 200 chars to get a good break point
-    const searchStart = Math.max(0, maxLength - 200)
-    const searchEnd = maxLength
-    const searchText = cleaned.substring(searchStart, searchEnd)
-    
-    const lastPeriod = searchText.lastIndexOf('.')
-    const lastExclamation = searchText.lastIndexOf('!')
-    const lastQuestion = searchText.lastIndexOf('?')
-    const lastBreak = Math.max(lastPeriod, lastExclamation, lastQuestion)
-    
-    if (lastBreak > 50) {
-      // Found a sentence break within reasonable distance (at least 50 chars from end)
-      preview = cleaned.substring(0, searchStart + lastBreak + 1)
-    } else {
-      // Try to break at paragraph or section boundary (double newline or common patterns)
-      const paragraphBreak = cleaned.substring(0, maxLength).lastIndexOf('\n\n')
-      if (paragraphBreak > maxLength * 0.8) {
-        preview = cleaned.substring(0, paragraphBreak)
-      } else {
-        // Break at word boundary to avoid cutting words
-        const lastSpace = preview.lastIndexOf(' ')
-        if (lastSpace > maxLength * 0.9) {
-          // Good word boundary found (within last 10%)
-          preview = cleaned.substring(0, lastSpace) + '...'
-        } else {
-          // Fallback: just truncate and add ellipsis
-          preview = preview + '...'
-        }
-      }
-    }
-    
-    return preview
-  }
-  
+    .where(eq(players.id, player2Id))
+
   const reasoningPreview = generateReasoningPreview(llmResult?.reasoning)
-  
-  // Record rating history for player 1
+
   const player1Expected = calculateExpectedScore(player1Effective.elo, player2Effective.elo)
-  const { error: player1HistoryError } = await supabase.from('rating_history').insert({
-    player_id: player1.id,
-    match_id: matchId,
-    elo_before: player1IsUnrated ? player1DefaultElo : player1.elo,
-    elo_after: player1NewElo,
-    elo_change: eloResult.player1Change,
-    mmr_before: player1Effective.mmr,
-    mmr_after: player1NewMmr,
-    mmr_change: mmrResult.player1MmrChange,
-    uncertainty_before: Number(player1.mmr_uncertainty),
-    uncertainty_after: mmrResult.player1NewUncertainty,
-    k_factor: getEloKFactor(player1Effective.elo, isPlayer1PlacementMatch, player1IsUnrated, player2IsUnrated),
-    expected_score: player1Expected,
-    actual_score: winnerId === 1 ? 1 : 0,
-    is_placement_match: isPlayer1PlacementMatch,
-    is_unrated_match: player1IsUnrated,
-    win_streak_bonus: eloResult.player1WinStreakBonus,
-    opponent_id: player2.id,
-    opponent_elo: player2Effective.elo,
-    opponent_mmr: player2Effective.mmr,
-    was_winner: winnerId === 1,
-    // UTR data
-    match_rating: utrData?.matchRatingP1 || null,
-    match_weight: utrData?.matchWeight || null,
-    games_won: utrData?.gamesWonP1 || null,
-    games_lost: utrData?.gamesLostP1 || null,
-    total_games: utrData?.totalGames || null,
-    // LLM reasoning preview
-    reasoning_preview: reasoningPreview,
-  })
-  
-  if (player1HistoryError) {
-    console.error('Failed to insert rating history for player 1:', player1HistoryError)
-    // Continue anyway - rating history is important but not critical
-  }
-  
-  // Record rating history for player 2
   const player2Expected = 1 - player1Expected
-  const { error: player2HistoryError } = await supabase.from('rating_history').insert({
-    player_id: player2.id,
-    match_id: matchId,
-    elo_before: player2IsUnrated ? player2DefaultElo : player2.elo,
-    elo_after: player2NewElo,
-    elo_change: eloResult.player2Change,
-    mmr_before: player2Effective.mmr,
-    mmr_after: player2NewMmr,
-    mmr_change: mmrResult.player2MmrChange,
-    uncertainty_before: Number(player2.mmr_uncertainty),
-    uncertainty_after: mmrResult.player2NewUncertainty,
-    k_factor: getEloKFactor(player2Effective.elo, isPlayer2PlacementMatch, player2IsUnrated, player1IsUnrated),
-    expected_score: player2Expected,
-    actual_score: winnerId === 2 ? 1 : 0,
-    is_placement_match: isPlayer2PlacementMatch,
-    is_unrated_match: player2IsUnrated,
-    win_streak_bonus: eloResult.player2WinStreakBonus,
-    opponent_id: player1.id,
-    opponent_elo: player1Effective.elo,
-    opponent_mmr: player1Effective.mmr,
-    was_winner: winnerId === 2,
-    // UTR data
-    match_rating: utrData?.matchRatingP2 || null,
-    match_weight: utrData?.matchWeight || null,
-    games_won: utrData?.gamesLostP1 || null, // Player 2's games won = Player 1's games lost
-    games_lost: utrData?.gamesWonP1 || null, // Player 2's games lost = Player 1's games won
-    total_games: utrData?.totalGames || null,
-    // LLM reasoning preview (same for both players)
-    reasoning_preview: reasoningPreview,
-  })
-  
-  if (player2HistoryError) {
-    console.error('Failed to insert rating history for player 2:', player2HistoryError)
-    // Continue anyway - rating history is important but not critical
-  }
-  
-  // Update player UTR ratings
+
+  await db.insert(rating_history).values([
+    {
+      player_id: player1Id,
+      match_id: matchId,
+      elo_before: player1EloBefore,
+      elo_after: player1NewElo,
+      elo_change: eloResult.player1Change,
+      mmr_before: player1Effective.mmr,
+      mmr_after: player1NewMmr,
+      mmr_change: mmrResult.player1MmrChange,
+      uncertainty_before: Number(player1.mmr_uncertainty),
+      uncertainty_after: mmrResult.player1NewUncertainty,
+      k_factor: getEloKFactor(player1Effective.elo, isPlayer1PlacementMatch, player1IsUnrated, player2IsUnrated),
+      expected_score: player1Expected,
+      actual_score: winnerId === 1 ? 1 : 0,
+      is_placement_match: isPlayer1PlacementMatch,
+      is_unrated_match: player1IsUnrated,
+      win_streak_bonus: eloResult.player1WinStreakBonus,
+      opponent_id: player2Id,
+      opponent_elo: player2Effective.elo,
+      opponent_mmr: player2Effective.mmr,
+      was_winner: winnerId === 1,
+      match_rating: utrData?.matchRatingP1 || null,
+      match_weight: utrData?.matchWeight || null,
+      games_won: utrData?.gamesWonP1 || null,
+      games_lost: utrData?.gamesLostP1 || null,
+      total_games: utrData?.totalGames || null,
+      reasoning_preview: reasoningPreview,
+    },
+    {
+      player_id: player2Id,
+      match_id: matchId,
+      elo_before: player2EloBefore,
+      elo_after: player2NewElo,
+      elo_change: eloResult.player2Change,
+      mmr_before: player2Effective.mmr,
+      mmr_after: player2NewMmr,
+      mmr_change: mmrResult.player2MmrChange,
+      uncertainty_before: Number(player2.mmr_uncertainty),
+      uncertainty_after: mmrResult.player2NewUncertainty,
+      k_factor: getEloKFactor(player2Effective.elo, isPlayer2PlacementMatch, player2IsUnrated, player1IsUnrated),
+      expected_score: player2Expected,
+      actual_score: winnerId === 2 ? 1 : 0,
+      is_placement_match: isPlayer2PlacementMatch,
+      is_unrated_match: player2IsUnrated,
+      win_streak_bonus: eloResult.player2WinStreakBonus,
+      opponent_id: player1Id,
+      opponent_elo: player1Effective.elo,
+      opponent_mmr: player1Effective.mmr,
+      was_winner: winnerId === 2,
+      match_rating: utrData?.matchRatingP2 || null,
+      match_weight: utrData?.matchWeight || null,
+      games_won: utrData?.gamesLostP1 || null, // Player 2's games won = Player 1's games lost
+      games_lost: utrData?.gamesWonP1 || null, // Player 2's games lost = Player 1's games won
+      total_games: utrData?.totalGames || null,
+      reasoning_preview: reasoningPreview,
+    },
+  ])
+
+  // UTR ratings are derived data; a failure there must not undo the match's ratings.
   if (utrData) {
-    await updatePlayerUtrRating(player1.id, supabase)
-    await updatePlayerUtrRating(player2.id, supabase)
+    await updatePlayerUtrRating(player1Id, db)
+    await updatePlayerUtrRating(player2Id, db)
   }
-  
+
   return {
     player1: {
       eloChange: eloResult.player1Change,
@@ -1288,113 +1138,101 @@ export async function updateRatingsAfterMatch(
 }
 
 /**
- * Update player UTR rating based on match history
+ * Brief reasoning preview from the LLM reasoning (max 1500 chars) for quick display in rating history
  */
-async function updatePlayerUtrRating(playerId: string, supabase: SupabaseClient): Promise<void> {
+function generateReasoningPreview(reasoning: string | null | undefined): string | null {
+  if (!reasoning) return null
+
+  const cleaned = reasoning.replace(/\s+/g, ' ').trim()
+  if (cleaned.length <= 1500) return cleaned
+
+  const maxLength = 1500
+  let preview = cleaned.substring(0, maxLength)
+
+  // Prefer a sentence boundary within the last 200 chars
+  const searchStart = Math.max(0, maxLength - 200)
+  const searchText = cleaned.substring(searchStart, maxLength)
+  const lastBreak = Math.max(searchText.lastIndexOf('.'), searchText.lastIndexOf('!'), searchText.lastIndexOf('?'))
+
+  if (lastBreak > 50) {
+    preview = cleaned.substring(0, searchStart + lastBreak + 1)
+  } else {
+    const paragraphBreak = cleaned.substring(0, maxLength).lastIndexOf('\n\n')
+    if (paragraphBreak > maxLength * 0.8) {
+      preview = cleaned.substring(0, paragraphBreak)
+    } else {
+      const lastSpace = preview.lastIndexOf(' ')
+      preview = lastSpace > maxLength * 0.9 ? cleaned.substring(0, lastSpace) + '...' : preview + '...'
+    }
+  }
+
+  return preview
+}
+
+/**
+ * Update player UTR rating based on match history.
+ * Runs in a savepoint and swallows its errors: UTR is derived data and must not abort the caller's transaction.
+ */
+async function updatePlayerUtrRating(playerId: string, db: DbOrTx): Promise<void> {
   try {
-    // Fetch match history with UTR data (last 30 matches within 12 months)
-    const twelveMonthsAgo = new Date()
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
-    
-    // Fetch match history with UTR data (last 30 matches within 12 months)
-    // First get all rating history entries with UTR data
-    const { data: allHistory, error: historyError } = await supabase
-      .from('rating_history')
-      .select(`
-        match_rating,
-        match_weight,
-        created_at,
-        match_id
-      `)
-      .eq('player_id', playerId)
-      .not('match_rating', 'is', null)
-      .not('match_weight', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(50) // Get more to filter by date
-    
-    if (historyError) {
-      console.error('Error fetching match history for UTR:', historyError)
-      return
-    }
-    
-    if (!allHistory || allHistory.length === 0) {
-      // No matches with UTR data, calculate reliability only
-      const { data: player } = await supabase
-        .from('players')
-        .select('total_matches_played, last_match_at')
-        .eq('id', playerId)
-        .single()
-      
-      if (player) {
-        const reliability = calculatePlayerReliability(
-          player.total_matches_played,
-          player.last_match_at
+    await db.transaction(async (t) => {
+      const twelveMonthsAgo = new Date()
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+
+      // Rating history entries with UTR data, newest first, with the match date
+      const allHistory = await t
+        .select({
+          match_rating: rating_history.match_rating,
+          match_weight: rating_history.match_weight,
+          created_at: rating_history.created_at,
+          played_at: matches.played_at,
+        })
+        .from(rating_history)
+        .innerJoin(matches, eq(matches.id, rating_history.match_id))
+        .where(
+          and(
+            eq(rating_history.player_id, playerId),
+            isNotNull(rating_history.match_rating),
+            isNotNull(rating_history.match_weight)
+          )
         )
-        
-        await supabase
-          .from('players')
-          .update({ utr_reliability: reliability })
-          .eq('id', playerId)
+        .orderBy(desc(rating_history.created_at))
+        .limit(50)
+
+      const [player] = await t
+        .select({ total_matches_played: players.total_matches_played, last_match_at: players.last_match_at })
+        .from(players)
+        .where(eq(players.id, playerId))
+
+      if (allHistory.length === 0) {
+        // No matches with UTR data, calculate reliability only
+        if (player) {
+          const reliability = calculatePlayerReliability(player.total_matches_played ?? 0, player.last_match_at)
+          await t.update(players).set({ utr_reliability: reliability }).where(eq(players.id, playerId))
+        }
+        return
       }
-      return
-    }
-    
-    // Get match dates for filtering
-    const matchIds = allHistory.map(h => h.match_id)
-    const { data: matches, error: matchesError } = await supabase
-      .from('matches')
-      .select('id, played_at')
-      .in('id', matchIds)
-    
-    if (matchesError) {
-      console.error('Error fetching matches for UTR:', matchesError)
-      return
-    }
-    
-    // Create a map of match_id -> played_at
-    const matchDates = new Map(matches?.map(m => [m.id, m.played_at]) || [])
-    
-    // Filter by date and limit to 30
-    const matchHistory = allHistory
-      .filter(h => {
-        const playedAt = matchDates.get(h.match_id)
-        if (!playedAt) return false
-        return new Date(playedAt) >= twelveMonthsAgo
-      })
-      .slice(0, 30)
-      .map(h => ({
-        ...h,
-        playedAt: matchDates.get(h.match_id) || h.created_at
-      }))
-    
-    // Calculate weighted average UTR rating
-    const utrRatings = matchHistory.map(m => ({
-      matchRating: Number(m.match_rating),
-      matchWeight: Number(m.match_weight),
-      playedAt: m.playedAt
-    }))
-    
-    const utrRating = calculateUtrRating(utrRatings)
-    
-    // Calculate reliability
-    const { data: player } = await supabase
-      .from('players')
-      .select('total_matches_played, last_match_at')
-      .eq('id', playerId)
-      .single()
-    
-    const reliability = player 
-      ? calculatePlayerReliability(player.total_matches_played, player.last_match_at)
-      : 0.3
-    
-    // Update player
-    await supabase
-      .from('players')
-      .update({
-        utr_rating: utrRating,
-        utr_reliability: reliability
-      })
-      .eq('id', playerId)
+
+      // Last 30 matches played within 12 months
+      const utrRatings = allHistory
+        .filter((h) => h.played_at !== null && h.played_at >= twelveMonthsAgo)
+        .slice(0, 30)
+        .map((h) => ({
+          matchRating: Number(h.match_rating),
+          matchWeight: Number(h.match_weight),
+          playedAt: h.played_at ?? h.created_at ?? new Date(),
+        }))
+
+      const utrRating = calculateUtrRating(utrRatings)
+      const reliability = player
+        ? calculatePlayerReliability(player.total_matches_played ?? 0, player.last_match_at)
+        : 0.3
+
+      await t
+        .update(players)
+        .set({ utr_rating: utrRating, utr_reliability: reliability })
+        .where(eq(players.id, playerId))
+    })
   } catch (error) {
     console.error('Error updating player UTR rating:', error)
   }
@@ -1403,19 +1241,18 @@ async function updatePlayerUtrRating(playerId: string, supabase: SupabaseClient)
 /**
  * Helper function to get updated match count for the current month
  */
-function getUpdatedMatchCount(currentCount: number, matchPlayedAt: string | null): number {
+function getUpdatedMatchCount(currentCount: number, matchPlayedAt: Date | null): number {
   if (!matchPlayedAt) {
     return currentCount
   }
-  
-  const matchDate = new Date(matchPlayedAt)
+
   const now = new Date()
-  
+
   // If match is in a different month than current, reset count
-  if (matchDate.getMonth() !== now.getMonth() || matchDate.getFullYear() !== now.getFullYear()) {
+  if (matchPlayedAt.getMonth() !== now.getMonth() || matchPlayedAt.getFullYear() !== now.getFullYear()) {
     return 0
   }
-  
+
   return currentCount
 }
 
