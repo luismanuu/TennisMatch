@@ -1,12 +1,9 @@
 import { eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { matches, rating_history } from '~/server/db/schema'
-import { clearLlmCalculation, reverseMatchRatings, updateRatingsAfterMatch } from '~/server/utils/rating-system'
+import { recalculateMatchRatings, updateRatingsAfterMatch } from '~/server/utils/rating-system'
 import { requireAdmin } from '~/server/utils/session'
 import type { RatingCalculationResult } from '~/types'
-
-// Thrown inside the transaction so a recalculation that produced nothing also undoes the reversal
-class NothingRecalculated extends Error {}
 
 function signed(change: number): string {
   return `${change > 0 ? '+' : ''}${change}`
@@ -24,7 +21,8 @@ function summary(result: RatingCalculationResult) {
  * Admin endpoint to force recalculate a match
  * This will reverse existing rating_history entries and recalculate (with LLM if API key is set)
  * Works for any match, regardless of whether it used LLM or fallback.
- * The reversal and the recalculation run in one transaction: either both apply or neither does.
+ * The reversal and the recalculation apply together or not at all (recalculateMatchRatings), and the LLM is asked
+ * with no transaction open.
  */
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -93,26 +91,13 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    let ratingResult: RatingCalculationResult
-    try {
-      ratingResult = await db.transaction(async (tx) => {
-        await reverseMatchRatings(matchId, tx)
-        await clearLlmCalculation(matchId, tx)
-        const result = await updateRatingsAfterMatch(matchId, tx)
-        if (!result) {
-          throw new NothingRecalculated()
-        }
-        return result
-      })
-    } catch (error) {
-      if (error instanceof NothingRecalculated) {
-        return {
-          success: false,
-          message: 'Recalculation returned null (check logs for details)',
-          match_id: matchId
-        }
+    const { result: ratingResult } = await recalculateMatchRatings(matchId)
+    if (!ratingResult) {
+      return {
+        success: false,
+        message: 'Recalculation returned null (check logs for details)',
+        match_id: matchId
       }
-      throw error
     }
 
     return {

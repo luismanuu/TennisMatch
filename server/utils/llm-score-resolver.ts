@@ -76,11 +76,13 @@ export async function calculateEloWithLLM(
       .from(players)
       .where(inArray(players.id, [request.player1Id, request.player2Id]))
 
-    const player1 = playerRows.find(p => p.id === request.player1Id)
-    const player2 = playerRows.find(p => p.id === request.player2Id)
-    if (!player1 || !player2) {
+    const row1 = playerRows.find(p => p.id === request.player1Id)
+    const row2 = playerRows.find(p => p.id === request.player2Id)
+    if (!row1 || !row2) {
       throw new Error('Failed to fetch players')
     }
+    const player1 = { ...row1, ...request.playerStates?.[row1.id] }
+    const player2 = { ...row2, ...request.playerStates?.[row2.id] }
 
     // Recent matches (5 per player) and head-to-head, excluding reversed ratings and the match being processed
     const live = and(eq(rating_history.rating_reversed, false), ne(rating_history.match_id, request.matchId))

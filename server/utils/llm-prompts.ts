@@ -14,6 +14,16 @@ export interface LlmEloCalculationRequest {
   score: string
   winnerId: string
   tournamentId?: string
+  // The players' state the rating is computed from, by player id, when it differs from their stored rows
+  // (a recalculation reads it after reversing the match). The stored rows are used when absent.
+  playerStates?: Record<string, LlmPlayerState>
+}
+
+export interface LlmPlayerState {
+  win_streak: number | null
+  loss_streak: number | null
+  total_matches_played: number | null
+  last_match_at: Date | null
 }
 
 // One of a player's previous rated matches, as the resolver reads it from rating_history

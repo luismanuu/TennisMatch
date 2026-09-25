@@ -1,6 +1,7 @@
-import { and, count, desc, eq, exists, inArray, isNotNull, not, or } from 'drizzle-orm'
+import { and, count, desc, eq, exists, inArray, not } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { matches, rating_history } from '~/server/db/schema'
+import { fallbackMatchCondition } from '~/server/utils/rating-system'
 import { requireAdmin } from '~/server/utils/session'
 
 const categoryColumns = { columns: { id: true, name: true, description: true, order: true } } as const
@@ -18,17 +19,10 @@ export default defineEventHandler(async (event) => {
 
     const db = useDb()
 
-    // Fallback matches are completed, scored matches where:
-    // 1. llm_calculation_failed = true (LLM attempted but failed)
-    // 2. OR (llm_elo_calculated = false AND llm_calculation_failed = false) (no API key/not attempted)
+    // Fallback matches (see fallbackMatchCondition; friendly matches are not among them).
     // Matches that already have an active (non-reversed) rating are left out.
     const where = and(
-      or(
-        eq(matches.llm_calculation_failed, true),
-        and(eq(matches.llm_elo_calculated, false), eq(matches.llm_calculation_failed, false))
-      ),
-      eq(matches.status, 'completed'),
-      isNotNull(matches.score),
+      fallbackMatchCondition(),
       not(
         exists(
           db

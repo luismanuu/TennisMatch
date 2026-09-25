@@ -1,12 +1,6 @@
-import { and, asc, eq, isNotNull, or } from 'drizzle-orm'
-import { useDb } from '~/server/db'
-import { matches } from '~/server/db/schema'
-import { clearLlmCalculation, reverseMatchRatings, updateRatingsAfterMatch } from '~/server/utils/rating-system'
+import { findFallbackMatches, recalculateMatchRatings } from '~/server/utils/rating-system'
 import { requireAdmin } from '~/server/utils/session'
 import type { RatingCalculationResult } from '~/types'
-
-// Thrown inside a match's transaction so a recalculation that produced nothing also undoes its reversal
-class NothingRecalculated extends Error {}
 
 function signed(change: number): string {
   return `${change > 0 ? '+' : ''}${change}`
@@ -23,7 +17,8 @@ function llmStatus(result: RatingCalculationResult): string {
 /**
  * Admin endpoint to reprocess matches that used fallback calculation
  * This will reverse existing rating_history entries and recalculate with LLM.
- * Each match is reprocessed in its own transaction: its reversal and recalculation apply together or not at all.
+ * Each match is reprocessed on its own (recalculateMatchRatings): its reversal and recalculation apply together or
+ * not at all, and the LLM is asked with no transaction open.
  */
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -35,27 +30,8 @@ export default defineEventHandler(async (event) => {
     const limit = parseInt(query.limit as string) || 100
     const dryRun = query.dry_run === 'true'
 
-    const db = useDb()
-
-    // Fallback matches are:
-    // 1. llm_calculation_failed = true (LLM attempted but failed)
-    // 2. OR (llm_elo_calculated = false AND llm_calculation_failed = false) (no API key/not attempted)
-    const fallbackMatches = await db
-      .select({ id: matches.id, played_at: matches.played_at, score: matches.score })
-      .from(matches)
-      .where(
-        and(
-          eq(matches.status, 'completed'),
-          or(
-            eq(matches.llm_calculation_failed, true),
-            and(eq(matches.llm_elo_calculated, false), eq(matches.llm_calculation_failed, false))
-          ),
-          isNotNull(matches.score),
-          matchId ? eq(matches.id, matchId) : undefined
-        )
-      )
-      .orderBy(asc(matches.created_at)) // Process in chronological order
-      .limit(matchId ? 1 : limit)
+    // Competitive matches rated with the fallback (see fallbackMatchCondition), oldest first
+    const fallbackMatches = await findFallbackMatches({ matchId, limit })
 
     if (fallbackMatches.length === 0) {
       return {
@@ -87,17 +63,16 @@ export default defineEventHandler(async (event) => {
 
     for (const match of fallbackMatches) {
       try {
-        const outcome = await db.transaction(async (tx) => {
-          const reversed = await reverseMatchRatings(match.id, tx)
-          await clearLlmCalculation(match.id, tx)
-          const result = await updateRatingsAfterMatch(match.id, tx)
-          if (!result) {
-            throw new NothingRecalculated()
-          }
-          return { reversed, result }
-        })
+        const { reversed, result } = await recalculateMatchRatings(match.id)
+        if (!result) {
+          results.push({
+            match_id: match.id,
+            status: 'error',
+            message: 'Recalculation returned null (check logs for details)'
+          })
+          continue
+        }
 
-        const { reversed, result } = outcome
         const prefix = reversed > 0 ? 'Successfully reprocessed' : 'Match had no previous calculation'
         results.push({
           match_id: match.id,
@@ -107,14 +82,6 @@ export default defineEventHandler(async (event) => {
           llm_failed: result.llmFailed || false
         })
       } catch (error: unknown) {
-        if (error instanceof NothingRecalculated) {
-          results.push({
-            match_id: match.id,
-            status: 'error',
-            message: 'Recalculation returned null (check logs for details)'
-          })
-          continue
-        }
         results.push({
           match_id: match.id,
           status: 'error',

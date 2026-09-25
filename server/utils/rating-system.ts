@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, exists, inArray, isNotNull, ne, not, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, exists, inArray, isNotNull, ne, not, or, type SQL } from 'drizzle-orm'
 import { useDb, type DbOrTx } from '../db'
 import { categories, matches, players, rating_history } from '../db/schema'
 import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayStatus } from '~/types'
@@ -626,20 +626,184 @@ const WALKOVER_MULTIPLIER = 0.25 // Walkovers give only 25% of normal points
 
 /**
  * Main function to update ratings after a match completes.
- * Every write (match LLM flags, both players, both rating_history rows) happens in one transaction:
- * pass `tx` to join the caller's, otherwise one is opened here. A failure rolls all of it back.
+ *
+ * Without `tx`: the match and both players are read and the LLM is asked (up to 3 attempts with sleeps) BEFORE any
+ * transaction opens. Then one transaction locks the match and both players, re-checks that the match is still
+ * unrated, and writes everything (match LLM flags, both players, both rating_history rows); a failure rolls all of
+ * it back. If a player's ratings changed while the LLM was answering, see rateLocked.
+ *
+ * With `tx`: everything, the LLM call included, runs inside the caller's transaction, holding its locks for as
+ * long as the LLM takes. No caller does this any more; a recalculation goes through recalculateMatchRatings.
+ *
  * Returns null, without writing anything, when the match cannot be rated or was already rated.
  */
 export async function updateRatingsAfterMatch(
   matchId: string,
   tx?: DbOrTx
 ): Promise<RatingCalculationResult | null> {
-  return (tx ?? useDb()).transaction((t) => applyRatingsForMatch(matchId, t))
+  if (tx) {
+    return tx.transaction((t) => rateLocked(matchId, t))
+  }
+  const db = useDb()
+  const draft = await loadRatingInputs(matchId, db, false)
+  if (!draft) {
+    return null
+  }
+  const precomputed = { basis: ratingBasis(draft), outcome: await resolveLlmOutcome(draft, db) }
+  return db.transaction((t) => rateLocked(matchId, t, precomputed))
 }
 
-async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<RatingCalculationResult | null> {
-  // Lock the match row so two concurrent calls cannot both rate it.
-  const [match] = await db
+// Thrown to roll back the dry run of recalculateMatchRatings, carrying what it read
+class DryRunRead extends Error {
+  constructor(readonly inputs: RatingInputs | null) {
+    super('dry run')
+  }
+}
+
+// Thrown inside the recalculation transaction so a re-rate that produced nothing also undoes the reversal
+class NothingRecalculated extends Error {}
+
+/**
+ * Reverse a match's ratings and rate it again (admin recalculate, reprocess-fallback). The reversal, the cleared
+ * LLM flags and the new rating apply together or not at all. The LLM is asked with no transaction open: a first
+ * transaction reverses the match, reads what rating it needs, and is always rolled back; then the LLM answers;
+ * then a second transaction reverses and rates for real, dropping the LLM answer if the ratings moved meanwhile.
+ * `result` is null (and nothing changed) when the match could not be rated again.
+ */
+export async function recalculateMatchRatings(
+  matchId: string
+): Promise<{ reversed: number; result: RatingCalculationResult | null }> {
+  const db = useDb()
+
+  let draft: RatingInputs | null = null
+  try {
+    await db.transaction(async (t) => {
+      await reverseMatchRatings(matchId, t)
+      throw new DryRunRead(await loadRatingInputs(matchId, t, false))
+    })
+  } catch (error) {
+    if (!(error instanceof DryRunRead)) throw error
+    draft = error.inputs
+  }
+  if (!draft) {
+    return { reversed: 0, result: null }
+  }
+  const precomputed = { basis: ratingBasis(draft), outcome: await resolveLlmOutcome(draft, db) }
+
+  try {
+    return await db.transaction(async (t) => {
+      // The match first, as in updateRatingsAfterMatch, then the players (inside reverseMatchRatings)
+      await t.select({ id: matches.id }).from(matches).where(eq(matches.id, matchId)).for('update')
+      const reversed = await reverseMatchRatings(matchId, t)
+      await clearLlmCalculation(matchId, t)
+      const result = await rateLocked(matchId, t, precomputed)
+      if (!result) {
+        throw new NothingRecalculated()
+      }
+      return { reversed, result }
+    })
+  } catch (error) {
+    if (error instanceof NothingRecalculated) {
+      return { reversed: 0, result: null }
+    }
+    throw error
+  }
+}
+
+type RatingPlayer = {
+  id: string
+  elo: number
+  mmr: number | null
+  mmr_uncertainty: number | null
+  placement_matches_completed: number | null
+  win_streak: number | null
+  loss_streak: number | null
+  total_matches_played: number | null
+  matches_this_month: number | null
+  last_match_at: Date | null
+  category_default_elo: number | null
+}
+
+// Everything a rating is computed from
+interface RatingInputs {
+  match: { id: string; score: string | null; played_at: Date | null; tournament_id: string | null }
+  player1Id: string
+  player2Id: string
+  matchWinnerId: string
+  player1: RatingPlayer
+  player2: RatingPlayer
+  player1ActualPlacementCount: number
+  player2ActualPlacementCount: number
+}
+
+interface LlmOutcome {
+  llmResult: LlmEloCalculationResult | null
+  llmUsed: boolean
+  llmFailed: boolean
+  fallbackReason: string | null
+}
+
+const RATINGS_CHANGED_REASON =
+  'Ratings changed while the LLM was calculating (another match of a player was rated meanwhile). ' +
+  'Used the fallback calculation on the current ratings; reprocess this match to rate it with the LLM.'
+
+/**
+ * Lock the match and both players, re-read them, and write the rating. With `precomputed` (an LLM outcome
+ * computed before this transaction), the outcome is used only if the ratings it was computed from are still the
+ * ones in the rows. Otherwise the LLM answer is stale: the match is rated from the fresh rows with the
+ * deterministic fallback and flagged llm_calculation_failed, so the reprocess-fallback queue picks it up.
+ * (No second LLM call: it would hold the request open again and could race again.)
+ * An outcome that did not use the LLM never goes stale: the fallback is always computed from the fresh rows.
+ */
+async function rateLocked(
+  matchId: string,
+  t: DbOrTx,
+  precomputed?: { basis: string; outcome: LlmOutcome }
+): Promise<RatingCalculationResult | null> {
+  const inputs = await loadRatingInputs(matchId, t, true)
+  if (!inputs) {
+    return null
+  }
+  let outcome: LlmOutcome
+  if (!precomputed) {
+    outcome = await resolveLlmOutcome(inputs, t)
+  } else if (precomputed.outcome.llmUsed && ratingBasis(inputs) !== precomputed.basis) {
+    console.warn(`[updateRatingsAfterMatch] Ratings changed during the LLM call for match ${matchId}; using the fallback.`)
+    outcome = { llmResult: null, llmUsed: false, llmFailed: true, fallbackReason: RATINGS_CHANGED_REASON }
+  } else {
+    outcome = precomputed.outcome
+  }
+  return writeRatings(inputs, outcome, t)
+}
+
+// The values an LLM answer depends on. Equal bases mean the answer still applies.
+function ratingBasis(inputs: RatingInputs): string {
+  const player = (p: RatingPlayer, placements: number) => [
+    p.id,
+    p.elo,
+    Number(p.mmr),
+    Number(p.mmr_uncertainty),
+    p.total_matches_played ?? 0,
+    p.win_streak ?? 0,
+    p.loss_streak ?? 0,
+    placements,
+    p.category_default_elo,
+  ]
+  return JSON.stringify([
+    inputs.match.score,
+    inputs.matchWinnerId,
+    player(inputs.player1, inputs.player1ActualPlacementCount),
+    player(inputs.player2, inputs.player2ActualPlacementCount),
+  ])
+}
+
+/**
+ * Read what rating a match needs. Returns null when the match cannot be rated (not completed, no winner, a missing
+ * player, a self-match, a friendly) or was already rated. With `lock`, the match and both players are locked
+ * FOR UPDATE (players in id order, so concurrent matches cannot deadlock); only inside a transaction.
+ */
+async function loadRatingInputs(matchId: string, db: DbOrTx, lock: boolean): Promise<RatingInputs | null> {
+  const matchQuery = db
     .select({
       id: matches.id,
       player1_id: matches.player1_id,
@@ -653,7 +817,7 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
     })
     .from(matches)
     .where(eq(matches.id, matchId))
-    .for('update')
+  const [match] = lock ? await matchQuery.for('update') : await matchQuery
 
   if (!match) {
     console.error('Failed to fetch match:', matchId)
@@ -673,7 +837,6 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
   }
   const player1Id = match.player1_id
   const player2Id = match.player2_id
-  const matchWinnerId = match.winner_id
 
   // Prevent self-match
   if (player1Id === player2Id) {
@@ -699,8 +862,8 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
     return null
   }
 
-  // Fetch both players with their category default, locked in id order so concurrent matches cannot deadlock.
-  const playerRows = await db
+  // Both players with their category default
+  const playerQuery = db
     .select({
       id: players.id,
       elo: players.elo,
@@ -718,7 +881,7 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
     .leftJoin(categories, eq(players.category_id, categories.id))
     .where(inArray(players.id, [player1Id, player2Id]))
     .orderBy(asc(players.id))
-    .for('update', { of: players })
+  const playerRows = lock ? await playerQuery.for('update', { of: players }) : await playerQuery
 
   const player1 = playerRows.find((p) => p.id === player1Id)
   const player2 = playerRows.find((p) => p.id === player2Id)
@@ -741,36 +904,42 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
       )
     return row?.n ?? 0
   }
-  const player1ActualPlacementCount = await placementCount(player1Id)
-  const player2ActualPlacementCount = await placementCount(player2Id)
 
-  const player1TotalMatches = player1.total_matches_played ?? 0
-  const player2TotalMatches = player2.total_matches_played ?? 0
-  const player1WinStreak = player1.win_streak ?? 0
-  const player2WinStreak = player2.win_streak ?? 0
-  const player1PlacementCompleted = player1.placement_matches_completed ?? 0
-  const player2PlacementCompleted = player2.placement_matches_completed ?? 0
+  return {
+    match: { id: match.id, score: match.score, played_at: match.played_at, tournament_id: match.tournament_id },
+    player1Id,
+    player2Id,
+    matchWinnerId: match.winner_id,
+    player1,
+    player2,
+    player1ActualPlacementCount: await placementCount(player1Id),
+    player2ActualPlacementCount: await placementCount(player2Id),
+  }
+}
 
-  // Determine winner
-  const winnerId: 1 | 2 = matchWinnerId === player1Id ? 1 : 2
+// Unrated status, category defaults and effective ratings, as both the LLM request and the write use them
+function effectiveRatings(inputs: RatingInputs) {
+  const player1IsUnrated = isPlayerUnrated(inputs.player1.total_matches_played ?? 0)
+  const player2IsUnrated = isPlayerUnrated(inputs.player2.total_matches_played ?? 0)
+  const player1DefaultElo = inputs.player1.category_default_elo ?? 1000
+  const player2DefaultElo = inputs.player2.category_default_elo ?? 1000
+  return {
+    player1IsUnrated,
+    player2IsUnrated,
+    player1DefaultElo,
+    player2DefaultElo,
+    player1Effective: getEffectiveRatings(inputs.player1.elo, Number(inputs.player1.mmr), player1IsUnrated, player1DefaultElo),
+    player2Effective: getEffectiveRatings(inputs.player2.elo, Number(inputs.player2.mmr), player2IsUnrated, player2DefaultElo),
+  }
+}
 
-  // Check if players are unrated
-  const player1IsUnrated = isPlayerUnrated(player1TotalMatches)
-  const player2IsUnrated = isPlayerUnrated(player2TotalMatches)
-
-  // All matches count as placement until 3 are completed, counted from rating_history (see above)
-  const isPlayer1PlacementMatch = player1ActualPlacementCount < 3
-  const isPlayer2PlacementMatch = player2ActualPlacementCount < 3
-
-  // Get default ELO from category
-  const player1DefaultElo = player1.category_default_elo ?? 1000
-  const player2DefaultElo = player2.category_default_elo ?? 1000
-
-  // Get effective ratings (use category defaults for unrated)
-  const player1Effective = getEffectiveRatings(player1.elo, Number(player1.mmr), player1IsUnrated, player1DefaultElo)
-  const player2Effective = getEffectiveRatings(player2.elo, Number(player2.mmr), player2IsUnrated, player2DefaultElo)
-
-  // Try LLM ELO calculation first (if API key available)
+/**
+ * Ask the LLM for the ELO changes (if an API key is set, the match has a score and is not a walkover), retrying
+ * up to twice with sleeps. Call it with no transaction open (see updateRatingsAfterMatch). Writes nothing.
+ */
+async function resolveLlmOutcome(inputs: RatingInputs, db: DbOrTx): Promise<LlmOutcome> {
+  const { match, player1Id, player2Id, matchWinnerId } = inputs
+  const { player1Effective, player2Effective } = effectiveRatings(inputs)
   const apiKey = openRouterApiKey()
   let llmResult: LlmEloCalculationResult | null = null
   let llmUsed = false
@@ -783,6 +952,14 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
 
   // Check if score is a walkover (WO) - walkovers don't need LLM calculation
   const isWalkover = match.score?.trim().toUpperCase() === 'WO'
+
+  // The prompt describes the players as this rating sees them (a recalculation reads them after the reversal)
+  const playerState = (p: RatingPlayer) => ({
+    win_streak: p.win_streak,
+    loss_streak: p.loss_streak,
+    total_matches_played: p.total_matches_played,
+    last_match_at: p.last_match_at,
+  })
 
   if (apiKey && match.score && !isWalkover) {
     let retryCount = 0
@@ -798,7 +975,8 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
             player2Elo: player2Effective.elo,
             score: match.score,
             winnerId: matchWinnerId,
-            tournamentId: match.tournament_id || undefined
+            tournamentId: match.tournament_id || undefined,
+            playerStates: { [player1Id]: playerState(inputs.player1), [player2Id]: playerState(inputs.player2) },
           },
           { openRouterApiKey: apiKey },
           db
@@ -844,6 +1022,41 @@ async function applyRatingsForMatch(matchId: string, db: DbOrTx): Promise<Rating
   } else if (!match.score) {
     fallbackReason = 'Match score not available. LLM calculation requires a score to analyze.'
   }
+
+  return { llmResult, llmUsed, llmFailed, fallbackReason }
+}
+
+/**
+ * Compute and write a match's rating from its inputs and LLM outcome. Call it inside the transaction that locked
+ * the inputs (rateLocked).
+ */
+async function writeRatings(inputs: RatingInputs, outcome: LlmOutcome, db: DbOrTx): Promise<RatingCalculationResult> {
+  const { match, player1Id, player2Id, matchWinnerId, player1, player2 } = inputs
+  const matchId = match.id
+  const { llmResult, llmUsed, llmFailed, fallbackReason } = outcome
+  const {
+    player1IsUnrated,
+    player2IsUnrated,
+    player1DefaultElo,
+    player2DefaultElo,
+    player1Effective,
+    player2Effective,
+  } = effectiveRatings(inputs)
+  const isWalkover = match.score?.trim().toUpperCase() === 'WO'
+
+  const player1TotalMatches = player1.total_matches_played ?? 0
+  const player2TotalMatches = player2.total_matches_played ?? 0
+  const player1WinStreak = player1.win_streak ?? 0
+  const player2WinStreak = player2.win_streak ?? 0
+  const player1PlacementCompleted = player1.placement_matches_completed ?? 0
+  const player2PlacementCompleted = player2.placement_matches_completed ?? 0
+
+  // Determine winner
+  const winnerId: 1 | 2 = matchWinnerId === player1Id ? 1 : 2
+
+  // All matches count as placement until 3 are completed, counted from rating_history (see loadRatingInputs)
+  const isPlayer1PlacementMatch = inputs.player1ActualPlacementCount < 3
+  const isPlayer2PlacementMatch = inputs.player2ActualPlacementCount < 3
 
   // Calculate ELO changes (use LLM result if available, otherwise fallback)
   let eloResult: ReturnType<typeof calculateELOChange>
@@ -1353,6 +1566,39 @@ export async function findMatchesMissingRatingHistory(
     )
     .orderBy(asc(matches.created_at))
     .limit(filter.limit ?? Number.MAX_SAFE_INTEGER)
+}
+
+/**
+ * Matches rated with the fallback calculation: completed, competitive and scored, where the LLM failed
+ * (llm_calculation_failed) or was never attempted (llm_elo_calculated = false and llm_calculation_failed = false).
+ * Friendly matches are never rated, so they would never leave the reprocess queue: they are not part of it.
+ */
+export function fallbackMatchCondition(): SQL {
+  return and(
+    eq(matches.status, 'completed'),
+    eq(matches.is_competitive, true),
+    or(
+      eq(matches.llm_calculation_failed, true),
+      and(eq(matches.llm_elo_calculated, false), eq(matches.llm_calculation_failed, false))
+    ),
+    isNotNull(matches.score)
+  )!
+}
+
+/**
+ * The fallback matches to reprocess (admin/matches/reprocess-fallback and scripts/reprocess-fallback-matches.ts),
+ * oldest first: the one with `matchId`, or up to `limit`.
+ */
+export async function findFallbackMatches(
+  filter: { matchId?: string; limit: number },
+  tx?: DbOrTx
+): Promise<Array<{ id: string; played_at: Date | null; score: string | null }>> {
+  return (tx ?? useDb())
+    .select({ id: matches.id, played_at: matches.played_at, score: matches.score })
+    .from(matches)
+    .where(and(fallbackMatchCondition(), filter.matchId ? eq(matches.id, filter.matchId) : undefined))
+    .orderBy(asc(matches.created_at))
+    .limit(filter.matchId ? 1 : filter.limit)
 }
 
 /**
