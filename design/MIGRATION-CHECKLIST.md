@@ -19,8 +19,8 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 | Perfil `/profile` | `pages/profile/index.vue` | Perfil | #3 | in PR | `shots/pr3` |
 | Editar perfil `/profile/edit` | `pages/profile/edit.vue` | Editar | #3 | in PR | `shots/pr3` |
 | Jugador `/players/:id` | `pages/players/[id].vue` | Perfil (applied) | #3 | in PR | `shots/pr3` |
-| Ranking `/leaderboard` | `pages/leaderboard/index.vue` | Ranking | #4 | todo | |
-| Mi ranking `/my-ranking` | `pages/my-ranking/index.vue` | Ranking (applied) | #4 | todo | |
+| Ranking `/leaderboard` | `pages/leaderboard/index.vue` | Ranking | #4 | in PR | `shots/pr4` |
+| Mi ranking `/my-ranking` | `pages/my-ranking/index.vue` | Ranking (applied) | #4 | in PR | `shots/pr4` |
 | Partido + Resultado `/matches/:id` | `pages/matches/[id].vue` | Partido, Resultado | #5 | todo | |
 | Historial `/matches` | `pages/matches/index.vue` | Historial | #6 | todo | |
 | Programar `/matches/new` | `pages/matches/new.vue` | Programar | #6 | todo | |
@@ -47,7 +47,7 @@ PRs stack: each batch branches from the previous one, so merge them in order.
 - [ ] Self-host Geist before production (DESIGN_SYSTEM.md §3); Google Fonts is still linked.
 - [ ] Inicio "Tu próximo partido" and "Puesto N de M" (mock) need data the page doesn't load today (next scheduled match, ranking position); left out rather than adding fetches (brief: no data-fetching changes).
 - [ ] Perfil "Último resultado" / "Tu próximo partido" (mock) are not loaded by the profile page today; left out (no new fetches).
-- [ ] `RankIconAnimated` (looping tier animation) is no longer used by Perfil/Jugador; Mi ranking still uses it until #4.
+- [x] `RankIconAnimated` + `useRankAnimation` + `useParticleSystem` (looping tier effects) removed in #4; nothing uses them.
 - [ ] Real club photography with verified venue IDs (DESIGN.md §8); current photos are credited references.
 
 ## Notes on spec vs. app structure

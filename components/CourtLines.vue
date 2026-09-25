@@ -57,8 +57,8 @@ const rally = computed(() => props.rally)
   -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 60%);
   mask-image: linear-gradient(90deg, transparent 30%, #000 60%);
 }
-.court-lines__court line { stroke: rgba(255, 255, 255, 0.2); stroke-width: 1.5; vector-effect: non-scaling-stroke; fill: none; }
-.court-lines__shot { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 2; stroke-dasharray: 0.012 0.018; vector-effect: non-scaling-stroke; }
+.court-lines__court line { stroke: rgba(255, 255, 255, 0.2); stroke-width: 1.5; fill: none; }
+.court-lines__shot { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 2; stroke-dasharray: 0.012 0.018; }
 .court-lines__ball { fill: #d7ec52; transform: translate(var(--tx), var(--ty)); }
 @supports (offset-path: path('M0 0')) { .court-lines__ball { transform: none; offset-rotate: 0deg; offset-distance: 100%; } }
 .court-lines__landing { fill: none; stroke: #d7ec52; stroke-width: 2; opacity: 0.7; vector-effect: non-scaling-stroke; }
