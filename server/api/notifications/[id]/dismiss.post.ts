@@ -1,63 +1,40 @@
-import { getSupabaseAdmin } from '~/server/utils/supabase'
+import { and, eq } from 'drizzle-orm'
+import { useDb } from '~/server/db'
+import { notifications } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
 
-/**
- * POST /api/notifications/[id]/dismiss
- * 
- * Dismiss a notification (hide permanently)
- */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// POST /api/notifications/[id]/dismiss — dismiss a notification (hide permanently).
 export default defineEventHandler(async (event) => {
   const { player: currentPlayer } = await requirePlayer(event)
 
   try {
     const notificationId = getRouterParam(event, 'id')
-    
+
     if (!notificationId) {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Notification ID is required'
-      })
+      throw createError({ statusCode: 400, statusMessage: 'Notification ID is required' })
     }
-    
-    const supabase = getSupabaseAdmin()
-    
-    // Verify notification belongs to player and dismiss it
-    const { data: notification, error: updateError } = await supabase
-      .from('notifications')
-      .update({
-        is_dismissed: true,
-        dismissed_at: new Date().toISOString()
-      })
-      .eq('id', notificationId)
-      .eq('player_id', currentPlayer.id)
-      .select()
-      .single()
-    
-    if (updateError) {
-      console.error('[API] Dismiss notification error:', updateError)
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to dismiss notification',
-        data: updateError
-      })
-    }
-    
+
+    // Ownership is enforced in the WHERE clause: a notification id that belongs to another
+    // player updates zero rows and reads back as 404, never revealing whether it exists.
+    const [notification] = UUID.test(notificationId)
+      ? await useDb()
+          .update(notifications)
+          .set({ is_dismissed: true, dismissed_at: new Date() })
+          .where(and(eq(notifications.id, notificationId), eq(notifications.player_id, currentPlayer.id)))
+          .returning()
+      : []
+
     if (!notification) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Notification not found or unauthorized'
-      })
+      throw createError({ statusCode: 404, statusMessage: 'Notification not found or unauthorized' })
     }
-    
-    return {
-      success: true,
-      notification
-    }
+
+    return { success: true, notification }
   } catch (error: any) {
-    console.error('[API] Dismiss notification error:', error)
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Internal server error'
+      statusMessage: error.statusMessage || 'Internal server error',
     })
   }
 })
