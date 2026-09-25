@@ -1,5 +1,4 @@
 import { and, asc, count, desc, eq, exists, inArray, isNotNull, ne, not, or } from 'drizzle-orm'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { useDb, type DbOrTx } from '../db'
 import { categories, matches, players, rating_history } from '../db/schema'
 import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayStatus } from '~/types'
@@ -1257,80 +1256,195 @@ function getUpdatedMatchCount(currentCount: number, matchPlayedAt: Date | null):
 }
 
 /**
+ * Mark a match's non-reversed rating_history rows as reversed and undo what they applied to each player
+ * (ELO, MMR, uncertainty, total and placement match counts). Win/loss streaks are left for the
+ * recalculation to set. Runs in one transaction; pass `tx` to join the caller's.
+ * Returns how many rating_history rows were reversed.
+ */
+export async function reverseMatchRatings(matchId: string, tx?: DbOrTx): Promise<number> {
+  return (tx ?? useDb()).transaction(async (t) => {
+    const live = await t
+      .select()
+      .from(rating_history)
+      .where(and(eq(rating_history.match_id, matchId), eq(rating_history.rating_reversed, false)))
+
+    if (live.length === 0) {
+      return 0
+    }
+
+    await t
+      .update(rating_history)
+      .set({ rating_reversed: true, reversed_at: new Date() })
+      .where(inArray(rating_history.id, live.map((entry) => entry.id)))
+
+    const playerIds = [...new Set(live.map((entry) => entry.player_id))].sort()
+    for (const playerId of playerIds) {
+      const [player] = await t
+        .select({
+          elo: players.elo,
+          mmr: players.mmr,
+          mmr_uncertainty: players.mmr_uncertainty,
+          total_matches_played: players.total_matches_played,
+          placement_matches_completed: players.placement_matches_completed,
+        })
+        .from(players)
+        .where(eq(players.id, playerId))
+        .for('update')
+
+      if (!player) {
+        throw new Error(`Failed to fetch player ${playerId}`)
+      }
+
+      const entry = live.find((h) => h.player_id === playerId)
+      if (!entry) continue
+
+      const placementCompleted = player.placement_matches_completed ?? 0
+      await t
+        .update(players)
+        .set({
+          elo: Math.max(1000, player.elo - entry.elo_change),
+          mmr: Math.max(0, Number(player.mmr) - Number(entry.mmr_change)),
+          mmr_uncertainty: Math.max(
+            0,
+            Number(player.mmr_uncertainty) - (Number(entry.uncertainty_after) - Number(entry.uncertainty_before))
+          ),
+          total_matches_played: Math.max(0, (player.total_matches_played ?? 0) - 1),
+          placement_matches_completed:
+            entry.is_placement_match && placementCompleted > 0 ? Math.max(0, placementCompleted - 1) : placementCompleted,
+        })
+        .where(eq(players.id, playerId))
+    }
+
+    return live.length
+  })
+}
+
+/**
+ * Completed competitive matches with both players and a winner that have no non-reversed rating_history
+ * (updateRatingsAfterMatch never ran for them, or failed). Self-matches are left out. Oldest first.
+ */
+export async function findMatchesMissingRatingHistory(
+  filter: { playerId?: string; matchId?: string; limit?: number }, // no limit = every match
+  tx?: DbOrTx
+): Promise<Array<{ id: string; score: string | null; created_at: Date | null }>> {
+  const db = tx ?? useDb()
+  return db
+    .select({ id: matches.id, score: matches.score, created_at: matches.created_at })
+    .from(matches)
+    .where(
+      and(
+        eq(matches.status, 'completed'),
+        eq(matches.is_competitive, true),
+        isNotNull(matches.winner_id),
+        isNotNull(matches.player1_id),
+        isNotNull(matches.player2_id),
+        ne(matches.player1_id, matches.player2_id),
+        filter.playerId ? or(eq(matches.player1_id, filter.playerId), eq(matches.player2_id, filter.playerId)) : undefined,
+        filter.matchId ? eq(matches.id, filter.matchId) : undefined,
+        not(
+          exists(
+            db
+              .select({ id: rating_history.id })
+              .from(rating_history)
+              .where(and(eq(rating_history.match_id, matches.id), eq(rating_history.rating_reversed, false)))
+          )
+        )
+      )
+    )
+    .orderBy(asc(matches.created_at))
+    .limit(filter.limit ?? Number.MAX_SAFE_INTEGER)
+}
+
+/**
+ * Clear the LLM calculation fields of a match before it is rated again
+ */
+export async function clearLlmCalculation(matchId: string, tx?: DbOrTx): Promise<void> {
+  await (tx ?? useDb())
+    .update(matches)
+    .set({
+      llm_elo_calculated: null,
+      llm_calculation_failed: null,
+      llm_calculation_reasoning: null,
+      llm_calculation_model: null,
+      llm_calculation_timestamp: null
+    })
+    .where(eq(matches.id, matchId))
+}
+
+/**
  * Check and apply monthly decay for a player
  */
 export async function checkAndApplyMonthlyDecay(
   playerId: string,
-  supabase: SupabaseClient
+  tx?: DbOrTx
 ): Promise<{ decayApplied: number; uncertaintyIncrease: number } | null> {
-  // Fetch player data
-  const { data: player, error } = await supabase
-    .from('players')
-    .select('id, elo, mmr_uncertainty, matches_this_month, last_decay_check, total_matches_played, placement_matches_completed, created_at')
-    .eq('id', playerId)
-    .single()
-  
-  if (error || !player) {
-    console.error('Failed to fetch player for decay check:', error)
+  const db = tx ?? useDb()
+  const [player] = await db
+    .select({
+      id: players.id,
+      elo: players.elo,
+      mmr_uncertainty: players.mmr_uncertainty,
+      matches_this_month: players.matches_this_month,
+      last_decay_check: players.last_decay_check,
+      total_matches_played: players.total_matches_played,
+      placement_matches_completed: players.placement_matches_completed,
+      created_at: players.created_at,
+    })
+    .from(players)
+    .where(eq(players.id, playerId))
+
+  if (!player) {
+    console.error('Failed to fetch player for decay check:', playerId)
     return null
   }
-  
+
   // Don't apply decay to unrated players
   if (player.total_matches_played === 0) {
     return { decayApplied: 0, uncertaintyIncrease: 0 }
   }
-  
+
   // Don't apply decay to players still in placement matches
   if ((player.placement_matches_completed ?? 0) < 3) {
     return { decayApplied: 0, uncertaintyIncrease: 0 }
   }
-  
+
   const lastDecayCheck = player.last_decay_check ? new Date(player.last_decay_check) : null
-  
-  // Check if we should apply decay
+
   if (!shouldApplyDecay(lastDecayCheck)) {
     return { decayApplied: 0, uncertaintyIncrease: 0 }
   }
-  
+
   // Calculate required matches (proportional if registered mid-month)
   const matchesRequired = calculateRequiredMatchesForMonth(player.created_at)
-  
-  // Calculate decay
-  const decayAmount = calculateDecayAmount(player.matches_this_month, matchesRequired)
-  const uncertaintyIncrease = (matchesRequired - Math.min(player.matches_this_month, matchesRequired)) * 0.1
-  
+  const matchesThisMonth = player.matches_this_month ?? 0
+
+  const decayAmount = calculateDecayAmount(matchesThisMonth, matchesRequired)
+  const uncertaintyIncrease = (matchesRequired - Math.min(matchesThisMonth, matchesRequired)) * 0.1
+  const today = new Date().toISOString().split('T')[0]
+
   if (decayAmount === 0 && uncertaintyIncrease === 0) {
-    // No decay needed, just update the check date
-    await supabase
-      .from('players')
-      .update({
-        last_decay_check: new Date().toISOString().split('T')[0],
-        matches_this_month: 0, // Reset for new month
-      })
-      .eq('id', playerId)
-    
+    // No decay needed, just update the check date and reset the month
+    await db
+      .update(players)
+      .set({ last_decay_check: today, matches_this_month: 0 })
+      .where(eq(players.id, playerId))
+
     return { decayApplied: 0, uncertaintyIncrease: 0 }
   }
-  
-  // Apply decay
+
   const newElo = applyDecay(player.elo, decayAmount)
   const newUncertainty = Math.min(UNCERTAINTY_MAX, Number(player.mmr_uncertainty) + uncertaintyIncrease)
-  
-  const { error: updateError } = await supabase
-    .from('players')
-    .update({
+
+  await db
+    .update(players)
+    .set({
       elo: newElo,
       mmr_uncertainty: newUncertainty,
-      last_decay_check: new Date().toISOString().split('T')[0],
-      matches_this_month: 0, // Reset for new month
+      last_decay_check: today,
+      matches_this_month: 0,
     })
-    .eq('id', playerId)
-  
-  if (updateError) {
-    console.error('Failed to apply decay:', updateError)
-    return null
-  }
-  
+    .where(eq(players.id, playerId))
+
   return { decayApplied: decayAmount, uncertaintyIncrease }
 }
 
@@ -1340,45 +1454,33 @@ export async function checkAndApplyMonthlyDecay(
  */
 export async function validateRatingConsistency(
   playerId: string,
-  supabase: SupabaseClient
+  tx?: DbOrTx
 ): Promise<{ isConsistent: boolean; expectedElo: number; actualElo: number }> {
-  // Fetch player's current rating
-  const { data: player, error: playerError } = await supabase
-    .from('players')
-    .select('elo, category:categories(default_elo)')
-    .eq('id', playerId)
-    .single()
-  
-  if (playerError || !player) {
+  const db = tx ?? useDb()
+  const [player] = await db
+    .select({ elo: players.elo, default_elo: categories.default_elo })
+    .from(players)
+    .leftJoin(categories, eq(players.category_id, categories.id))
+    .where(eq(players.id, playerId))
+
+  if (!player) {
     return { isConsistent: false, expectedElo: 0, actualElo: 0 }
   }
-  
-  // Fetch all non-reversed rating history
-  const { data: history, error: historyError } = await supabase
-    .from('rating_history')
-    .select('elo_change, is_unrated_match')
-    .eq('player_id', playerId)
-    .eq('rating_reversed', false)
-    .order('created_at', { ascending: true })
-  
-  if (historyError) {
-    return { isConsistent: false, expectedElo: 0, actualElo: player.elo }
+
+  const history = await db
+    .select({ elo_change: rating_history.elo_change })
+    .from(rating_history)
+    .where(and(eq(rating_history.player_id, playerId), eq(rating_history.rating_reversed, false)))
+    .orderBy(asc(rating_history.created_at))
+
+  // Expected ELO: the category default plus every non-reversed change
+  let expectedElo = player.default_elo ?? 1000
+  for (const entry of history) {
+    expectedElo += entry.elo_change
   }
-  
-  // Calculate expected ELO from history
-  const defaultElo = (player.category as any)?.default_elo ?? 1000
-  let expectedElo = history && history.length > 0 
-    ? (history[0].is_unrated_match ? defaultElo : defaultElo)
-    : defaultElo
-  
-  if (history) {
-    for (const entry of history) {
-      expectedElo += entry.elo_change
-    }
-  }
-  
+
   expectedElo = Math.max(ELO_MIN, expectedElo)
-  
+
   return {
     isConsistent: Math.abs(expectedElo - player.elo) <= 1, // Allow for rounding
     expectedElo,
