@@ -41,8 +41,9 @@ const sizeClass = computed(() => ({
 // so the shipped page carries the brief it is audited against.
 const CONTRACT = `THESIS: Tenis Ecuador is a club scoreboard, not a dashboard of cards. Refuses the dark app with glass cards, pills and a photo hero.
 OWN-WORLD: enamel-green board, white enamel plates hung on two hooks, one amber lamp for what needs you; Big Shoulders painted caps, Archivo text, tabular numerals; chalk hairlines; 3-4px corners.
+BROADCAST: the board goes on television. A real-time court behind the landing's score bug, lower thirds and straps as Tablero pieces, enamel player cards with a brushed bezel; luxury broadcast, never arcade.
 STORY: a visitor watches a match play out under their own scroll, sees it confirmed and the winner climb a rung, then signs up; a player reads their SR on plates and acts on the lit plate.
-FIRST VIEWPORT: headline left at display scale, the example scoreboard right (below on phones) at 0-0, amber "Crear cuenta gratis" beside the headline.
+FIRST VIEWPORT: the court under floodlights through the broadcast camera, the score bug at 0-0 top-left, the title card lower-left with the headline at display scale and amber "Crear cuenta gratis" (phones: headline first, court below).
 FORM: hand-operated club scoreboard, grounded candidate 3 of 7; seed 2af1d28f.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md`
 

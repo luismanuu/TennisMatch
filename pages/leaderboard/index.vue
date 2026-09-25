@@ -11,14 +11,17 @@
         <p v-else class="t-muted">Clasificación de Ecuador</p>
       </div>
       <div class="rank-head__side">
-        <div v-if="ownRow" class="rank-head__own">
-          <span class="t-paint">Tu posición</span>
-          <span class="rank-head__own-plates">
-            <TableroPlate :value="ownRow.rank" tone="lamp" word />
-            <span class="rank-head__own-sr num">{{ ownRow.elo.toLocaleString('es-EC') }} <span class="t-paint">SR</span></span>
-          </span>
-          <span class="sr-only">Puesto {{ ownRow.rank }}, {{ ownRow.elo }} puntos SR</span>
-        </div>
+        <BroadcastPlayerCard
+          v-if="ownRow"
+          class="rank-head__own"
+          compact
+          :name="ownRow.name"
+          :rank="ownRow.rank"
+          :rating="ownRow.elo"
+          :tier="ownTier"
+          :heading="`Tu posición: puesto ${ownRow.rank}`"
+          :stats="ownStats"
+        />
         <button type="button" class="t-btn t-btn--line" @click.stop="showRankingInfo = true">
           Cómo funciona
           <Icon name="heroicons:information-circle" class="w-5 h-5" aria-hidden="true" />
@@ -89,7 +92,7 @@
         <section v-if="topPlayers.length >= 3" class="rank-top" aria-labelledby="rank-top-title">
           <h3 id="rank-top-title" class="t-paint rank-top__title">Primeros tres puestos</h3>
           <div class="rank-list">
-            <LeaderboardPlayerCard v-for="(p, i) in topPlayers.slice(0, 3)" :key="`top-${p.id}`" :player="p" :billing="(i + 1) as 1 | 2 | 3" />
+            <LeaderboardPlayerCard v-for="(p, i) in topPlayers.slice(0, 3)" :key="`top-${p.id}`" :player="p" :billing="(i + 1) as 1 | 2 | 3" :order="i" />
           </div>
         </section>
 
@@ -103,7 +106,7 @@
               <Icon name="heroicons:arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
               <span class="sr-only">Cargando más</span>
             </div>
-            <LeaderboardPlayerCard v-for="p in rankings" :key="`${p.id}-${p.rank}`" :player="p" />
+            <LeaderboardPlayerCard v-for="(p, i) in rankings" :key="`${p.id}-${p.rank}`" :player="p" :order="i" />
             <div v-if="hasMoreBelow && isLoadingMore" class="ranking-more" aria-live="polite">
               <Icon name="heroicons:arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
               <span class="sr-only">Cargando más</span>
@@ -171,6 +174,15 @@ const showRankingInfo = ref(false)
 // The header board the compact rail tracks, and the viewer's own row when the API returned it
 const rankBoard = ref<HTMLElement | null>(null)
 const ownRow = computed(() => rankings.value.find(p => p.is_current_user) || currentUserPosition.value || null)
+const ownTier = computed(() => {
+  const r = ownRow.value
+  if (!r || !r.total_matches_played) return null
+  return TIERS.find(t => r.elo >= t.minElo && r.elo <= t.maxElo)?.name ?? null
+})
+const ownStats = computed(() => [
+  { label: 'Partidos jugados', value: ownRow.value?.total_matches_played ?? null },
+  { label: 'Victorias seguidas', value: ownRow.value?.win_streak ?? null }
+])
 
 // Computed
 const hasActiveFilters = computed(() => {
@@ -677,13 +689,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.rank-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px 40px; padding-bottom: 28px; margin-bottom: 32px; border-bottom: 1px solid var(--t-chalk-strong); }
+.rank-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 24px 40px; padding-bottom: 28px; margin-bottom: 32px; border-bottom: 1px solid var(--t-chalk-strong); }
 .rank-head__title { display: grid; gap: 16px; }
-.rank-head__count { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 2rem; }
+/* The count as a broadcast strap under the title: plates on a painted bar */
+.rank-head__count { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-self: start; font-size: 2rem; padding: 8px 16px 8px 8px; border-radius: 4px; background: var(--t-board-raise); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); }
+@media (prefers-reduced-motion: no-preference) {
+  .rank-head__count { transition: clip-path 620ms var(--t-ease); clip-path: inset(0 0 0 0 round 4px); }
+  @starting-style { .rank-head__count { clip-path: inset(0 100% 0 0 round 4px); } }
+}
 .rank-head__side { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; }
-.rank-head__own { display: grid; gap: 8px; }
-.rank-head__own-plates { display: flex; align-items: center; gap: 14px; font-size: 2.1rem; }
-.rank-head__own-sr { font-size: 18px; font-weight: 650; }
+.rank-head__own { width: min(420px, 100%); }
 .strip-label { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
 .strip-sr { font-size: 17px; font-weight: 650; }
 
@@ -717,6 +732,7 @@ onMounted(() => {
   .rank-head { padding-bottom: 20px; margin-bottom: 24px; }
   .rank-head__count { font-size: 1.6rem; }
   .rank-head__side { width: 100%; justify-content: space-between; }
+  .rank-head__own { width: 100%; }
   .filters__grid { grid-template-columns: 1fr; }
   .ranking-grid { grid-template-columns: 1fr; gap: 32px; }
   .ranking-scroll { max-height: 60vh; }

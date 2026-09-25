@@ -4,6 +4,7 @@
     :data-user-card="player.is_current_user ? 'true' : undefined"
     class="lb-row"
     :class="[{ 'is-own': player.is_current_user }, billing && `is-billing-${billing}`]"
+    :style="{ '--i': Math.min(order, 12) }"
     :aria-current="player.is_current_user ? 'true' : undefined"
   >
     <span class="lb-rank">
@@ -52,7 +53,7 @@
 import type { LeaderboardPlayer } from '~/types/leaderboard'
 import { TIERS, tierName } from '~/utils/tiers'
 
-const props = defineProps<{ player: LeaderboardPlayer; billing?: 1 | 2 | 3 }>()
+const props = withDefaults(defineProps<{ player: LeaderboardPlayer; billing?: 1 | 2 | 3; order?: number }>(), { billing: undefined, order: 0 })
 
 const isInPlacement = computed(() =>
   props.player.total_matches_played === 0 || (props.player.placement_matches_completed || 0) < 3
@@ -109,6 +110,11 @@ const streak = computed(() => {
   .lb-row:hover .lb-rank :deep(.t-plate) { transform: perspective(300px) rotateX(14deg); }
 }
 .lb-row:active { background: var(--t-board-deep); }
+/* Stat reveal: rows wipe in, staggered, the moment the data puts them on the board */
+@media (prefers-reduced-motion: no-preference) {
+  .lb-row { transition: clip-path 520ms var(--t-ease) calc(var(--i, 0) * 45ms), background-color 160ms linear; clip-path: inset(0 0 0 0); }
+  @starting-style { .lb-row { clip-path: inset(0 100% 0 0); } }
+}
 @media (max-width: 767px) {
   .lb-row { grid-template-columns: 2.9rem minmax(0, 1fr) auto; gap: 12px; padding: 14px 4px; }
   .lb-rank { font-size: 1.25rem; }

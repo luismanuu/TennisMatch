@@ -1,6 +1,6 @@
 ---
 name: Tenis Ecuador · Tablero
-description: The hand-operated club scoreboard. Enamel-green board, white enamel plates hung on two hooks, one amber lamp.
+description: The hand-operated club scoreboard, put on television. Enamel-green board, white enamel plates hung on two hooks, one amber lamp; a broadcast layer (3D court, score bug, lower thirds, player cards) on top.
 colors:
   enamel-green: "#0e3a2d"
   board-raise: "#114234"
@@ -17,6 +17,13 @@ colors:
   day-chalk: "rgba(14, 58, 45, 0.16)"
   day-chalk-strong: "rgba(14, 58, 45, 0.36)"
   day-clay: "#a4442a"
+  court-night: "#061510"
+  court-scrim: "rgba(6, 21, 16, 0.55)"
+  court-paint: "#1b5a44"
+  court-apron: "#0f3d2f"
+  bezel-metal: "#26352f"
+  broadcast-shadow: "rgba(0, 0, 0, 0.7)"
+  enamel-highlight: "rgba(255, 255, 255, 0.06)"
 typography:
   display-xl: { fontFamily: "Big Shoulders, Arial Narrow, Roboto Condensed, sans-serif", fontSize: "clamp(3.25rem, 1.4rem + 7.4vw, 6rem)", fontWeight: 800, lineHeight: 0.86, letterSpacing: "0.005em" }
   display-l: { fontFamily: "Big Shoulders, Arial Narrow, Roboto Condensed, sans-serif", fontSize: "clamp(2.75rem, 1.6rem + 4.4vw, 5rem)", fontWeight: 800, lineHeight: 0.9, letterSpacing: "0.005em" }
@@ -53,6 +60,10 @@ components:
   field: { backgroundColor: "{colors.board-deep}", textColor: "{colors.enamel-white}", typography: "{typography.body}", rounded: "{rounded.slot}", padding: "12px 14px", height: "48px" }
   status-mark: { textColor: "{colors.enamel-white}", rounded: "{rounded.plate}", padding: "3px 8px" }
   nav-link-active: { backgroundColor: "{colors.enamel-white}", textColor: "{colors.enamel-green}", rounded: "{rounded.plate}", padding: "8px 12px", height: "40px" }
+  score-bug: { backgroundColor: "{colors.board-raise}", textColor: "{colors.enamel-white}", rounded: "{rounded.board}", padding: "12px 16px 14px" }
+  lower-third: { backgroundColor: "{colors.board-raise}", textColor: "{colors.enamel-white}", rounded: "{rounded.board}", padding: "8px 16px 8px 8px", height: "58px" }
+  strap-tab: { backgroundColor: "{colors.enamel-white}", textColor: "{colors.enamel-green}", rounded: "{rounded.plate}", padding: "0 12px", height: "40px" }
+  player-card: { backgroundColor: "{colors.board-raise}", textColor: "{colors.enamel-white}", rounded: "{rounded.board}", padding: "18px 20px 22px" }
 ---
 
 > `DESIGN_SYSTEM.md` describes the retired Graphite system, still used by the routes not yet migrated to Tablero.
@@ -69,7 +80,7 @@ The point of view is the product's own: the number is the product. SR, rank and 
 THESIS: Tenis Ecuador is a club scoreboard, not a dashboard of cards. Refuses the dark app with glass cards, pills and a photo hero.
 OWN-WORLD: enamel-green board, white enamel plates hung on two hooks, one amber lamp for what needs you; Big Shoulders painted caps, Archivo text, tabular numerals; chalk hairlines; 3-4px corners.
 STORY: a visitor watches a match play out under their own scroll, sees it confirmed and the winner climb a rung, then signs up; a player reads their SR on plates and acts on the lit plate.
-FIRST VIEWPORT: headline left at display scale, the example scoreboard right (below on phones) at 0-0, amber "Crear cuenta gratis" beside the headline.
+FIRST VIEWPORT: the court under floodlights through the broadcast camera, the score bug at 0-0 top-left, the title card lower-left with the headline at display scale and amber "Crear cuenta gratis" (phones: headline first, court below).
 FORM: hand-operated club scoreboard, grounded candidate 3 of 7; seed 2af1d28f.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 ```
@@ -80,6 +91,49 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 - One lamp: amber marks the single thing that needs you, or you.
 - Motion is scrubbed by the user's scroll or triggered by their pointer; it rests when they rest.
 - Spanish UI copy in neutral tuteo (tú / puedes / tienes), never voseo.
+- A broadcast layer on top (below): the club board is what the television puts on screen. The graphics are Tablero pieces; only the court behind them is new.
+
+## Broadcast layer
+
+**North star: "The club final, on television."** The CEO asked for videogame-level presentation, and chose the most luxurious reference: a sports broadcast in the Top Spin / EA Sports register, not a holo card and not an arcade. The Tablero world does not change; it goes on air. The board, plates and lamp become the broadcast graphics; a real-time court appears behind them on the landing; players get a card.
+
+What the layer adds, and what it refuses:
+- **One 3D moment, on one surface.** Only the landing hero renders WebGL. Inicio and Ranking get the broadcast *graphics* (straps, card, reveals) in CSS, never a canvas.
+- **A broadcast camera, not a fly-through.** The camera holds the positions a TV director would cut to (establishing wide from the corner, the high end-on match camera, a push toward the net for the result, a slow crane for the ladder) and moves between them only as the visitor scrolls. Dragging swings it around the court within ±0.42 rad (less on a phone) and letting go brings it back.
+- **Hawk-Eye, not particles.** Shots draw as chalk ribbons that fade toward the tail, bounces leave chalk marks, the ball carries a soft contact shadow. No players on court, no crowd noise, no confetti.
+- **Night under floodlights, not neon.** Deep enamel green court and apron with acrylic grain and four baked floodlight pools, chalk lines in unlit paint, a dusk sky that only shows at the horizon, dark stands with a seated crowd dimmed to silhouette, four towers with a faint halo each. Tone mapping ACES, no bloom, no lens flares, no neon grid, no gradient text.
+
+### The court (landing hero)
+- **Code:** `components/broadcast/Hero.vue` (hero, HUD, drag, device tier), `utils/broadcast.ts` (pure camera, projection, shot paths, rallies, device tiers, sheen; property-tested in `tests/design/broadcast.test.ts`), `utils/courtPoster.ts` (the court as SVG through the same camera), `lib/broadcast/courtScene.ts` (three.js scene, its own lazy chunk).
+- **First paint is the poster.** The server HTML carries the court as flat SVG shapes projected through `cameraAt`/`projectPoint`: a landscape and a portrait poster chosen by CSS, replaced by one at the measured size after mount. Nothing about the 3D court is in the critical path.
+- **Upgrade, then fade.** After `load` and an idle callback, `courtTier()` decides: `full` (antialiased, DPR ≤ 2), `lite` (no MSAA, DPR ≤ 1.25, a thinner crowd) or `static`. Static is kept for no WebGL, a software renderer (SwiftShader, llvmpipe), reduced motion, Data Saver, 2G, under 4 GB of memory or under 4 cores; unknown signals count as capable. Capable devices dynamically import the scene, render one frame at the current scroll, and fade the canvas in over the poster (700 ms). `?court=full|lite|static` overrides for QA; reduced motion still wins.
+- **On demand only.** The scene renders when scroll, drag or size change, in one coalesced rAF, and not while the hero is off screen. A resting page draws nothing.
+- **The static court still plays.** Without the canvas, the poster draws the rally in 2D (ball, shadow, chalk trail) through the same camera, so low-end phones get the same match, flat.
+- **One clock.** `rallyAt(progress)` walks the same `linger`/`stepAt` clock as `stageAt`: the board hangs a new point the moment the ball finishes one. Every rally is real tennis: the serve lands in the diagonal box, every shot clears the net, the point's winner strikes last.
+- **The ball is the lamp in flight.** The ball is the only amber thing on the court; when the match ends it rests in the back run-off and the lamp passes to the +18 plates and the winner's serve marker.
+
+### Broadcast graphics (all three surfaces)
+- **Score bug:** the Tablero scoreboard, top-left of the court: serve marker, painted name, set plates, points plate, "Partido de ejemplo · Ilustrativo" painted in its head. Painted-on frame plus a short contact shadow. The on-court graphics (score bug, lower third, strap) are the only boards allowed one: they sit over a picture, not on the board.
+- **Lower third:** a Board Raise bar with an enamel **strap tab** on the left ("Previa", "En juego", "Final", "Por confirmar", "Confirmado"), the status line, and the +18 SR lamp plates on confirmation. Wipes in from the left (clip-path, scrubbed by scroll) as the title card lifts off.
+- **Stat reveal strap:** the ladder, as a strap that slides and wipes in from the right just before the confirmation lands; the winner climbs a rung inside it.
+- **Title card:** the landing's headline, lede and actions on an enamel card over the resting court; the first 4.5% of scroll wipes it off to the left (clip-path, 24 px lift), never a fade, so its text is never translucent over the court. Phones and reduced motion put it in the page flow above the court.
+- **Name strap (Inicio):** under the greeting, a plate tab with the city and the date painted beside it; wipes in once when the page renders (`@starting-style`).
+- **Count strap (Ranking):** the "jugadores clasificados" plates on a painted bar under the title, same wipe.
+- **Row reveal (Ranking):** rows wipe in left to right, staggered 45 ms, when the data puts them on the board (initial load and load-more).
+- Graphics motion is always either scrubbed by scroll or a one-time reveal when data appears; nothing loops, nothing autoplays on a timer.
+
+### Broadcast colours
+The court is its own night: **Court Night** (`court-night`) is the stadium dark behind and around the court and the poster's base; **Court Paint** and **Court Apron** are the playing surface and its run-off (both in the 3D scene and the poster); **Court Scrim** is the low floor under on-court graphics so white paint reads on the lit court. **Broadcast Shadow** is the contact shadow of on-court graphics only. **Bezel Metal** is the player card's machined frame, **Enamel Highlight** the light caught on its enamel.
+
+### Player card (Inicio, Ranking)
+`components/broadcast/PlayerCard.vue`, `composables/useSheen.ts`. A sports-game player card in enamel, not a holo foil:
+- **Face:** Board Raise enamel set in an 8 px **brushed-metal bezel** (a light hairline, a machined edge, fine horizontal brushing masked to the bezel only), a recessed **name strap** with the player's name in Big Shoulders and the tier on an enamel tab, SR hung on large plates, a faint engraved court corner as card art. On Ranking the viewer's rank hangs on the lamp plate at the start of the strap.
+- **Light:** the pointer moves a soft warm highlight (13% at most) and a narrow specular band across the enamel and the bezel, and tips the card at most 4° (`sheenAt`, one CSS-variable write per frame, only while the pointer moves). On phones where it needs no permission prompt, device tilt does the same at half strength. Leaving rests it flat. Reduced motion: flat, lit from the middle.
+- **Stats:** plate numbers in ruled columns; win rate carries a thin enamel bar. When the card mounts before its numbers, the columns wipe in left to right (80 ms stagger) the moment they arrive and the bar fills; if the numbers were already there they are simply shown.
+- **No rainbow, no foil, no glow, no rarity colours.** The luxury is the metal, the enamel and the light.
+
+### Performance contract
+The 3D court is a progressive enhancement with a hard budget: hero first paint within +20% of staging on throttled mobile (Fast 3G, 4× CPU), three.js in its own chunk loaded only after `load`, no modulepreload of it in the HTML, no assets downloaded (geometry, materials and lighting are code; the only textures are drawn at runtime on small canvases: court grain and floodlight pools 256×512, net weave 32×32, soft disc 64×64). Measured numbers live in the PR, not here.
 
 ## Colors
 
@@ -188,9 +242,9 @@ Rectangular 3px marks, 12.5px 600, Chalk Strong ring. Active: full-ink ring. Pen
 ### Signature interactions
 - **Motion principles.** User-driven only: scroll position or pointer. Easing is exponential out (`cubic-bezier(0.16, 1, 0.3, 1)`), no bounce, no loops, no autoplay. `useScrub` runs one rAF loop per use, started by scroll/resize and stopped once the value reaches its target (frame-rate independent half-life smoothing, snap below 0.0005), so an idle page requests no frames. Reduced motion: progress jumps to the target, the stage drops its pin and shows its composed final state, the flip swaps instantly.
 - **Plate flip.** Old plate swings off its hooks (180ms, ease-in, `rotateX(80deg)`), new one drops on (260ms, `rotateX(-78deg)` → 0).
-- **Landing match stage.** A 280vh section (240vh under 768px) pins the scoreboard and ladder while scroll plays a labelled example match (6–4, 6–3) point by point. A linger remap (amount 0.35) slows the middle; whole-point settling means every resting frame is a real score. At 64% of the scroll the result is proposed, at 80% confirmed (+18 SR on lamp plates, the winner's serve marker lit), then the winner's row climbs one rung. Scrolling up replays it backwards. Smoothing half-life 70ms.
-- **Inicio.** The player's SR hangs on large plates on the player board with four plate-number columns. When those plates pass under the header, the score rail slides out from behind it (driven by scroll position, 55ms half-life) repeating name, SR plates and tier; scrolling back reels it in. The most urgent pending action is the one lit plate: an amber lead panel with a Board button.
-- **Ranking.** A ladder of rows, each rank on a hung plate; hover lifts the rank plate on its hooks (`rotateX(14deg)`). The viewer's own rank hangs on the lamp plate, in the header and in the score rail. The top three are billed by size (display caps, 2rem / 1.65rem / 1.4rem), never podium cards. The list window fades at its edges instead of cutting rows.
+- **Landing broadcast hero.** A 300vh section (260vh under 768px) pins the court, the score bug, the lower third and the ladder strap while scroll plays a labelled example match (6–4, 6–3) point by point, on court and on the board at once. A linger remap (amount 0.35) slows the middle; whole-point settling means every resting frame is a real score. At 64% of the scroll the result is proposed, at 80% confirmed (+18 SR on lamp plates, the winner's serve marker lit), then the winner's row climbs one rung in the strap. Scrolling up replays it backwards. Smoothing half-life 70ms. See "Broadcast layer".
+- **Inicio.** The player's SR hangs on large plates on the player card (see "Player card") with four plate-number columns beside it. When those plates pass under the header, the score rail slides out from behind it (driven by scroll position, 55ms half-life) repeating name, SR plates and tier; scrolling back reels it in. The most urgent pending action is the one lit plate: an amber lead panel with a Board button.
+- **Ranking.** The viewer's compact player card sits beside the title. A ladder of rows, each rank on a hung plate; hover lifts the rank plate on its hooks (`rotateX(14deg)`). The viewer's own rank hangs on the lamp plate, in the header and in the score rail. The top three are billed by size (display caps, 2rem / 1.65rem / 1.4rem), never podium cards. The list window fades at its edges instead of cutting rows.
 
 ## Do's and Don'ts
 
@@ -216,3 +270,7 @@ Rectangular 3px marks, 12.5px 600, Chalk Strong ring. Active: full-ink ring. Pen
 - **Don't** use AI medal imagery: the tier PNG medals in `public/images/ranks/` are not used on Tablero surfaces; tiers are named in Big Shoulders caps.
 - **Don't** put wide soft shadows under 1px-bordered panels.
 - **Don't** light more than one amber lamp per view.
+- **Don't** go arcade: no neon grids, cartoon players, lens-flare streaks, bloom, confetti, holo-rainbow foil or rarity colours on the broadcast layer.
+- **Don't** put a WebGL canvas anywhere but the landing hero, and never in the critical path: the poster paints first, the court upgrades after `load`.
+- **Don't** fly the camera through the stadium; it holds broadcast positions and only the visitor's scroll or drag moves it.
+- **Don't** download textures or models for the court; draw them in code.

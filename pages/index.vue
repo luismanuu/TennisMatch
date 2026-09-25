@@ -4,58 +4,33 @@
     <template v-if="isAuthenticated">
       <header class="home-head">
         <h1 class="t-display-l">{{ greeting }}<span v-if="firstName">, {{ firstName }}</span></h1>
-        <p class="t-muted home-head__context">{{ contextLine }}</p>
+        <p class="home-strap">
+          <span class="home-strap__tab">{{ player?.city?.name || 'Hoy' }}</span>
+          <span class="home-strap__date">{{ dateLine }}</span>
+        </p>
       </header>
 
-      <!-- The player's own scoreboard: SR on hung plates, supporting counts as columns -->
-      <section class="player-board t-board" aria-labelledby="player-board-title">
-        <div class="player-board__sr">
-          <h2 id="player-board-title" class="t-paint">Tu nivel de juego</h2>
-          <p v-if="playerLoading" class="player-board__plates" aria-busy="true">
-            <span class="sr-only">Cargando tu nivel</span>
-            <span v-for="n in 4" :key="n" class="t-slot player-board__slot" aria-hidden="true" />
-          </p>
-          <p v-else ref="playerBoard" class="player-board__plates">
-            <TableroPlates :value="player?.elo ?? 0" :label="`${(player?.elo ?? 0).toLocaleString('es-EC')} puntos SR`" />
-            <span class="player-board__unit" aria-hidden="true">SR</span>
-          </p>
-          <p v-if="currentTier" class="player-board__tier">{{ tierName(currentTier.tier) }}</p>
-          <p v-else-if="player && !playerLoading" class="player-board__tier player-board__tier--quiet">Sin nivel todavía: juega tus partidos de colocación</p>
-        </div>
-
-        <dl class="player-board__stats">
-          <div>
-            <dt class="t-paint">Victorias seguidas</dt>
-            <dd><TableroPlates :value="player?.win_streak ?? 0" :label="String(player?.win_streak ?? 0)" /></dd>
-          </div>
-          <div>
-            <dt class="t-paint">Partidos jugados</dt>
-            <dd><TableroPlates :value="player?.total_matches_played ?? 0" :label="String(player?.total_matches_played ?? 0)" /></dd>
-          </div>
-          <div>
-            <dt class="t-paint">Victorias</dt>
-            <dd><TableroPlates :value="winsNumber" :label="String(winsNumber)" /></dd>
-          </div>
-          <div>
-            <dt class="t-paint">Porcentaje de victorias</dt>
-            <dd>
-              <TableroPlates :value="winRateNumber" :label="winRateNumber === null ? 'Sin datos' : `${winRateNumber}%`" />
-              <span v-if="winRateNumber !== null" class="player-board__pct" aria-hidden="true">%</span>
-            </dd>
-          </div>
-        </dl>
-
-        <div class="player-board__links">
-          <NuxtLink to="/my-ranking" class="t-link">
-            Ver mi ranking
-            <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
-          </NuxtLink>
-          <button type="button" class="t-link" @click="showRankingInfo = true">
-            Cómo funciona el ranking
-            <Icon name="heroicons:information-circle" class="w-4 h-4" aria-hidden="true" />
-          </button>
-        </div>
-      </section>
+      <!-- The player's card: SR on plates on an enamel face, stats revealed as they arrive -->
+      <BroadcastPlayerCard
+        ref="playerCard"
+        class="home-card"
+        :name="player?.name || user?.name || ''"
+        :rating="player?.elo ?? null"
+        :loading="playerLoading"
+        :tier="currentTier ? tierName(currentTier.tier) : null"
+        :tier-note="player ? 'Sin nivel todavía: juega tus partidos de colocación' : ''"
+        heading="Tu nivel de juego"
+        :stats="homeStats"
+      >
+        <NuxtLink to="/my-ranking" class="t-link">
+          Ver mi ranking
+          <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
+        </NuxtLink>
+        <button type="button" class="t-link" @click="showRankingInfo = true">
+          Cómo funciona el ranking
+          <Icon name="heroicons:information-circle" class="w-4 h-4" aria-hidden="true" />
+        </button>
+      </BroadcastPlayerCard>
 
       <TableroScoreStrip :target="playerBoard">
         <span class="strip-name">{{ firstName || 'Tú' }}</span>
@@ -185,8 +160,9 @@
 
     <!-- Guest landing (DESIGN.md "Landing") -->
     <template v-else>
-      <section class="landing-top" aria-labelledby="landing-title">
-        <div class="landing-copy">
+      <!-- Broadcast hero (DESIGN.md "Broadcast"): the example match plays on court under the visitor's scroll -->
+      <BroadcastHero class="landing-hero">
+        <template #title>
           <h1 id="landing-title" class="t-display-xl">Juega. Confirma. Sube.</h1>
           <p class="t-lede">Registra tus partidos, sigue tu nivel SR y encuentra rivales de tu nivel en tu ciudad. Rankings y torneos para jugadores amateur de Ecuador.</p>
           <div class="landing-actions">
@@ -196,9 +172,8 @@
             </NuxtLink>
             <NuxtLink to="/sign-in" class="t-btn t-btn--line">Ya tengo cuenta</NuxtLink>
           </div>
-        </div>
-        <TableroMatchStage class="landing-stage" />
-      </section>
+        </template>
+      </BroadcastHero>
 
       <!-- The sign-up lands straight after the climb, while the board is still in view -->
       <section class="close" aria-labelledby="close-title">
@@ -298,10 +273,9 @@ const greeting = computed(() => {
   const h = new Date().getHours()
   return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'
 })
-const contextLine = computed(() => {
+const dateLine = computed(() => {
   const date = new Date().toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })
-  const city = player.value?.city?.name
-  return city ? `${city}, ${date}` : date.charAt(0).toUpperCase() + date.slice(1)
+  return date.charAt(0).toUpperCase() + date.slice(1)
 })
 
 const getNotificationIcon = (type: string) => {
@@ -485,7 +459,16 @@ const winRateNumber = computed(() => {
 })
 
 // The SR plates the compact rail tracks: once they are under the header, the rail repeats them
-const playerBoard = ref<HTMLElement | null>(null)
+const playerCard = ref<{ rating: HTMLElement | null } | null>(null)
+const playerBoard = computed(() => playerCard.value?.rating ?? null)
+
+// The card's stat columns (real data only; win rate needs rating history)
+const homeStats = computed(() => [
+  { label: 'Victorias seguidas', value: player.value ? player.value.win_streak ?? 0 : null },
+  { label: 'Partidos jugados', value: player.value ? player.value.total_matches_played ?? 0 : null },
+  { label: 'Victorias', value: player.value ? winsNumber.value : null },
+  { label: 'Porcentaje de victorias', value: winRateNumber.value, unit: '%', share: winRateNumber.value === null ? null : winRateNumber.value / 100 }
+])
 
 const steps = [
   { title: 'Crea tu cuenta', detail: 'Con tu email, en menos de un minuto.' },
@@ -507,25 +490,18 @@ const featureGroups = [
 <style scoped>
 /* ── Inicio ──────────────────────────────────────────────────────────────── */
 .home-head { display: grid; gap: 10px; margin-bottom: 28px; }
-.home-head__context { font-size: 15px; }
 .home-head h1 { overflow-wrap: anywhere; text-wrap: balance; }
 
-.player-board {
-  display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 20px 48px; align-items: end;
-  padding: 24px 28px; margin-bottom: 40px;
+.home-card { margin-bottom: 44px; }
+
+/* Broadcast strap under the greeting: a plate tab with the city, the date painted beside it */
+.home-strap { justify-self: start; display: inline-flex; align-items: stretch; gap: 0; max-width: 100%; border-radius: 4px; overflow: hidden; background: var(--t-board-raise); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); }
+.home-strap__tab { display: inline-grid; place-items: center; padding: 6px 12px; background: var(--t-plate); color: var(--t-plate-ink); font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; font-size: 1.05rem; }
+.home-strap__date { display: inline-flex; align-items: center; padding: 6px 14px; font-size: 15px; color: var(--t-ink); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) {
+  .home-strap { transition: clip-path 620ms var(--t-ease); clip-path: inset(0 0 0 0 round 4px); }
+  @starting-style { .home-strap { clip-path: inset(0 100% 0 0 round 4px); } }
 }
-.player-board__sr { display: grid; gap: 12px; }
-.player-board__sr h2 { font-family: var(--t-text); font-size: 0.78rem; font-weight: 650; }
-.player-board__plates { display: flex; align-items: flex-end; gap: 12px; font-size: clamp(3.4rem, 2.4rem + 3.6vw, 5.25rem); min-height: 1.4em; }
-.player-board__slot { width: 1.05em; height: 1.32em; padding: 0; margin-right: 3px; }
-.player-board__unit, .player-board__pct { font-family: var(--t-display); font-weight: 800; color: var(--t-ink-muted); font-size: 0.34em; line-height: 1.2; }
-.player-board__tier { font-family: var(--t-display); font-weight: 800; font-size: 1.6rem; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1; }
-.player-board__tier--quiet { font-family: var(--t-text); font-weight: 500; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--t-ink-muted); line-height: 1.4; }
-.player-board__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border-left: 1px solid var(--t-chalk); }
-.player-board__stats > div { display: grid; gap: 12px; align-content: end; padding: 0 16px; border-right: 1px solid var(--t-chalk); }
-.player-board__stats dt { line-height: 1.3; }
-.player-board__stats dd { margin: 0; display: flex; align-items: flex-end; gap: 6px; font-size: 1.9rem; }
-.player-board__links { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 28px; padding-top: 12px; border-top: 1px solid var(--t-chalk); }
 
 .strip-name { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; font-size: 1.35rem; }
 
@@ -553,12 +529,8 @@ const featureGroups = [
 .home-side { position: sticky; top: calc(var(--t-nav-h) + 76px); }
 
 /* ── Landing ─────────────────────────────────────────────────────────────── */
-.landing-top { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start; margin-bottom: 40px; }
-.landing-copy {
-  position: sticky; top: calc(var(--t-nav-h) + env(safe-area-inset-top, 0px) + 20px);
-  display: grid; gap: 24px; padding-top: 8px;
-}
-.landing-copy h1 { text-wrap: balance; }
+.landing-hero { margin-bottom: 56px; }
+.landing-hero h1 { text-wrap: balance; }
 .landing-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
 
 .rules { margin-bottom: 64px; }
@@ -588,24 +560,18 @@ const featureGroups = [
 .close > div { display: grid; gap: 14px; }
 
 @media (min-width: 768px) and (max-width: 1099px) {
-  .player-board { grid-template-columns: 1fr; }
   .home-grid { grid-template-columns: 1fr; gap: 40px; }
   .home-side { position: static; }
-  .landing-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 32px; }
 }
 @media (max-width: 767px) {
   .home-head { margin-bottom: 20px; }
-  .player-board { grid-template-columns: 1fr; padding: 18px 16px; gap: 18px; margin-bottom: 32px; }
-  .player-board__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; row-gap: 16px; }
-  .player-board__stats > div { padding: 0 12px 0 0; border-right: 0; }
-  .player-board__stats dd { font-size: 1.6rem; }
+  .home-card { margin-bottom: 32px; }
   .home-grid { grid-template-columns: 1fr; gap: 36px; }
   .home-side { position: static; }
   .lead { padding: 22px 18px; }
   .home-actions > .t-btn { width: 100%; }
 
-  .landing-top { grid-template-columns: 1fr; gap: 28px; margin-bottom: 24px; }
-  .landing-copy { position: static; gap: 18px; padding-top: 0; }
+  .landing-hero { margin-bottom: 40px; }
   .landing-actions > .t-btn { flex: 1 1 100%; }
   .rules { margin-bottom: 72px; }
   .rules__title { margin-bottom: 24px; }
