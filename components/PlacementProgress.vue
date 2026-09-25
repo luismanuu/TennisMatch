@@ -12,7 +12,7 @@
     <!-- Progress Bar -->
     <div class="h-3 bg-surface-elevated rounded-full overflow-hidden mb-4">
       <div 
-        class="h-full bg-gradient-to-r from-accent to-accent/80 rounded-full transition-all duration-500"
+        class="h-full bg-accent rounded-full"
         :style="{ width: `${progressPercent}%` }"
       ></div>
     </div>

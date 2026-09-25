@@ -1,7 +1,7 @@
 <template>
   <div 
     v-if="showWarning"
-    class="p-4 rounded-xl border-2 transition-all"
+    class="p-5 rounded-[24px] border"
     :class="warningClasses"
   >
     <div class="flex items-start gap-3">

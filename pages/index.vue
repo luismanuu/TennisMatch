@@ -113,14 +113,14 @@
               <h2 class="meta rating__label">Tu nivel de juego</h2>
               <p v-if="playerLoading" class="rating-number rating-number--loading" aria-busy="true">—</p>
               <p v-else class="rating-number">{{ (player?.elo ?? 0).toLocaleString('es-EC') }} <span>SR</span></p>
-              <p v-if="currentTier" class="meta">{{ currentTier.tier }}</p>
+              <p v-if="currentTier" class="meta">{{ tierName(currentTier.tier) }}</p>
               <p v-else-if="player && !playerLoading" class="meta">Sin nivel todavía: juega tus partidos de colocación</p>
               <NuxtLink to="/my-ranking" class="text-link">
                 Ver mi ranking
                 <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
               </NuxtLink>
             </div>
-            <img v-if="tierImage" :src="tierImage" width="72" height="72" :alt="`Nivel ${currentTier?.tier}`" class="rating__tier">
+            <img v-if="tierImage" :src="tierImage" width="72" height="72" :alt="`Nivel ${tierName(currentTier?.tier)}`" class="rating__tier">
           </section>
 
           <section class="panel" aria-label="Estadísticas recientes">
@@ -177,7 +177,7 @@
 
       <section class="landing-section split-grid even" aria-labelledby="tiers-title">
         <div>
-          <div class="section-heading"><h2 id="tiers-title">Sube de nivel, de Bronze a Grandmaster</h2></div>
+          <div class="section-heading"><h2 id="tiers-title">Sube de nivel, de Bronce a Gran Maestro</h2></div>
           <p class="meta">Cada partido competitivo confirmado mueve tu SR. Tres partidos de colocación te dan tu nivel inicial.</p>
           <ol class="landing-steps">
             <li><strong>Crea tu cuenta</strong><span class="meta">Con tu email, en menos de un minuto.</span></li>
@@ -188,7 +188,7 @@
         <div class="list-surface">
           <div v-for="tier in ratingTiers" :key="tier.tier" class="rank-row">
             <img :src="tierImageFor(tier.tier)" width="36" height="36" alt="" class="landing-tier-icon" loading="lazy">
-            <span class="row-copy"><strong>{{ tier.tier }}</strong></span>
+            <span class="row-copy"><strong>{{ tierName(tier.tier) }}</strong></span>
             <span class="rank-score">{{ tier.minElo.toLocaleString('es-EC') }}{{ tier.maxElo === Infinity ? '+' : `–${tier.maxElo.toLocaleString('es-EC')}` }}<small>SR</small></span>
           </div>
         </div>
@@ -208,6 +208,7 @@
 
 <script setup lang="ts">
 import { byUrgency, formatScore, pendingCopy } from '~/utils/pendingAction'
+import { tierName } from '~/utils/tiers'
 
 definePageMeta({
   middleware: []
@@ -430,7 +431,7 @@ const tierImage = computed(() => (currentTier.value ? tierImageFor(currentTier.v
 
 // Guest landing feature groups (copy kept from the previous landing, regrouped as lists)
 const featureGroups = [
-  { title: 'Sistema SR (Skill Rating)', icon: 'heroicons:chart-bar', description: 'Rating dinámico con 7 tiers, de Bronze a Grandmaster.', points: ['Partidos de colocación iniciales', 'Decay mensual para mantener actividad', 'Historial completo de cambios'] },
+  { title: 'Sistema SR (Skill Rating)', icon: 'heroicons:chart-bar', description: 'Rating dinámico con 7 tiers, de Bronce a Gran Maestro.', points: ['Partidos de colocación iniciales', 'Decay mensual para mantener actividad', 'Historial completo de cambios'] },
   { title: 'Matchmaking', icon: 'heroicons:magnifying-glass', description: 'Oponentes por nivel, ubicación y actividad reciente.', points: ['Búsqueda por tier (2 arriba, 1 abajo)', 'Filtrado por ciudad y segmento', 'Límite de 4 partidos al mes por oponente'] },
   { title: 'Torneos organizados', icon: 'heroicons:trophy', description: 'Competencias con brackets automáticos y seguimiento.', points: ['Brackets automáticos', 'Múltiples fases y grupos', 'Programación de partidos'] },
   { title: 'Partidos competitivos y amistosos', icon: 'heroicons:check-badge', description: 'Solo los competitivos mueven tu SR.', points: ['Los competitivos afectan el ranking', 'Los amistosos quedan registrados sin impacto', 'Historial de ambos tipos'] },

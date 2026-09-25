@@ -380,6 +380,7 @@ a, button, summary { touch-action: manipulation; -webkit-tap-highlight-color: tr
 .status-badge-active { background: var(--success-subtle); color: var(--success); }
 .status-badge-completed { background: var(--lens); color: var(--foreground-muted); }
 .status-badge-pending { background: var(--warning-subtle); color: var(--warning); }
+.status-badge-danger { background: var(--danger-subtle); color: var(--danger); }
 
 /* ── Forms: 12–16px corners ───────────────────────────────────────────────── */
 .form-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--foreground); }
