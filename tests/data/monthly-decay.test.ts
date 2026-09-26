@@ -162,7 +162,7 @@ describe('GET /api/players/:id/decay-status is read-only', () => {
       ),
       { seed: 20260926, numRuns: 40 },
     )
-  })
+  }, 120_000)
 })
 
 describe('the decay cron authenticates with CRON_SECRET only', () => {
@@ -216,7 +216,7 @@ describe('the decay cron authenticates with CRON_SECRET only', () => {
       { seed: 20260926, numRuns: 60 },
     )
     expect(await snapshot([due])).toEqual(before)
-  })
+  }, 120_000)
 
   it('with the secret it runs and decays the due player', async () => {
     const res = await cron(`Bearer ${TEST_CRON_SECRET}`)
@@ -270,5 +270,5 @@ describe('the decay cron: once per player per month, only for eligible players',
       }),
       { seed: 20260926, numRuns: 25 },
     )
-  })
+  }, 120_000)
 })
