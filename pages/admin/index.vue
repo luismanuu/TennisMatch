@@ -5,7 +5,7 @@
         <!-- Navigation Tabs - Organized in Groups -->
         <div v-if="!loading" class="mb-8">
           <!-- Primary Tab: Overview -->
-          <div class="mb-4">
+          <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-2">
             <button
               @click="activeTab = 'overview'"
               :class="[
@@ -18,6 +18,10 @@
               <Icon name="heroicons:chart-bar-square" class="w-5 h-5 flex-shrink-0" />
               <span>Overview</span>
             </button>
+            <NuxtLink to="/admin/revision" class="admin-tab">
+              <Icon name="heroicons:shield-check" class="w-5 h-5 flex-shrink-0" />
+              <span>Revisión</span>
+            </NuxtLink>
           </div>
 
           <!-- Grouped Tabs -->

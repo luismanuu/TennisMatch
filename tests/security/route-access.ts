@@ -32,6 +32,8 @@ export const ROUTE_ACCESS: Record<string, Access> = {
   'server/api/admin/matches/process-missing-rating-history.post.ts': 'admin',
   'server/api/admin/matches/recalculate.post.ts': 'admin',
   'server/api/admin/matches/reprocess-fallback.post.ts': 'admin',
+  'server/api/admin/moderation/messages.get.ts': 'admin',
+  'server/api/admin/moderation/messages/[id].post.ts': 'admin',
   'server/api/admin/organizers/[id].delete.ts': 'admin',
   'server/api/admin/organizers/[id].put.ts': 'admin',
   'server/api/admin/organizers/index.get.ts': 'admin',

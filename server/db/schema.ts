@@ -518,6 +518,8 @@ export const tournament_matches = pgTable(
   ],
 )
 
+export type MessageModerationStatus = 'visible' | 'held' | 'rejected'
+
 export const match_messages = pgTable(
   'match_messages',
   {
@@ -530,8 +532,16 @@ export const match_messages = pgTable(
       .references(() => players.id),
     message: text('message').notNull(),
     created_at: createdAt(),
+    moderation_status: text('moderation_status').$type<MessageModerationStatus>().notNull().default('visible'),
+    moderation_scores: jsonb('moderation_scores').$type<Record<string, number>>(),
+    moderation_reviewed_by: text('moderation_reviewed_by').references(() => user.id, { onDelete: 'set null' }),
+    moderation_reviewed_at: tz('moderation_reviewed_at'),
   },
-  (t) => [index('idx_match_messages_match_created').on(t.match_id, t.created_at)],
+  (t) => [
+    check('match_messages_moderation_status_check', sql`${t.moderation_status} in ('visible', 'held', 'rejected')`),
+    index('idx_match_messages_match_created').on(t.match_id, t.created_at),
+    index('idx_match_messages_held').on(t.created_at).where(sql`${t.moderation_status} = 'held'`),
+  ],
 )
 
 export const NOTIFICATION_TYPES = [

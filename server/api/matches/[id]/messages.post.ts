@@ -3,6 +3,7 @@ import { useDb } from '~/server/db'
 import { match_messages, matches, players } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { moderateText, PLAYER_MESSAGE_COLUMNS } from '~/server/utils/moderation'
 import type { CreateMatchMessagePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -89,14 +90,23 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Create message
+    // Held messages stay visible to their sender with a notice until an admin reviews them.
+    const text = message.trim()
+    const moderation = await moderateText('chat', text)
     const [inserted] = await db
       .insert(match_messages)
-      .values({ match_id: matchId, player_id: currentPlayer.id, message: message.trim() })
+      .values({
+        match_id: matchId,
+        player_id: currentPlayer.id,
+        message: text,
+        moderation_status: moderation.verdict === 'flag' ? 'held' : 'visible',
+        moderation_scores: moderation.checked ? moderation.scores : null,
+      })
       .returning({ id: match_messages.id })
     const newMessage = inserted
       ? await db.query.match_messages.findFirst({
           where: eq(match_messages.id, inserted.id),
+          columns: PLAYER_MESSAGE_COLUMNS,
           with: { player: { columns: { id: true, name: true } } },
         })
       : undefined
