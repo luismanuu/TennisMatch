@@ -1,0 +1,293 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLERO · Night Court (DESIGN.md)
+   A deep court-green night, off-white type set large and tight, one amber lamp.
+   Depth comes from light and shadow, not from borders. Scoped: nothing here applies
+   outside `.tablero` (PageLayout world="tablero"), so routes not yet migrated keep
+   the previous look until Phase 2. Font: Archivo, SIL OFL 1.1, self-hosted latin subset.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ── Night (default) ─────────────────────────────────────────────────────── */
+.tablero {
+  --t-board: #0b1813;          /* night court: the ground of every screen */
+  --t-board-raise: #12241d;    /* a raised surface: panels, hovered rows */
+  --t-board-high: #1a2f27;     /* the highest surface: secondary buttons, glyphs, pressed */
+  --t-board-deep: #07110d;     /* sunk: fields, tracks */
+  --t-ink: #f2f3ef;
+  --t-ink-muted: #a3b5ab;
+  --t-lamp: #f4b23e;           /* the one lamp: the action that needs you, or you */
+  --t-lamp-ink: #1c1405;
+  --t-clay: #f29a7e;           /* a lost place: always with an arrow and words */
+  --t-chalk: rgba(242, 243, 239, 0.09);
+  --t-chalk-strong: rgba(242, 243, 239, 0.18);
+  --t-focus: #f2f3ef;
+  --t-scrim: rgba(7, 17, 13, 0.72);
+
+  --t-e1: 0 1px 1px rgba(0, 0, 0, 0.25), 0 10px 24px -14px rgba(0, 0, 0, 0.55);
+  --t-e2: 0 2px 3px rgba(0, 0, 0, 0.28), 0 22px 44px -18px rgba(0, 0, 0, 0.7);
+  --t-inner: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  --t-r-sm: 10px;
+  --t-r-md: 16px;
+  --t-r-lg: 24px;
+
+  --t-text: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --t-display: var(--t-text);
+  /* Curves: settle like a precision part, never bounce */
+  --t-ease: cubic-bezier(0.22, 1, 0.36, 1);        /* out-quint: arrivals, hovers */
+  --t-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* state changes that go both ways */
+  --t-ease-in: cubic-bezier(0.55, 0, 0.9, 0.4);    /* departures */
+  --t-quick: 180ms;
+  --t-base: 320ms;
+  --t-slow: 640ms;
+  --t-nav-h: 64px;
+  --t-tab-h: 64px;
+
+  /* Legacy tokens the shared components read, re-pointed at the night court */
+  --background: var(--t-board);
+  --foreground: var(--t-ink);
+  --foreground-muted: var(--t-ink-muted);
+  --accent: var(--t-lamp);
+  --edge: var(--t-chalk);
+  --lens: rgba(242, 243, 239, 0.05);
+  --solid: var(--t-board);
+  --focus: var(--t-focus);
+  --shell-top: calc(var(--t-nav-h) + env(safe-area-inset-top, 0px) + 32px);
+  --shell-bottom: calc(var(--t-tab-h) + env(safe-area-inset-bottom, 0px) + 48px);
+
+  background: var(--t-board);
+  color: var(--t-ink);
+  font-family: var(--t-text);
+  word-spacing: 0.03em;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+  /* Full-bleed sections break out of the 1280px shell without a sideways scroll */
+  overflow-x: clip;
+}
+@media (min-width: 900px) { .tablero { --shell-bottom: 96px; --shell-top: calc(var(--t-nav-h) + 64px); } }
+
+/* ── Day (Claro appearance) ─────────────────────────────────────────────── */
+[data-theme='claro'] .tablero {
+  --t-board: #f4f5f0;
+  --t-board-raise: #ffffff;
+  --t-board-high: #e9ebe4;
+  --t-board-deep: #e6e8e1;
+  --t-ink: #0f1c17;
+  --t-ink-muted: #52635a;
+  --t-lamp-ink: #1c1405;
+  --t-clay: #a4442a;
+  --t-chalk: rgba(15, 28, 23, 0.09);
+  --t-chalk-strong: rgba(15, 28, 23, 0.18);
+  --t-focus: #0f1c17;
+  --t-e1: 0 1px 1px rgba(15, 28, 23, 0.06), 0 10px 24px -14px rgba(15, 28, 23, 0.25);
+  --t-e2: 0 2px 3px rgba(15, 28, 23, 0.08), 0 22px 44px -18px rgba(15, 28, 23, 0.32);
+  --t-inner: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --lens: rgba(15, 28, 23, 0.04);
+  color-scheme: light;
+}
+
+html:has(.tablero), html:has(.tablero) body { background-color: #0b1813; }
+html[data-theme='claro']:has(.tablero), html[data-theme='claro']:has(.tablero) body { background-color: #f4f5f0; }
+
+/* Browser surfaces carry the design too */
+.tablero ::selection { background: var(--t-lamp); color: var(--t-lamp-ink); }
+.tablero input, .tablero textarea { caret-color: var(--t-lamp); }
+.tablero, .tablero * { scrollbar-color: var(--t-chalk-strong) transparent; }
+.tablero :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--t-focus);
+  outline-offset: 3px;
+}
+.tablero .num { font-variant-numeric: tabular-nums lining-nums; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+
+/* ── Type: one family, a disciplined scale ───────────────────────────────── */
+.tablero h1, .tablero h2, .tablero h3 { font-family: var(--t-display); font-weight: 700; font-stretch: 96%; letter-spacing: -0.03em; word-spacing: 0.08em; text-wrap: balance; }
+.t-display-xl { font-size: clamp(3rem, 1.4rem + 6.4vw, 7rem); line-height: 0.95; letter-spacing: -0.045em; }
+.t-display-l { font-size: clamp(2.5rem, 1.6rem + 3.6vw, 4.75rem); line-height: 1; letter-spacing: -0.04em; }
+.t-display-m { font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.75rem); line-height: 1.05; letter-spacing: -0.03em; }
+.t-display-s { font-size: 1.375rem; line-height: 1.15; letter-spacing: -0.015em; font-weight: 650; }
+.tablero p, .tablero li { text-wrap: pretty; }
+.t-lede { font-size: clamp(1.0625rem, 0.98rem + 0.35vw, 1.3125rem); line-height: 1.5; color: var(--t-ink-muted); max-width: 42ch; }
+.t-muted { color: var(--t-ink-muted); }
+/* Small labels: sentence case, muted. They name a value; they never sit above a heading. */
+.t-paint { font-family: var(--t-text); font-weight: 500; font-size: 0.875rem; letter-spacing: 0; color: var(--t-ink-muted); }
+
+/* ── Surfaces ────────────────────────────────────────────────────────────── */
+.t-board {
+  position: relative;
+  background: var(--t-board-raise);
+  border-radius: var(--t-r-lg);
+  box-shadow: var(--t-inner);
+}
+.t-rule { border: 0; border-top: 1px solid var(--t-chalk); margin: 0; }
+
+/* Loading: a designed placeholder with a slow light passing over it */
+.t-skel {
+  display: block; border-radius: var(--t-r-sm);
+  background: var(--t-board-raise);
+  background-image: linear-gradient(100deg, transparent 20%, rgba(242, 243, 239, 0.06) 50%, transparent 80%);
+  background-size: 220% 100%; background-position: 120% 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .t-skel { animation: t-sheen 1.8s var(--t-ease-in-out) infinite; }
+}
+@keyframes t-sheen { to { background-position: -120% 0; } }
+
+/* Content arriving: rises 8px into place as the data lands (one time, per element) */
+@media (prefers-reduced-motion: no-preference) {
+  .t-arrive { transition: opacity var(--t-slow) var(--t-ease), transform var(--t-slow) var(--t-ease), translate var(--t-slow) var(--t-ease); }
+  @starting-style { .t-arrive { opacity: 0; translate: 0 8px; } }
+}
+
+/* Sections below the fold rise into place once, the first time they enter (composables/useReveal.ts).
+   The hidden state exists only after the script has armed, so content is never lost without JS. */
+.is-armed .t-reveal:not(.is-in) { opacity: 0; translate: 0 28px; }
+.is-armed .t-reveal { transition: opacity 900ms var(--t-ease), translate 900ms var(--t-ease); }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.t-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; max-width: 100%; padding: 12px 24px;
+  border: 0; border-radius: 999px; cursor: pointer; text-decoration: none; text-align: center;
+  font-family: var(--t-text); font-size: 16px; font-weight: 600; line-height: 1.2; letter-spacing: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.t-btn--lamp { background: var(--t-lamp); color: var(--t-lamp-ink); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, var(--t-e1); }
+.t-btn--plate { background: var(--t-board-high); color: var(--t-ink); box-shadow: var(--t-inner); }
+.t-btn--board { background: var(--t-ink); color: var(--t-board); }
+.t-btn--line { background: transparent; color: var(--t-ink); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); }
+.t-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (prefers-reduced-motion: no-preference) {
+  .t-btn { transition: transform var(--t-quick) var(--t-ease), box-shadow var(--t-base) var(--t-ease), background-color var(--t-quick) linear, filter var(--t-quick) linear; }
+}
+@media (hover: hover) {
+  .t-btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .t-btn--lamp:hover:not(:disabled) { filter: brightness(1.06); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, var(--t-e2); }
+  .t-btn--plate:hover:not(:disabled) { box-shadow: var(--t-inner), var(--t-e1); }
+  .t-btn--line:hover:not(:disabled) { background: var(--lens); box-shadow: inset 0 0 0 1px var(--t-ink-muted); }
+}
+.t-btn:active:not(:disabled) { transform: scale(0.97); transition-duration: 90ms; }
+
+.t-link {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 0;
+  border: 0; background: none; cursor: pointer;
+  color: var(--t-ink); font-family: var(--t-text); font-size: 16px; font-weight: 550;
+  text-decoration: underline; text-decoration-color: transparent; text-decoration-thickness: 1px; text-underline-offset: 5px;
+}
+.t-link > svg { transition: transform var(--t-base) var(--t-ease); }
+@media (hover: hover) {
+  .t-link:hover { text-decoration-color: var(--t-chalk-strong); }
+  .t-link:hover > svg:last-child { transform: translateX(3px); }
+}
+@media (prefers-reduced-motion: no-preference) { .t-link { transition: text-decoration-color var(--t-base) var(--t-ease); } }
+
+/* ── Rows: no rules, space and a surface that rises under the pointer ───── */
+.t-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.t-row {
+  display: flex; align-items: center; gap: 16px; min-height: 68px; padding: 14px 16px; margin: 0 -16px;
+  border-radius: var(--t-r-md); color: inherit; text-decoration: none;
+}
+.t-row__copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.t-row__copy strong { display: block; font-weight: 600; }
+.t-row__copy span { display: block; font-size: 14.5px; color: var(--t-ink-muted); }
+.t-row__end { color: var(--t-ink-muted); flex-shrink: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  a.t-row { transition: background-color var(--t-base) var(--t-ease), box-shadow var(--t-base) var(--t-ease), transform var(--t-quick) var(--t-ease); }
+  a.t-row .t-row__end { transition: transform var(--t-base) var(--t-ease), color var(--t-quick) linear; }
+}
+@media (hover: hover) {
+  a.t-row:hover { background: var(--t-board-raise); box-shadow: var(--t-inner), var(--t-e1); }
+  a.t-row:hover .t-row__end { color: var(--t-ink); transform: translateX(3px); }
+}
+a.t-row:active { transform: scale(0.99); background: var(--t-board-high); }
+.t-glyph { display: inline-grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; background: var(--t-board-high); color: var(--t-ink); font-weight: 650; font-size: 15px; }
+
+/* ── Fields ──────────────────────────────────────────────────────────────── */
+.t-field {
+  width: 100%; min-height: 48px; padding: 12px 16px;
+  border: 0; border-radius: 12px;
+  background: var(--t-board-raise); color: var(--t-ink);
+  box-shadow: inset 0 0 0 1px var(--t-chalk);
+  font-family: var(--t-text); font-size: 16px; line-height: 1.4;
+}
+.t-field::placeholder { color: var(--t-ink-muted); opacity: 1; }
+.t-field:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--t-lamp), 0 0 0 4px rgba(244, 178, 62, 0.22); }
+@media (prefers-reduced-motion: no-preference) { .t-field { transition: box-shadow var(--t-base) var(--t-ease); } }
+select.t-field {
+  appearance: none; -webkit-appearance: none; padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3b5ab' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 16px;
+}
+[data-theme='claro'] .tablero select.t-field { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2352635a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); }
+select.t-field option { background: var(--t-board); color: var(--t-ink); }
+
+/* ── Status marks ────────────────────────────────────────────────────────── */
+.tablero .status-badge, .tablero .status-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  background: var(--t-board-high); color: var(--t-ink-muted); box-shadow: none;
+  font-size: 13px; font-weight: 550; line-height: 1.45;
+}
+.tablero .status-badge-active { color: var(--t-ink); }
+.tablero .status-badge-pending { color: var(--t-ink); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); background: transparent; }
+.tablero .status-badge-completed { color: var(--t-ink-muted); }
+
+/* ── Shell: a translucent header rail and tab bar ────────────────────────── */
+.tablero .nav-island {
+  top: 0; left: 0; right: 0;
+  min-height: var(--t-nav-h);
+  padding: env(safe-area-inset-top, 0px) max(var(--gutter), calc((100vw - 1280px) / 2 + var(--gutter))) 0;
+  border: 0; border-bottom: 1px solid var(--t-chalk);
+  border-radius: 0;
+  background: var(--t-board);
+  box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.tablero .nav-island .brand { gap: 10px; font-family: var(--t-text); font-weight: 700; font-size: 18px; letter-spacing: -0.005em; word-spacing: 0.06em; color: var(--t-ink); }
+.tablero .nav-island .brand > svg { color: var(--t-lamp); }
+.tablero .nav-island .brand strong { font-weight: 700; }
+.tablero .nav-links { gap: 4px; }
+.tablero .nav-links a {
+  position: relative; border-radius: 999px; padding: 8px 14px; min-height: 40px;
+  font-family: var(--t-text); font-weight: 500; font-size: 15px; letter-spacing: 0;
+  color: var(--t-ink-muted); background: transparent; box-shadow: none;
+}
+.tablero .nav-links a[aria-current='page'] { color: var(--t-ink); background: var(--t-board-high); font-weight: 600; box-shadow: none; }
+@media (prefers-reduced-motion: no-preference) { .tablero .nav-links a { transition: color var(--t-quick) linear, background-color var(--t-base) var(--t-ease); } }
+@media (hover: hover) { .tablero .nav-links a:not([aria-current='page']):hover { color: var(--t-ink); background: var(--lens); } }
+.tablero .nav-island .icon-button { border-radius: 999px; background: transparent; box-shadow: none; color: var(--t-ink); }
+@media (hover: hover) { .tablero .nav-island .icon-button:hover { background: var(--t-board-high); } }
+.tablero .nav-dot { background: var(--t-lamp); box-shadow: 0 0 0 2px var(--t-board); border-radius: 999px; }
+.tablero .nav-tools .text-link { color: var(--t-ink); font-family: var(--t-text); font-weight: 550; white-space: nowrap; }
+.tablero .nav-tools .btn-primary { white-space: nowrap; border-radius: 999px; background: var(--t-ink); color: var(--t-board); box-shadow: none; font-family: var(--t-text); font-weight: 600; }
+@media (max-width: 599px) { .tablero .nav-tools .btn-primary { display: none; } }
+@media (max-width: 899px) {
+  .tablero .nav-island { left: 0; right: 0; min-height: var(--t-nav-h); padding: env(safe-area-inset-top, 0px) var(--gutter) 0; gap: 8px; }
+  .tablero .nav-island .brand { font-size: 17px; gap: 8px; }
+  .tablero .nav-tools { gap: 4px; }
+  .tablero .nav-tools .text-link { padding: 8px 6px; font-size: 15px; }
+  .tablero .nav-tools .btn-primary { padding: 8px 14px; font-size: 14px; }
+}
+.tablero .site-footer { border-top-color: var(--t-chalk); color: var(--t-ink-muted); font-size: 13px; }
+.tablero .site-footer a { color: var(--t-ink-muted); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--t-chalk-strong); }
+
+html:has(.tablero) .tabbar {
+  left: 0; right: 0; bottom: 0; max-width: none; margin: 0;
+  padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+  border: 0; border-top: 1px solid rgba(242, 243, 239, 0.09);
+  border-radius: 0; background: rgba(11, 24, 19, 0.8); box-shadow: none;
+  -webkit-backdrop-filter: saturate(160%) blur(20px); backdrop-filter: saturate(160%) blur(20px);
+}
+html:has(.tablero) .tabbar-item { border-radius: 16px; min-height: 56px; color: #a3b5ab; font-family: 'Archivo', system-ui, sans-serif; background: transparent; }
+html:has(.tablero) .tabbar-item.is-active { background: transparent; color: #f2f3ef; font-weight: 600; }
+html:has(.tablero) .tabbar-badge { background: #f4b23e; border-radius: 999px; box-shadow: 0 0 0 2px #0b1813; }
+html[data-theme='claro']:has(.tablero) .tabbar { background: rgba(244, 245, 240, 0.85); border-top-color: rgba(15, 28, 23, 0.09); }
+html[data-theme='claro']:has(.tablero) .tabbar-item { color: #52635a; }
+html[data-theme='claro']:has(.tablero) .tabbar-item.is-active { color: #0f1c17; }

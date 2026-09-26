@@ -1,92 +1,119 @@
 <template>
-  <PageLayout>
-    <!-- Ranking (DESIGN.md §7, design/mock/court-Ranking.html) -->
-    <PhotoPanel photo="aerial" variant="compact" eager>
-      <template #decor><RankLadder /></template>
-      <p>{{ total ? `${total.toLocaleString('es-EC')} jugadores clasificados` : 'Clasificación de Ecuador' }}</p>
-      <h1>Ranking</h1>
-      <button type="button" class="btn-photo ranking-info" @click.stop="showRankingInfo = true">
-        Cómo funciona
-        <Icon name="heroicons:information-circle" class="w-5 h-5" aria-hidden="true" />
-      </button>
-    </PhotoPanel>
+  <PageLayout world="tablero">
+    <!-- Ranking (DESIGN.md "Ranking"): large type, the viewer's place, then the ladder -->
+    <header class="rank-head">
+      <div class="rank-head__title">
+        <h1 class="t-display-xl">Ranking</h1>
+        <p class="rank-head__count">
+          <template v-if="total"><span class="num">{{ total.toLocaleString('es-EC') }}</span> jugadores clasificados en Ecuador</template>
+          <template v-else>Clasificación de Ecuador</template>
+        </p>
+      </div>
+      <div v-if="ownRow" ref="rankBoard" class="rank-own t-arrive">
+        <p class="rank-own__label">Tu posición</p>
+        <p class="rank-own__figures">
+          <span class="rank-own__rank num" aria-hidden="true">{{ ownRow.rank }}</span>
+          <span class="rank-own__meta" aria-hidden="true">
+            <span class="num">{{ ownRow.elo.toLocaleString('es-EC') }} SR</span>
+            <span v-if="ownTier" class="t-muted">{{ ownTier }}</span>
+          </span>
+          <span class="sr-only">Puesto {{ ownRow.rank }}, {{ ownRow.elo }} puntos SR<template v-if="ownTier">, {{ ownTier }}</template></span>
+        </p>
+      </div>
+    </header>
+
+    <TableroScoreStrip v-if="ownRow" :target="rankBoard">
+      <strong class="strip-label">Tú</strong>
+      <span class="strip-rank num">Puesto {{ ownRow.rank }}</span>
+      <span class="strip-sr num t-muted">{{ ownRow.elo.toLocaleString('es-EC') }} SR</span>
+    </TableroScoreStrip>
 
     <RankingSystemInfo v-model="showRankingInfo" />
 
-    <div v-if="initialLoading" class="panel loading-state" aria-busy="true">
-      <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
-      <p class="loading-text">Cargando clasificación…</p>
+    <div v-if="initialLoading" class="rank-loading" aria-busy="true">
+      <span class="sr-only">Cargando clasificación…</span>
+      <span v-for="n in 6" :key="n" class="t-skel rank-loading__bar" :style="{ opacity: 1 - n * 0.12 }" aria-hidden="true" />
     </div>
 
     <template v-else>
-      <section class="panel filters" aria-label="Filtros">
+      <section class="filters" aria-label="Filtros">
         <div class="filters__grid">
           <div class="filters__search">
             <label for="lb-search" class="sr-only">Buscar jugador</label>
-            <input id="lb-search" v-model="searchQuery" type="search" class="form-input" placeholder="Buscar jugador por nombre" autocomplete="off" @input="onSearchInput">
+            <input id="lb-search" v-model="searchQuery" type="search" class="t-field" placeholder="Buscar jugador por nombre" autocomplete="off" @input="onSearchInput">
           </div>
           <div>
             <label for="lb-tier" class="sr-only">Tier</label>
-            <select id="lb-tier" v-model="selectedTier" class="form-select" @change="onTierChange">
+            <select id="lb-tier" v-model="selectedTier" class="t-field" @change="onTierChange">
               <option :value="undefined">Todos los tiers</option>
               <option v-for="t in TIERS" :key="t.tier" :value="t.tier">{{ t.name }}</option>
             </select>
           </div>
           <div>
             <label for="lb-city" class="sr-only">Ciudad</label>
-            <select id="lb-city" v-model="selectedCity" class="form-select" @change="onCityChange">
+            <select id="lb-city" v-model="selectedCity" class="t-field" @change="onCityChange">
               <option :value="undefined">Todas las ciudades</option>
               <option v-for="city in cities" :key="city.id" :value="city.id">{{ city.name }}</option>
             </select>
           </div>
         </div>
-        <button v-if="hasActiveFilters" type="button" class="text-link" @click="clearAllFilters">
-          <Icon name="heroicons:x-mark" class="w-4 h-4" aria-hidden="true" />
-          Limpiar filtros
-        </button>
+        <div class="filters__tools">
+          <button v-if="hasActiveFilters" type="button" class="t-link" @click="clearAllFilters">
+            <Icon name="heroicons:x-mark" class="w-4 h-4" aria-hidden="true" />
+            Limpiar filtros
+          </button>
+          <button type="button" class="t-link filters__info" @click.stop="showRankingInfo = true">
+            Cómo funciona el ranking
+            <Icon name="heroicons:information-circle" class="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
       </section>
 
-      <div class="section-heading">
-        <h2>{{ isAuthenticated && player && showAroundMe ? (selectedTier ? `Tu posición en ${getTierNameInSpanish(selectedTier)}` : 'Tu posición') : 'Clasificación nacional' }}</h2>
-        <div class="quick-actions ranking-actions">
-          <NuxtLink v-if="isAuthenticated && player" to="/my-ranking" class="text-link">
+      <div class="rank-section-head">
+        <div>
+          <h2 class="t-display-m">{{ isAuthenticated && player && showAroundMe ? (selectedTier ? `Tu posición en ${getTierNameInSpanish(selectedTier)}` : 'Tu posición') : 'Clasificación nacional' }}</h2>
+          <p class="t-muted">{{ isAuthenticated && player && showAroundMe ? 'Puestos destacados y jugadores cerca de tu posición.' : `${total} jugadores clasificados` }}</p>
+        </div>
+        <div class="rank-actions">
+          <NuxtLink v-if="isAuthenticated && player" to="/my-ranking" class="t-link">
             Mi ranking
             <Icon name="heroicons:arrow-right" class="w-4 h-4" aria-hidden="true" />
           </NuxtLink>
-          <button v-if="isAuthenticated && player" type="button" class="btn-secondary !min-h-[44px] !py-2" @click="toggleView">
+          <button v-if="isAuthenticated && player" type="button" class="t-btn t-btn--line" @click="toggleView">
             <Icon :name="showAroundMe ? 'heroicons:globe-alt' : 'heroicons:user'" class="w-4 h-4" aria-hidden="true" />
             {{ showAroundMe ? 'Ver todos' : 'Ver cerca de mí' }}
           </button>
         </div>
       </div>
-      <p class="meta">{{ isAuthenticated && player && showAroundMe ? 'Puestos destacados y jugadores cerca de tu posición.' : `${total} jugadores clasificados` }}</p>
 
       <div class="ranking-grid">
-        <section v-if="topPlayers.length >= 3" class="list-surface" aria-label="Primeros tres puestos">
-          <LeaderboardPlayerCard v-for="p in topPlayers.slice(0, 3)" :key="`top-${p.id}`" :player="p" />
+        <section v-if="topPlayers.length >= 3" class="rank-top" aria-labelledby="rank-top-title">
+          <h3 id="rank-top-title" class="rank-top__title">Primeros tres puestos</h3>
+          <div class="rank-list">
+            <LeaderboardPlayerCard v-for="(p, i) in topPlayers.slice(0, 3)" :key="`top-${p.id}`" :player="p" :billing="(i + 1) as 1 | 2 | 3" :order="i" />
+          </div>
         </section>
 
-        <section class="list-surface ranking-list" :aria-label="showAroundMe ? 'Cerca de tu posición' : 'Clasificación'">
-          <div v-if="loading && rankings.length === 0" class="loading-state" aria-busy="true">
-            <Icon name="heroicons:arrow-path" class="loading-spinner animate-spin" aria-hidden="true" />
-            <p class="loading-text">Cargando rankings…</p>
+        <section class="rank-list ranking-list" :aria-label="showAroundMe ? 'Cerca de tu posición' : 'Clasificación'">
+          <div v-if="loading && rankings.length === 0" class="rank-loading" aria-busy="true">
+            <span class="sr-only">Cargando rankings…</span>
+            <span v-for="n in 4" :key="n" class="t-skel rank-loading__bar" aria-hidden="true" />
           </div>
           <div v-else-if="rankings.length > 0" ref="scrollContainer" class="ranking-scroll" @scroll="onScroll">
             <div v-if="hasMoreAbove && isLoadingMore" class="ranking-more" aria-live="polite">
-              <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" aria-hidden="true" />
+              <Icon name="heroicons:arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
               <span class="sr-only">Cargando más</span>
             </div>
-            <LeaderboardPlayerCard v-for="p in rankings" :key="`${p.id}-${p.rank}`" :player="p" />
+            <LeaderboardPlayerCard v-for="(p, i) in rankings" :key="`${p.id}-${p.rank}`" :player="p" :order="i" />
             <div v-if="hasMoreBelow && isLoadingMore" class="ranking-more" aria-live="polite">
-              <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" aria-hidden="true" />
+              <Icon name="heroicons:arrow-path" class="w-5 h-5 animate-spin" aria-hidden="true" />
               <span class="sr-only">Cargando más</span>
             </div>
           </div>
-          <div v-else class="empty-state">
-            <Icon name="heroicons:user-group" class="empty-state-icon" aria-hidden="true" />
-            <h3 class="empty-state-title">No se encontraron jugadores</h3>
-            <p class="empty-state-description">{{ hasActiveFilters ? 'Prueba con otros filtros.' : 'Aún no hay jugadores clasificados.' }}</p>
-            <button v-if="hasActiveFilters" type="button" class="btn-primary" @click="clearAllFilters">Limpiar filtros</button>
+          <div v-else class="rank-empty">
+            <h3 class="t-display-s">No se encontraron jugadores</h3>
+            <p class="t-muted">{{ hasActiveFilters ? 'Prueba con otros filtros.' : 'Aún no hay jugadores clasificados.' }}</p>
+            <button v-if="hasActiveFilters" type="button" class="t-btn t-btn--plate" @click="clearAllFilters">Limpiar filtros</button>
           </div>
         </section>
       </div>
@@ -142,6 +169,15 @@ const hasMoreBelow = ref(false)
 const scrollContainer = ref<HTMLElement | null>(null)
 const userPlayerRef = ref<HTMLElement | null>(null)
 const showRankingInfo = ref(false)
+// The header board the compact rail tracks, and the viewer's own row when the API returned it
+const rankBoard = ref<HTMLElement | null>(null)
+const ownRow = computed(() => rankings.value.find(p => p.is_current_user) || currentUserPosition.value || null)
+const ownTier = computed(() => {
+  const r = ownRow.value
+  if (!r || !r.total_matches_played) return null
+  return TIERS.find(t => r.elo >= t.minElo && r.elo <= t.maxElo)?.name ?? null
+})
+
 
 // Computed
 const hasActiveFilters = computed(() => {
@@ -648,22 +684,53 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.ranking-info { margin-top: 4px; }
-.filters { display: grid; gap: 8px; margin-bottom: 28px; padding: 16px; }
+.rank-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 40px 64px; margin-bottom: clamp(56px, 7vw, 96px); }
+.rank-head__title { display: grid; gap: 16px; }
+.rank-head__count { font-size: 19px; color: var(--t-ink-muted); }
+.rank-head__count .num { color: var(--t-ink); font-weight: 600; }
+
+/* The viewer's place: the one amber figure on the page */
+.rank-own { display: grid; gap: 6px; }
+.rank-own__label { font-size: 15px; color: var(--t-ink-muted); }
+.rank-own__figures { display: flex; align-items: flex-end; gap: 20px; margin: 0; }
+.rank-own__rank { font-size: clamp(4rem, 3rem + 3.6vw, 6.5rem); font-weight: 700; line-height: 0.85; letter-spacing: -0.055em; color: var(--t-lamp); }
+.rank-own__meta { display: grid; gap: 2px; padding-bottom: 6px; font-size: 19px; font-weight: 600; }
+.rank-own__meta .t-muted { font-weight: 500; }
+.strip-label { font-weight: 650; }
+.strip-rank { font-weight: 600; color: var(--t-lamp); }
+
+.filters { display: grid; gap: 8px; margin-bottom: clamp(48px, 6vw, 80px); }
 .filters__grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-.filters .text-link { justify-self: start; }
-.ranking-actions { gap: 8px 16px; }
-.ranking-actions > .btn-secondary, .ranking-actions > .text-link { width: auto; margin: 0; flex-grow: 0; }
-.ranking-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; margin-top: 20px; align-items: start; }
+.filters__tools { display: flex; flex-wrap: wrap; gap: 4px 28px; }
+.filters__info { margin-left: auto; }
+
+.rank-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 24px; }
+.rank-section-head > div:first-child { display: grid; gap: 8px; }
+.rank-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+
+.ranking-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 64px; align-items: start; }
 .ranking-grid > .ranking-list:only-child { grid-column: 1 / -1; }
+.rank-top__title { margin-bottom: 12px; font-size: 15px; font-weight: 550; letter-spacing: 0; color: var(--t-ink-muted); }
+.rank-list { display: grid; gap: 2px; }
 /* Scroll container kept: the page loads more rows above/below and centers the viewer's row inside it */
-.ranking-scroll { position: relative; max-height: min(70vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
-.ranking-more { display: flex; justify-content: center; padding: 10px; }
+.ranking-scroll {
+  position: relative; display: grid; gap: 2px; max-height: min(70vh, 680px); overflow-y: auto; overscroll-behavior: contain;
+  /* A window onto the ladder: rows fade at its edges instead of being cut */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  padding: 16px 16px; margin: 0 -16px;
+}
+.ranking-more { display: flex; justify-content: center; padding: 10px; color: var(--t-ink-muted); }
+.rank-loading { display: grid; gap: 10px; padding: 12px 0; }
+.rank-loading__bar { display: block; height: 64px; width: 100%; border-radius: var(--t-r-md); }
+.rank-empty { display: grid; justify-items: start; gap: 12px; padding: 32px 0; }
+
 @media (min-width: 768px) and (max-width: 1099px) { .ranking-grid { grid-template-columns: 1fr; } }
 @media (max-width: 767px) {
-  .filters__grid { grid-template-columns: 1fr 1fr; }
-  .filters__search { grid-column: 1 / -1; }
-  .ranking-grid { grid-template-columns: 1fr; gap: 24px; }
-  .ranking-scroll { max-height: 60vh; }
+  .rank-head { gap: 32px; }
+  .filters__grid { grid-template-columns: 1fr; }
+  .filters__info { margin-left: 0; }
+  .ranking-grid { grid-template-columns: 1fr; gap: 40px; }
+  .ranking-scroll { max-height: 64vh; }
 }
 </style>
