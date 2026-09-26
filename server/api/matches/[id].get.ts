@@ -1,7 +1,8 @@
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { match_messages, matches, players } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
+import { messagesVisibleTo, PLAYER_MESSAGE_COLUMNS } from '~/server/utils/moderation'
 
 const namedPlayer = { columns: { id: true, name: true } } as const
 const categoryColumns = { columns: { id: true, name: true, description: true, order: true } } as const
@@ -106,7 +107,8 @@ export default defineEventHandler(async (event) => {
     }
     
     const messages = await db.query.match_messages.findMany({
-      where: eq(match_messages.match_id, matchId),
+      where: and(eq(match_messages.match_id, matchId), messagesVisibleTo({ isAdmin, playerId: currentPlayer.id })),
+      columns: PLAYER_MESSAGE_COLUMNS,
       with: { player: { columns: { id: true, name: true } } },
       orderBy: [asc(match_messages.created_at)],
     })

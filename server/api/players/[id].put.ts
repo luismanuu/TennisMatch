@@ -4,6 +4,7 @@ import { categories, cities, players } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
 import { setAccountName } from '~/server/utils/users'
 import { eloToMmr } from '~/server/utils/rating-system'
+import { assertDisplayNameAllowed } from '~/server/utils/moderation'
 import type { UpdatePlayerPayload } from '~/types'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -72,6 +73,10 @@ export default defineEventHandler(async (event) => {
       if (!phoneRegex.test(phone_number.trim())) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid phone number format' })
       }
+    }
+
+    if (typeof name === 'string' && name.trim() && name.trim() !== existingPlayer.name) {
+      await assertDisplayNameAllowed(name.trim())
     }
 
     // Prepare update payload

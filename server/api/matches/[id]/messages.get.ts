@@ -3,6 +3,7 @@ import { useDb } from '~/server/db'
 import { match_messages, matches, players } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
+import { messagesVisibleTo, PLAYER_MESSAGE_COLUMNS } from '~/server/utils/moderation'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -88,8 +89,10 @@ export default defineEventHandler(async (event) => {
         // created_at with millisecond precision, so compare at that precision or the last message repeats.
         since
           ? sql`date_trunc('milliseconds', ${match_messages.created_at}) > ${new Date(since).toISOString()}::timestamptz`
-          : undefined
+          : undefined,
+        messagesVisibleTo({ isAdmin, playerId: currentPlayer.id }),
       ),
+      columns: PLAYER_MESSAGE_COLUMNS,
       with: { player: { columns: { id: true, name: true } } },
       orderBy: [asc(match_messages.created_at)],
     })

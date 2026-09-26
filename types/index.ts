@@ -369,6 +369,7 @@ export interface MatchMessage {
   player?: Player
   message: string
   created_at: string
+  moderation_status?: 'visible' | 'held' | 'rejected'
 }
 
 export interface ProposeScorePayload {

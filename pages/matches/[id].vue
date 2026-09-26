@@ -584,6 +584,21 @@
                           </span>
                         </p>
                       </div>
+                      <p
+                        v-if="message.moderation_status === 'held' || message.moderation_status === 'rejected'"
+                        class="chat__moderation text-size-4 mt-2"
+                        role="note"
+                      >
+                        <Icon name="heroicons:eye-slash" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                        <span v-if="message.moderation_status === 'rejected' && message.player_id === currentPlayerId">
+                          Oculto por moderación: tu rival no verá este mensaje.
+                        </span>
+                        <span v-else-if="message.moderation_status === 'rejected'">Oculto por moderación.</span>
+                        <span v-else-if="message.player_id === currentPlayerId">
+                          En revisión: tu rival no verá este mensaje hasta que lo revisemos.
+                        </span>
+                        <span v-else>En revisión: solo lo ven quien lo escribió y los administradores.</span>
+                      </p>
                       <div class="flex items-center justify-between mt-2">
                         <p class="text-size-4 text-foreground-subtle flex items-center gap-1">
                           <Icon name="heroicons:clock" class="w-3 h-3" />
@@ -2336,4 +2351,5 @@ onUnmounted(() => {
 }
 @keyframes sr-spark { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
 @media (max-width: 767px) { .player h2 { font-size: 16px; } }
+.chat__moderation { display: flex; align-items: flex-start; gap: 6px; padding: 6px 10px; border-radius: 10px; background: var(--warning-subtle); color: var(--warning); }
 </style>

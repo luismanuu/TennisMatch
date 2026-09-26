@@ -3,6 +3,7 @@ import { useDb } from '~/server/db'
 import { categories, cities, players } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
 import { eloToMmr } from '~/server/utils/rating-system'
+import { assertDisplayNameAllowed } from '~/server/utils/moderation'
 import type { CreatePlayerPayload } from '~/types'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -52,6 +53,8 @@ export default defineEventHandler(async (event) => {
   if (existingPlayer) {
     throw createError({ statusCode: 409, statusMessage: 'Player profile already exists' })
   }
+
+  await assertDisplayNameAllowed(name)
 
   const initialElo = category.default_elo || 1000
   const initialMmr = eloToMmr(initialElo)

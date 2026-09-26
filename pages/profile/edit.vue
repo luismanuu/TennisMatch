@@ -50,7 +50,7 @@
 
       <p v-if="error" class="form-status form-status--error" role="alert">
         <Icon name="heroicons:exclamation-circle" class="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-        {{ error.message }}
+        {{ (error as any).statusCode === 422 ? (error as any).data?.statusMessage : error.message }}
       </p>
       <p v-if="success" class="form-status form-status--ok" role="status">
         <Icon name="heroicons:check-circle" class="w-5 h-5 flex-shrink-0" aria-hidden="true" />
