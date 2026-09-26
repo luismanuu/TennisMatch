@@ -275,9 +275,12 @@ onBeforeUnmount(() => {
 /* ── Reduced motion: no pin, the lit court as a still, then the copy in order ── */
 .ch.is-static { height: auto; }
 .ch.is-static .ch__pin { position: relative; top: 0; height: auto; min-height: 0; overflow: visible; }
-.ch.is-static .ch__frame { position: relative; height: min(70svh, 720px); }
-.ch.is-static .ch__copy { position: relative; inset: auto; padding-top: 40px; display: grid; gap: 56px; }
-.ch.is-static .ch__chapter { position: static; }
+.ch.is-static { --still-h: min(calc(100svh - var(--t-nav-h)), 820px); }
+.ch.is-static .ch__frame { position: relative; height: var(--still-h); }
+.ch.is-static .ch__copy { position: static; padding: 0; }
+/* The headline and actions stay over the still, in the first viewport; the other chapters follow in order */
+.ch.is-static .ch__chapter--intro { position: absolute; top: var(--still-h); bottom: auto; transform: translateY(calc(-100% - clamp(40px, 7vh, 88px))); left: max(var(--gutter), calc((100vw - 1280px) / 2 + var(--gutter))); right: var(--gutter); }
+.ch.is-static .ch__chapter:not(.ch__chapter--intro) { position: static; max-width: 1280px; margin: 0 auto; padding: 56px var(--gutter) 0; }
 
 @media (max-width: 767px) {
   .ch { height: 400vh; }
@@ -286,6 +289,7 @@ onBeforeUnmount(() => {
   .ch__scrim {
     background: linear-gradient(180deg, rgba(11, 24, 19, 0) 30%, rgba(11, 24, 19, 0.7) 62%, #0b1813 100%);
   }
-  .ch.is-static .ch__frame { height: 56svh; }
+  .ch.is-static { --still-h: calc(100svh - var(--t-nav-h)); }
+  .ch.is-static .ch__chapter--intro { transform: translateY(calc(-100% - 32px)); }
 }
 </style>
