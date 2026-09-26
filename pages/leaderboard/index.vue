@@ -417,6 +417,10 @@ const initializeAroundUser = async () => {
   }, 300)
 }
 
+const positionOf = (p: { position?: number; rank: number }) => p.position ?? p.rank
+const firstPosition = () => Math.min(...rankings.value.map(positionOf))
+const lastPosition = () => Math.max(...rankings.value.map(positionOf))
+
 // Load players around user
 const loadPlayersAroundUser = async () => {
   if (!player.value?.id) return
@@ -441,20 +445,10 @@ const loadPlayersAroundUser = async () => {
       limit: 50 
     })
     
-    // Check if there are more players above/below within the tier
-    const userInRankings = rankings.value.find(p => p.is_current_user)
-    if (userInRankings) {
-      hasMoreAbove.value = userInRankings.rank > 1
-      hasMoreBelow.value = userInRankings.rank < total.value
-    } else if (currentUserPosition.value) {
-      hasMoreAbove.value = currentUserPosition.value.rank > 1
-      hasMoreBelow.value = currentUserPosition.value.rank < total.value
-    } else if (rankings.value.length > 0) {
-      // Fallback: check if we have more based on displayed ranks
-      const minRank = Math.min(...rankings.value.map(p => p.rank))
-      const maxRank = Math.max(...rankings.value.map(p => p.rank))
-      hasMoreAbove.value = minRank > 1
-      hasMoreBelow.value = maxRank < total.value
+    // More rows above/below the loaded window, by list position (rank is global and can repeat on ties)
+    if (rankings.value.length > 0) {
+      hasMoreAbove.value = firstPosition() > 1
+      hasMoreBelow.value = lastPosition() < total.value
     } else {
       hasMoreAbove.value = false
       hasMoreBelow.value = false
@@ -471,12 +465,9 @@ const loadMoreAbove = async () => {
   isLoadingMore.value = true
   
   try {
-    // Get the lowest rank currently displayed
-    const lowestRank = Math.min(...rankings.value.map(p => p.rank))
-    const range = 25 // Load 25 more above
-    
-    // Calculate offset to get players above
-    const newOffset = Math.max(0, lowestRank - range - 1)
+    const first = firstPosition()
+    const range = Math.min(25, first - 1) // Load up to 25 more above
+    const newOffset = first - 1 - range
     
     const response = await $fetch('/api/leaderboard', {
       query: {
@@ -510,8 +501,7 @@ const loadMoreBelow = async () => {
   isLoadingMore.value = true
   
   try {
-    // Get the highest rank currently displayed
-    const highestRank = Math.max(...rankings.value.map(p => p.rank))
+    const highestRank = lastPosition()
     const range = 25 // Load 25 more below
     
     const response = await $fetch('/api/leaderboard', {

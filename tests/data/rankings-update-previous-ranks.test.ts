@@ -18,11 +18,9 @@ afterAll(async () => {
   await app?.close()
 })
 
+// The one rank definition (server/utils/ranking.ts): 1 + players with a strictly higher SR; ties share a rank
 function expectedRanks(rows: Array<{ id: string; elo: number }>): Map<string, number> {
-  const sorted = [...rows].sort((a, b) => (b.elo !== a.elo ? b.elo - a.elo : a.id.localeCompare(b.id)))
-  const ranks = new Map<string, number>()
-  sorted.forEach((r, i) => ranks.set(r.id, i + 1))
-  return ranks
+  return new Map(rows.map((r) => [r.id, 1 + rows.filter((o) => o.elo > r.elo).length]))
 }
 
 describe('POST /api/admin/rankings/update-previous-ranks (property)', () => {

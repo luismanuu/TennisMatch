@@ -1,7 +1,8 @@
-import { and, count, eq, gt, gte, inArray, isNull } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { city_segment_cities, players } from '~/server/db/schema'
 import { getRatingTier } from '~/server/utils/rating-system'
+import { eloBetween, rankOf, rankedCount } from '~/server/utils/ranking'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -39,34 +40,26 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, statusMessage: 'Player not found' })
     }
 
-    // Only calculate rank for rated players
-    if (player.total_matches_played === 0) {
+    // Rank as defined in server/utils/ranking.ts; a player with no rated match has none
+    if (!player.total_matches_played) {
       return { success: true, is_unrated: true, position: null }
     }
 
-    const rated = and(eq(players.status, 'active'), isNull(players.deleted_at), gte(players.total_matches_played, 1))
-
-    const [{ n: totalPlayersRaw }] = await db.select({ n: count() }).from(players).where(rated)
-    const actualTotalPlayers = totalPlayersRaw > 0 ? totalPlayersRaw : 1
-
-    const [{ n: playersAbove }] = await db
-      .select({ n: count() })
-      .from(players)
-      .where(and(rated, gt(players.elo, player.elo)))
-
-    const globalRank = playersAbove + 1
-    const playersBelow = Math.max(0, actualTotalPlayers - globalRank)
-    const percentile = actualTotalPlayers === 1 ? 100 : Math.round(((actualTotalPlayers - globalRank) / actualTotalPlayers) * 100)
+    const totalPlayers = Math.max(1, await rankedCount(db))
+    const globalRank = await rankOf(db, player.elo)
+    const playersAbove = globalRank - 1
+    const playersBelow = Math.max(0, totalPlayers - globalRank)
+    const percentile = totalPlayers === 1 ? 100 : Math.round(((totalPlayers - globalRank) / totalPlayers) * 100)
 
     const position: RankingPosition = {
       global_rank: globalRank,
-      total_players: actualTotalPlayers,
+      total_players: totalPlayers,
       players_above: playersAbove,
       players_below: playersBelow,
       percentile,
     }
 
-    // Segment rank, if the player's city belongs to one
+    // Segment rank, if the player's city belongs to one: the same definition, among the segment's cities
     if (player.city_id) {
       const segmentCities = await db.query.city_segment_cities.findMany({
         columns: { city_segment_id: true },
@@ -77,8 +70,6 @@ export default defineEventHandler(async (event) => {
 
       if (segmentCities.length > 0) {
         const segmentId = segmentCities[0].city_segment_id
-        const segmentName = segmentCities[0].city_segment?.name ?? 'Segmento'
-
         const cityRows = await db.query.city_segment_cities.findMany({
           columns: { city_id: true },
           where: eq(city_segment_cities.city_segment_id, segmentId),
@@ -86,44 +77,27 @@ export default defineEventHandler(async (event) => {
         const cityIds = cityRows.map((c) => c.city_id)
 
         if (cityIds.length > 0) {
-          const [{ n: segmentTotal }] = await db
-            .select({ n: count() })
-            .from(players)
-            .where(and(rated, inArray(players.city_id, cityIds)))
-
-          const [{ n: segmentPlayersAbove }] = await db
-            .select({ n: count() })
-            .from(players)
-            .where(and(rated, inArray(players.city_id, cityIds), gt(players.elo, player.elo)))
-
-          position.segment_rank = segmentPlayersAbove + 1
-          position.segment_total = segmentTotal
-          position.segment_name = segmentName
+          const inSegment = inArray(players.city_id, cityIds)
+          position.segment_rank = await rankOf(db, player.elo, inSegment)
+          position.segment_total = await rankedCount(db, inSegment)
+          position.segment_name = segmentCities[0].city_segment?.name ?? 'Segmento'
         }
       }
     }
 
-    // Tier rank
+    // Tier rank: the same definition, among the ranked players of the player's tier
     const tierInfo = getRatingTier(player.elo)
     const tier = tierInfo.tier
-
-    const allPlayers = await db.query.players.findMany({
-      columns: { id: true, elo: true },
-      where: rated,
-      orderBy: (t, { desc }) => desc(t.elo),
-    })
-
-    const tierPlayers = allPlayers.filter((p) => getRatingTier(p.elo).tier === tier)
-    const tierPlayersAbove = tierPlayers.filter((p) => p.elo > player.elo).length
-    position.tier_rank = tierPlayersAbove + 1
-    position.tier_total = tierPlayers.length
+    const inTier = eloBetween(tierInfo.minElo, tierInfo.maxElo)
+    position.tier_rank = await rankOf(db, player.elo, inTier)
+    position.tier_total = await rankedCount(db, inTier)
 
     return {
       success: true,
       is_unrated: false,
       position,
       tier,
-      current_players: actualTotalPlayers,
+      current_players: totalPlayers,
     }
   } catch (error: any) {
     throw createError({
