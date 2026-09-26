@@ -2,12 +2,12 @@
   <PageLayout container-size="medium">
     <PageHeader
       title="Revisión"
-      subtitle="Mensajes retenidos por moderación"
+      subtitle="Mensajes retenidos por moderación y parejas con patrones raros de resultados"
       back-to="/admin"
       back-label="Volver al panel"
     />
 
-    <section class="panel" aria-labelledby="held-title">
+    <section class="panel mb-8" aria-labelledby="held-title">
       <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h2 id="held-title" class="text-size-2 font-semibold text-foreground">Mensajes en revisión</h2>
         <button type="button" class="btn-secondary text-size-4" :disabled="heldLoading" @click="loadHeld">Actualizar</button>
@@ -36,6 +36,42 @@
       </ul>
     </section>
 
+    <section class="panel" aria-labelledby="farming-title">
+      <h2 id="farming-title" class="text-size-2 font-semibold text-foreground mb-2">Posible farming de ranking</h2>
+      <p class="text-size-4 text-foreground-muted mb-6">
+        Parejas con {{ MIN_MATCHES }} o más partidos entre sí en los últimos 60 días. Es solo una señal para revisar:
+        no cambia ningún rating, no bloquea partidos y no avisa a los jugadores.
+      </p>
+      <button type="button" class="btn-primary text-size-4 mb-6" :disabled="scanLoading" @click="scan">
+        {{ scanLoading ? 'Analizando…' : 'Analizar parejas' }}
+      </button>
+      <p v-if="scanError" class="text-size-4 text-danger" role="alert">{{ scanError }}</p>
+      <p v-else-if="scanDone && !scanEnabled" class="text-size-4 text-foreground-muted">
+        El análisis está desactivado (JEV_FARMING_ENABLED).
+      </p>
+      <p v-else-if="scanDone && pairs.length === 0" class="text-size-4 text-foreground-muted">
+        Ninguna pareja cumple el mínimo de partidos.
+      </p>
+      <ul v-else-if="pairs.length" class="space-y-4">
+        <li v-for="p in pairs" :key="`${p.player_a.id}-${p.player_b.id}`" class="revision-item">
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <span class="badge" :class="STATUS[p.status].class">{{ STATUS[p.status].label }}</span>
+            <span v-if="p.risk_score !== null" class="text-size-4 text-foreground-muted">Riesgo {{ p.risk_score }} / 4</span>
+          </div>
+          <p class="text-size-3 text-foreground mb-2">
+            <NuxtLink :to="`/admin/rankings/players/${p.player_a.id}`" class="text-link">{{ p.player_a.name }}</NuxtLink>
+            ({{ p.facts.wins_a }}) vs
+            <NuxtLink :to="`/admin/rankings/players/${p.player_b.id}`" class="text-link">{{ p.player_b.name }}</NuxtLink>
+            ({{ p.facts.wins_b }})
+          </p>
+          <p class="text-size-4 text-foreground-muted">
+            {{ p.facts.matches }} partidos · {{ p.facts.wide_margin_matches }} con marcador muy amplio ·
+            confirmados en {{ p.facts.median_minutes_to_confirm ?? '?' }} min (mediana) ·
+            cuentas de {{ p.facts.account_age_days_a }} y {{ p.facts.account_age_days_b }} días
+          </p>
+        </li>
+      </ul>
+    </section>
   </PageLayout>
 </template>
 
@@ -53,7 +89,28 @@ type HeldMessage = {
   player?: { id: string; name: string }
 }
 
+type FarmingPair = {
+  player_a: { id: string; name: string }
+  player_b: { id: string; name: string }
+  status: 'flagged' | 'clear' | 'unchecked'
+  risk_score: number | null
+  facts: {
+    matches: number
+    wins_a: number
+    wins_b: number
+    wide_margin_matches: number
+    median_minutes_to_confirm: number | null
+    account_age_days_a: number
+    account_age_days_b: number
+  }
+}
 
+const MIN_MATCHES = 3
+const STATUS = {
+  flagged: { label: 'Revisar', class: 'status-badge-pending' },
+  unchecked: { label: 'Sin evaluar', class: '' },
+  clear: { label: 'Normal', class: 'badge-accent' },
+} as const
 // Only the categories that can hold a chat message; contact details alone never do.
 const HOLDING_CATEGORIES: Record<string, string> = {
   harassment: 'insultos o acoso',
@@ -65,6 +122,12 @@ const held = ref<HeldMessage[]>([])
 const heldLoading = ref(false)
 const heldError = ref('')
 const acting = ref<string | null>(null)
+
+const pairs = ref<FarmingPair[]>([])
+const scanLoading = ref(false)
+const scanDone = ref(false)
+const scanEnabled = ref(true)
+const scanError = ref('')
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Guayaquil' })
@@ -102,6 +165,23 @@ const review = async (id: string, action: 'approve' | 'reject') => {
   }
 }
 
+const scan = async () => {
+  scanLoading.value = true
+  scanError.value = ''
+  try {
+    const res = await $fetch<{ enabled: boolean; pairs: FarmingPair[] }>('/api/admin/jev/farming-scan', { method: 'POST' })
+    scanEnabled.value = res.enabled
+    pairs.value = res.pairs
+    scanDone.value = true
+  } catch (error: any) {
+    scanError.value =
+      error?.statusCode === 429
+        ? 'Demasiados análisis seguidos. Espera un minuto e inténtalo de nuevo.'
+        : 'El análisis falló. Inténtalo de nuevo más tarde.'
+  } finally {
+    scanLoading.value = false
+  }
+}
 
 onMounted(loadHeld)
 </script>
