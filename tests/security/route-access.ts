@@ -116,6 +116,8 @@ export const ROUTE_ACCESS: Record<string, Access> = {
   'server/api/players/[id]/ranking-position.get.ts': 'public',
   'server/api/players/[id]/rating-history.get.ts': 'public',
   'server/api/players/[id]/tier-progress.get.ts': 'public',
+  'server/api/players/level-suggestion.get.ts': 'user',
+  'server/api/players/level-suggestion.post.ts': 'user',
   'server/api/players/me.get.ts': 'user',
   'server/api/players/me.post.ts': 'user',
   'server/api/players/search.get.ts': 'public',
