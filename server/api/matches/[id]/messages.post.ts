@@ -3,7 +3,9 @@ import { useDb } from '~/server/db'
 import { match_messages, matches, players } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
-import { moderateText, PLAYER_MESSAGE_COLUMNS } from '~/server/utils/moderation'
+import { CHAT_MODERATION_LIMIT, moderateText, PLAYER_MESSAGE_COLUMNS } from '~/server/utils/moderation'
+import { isJevFeatureEnabled } from '~/server/utils/jev'
+import { consumeRateLimit } from '~/server/utils/rate-limit'
 import type { CreateMatchMessagePayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -90,9 +92,13 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Held messages stay visible to their sender with a notice until an admin reviews them.
+    // Held messages stay visible to their sender with a notice until an admin reviews them. Past the
+    // per-player limit a message skips moderation and publishes as it did before, with no Jev call.
     const text = message.trim()
-    const moderation = await moderateText('chat', text)
+    const withinLimit =
+      isJevFeatureEnabled('moderation') &&
+      (await consumeRateLimit(db, `jev-chat:${currentPlayer.id}`, CHAT_MODERATION_LIMIT)).allowed
+    const moderation = withinLimit ? await moderateText('chat', text) : ({ verdict: 'allow', checked: false } as const)
     const [inserted] = await db
       .insert(match_messages)
       .values({

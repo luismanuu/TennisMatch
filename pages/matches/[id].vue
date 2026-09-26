@@ -590,7 +590,10 @@
                         role="note"
                       >
                         <Icon name="heroicons:eye-slash" class="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                        <span v-if="message.moderation_status === 'rejected'">Oculto por moderación.</span>
+                        <span v-if="message.moderation_status === 'rejected' && message.player_id === currentPlayerId">
+                          Oculto por moderación: tu rival no verá este mensaje.
+                        </span>
+                        <span v-else-if="message.moderation_status === 'rejected'">Oculto por moderación.</span>
                         <span v-else-if="message.player_id === currentPlayerId">
                           En revisión: tu rival no verá este mensaje hasta que lo revisemos.
                         </span>

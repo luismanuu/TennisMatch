@@ -1,5 +1,5 @@
 import { createError } from 'h3'
-import { and, eq, or, type SQL } from 'drizzle-orm'
+import { and, eq, inArray, or, type SQL } from 'drizzle-orm'
 import { match_messages } from '../db/schema'
 import { evaluateJev, isJevFeatureEnabled, UNTRUSTED_NOTE, untrustedText, type EvaluateJevOptions } from './jev'
 
@@ -119,14 +119,26 @@ export async function assertDisplayNameAllowed(name: string): Promise<void> {
   }
 }
 
-// Every route that returns chat messages filters with this. Admins see all of them; everyone else sees
-// visible messages plus the held ones they wrote themselves. Jev's scores never leave the admin routes.
+// Every route that returns chat messages to players filters with this, whatever the flag says, so turning
+// moderation off never re-exposes held or rejected rows. Admins see all of them; everyone else sees
+// visible messages plus the held or rejected ones they wrote themselves.
 export function messagesVisibleTo(viewer: { isAdmin: boolean; playerId: string }): SQL | undefined {
   if (viewer.isAdmin) return undefined
   return or(
     eq(match_messages.moderation_status, 'visible'),
-    and(eq(match_messages.moderation_status, 'held'), eq(match_messages.player_id, viewer.playerId)),
+    and(inArray(match_messages.moderation_status, ['held', 'rejected']), eq(match_messages.player_id, viewer.playerId)),
   )
 }
 
-export const PLAYER_MESSAGE_COLUMNS = { moderation_scores: false, moderation_reviewed_by: false } as const
+// An allowlist, so a column added later never reaches players by default. With messagesVisibleTo, a
+// status other than 'visible' only ever appears on the viewer's own rows.
+export const PLAYER_MESSAGE_COLUMNS = {
+  id: true,
+  match_id: true,
+  player_id: true,
+  message: true,
+  created_at: true,
+  moderation_status: true,
+} as const
+
+export const CHAT_MODERATION_LIMIT = { windowSeconds: 60, max: 20 }
