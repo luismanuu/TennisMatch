@@ -2,6 +2,8 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
+import { getTableColumns, type Column } from 'drizzle-orm'
+import { account, matches, pending_players, players, session, user } from '../../server/db/schema'
 import { ROUTE_ACCESS } from './route-access'
 import { startTestApp, type Route, type TestApp } from './harness'
 
@@ -9,7 +11,33 @@ import { startTestApp, type Route, type TestApp } from './harness'
 // person's phone number, email, auth user id or invitation token. The forbidden values are read back from the
 // database itself after every seeded world, so a new private column only needs a line in privateValues().
 
-const PRIVATE_KEYS = ['phone_number', 'user_id', 'userId', 'email', 'invitation_token']
+// Private columns, named through the schema so a rename breaks this list instead of silently emptying it.
+// Each contributes its TS key and its SQL name. matches.location is private too (a friendly's meetup address)
+// but shares its name with the public tournaments.location, so it is caught by value in privateValues().
+const PRIVATE_COLUMNS: Column[] = [
+  players.phone_number,
+  players.user_id,
+  user.email,
+  pending_players.email,
+  pending_players.invitation_token,
+  session.token,
+  session.ipAddress,
+  session.userAgent,
+  account.password,
+  account.accessToken,
+  account.refreshToken,
+  account.idToken,
+  matches.acceptance_proposed_location,
+  matches.llm_calculation_reasoning,
+]
+const tsKeyOf = (column: Column) => {
+  for (const table of [account, matches, pending_players, players, session, user]) {
+    const hit = Object.entries(getTableColumns(table)).find(([, c]) => c === column)
+    if (hit) return hit[0]
+  }
+  throw new Error(`column ${column.name} is not in a listed table`)
+}
+const PRIVATE_KEYS = [...new Set(PRIVATE_COLUMNS.flatMap((c) => [c.name, tsKeyOf(c)]).concat('userId'))]
 
 type Caller = { name: string; cookie?: string; userId?: string; playerId?: string }
 
@@ -151,8 +179,8 @@ async function seedWorld(spec: WorldSpec): Promise<World> {
       }
       if (members.length >= 2) {
         const [m] = await q<{ id: string }>(
-          `insert into matches (player1_id, player2_id, tournament_id, status) values ($1, $2, $3, 'scheduled') returning id`,
-          [members[0], members[1], row.id],
+          `insert into matches (player1_id, player2_id, tournament_id, status, location) values ($1, $2, $3, 'scheduled', $4) returning id`,
+          [members[0], members[1], row.id, `Cancha privada ${++seq}`],
         )
         world.matches.push(m.id)
         await q(
@@ -167,8 +195,10 @@ async function seedWorld(spec: WorldSpec): Promise<World> {
     if (a === b) continue
     const [p1, p2] = [world.players[a], world.players[b]]
     const [m] = await q<{ id: string }>(
-      `insert into matches (player1_id, player2_id, winner_id, status, score, played_at) values ($1, $2, $1, 'completed', '6-4 6-4', now()) returning id`,
-      [p1, p2],
+      `insert into matches (player1_id, player2_id, winner_id, status, score, played_at, location, acceptance_proposed_location,
+         llm_calculation_reasoning, llm_elo_calculated)
+       values ($1, $2, $1, 'completed', '6-4 6-4', now(), $3, $4, $5, true) returning id`,
+      [p1, p2, `Casa de ${++seq}, calle 9`, `Club alterno ${seq}`, `razonamiento-llm-${seq}`],
     )
     world.matches.push(m.id)
     await q(`insert into match_messages (match_id, player_id, message) values ($1, $2, 'nos vemos a las 8')`, [m.id, p1])
@@ -210,6 +240,11 @@ async function privateValues(caller: Caller): Promise<string[]> {
     ...(await q<{ v: string }>(`select email as v from pending_players`)),
     ...(await q<{ v: string }>(`select invitation_token as v from pending_players where invitation_token is not null`)),
     ...(await q<{ v: string }>(`select token as v from session`)),
+    ...(await q<{ v: string }>(
+      `select unnest(array[location, acceptance_proposed_location, llm_calculation_reasoning]) as v from matches
+        where $1::uuid is null or $1::uuid not in (coalesce(player1_id, $2::uuid), coalesce(player2_id, $2::uuid))`,
+      [caller.playerId ?? null, randomUUID()],
+    )),
     ...(await q<{ v: string }>(
       `select unnest(array[password, access_token, refresh_token, id_token]) as v from account where user_id is distinct from $1`,
       [caller.userId ?? null],
@@ -326,7 +361,7 @@ describe('no outsider GET response carries private fields (property over seeded 
         }
         return true
       }),
-      { seed: 20260926, numRuns: 12, endOnFailure: true },
+      { seed: 20260926, numRuns: 25, endOnFailure: true },
     )
     // Non-vacuity: the routes really answered with data, not only 404s and 500s.
     expect(answered).toBeGreaterThan(200)
@@ -449,7 +484,8 @@ describe('signed-in views: contact details where the product uses them, never au
       const text = JSON.stringify(res.body)
       expect(text).not.toContain(beto.userId)
       expect(text).not.toContain(ana.userId)
-      expect(privateKeysIn(res.body).filter((k) => !k.endsWith('.phone_number'))).toEqual([])
+      // A participant's own match keeps its location fields; auth ids and emails never belong in it.
+      expect(privateKeysIn(res.body).filter((k) => /\.(user_id|userId|email)$/.test(k))).toEqual([])
     }
 
     const [pending] = await q<{ id: string }>(
@@ -494,5 +530,50 @@ describe('signed-in views: contact details where the product uses them, never au
     }
     expect(detail.registrations[0].player).toMatchObject({ phone_number: carla.phone, email: carla.email })
     expect(privateKeysIn(detail.groups)).toEqual([])
+  })
+})
+
+// Review of PR #50 (2026-09-26): players/[id]/matches.get.ts:71-90 selected every matches column for anonymous
+// callers, including the meetup address (location), acceptance_proposed_location and llm_calculation_reasoning.
+describe('regression: players/[id]/matches returned whole match rows', () => {
+  it('anonymous history carries what the profile page renders and none of the private match columns', async () => {
+    const world = await seedWorld({
+      players: [
+        { name: 'Local', phone: true, rated: true },
+        { name: 'Visita', phone: true, rated: true },
+      ],
+      tournaments: [],
+      friendlies: [[0, 1]],
+      invites: [],
+    })
+    const res = await app.request('GET', `/api/players/${world.players[0]}/matches`)
+    expect(res.status).toBe(200)
+    const [m] = (res.body as { matches: Array<Record<string, unknown>> }).matches
+    expect(m).toMatchObject({ status: 'completed', score: '6-4 6-4', player1_id: world.players[0], is_competitive: true })
+    expect(m.winner).toMatchObject({ name: 'Local' })
+    for (const key of ['location', 'acceptance_proposed_location', 'llm_calculation_reasoning', 'llm_calculation_model', 'match_proposed_by']) {
+      expect(m, key).not.toHaveProperty(key)
+    }
+    expect(JSON.stringify(res.body)).not.toMatch(/Casa de|Club alterno|razonamiento-llm/)
+  })
+})
+
+// Review of PR #50: tournaments/[id]/register.post.ts:131 embedded the registrant's whole player row.
+describe('regression: tournament self-registration returned the whole player row', () => {
+  it('the registration response names the player without phone, auth id or other private columns', async () => {
+    const { cookie, userId } = await app.signUp('inscribe@tenis.ec')
+    const [p] = await q<{ id: string }>(
+      `insert into players (user_id, name, phone_number, category_id) values ($1, 'Inscribe', '+593 96 111 2222', $2) returning id`,
+      [userId, categoryId],
+    )
+    const [t] = await q<{ id: string }>(
+      `insert into tournaments (name, start_date, created_by) values ('Abierto de inscripción', now() + interval '30 days', $1) returning id`,
+      [p.id],
+    )
+    const res = await app.request('POST', `/api/tournaments/${t.id}/register`, { cookie, body: {} })
+    expect(res.status, JSON.stringify(res.body)).toBe(200)
+    const registration = (res.body as { registration: { player: Record<string, unknown> } }).registration
+    expect(registration.player).toMatchObject({ id: p.id, name: 'Inscribe' })
+    expect(privateKeysIn(res.body)).toEqual([])
   })
 })
