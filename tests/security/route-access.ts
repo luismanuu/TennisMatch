@@ -27,6 +27,7 @@ export const ROUTE_ACCESS: Record<string, Access> = {
   'server/api/admin/invitations.get.ts': 'admin',
   'server/api/admin/invitations/[id].delete.ts': 'admin',
   'server/api/admin/invitations/[id]/resend.post.ts': 'admin',
+  'server/api/admin/jev/farming-scan.post.ts': 'admin',
   'server/api/admin/matches.get.ts': 'admin',
   'server/api/admin/matches/fallback.get.ts': 'admin',
   'server/api/admin/matches/process-missing-rating-history.post.ts': 'admin',
