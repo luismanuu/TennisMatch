@@ -90,7 +90,7 @@ export default defineEventHandler(async (event) => {
           ? sql`date_trunc('milliseconds', ${match_messages.created_at}) > ${new Date(since).toISOString()}::timestamptz`
           : undefined
       ),
-      with: { player: { columns: { id: true, name: true, user_id: true } } },
+      with: { player: { columns: { id: true, name: true } } },
       orderBy: [asc(match_messages.created_at)],
     })
     

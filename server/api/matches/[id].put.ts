@@ -20,7 +20,7 @@ const matchResponseRelations = {
   player1: playerWithCategory,
   player2: playerWithCategory,
   pending_player2: {
-    columns: { id: true, name: true, email: true, status: true },
+    columns: { id: true, name: true, status: true },
     with: { category: { columns: { id: true, name: true, description: true, order: true } } },
   },
   match_proposed_by_player: namedPlayer,

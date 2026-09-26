@@ -97,7 +97,7 @@ export default defineEventHandler(async (event) => {
     const newMessage = inserted
       ? await db.query.match_messages.findFirst({
           where: eq(match_messages.id, inserted.id),
-          with: { player: { columns: { id: true, name: true, user_id: true } } },
+          with: { player: { columns: { id: true, name: true } } },
         })
       : undefined
     

@@ -14,7 +14,7 @@ const categoryColumns = { columns: { id: true, name: true, description: true, or
 const matchResponseRelations = {
   player1: { columns: { id: true, name: true }, with: { category: categoryColumns } },
   player2: { columns: { id: true, name: true }, with: { category: categoryColumns } },
-  pending_player2: { columns: { id: true, name: true, email: true, status: true }, with: { category: categoryColumns } },
+  pending_player2: { columns: { id: true, name: true, status: true }, with: { category: categoryColumns } },
   match_proposed_by_player: namedPlayer,
   match_accepted_by_player: namedPlayer,
   match_rejected_by_player: namedPlayer,

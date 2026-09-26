@@ -4,6 +4,7 @@ import { tournaments } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { getAccountsByIds } from '~/server/utils/users'
+import { publicPlayer } from '~/server/utils/public-player'
 
 export default defineEventHandler(async (event) => {
   const { player: organizer } = await requirePlayer(event, 'organizer')
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event) => {
             },
           },
         },
-        groups: { with: { players: { with: { player: true } } } },
+        groups: { with: { players: { with: { player: publicPlayer } } } },
         rounds: true,
       },
     })
@@ -45,14 +46,14 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Enrich registrations with the account email
+    // The organizer contacts registrants by phone or email; the auth user id is only the lookup key.
     const accounts = await getAccountsByIds(tournament.registrations.map((reg) => reg.player.user_id))
 
     return {
       ...tournament,
-      registrations: tournament.registrations.map((reg) => ({
+      registrations: tournament.registrations.map(({ player: { user_id, ...player }, ...reg }) => ({
         ...reg,
-        player: { ...reg.player, email: accounts.get(reg.player.user_id)?.email ?? null },
+        player: { ...player, email: accounts.get(user_id)?.email ?? null },
       })),
     }
   } catch (error: any) {

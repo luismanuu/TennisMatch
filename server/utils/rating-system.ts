@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, exists, inArray, isNotNull, ne, not, or, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lt, ne, not, or, type SQL } from 'drizzle-orm'
 import { useDb, type DbOrTx } from '../db'
 import { categories, matches, players, rating_history } from '../db/schema'
 import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayStatus } from '~/types'
@@ -1683,81 +1683,106 @@ export async function clearLlmCalculation(matchId: string, tx?: DbOrTx): Promise
     .where(eq(matches.id, matchId))
 }
 
+export type MonthlyDecayOutcome = 'decayed' | 'reset' | 'baseline' | 'skipped'
+
 /**
- * Check and apply monthly decay for a player
+ * Apply the monthly decay to one player, at most once per calendar month.
+ *
+ * One transaction locks the player row and re-reads it, so a concurrent run (or a rating update) waits and then
+ * finds last_decay_check already in this month. Unrated players, players still in placement and deleted
+ * players are never touched. A player never checked before gets this month recorded as the baseline, with no
+ * decay and the running match count kept: decay starts from the next month.
  */
-export async function checkAndApplyMonthlyDecay(
-  playerId: string,
-  tx?: DbOrTx
-): Promise<{ decayApplied: number; uncertaintyIncrease: number } | null> {
-  const db = tx ?? useDb()
-  const [player] = await db
-    .select({
-      id: players.id,
-      elo: players.elo,
-      mmr_uncertainty: players.mmr_uncertainty,
-      matches_this_month: players.matches_this_month,
-      last_decay_check: players.last_decay_check,
-      total_matches_played: players.total_matches_played,
-      placement_matches_completed: players.placement_matches_completed,
-      created_at: players.created_at,
-    })
-    .from(players)
-    .where(eq(players.id, playerId))
+export async function applyMonthlyDecay(
+  playerId: string
+): Promise<{ outcome: MonthlyDecayOutcome; decayApplied: number; uncertaintyIncrease: number }> {
+  const none = (outcome: MonthlyDecayOutcome) => ({ outcome, decayApplied: 0, uncertaintyIncrease: 0 })
 
-  if (!player) {
-    console.error('Failed to fetch player for decay check:', playerId)
-    return null
-  }
+  return useDb().transaction(async (tx) => {
+    const [player] = await tx
+      .select({
+        elo: players.elo,
+        mmr_uncertainty: players.mmr_uncertainty,
+        matches_this_month: players.matches_this_month,
+        last_decay_check: players.last_decay_check,
+        total_matches_played: players.total_matches_played,
+        placement_matches_completed: players.placement_matches_completed,
+        created_at: players.created_at,
+      })
+      .from(players)
+      .where(and(eq(players.id, playerId), eq(players.status, 'active'), isNull(players.deleted_at)))
+      .for('update')
 
-  // Don't apply decay to unrated players
-  if (player.total_matches_played === 0) {
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
-  }
+    if (!player || (player.total_matches_played ?? 0) === 0 || (player.placement_matches_completed ?? 0) < 3) {
+      return none('skipped')
+    }
 
-  // Don't apply decay to players still in placement matches
-  if ((player.placement_matches_completed ?? 0) < 3) {
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
-  }
+    const today = new Date().toISOString().split('T')[0]
 
-  const lastDecayCheck = player.last_decay_check ? new Date(player.last_decay_check) : null
+    if (!player.last_decay_check) {
+      await tx.update(players).set({ last_decay_check: today }).where(eq(players.id, playerId))
+      return none('baseline')
+    }
 
-  if (!shouldApplyDecay(lastDecayCheck)) {
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
-  }
+    if (!shouldApplyDecay(new Date(player.last_decay_check))) {
+      return none('skipped')
+    }
 
-  // Calculate required matches (proportional if registered mid-month)
-  const matchesRequired = calculateRequiredMatchesForMonth(player.created_at)
-  const matchesThisMonth = player.matches_this_month ?? 0
+    const matchesRequired = calculateRequiredMatchesForMonth(player.created_at)
+    const matchesThisMonth = player.matches_this_month ?? 0
+    const decayAmount = calculateDecayAmount(matchesThisMonth, matchesRequired)
+    const uncertaintyIncrease = (matchesRequired - Math.min(matchesThisMonth, matchesRequired)) * 0.1
 
-  const decayAmount = calculateDecayAmount(matchesThisMonth, matchesRequired)
-  const uncertaintyIncrease = (matchesRequired - Math.min(matchesThisMonth, matchesRequired)) * 0.1
-  const today = new Date().toISOString().split('T')[0]
+    if (decayAmount === 0 && uncertaintyIncrease === 0) {
+      await tx.update(players).set({ last_decay_check: today, matches_this_month: 0 }).where(eq(players.id, playerId))
+      return none('reset')
+    }
 
-  if (decayAmount === 0 && uncertaintyIncrease === 0) {
-    // No decay needed, just update the check date and reset the month
-    await db
+    await tx
       .update(players)
-      .set({ last_decay_check: today, matches_this_month: 0 })
+      .set({
+        elo: applyDecay(player.elo, decayAmount),
+        mmr_uncertainty: Math.min(UNCERTAINTY_MAX, Number(player.mmr_uncertainty) + uncertaintyIncrease),
+        last_decay_check: today,
+        matches_this_month: 0,
+      })
       .where(eq(players.id, playerId))
 
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
+    return { outcome: 'decayed' as const, decayApplied: decayAmount, uncertaintyIncrease }
+  })
+}
+
+/**
+ * The scheduled monthly decay: every rated, active player not yet checked this month, one transaction each.
+ * Safe to run any number of times; a run cut short is finished by the next one.
+ */
+export async function applyMonthlyDecayToAllPlayers(): Promise<Record<MonthlyDecayOutcome | 'failed', number>> {
+  const now = new Date()
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0]
+  const due = await useDb()
+    .select({ id: players.id })
+    .from(players)
+    .where(
+      and(
+        eq(players.status, 'active'),
+        isNull(players.deleted_at),
+        gt(players.total_matches_played, 0),
+        gte(players.placement_matches_completed, 3),
+        or(isNull(players.last_decay_check), lt(players.last_decay_check, monthStart))
+      )
+    )
+    .orderBy(asc(players.id))
+
+  const counts: Record<MonthlyDecayOutcome | 'failed', number> = { decayed: 0, reset: 0, baseline: 0, skipped: 0, failed: 0 }
+  for (const { id } of due) {
+    try {
+      counts[(await applyMonthlyDecay(id)).outcome]++
+    } catch (error) {
+      counts.failed++
+      console.error('Monthly decay failed for player', id, error)
+    }
   }
-
-  const newElo = applyDecay(player.elo, decayAmount)
-  const newUncertainty = Math.min(UNCERTAINTY_MAX, Number(player.mmr_uncertainty) + uncertaintyIncrease)
-
-  await db
-    .update(players)
-    .set({
-      elo: newElo,
-      mmr_uncertainty: newUncertainty,
-      last_decay_check: today,
-      matches_this_month: 0,
-    })
-    .where(eq(players.id, playerId))
-
-  return { decayApplied: decayAmount, uncertaintyIncrease }
+  return counts
 }
 
 /**

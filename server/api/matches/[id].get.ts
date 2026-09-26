@@ -9,7 +9,6 @@ const seatedPlayer = {
   columns: {
     id: true,
     name: true,
-    user_id: true,
     status: true,
     elo: true,
     total_matches_played: true,
@@ -24,7 +23,7 @@ const matchDetailRelations = {
   player1: seatedPlayer,
   player2: seatedPlayer,
   pending_player2: {
-    columns: { id: true, name: true, email: true, status: true, invited_by_player_id: true },
+    columns: { id: true, name: true, status: true, invited_by_player_id: true },
     with: { category: categoryColumns },
   },
   match_proposed_by_player: namedPlayer,
@@ -108,7 +107,7 @@ export default defineEventHandler(async (event) => {
     
     const messages = await db.query.match_messages.findMany({
       where: eq(match_messages.match_id, matchId),
-      with: { player: { columns: { id: true, name: true, user_id: true } } },
+      with: { player: { columns: { id: true, name: true } } },
       orderBy: [asc(match_messages.created_at)],
     })
     
