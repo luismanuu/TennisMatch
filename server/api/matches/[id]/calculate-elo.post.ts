@@ -1,11 +1,9 @@
 /**
- * API Endpoint for LLM-based ELO Calculation
- * This endpoint can be called manually, but it's also automatically triggered
- * when a match is completed (both players accepted score)
- * Admin only: it rewrites ratings and spends LLM credits.
+ * Rate a completed match that has no live rating yet (admin only). Approving a score already rates the match in the
+ * same transaction; this is for a match left unrated. An already rated match is a 409: use admin recalculate.
  */
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { matches, rating_history } from '~/server/db/schema'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
@@ -53,31 +51,24 @@ export default defineEventHandler(async (event) => {
       })
     }
     
-    // Check if ELO has already been calculated
-    const existingHistory = await db.query.rating_history.findFirst({
+    const liveHistory = await db.query.rating_history.findFirst({
       columns: { id: true },
-      where: eq(rating_history.match_id, matchId),
+      where: and(eq(rating_history.match_id, matchId), eq(rating_history.rating_reversed, false)),
     })
-    
-    if (existingHistory) {
-      // ELO already calculated, recalculate (this will update UTR if needed)
-      const result = await updateRatingsAfterMatch(matchId)
-      
-      return {
-        success: true,
-        recalculated: true,
-        message: 'ELO recalculated successfully',
-        result
-      }
+
+    if (liveHistory) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Match is already rated; use /api/admin/matches/recalculate to rate it again'
+      })
     }
-    
-    // Calculate ELO (this will trigger LLM if API key is available)
+
     const result = await updateRatingsAfterMatch(matchId)
     
     if (!result) {
       throw createError({
-        statusCode: 500,
-        statusMessage: 'Failed to calculate ELO'
+        statusCode: 422,
+        statusMessage: 'Match is not ratable (friendly, walkover, or missing players)'
       })
     }
     

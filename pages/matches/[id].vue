@@ -104,7 +104,8 @@
               Ganó <NuxtLink :to="`/players/${match.winner.id}`" class="text-accent font-semibold">{{ match.winner.name }}</NuxtLink>
               <span v-if="match.winner.status === 'deleted'" class="status-badge status-badge-danger ml-2">Eliminado</span>
             </p>
-            <div v-if="match.is_competitive && isEloCalculating" class="result__sr result__sr--loading" aria-busy="true">
+            <p v-if="match.is_competitive && notRated === 'walkover'" class="result__sr meta">Walkover: el partido no se jugó, así que no cambia el SR de nadie.</p>
+            <div v-else-if="match.is_competitive && isEloCalculating" class="result__sr result__sr--loading" aria-busy="true">
               <Icon name="heroicons:arrow-path" class="w-5 h-5 text-accent animate-spin" aria-hidden="true" />
               <span class="meta">Calculando el cambio de SR…</span>
             </div>
@@ -117,6 +118,16 @@
                 <strong class="stat-value sr-spark" :class="ratingHistory.player2.elo_change > 0 ? 'text-success' : ratingHistory.player2.elo_change < 0 ? 'text-danger' : ''">{{ ratingHistory.player2.elo_change > 0 ? '+' : '' }}{{ ratingHistory.player2.elo_change }} SR</strong>
                 <span class="meta"><NuxtLink :to="`/players/${match.player2.id}`">{{ match.player2.name }}</NuxtLink> · {{ ratingHistory.player2.elo_before }} → {{ ratingHistory.player2.elo_after }}</span>
               </div>
+              <details v-if="srWhy" class="result__why">
+                <summary>¿Por qué {{ srWhy.change >= 0 ? 'ganaste' : 'perdiste' }} {{ Math.abs(srWhy.change) }} SR?</summary>
+                <ul class="result__why-list">
+                  <li>Antes del partido: tú {{ srWhy.before }} SR, tu rival {{ srWhy.opponent }} SR.</li>
+                  <li>Con esa diferencia, tu probabilidad de ganar era {{ srWhy.expectedPct }}%.</li>
+                  <li>Peso del partido (K): {{ srWhy.k }}<template v-if="srWhy.placement">, más alto porque alguno de los dos está en sus partidos de colocación</template>.</li>
+                  <li>{{ srWhy.marginText }}</li>
+                  <li class="num">{{ srWhy.formula }}</li>
+                </ul>
+              </details>
             </div>
           </section>
 
@@ -821,8 +832,15 @@
                         type="text"
                         required
                         class="form-input"
-                        placeholder="Ej: 6-4, 6-3"
+                        placeholder="Ej: 6-4 3-6 7-5"
+                        aria-describedby="score-help"
                       />
+                      <p id="score-help" class="text-size-5 text-foreground-muted mt-2">
+                        Primero los juegos de {{ match.player1?.name || 'quien creó el partido' }}. Tiebreak: 7-6(5). Super tiebreak como tercer set: 10-8. Si alguien se retiró, añade «ret.»; si no se presentó, escribe W/O.
+                      </p>
+                      <p v-if="scorePreview" class="text-size-5 mt-1" :class="scorePreview.ok ? 'text-foreground-muted' : 'text-danger'" aria-live="polite">
+                        {{ scorePreview.text }}
+                      </p>
                     </div>
 
                     <div>
@@ -841,10 +859,14 @@
                       </select>
                     </div>
 
+                    <div v-if="scoreFormError" class="form-error">
+                      <p class="text-size-4 text-danger">{{ scoreFormError }}</p>
+                    </div>
+
                     <div class="flex flex-col sm:flex-row gap-3 pt-2">
                       <button
                         type="submit"
-                        :disabled="actionLoading"
+                        :disabled="actionLoading || (scorePreview !== null && !scorePreview.ok)"
                         class="btn-primary text-size-3 flex-1 justify-center group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Icon name="heroicons:check" class="w-5 h-5" />
@@ -1150,10 +1172,10 @@
                         type="text"
                         required
                         class="form-input"
-                        placeholder="Ej: 6-4, 6-3"
+                        placeholder="Ej: 6-4 3-6 7-5"
                       />
                       <p class="text-size-5 text-foreground-muted mt-2">
-                        Formato: sets separados por comas (ej: "6-4, 6-3" o "6-2, 4-6, 6-1")
+                        Primero los juegos de {{ match.player1?.name || 'el jugador 1' }} (ej: "6-4 6-3" o "6-2 4-6 10-8"). Si alguien se retiró, añade «ret.».
                       </p>
                     </div>
 
@@ -1191,6 +1213,7 @@
 
 <script setup lang="ts">
 import { formatScore } from '~/utils/pendingAction'
+import { checkWinner, parseScore, renderScore } from '~/utils/score'
 import type { Match, MatchMessage } from '~/types'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
@@ -1216,10 +1239,17 @@ const isPollingPaused = ref(false)
 const failedMessages = ref<Map<string, any>>(new Map())
 
 const match = ref<Match | null>(null)
-const ratingHistory = ref<{
-  player1?: { elo_change: number; elo_before: number; elo_after: number }
-  player2?: { elo_change: number; elo_before: number; elo_after: number }
-} | null>(null)
+type RatingWhy = {
+  k: number
+  margin: number
+  expected: number
+  opponent_before: number
+  classification: { completion: string; sets: string }
+}
+type RatingSide = { elo_change: number; elo_before: number; elo_after: number; why?: RatingWhy | null }
+const ratingHistory = ref<{ player1?: RatingSide; player2?: RatingSide } | null>(null)
+const notRated = ref<string | null>(null)
+const scoreFormError = ref<string | null>(null)
 const actionLoading = ref(false)
 const eloPollingInterval = ref<NodeJS.Timeout | null>(null)
 const showScoreForm = ref(false)
@@ -1546,10 +1576,8 @@ const loadRatingHistory = async () => {
   try {
     const response = await $fetch<{
       success: boolean
-      rating_history: {
-        player1: { elo_change: number; elo_before: number; elo_after: number } | null
-        player2: { elo_change: number; elo_before: number; elo_after: number } | null
-      } | null
+      not_rated?: string
+      rating_history: { player1: RatingSide | null; player2: RatingSide | null } | null
     }>(`/api/matches/${matchId}/rating-history`, {
       query: {}
     }).catch((err) => {
@@ -1558,6 +1586,7 @@ const loadRatingHistory = async () => {
       return { success: false, rating_history: null }
     })
     
+    notRated.value = response.not_rated ?? null
     if (response.success && response.rating_history) {
       // Check if we actually have data for at least one player
       const hasData = response.rating_history.player1 || response.rating_history.player2
@@ -1586,6 +1615,49 @@ const loadRatingHistory = async () => {
   }
 }
 
+const isWalkoverScore = (score: string | null | undefined) => {
+  const parsed = parseScore(score)
+  return parsed.ok && parsed.score.completion === 'walkover'
+}
+
+// Live check of the typed score with the parser the server uses
+const scorePreview = computed<{ ok: boolean; text: string } | null>(() => {
+  if (!scoreForm.value.score.trim() || !match.value) return null
+  const parsed = parseScore(scoreForm.value.score)
+  if (!parsed.ok) return { ok: false, text: parsed.error }
+  if (scoreForm.value.winner_id) {
+    const side = scoreForm.value.winner_id === match.value.player1_id ? 'p1' : 'p2'
+    const error = checkWinner(parsed.score, side)
+    if (error) return { ok: false, text: error }
+  }
+  return { ok: true, text: `Se guardará como ${formatScore(renderScore(parsed.score))}` }
+})
+
+// "¿Por qué?" for the viewer's own SR change, from the inputs stored with the rating
+const MARGIN_TEXT: Record<string, string> = {
+  straight: 'Partido en dos sets: el cambio se multiplica por 1,1.',
+  deciding: 'Partido a tres sets: el cambio se multiplica por 0,9.',
+  incomplete: 'Partido con retiro: el cambio se multiplica por 0,9.',
+  unknown: 'Marcador anterior al formato actual: el cambio no se ajusta por sets.',
+}
+const decimal = (n: number) => String(n).replace('.', ',')
+const srWhy = computed(() => {
+  const own = match.value?.player1_id === currentPlayerId.value ? ratingHistory.value?.player1
+    : match.value?.player2_id === currentPlayerId.value ? ratingHistory.value?.player2 : undefined
+  const why = own?.why
+  if (!own || !why) return null
+  return {
+    change: own.elo_change,
+    before: own.elo_before,
+    opponent: why.opponent_before,
+    expectedPct: Math.round(why.expected * 100),
+    k: why.k,
+    placement: why.k > 32,
+    marginText: MARGIN_TEXT[why.classification.sets] ?? '',
+    formula: `${why.k} × ${decimal(why.margin)} × (${own.elo_change > 0 || (own.elo_change === 0 && why.expected >= 0.5) ? 1 : 0} − ${decimal(why.expected)}) ≈ ${own.elo_change > 0 ? '+' : ''}${own.elo_change}`,
+  }
+})
+
 // Computed to check if ELO is being calculated
 const isEloCalculating = computed(() => {
   if (!match.value) return false
@@ -1593,6 +1665,7 @@ const isEloCalculating = computed(() => {
          match.value.status === 'completed' && 
          match.value.player1_id && 
          match.value.player2_id &&
+         !notRated.value &&
          !ratingHistory.value
 })
 
@@ -1726,6 +1799,7 @@ const handleProposeScore = async () => {
   if (!userId.value || !match.value) return
   
   actionLoading.value = true
+  scoreFormError.value = null
   try {
     await proposeScore(userId.value, match.value.id, {
       score: scoreForm.value.score,
@@ -1734,7 +1808,8 @@ const handleProposeScore = async () => {
     showScoreForm.value = false
     scoreForm.value = { score: '', winner_id: '' }
     await loadMatch()
-  } catch (err) {
+  } catch (err: any) {
+    scoreFormError.value = err.data?.statusMessage || err.data?.message || 'No se pudo proponer el resultado'
     console.error('Error proposing score:', err)
   } finally {
     actionLoading.value = false
@@ -1747,8 +1822,8 @@ const openOrganizerResultForm = () => {
   if (match.value && match.value.status === 'completed') {
     organizerResultForm.value = {
       winner_id: match.value.winner_id || '',
-      score: match.value.score && match.value.score !== 'WO' ? match.value.score : '',
-      is_wo: match.value.score === 'WO'
+      score: match.value.score && !isWalkoverScore(match.value.score) ? match.value.score : '',
+      is_wo: isWalkoverScore(match.value.score)
     }
   } else {
     organizerResultForm.value = { score: '', winner_id: '', is_wo: false }
@@ -1784,9 +1859,17 @@ const handleApproveScore = async () => {
   
   actionLoading.value = true
   try {
-    await approveScore(userId.value, match.value.id)
+    await approveScore(userId.value, match.value.id, {
+      score: match.value.score ?? '',
+      winner_id: match.value.winner_id ?? '',
+      score_proposed_at: match.value.score_proposed_at ?? ''
+    })
     await loadMatch()
-  } catch (err) {
+  } catch (err: any) {
+    if (err.statusCode === 409 || err.status === 409) {
+      useToastNotifications().error(err.data?.statusMessage || 'El marcador cambió. Revísalo antes de aprobarlo.')
+      await loadMatch()
+    }
     console.error('Error approving score:', err)
   } finally {
     actionLoading.value = false
@@ -2341,6 +2424,9 @@ onUnmounted(() => {
 .result__score { font-size: clamp(30px, 4vw, 44px); }
 .result__sr { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--edge); }
 .result__sr--loading { display: flex; align-items: center; gap: 10px; }
+.result__why { grid-column: 1 / -1; margin-top: 12px; color: var(--t-ink-muted); }
+.result__why summary { cursor: pointer; font-weight: 600; color: var(--t-ink); min-height: 44px; display: flex; align-items: center; }
+.result__why-list { display: grid; gap: 6px; margin: 8px 0 0; padding-left: 1.1em; list-style: disc; }
 .chat { margin-top: 24px; }
 .chat__title { font-size: 20px; }
 .chat :deep(.chat__bubble) { padding: 12px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--edge); }

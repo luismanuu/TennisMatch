@@ -44,7 +44,6 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {},
-    openRouterApiKey: process.env.OPENROUTER_API_KEY
   },
 
   typescript: {

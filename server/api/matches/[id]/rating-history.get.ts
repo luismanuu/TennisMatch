@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { matches, players, rating_history } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
+import { classifyStoredScore, isRatable, parseExplanation } from '~/server/utils/elo'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event) => {
     
     // Get match to verify user is involved
     const match = await db.query.matches.findFirst({
-      columns: { id: true, player1_id: true, player2_id: true, status: true, is_competitive: true },
+      columns: { id: true, player1_id: true, player2_id: true, status: true, is_competitive: true, score: true },
       where: eq(matches.id, matchId),
     })
     
@@ -63,6 +64,16 @@ export default defineEventHandler(async (event) => {
       }
     }
     
+    // A walkover is completed but never rated: say so, so the page stops waiting for a rating
+    const classification = classifyStoredScore(match.score)
+    if (!isRatable(classification)) {
+      return {
+        success: true,
+        rating_history: null,
+        not_rated: classification.completion,
+      }
+    }
+
     // Rating history for both players for this match (only non-reversed entries).
     // None yet (not calculated, or a recalculation in progress) returns null so the page keeps showing "Calculando ELO...".
     const ratingHistory = await db
@@ -71,6 +82,7 @@ export default defineEventHandler(async (event) => {
         elo_before: rating_history.elo_before,
         elo_after: rating_history.elo_after,
         elo_change: rating_history.elo_change,
+        reasoning_preview: rating_history.reasoning_preview,
       })
       .from(rating_history)
       .where(and(eq(rating_history.match_id, matchId), eq(rating_history.rating_reversed, false)))
@@ -86,20 +98,15 @@ export default defineEventHandler(async (event) => {
     const player1History = ratingHistory.find(h => h.player_id === match.player1_id)
     const player2History = ratingHistory.find(h => h.player_id === match.player2_id)
     
-    // A missing side returns null for that player (partial data is still returned)
+    // A missing side returns null for that player (partial data is still returned). `why` holds the inputs the SR
+    // formula used (server/utils/elo.ts); null for ratings made before it stored them.
+    const view = (h: (typeof ratingHistory)[number] | undefined) =>
+      h ? { elo_change: h.elo_change, elo_before: h.elo_before, elo_after: h.elo_after, why: parseExplanation(h.reasoning_preview) } : null
     return {
       success: true,
       rating_history: {
-        player1: player1History ? {
-          elo_change: player1History.elo_change,
-          elo_before: player1History.elo_before,
-          elo_after: player1History.elo_after
-        } : null,
-        player2: player2History ? {
-          elo_change: player2History.elo_change,
-          elo_before: player2History.elo_before,
-          elo_after: player2History.elo_after
-        } : null
+        player1: view(player1History),
+        player2: view(player2History),
       }
     }
   } catch (error: any) {

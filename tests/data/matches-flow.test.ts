@@ -1,8 +1,7 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startTestApp, type TestApp } from '../security/harness'
-import { getDefaultEloCalculation } from '../../server/utils/llm-score-resolver'
-import { activeMatch, createCategory, createPlayer, playerRow, put, type Account } from './matches-helpers'
+import { approve, activeMatch, createCategory, createPlayer, playerRow, put, type Account } from './matches-helpers'
 
 let app: TestApp
 let categoryId: string
@@ -56,7 +55,7 @@ describe('full match flow through the API', () => {
     )
     expect(pending).toHaveLength(1)
 
-    const approved = await put(app, b, matchId, 'approve_score')
+    const approved = await approve(app, b, matchId)
     expect(approved.status).toBe(200)
     const body = approved.body as { status: string; winner: { id: string } | null; player1: { id: string; category: unknown } }
     expect(body.status).toBe('completed')
@@ -67,10 +66,10 @@ describe('full match flow through the API', () => {
     expect(match.status).toBe('completed')
     expect(match.winner_id).toBe(a.playerId)
     expect(match.score_approved_by).toBe(b.playerId)
-    // No OPENROUTER_API_KEY anywhere: the deterministic calculation ran and the reason was recorded
+    // No model in the rating path: the legacy LLM columns are never written
     expect(match.llm_elo_calculated).toBe(false)
     expect(match.llm_calculation_failed).toBe(false)
-    expect(match.llm_calculation_reasoning).toMatch(/No OpenRouter API key/)
+    expect(match.llm_calculation_reasoning).toBeNull()
 
     const aAfter = await playerRow(app, a.playerId)
     const bAfter = await playerRow(app, b.playerId)
@@ -95,22 +94,25 @@ describe('full match flow through the API', () => {
     expect(ratingHistory.status).toBe(200)
     expect(ratingHistory.body).toMatchObject({
       success: true,
-      rating_history: { player1: { elo_after: aAfter.elo }, player2: { elo_after: bAfter.elo } },
+      rating_history: {
+        player1: { elo_after: aAfter.elo, why: { formula: 'elo-v2', opponent_before: bBefore.elo, classification: { completion: 'completed', sets: 'straight', source: 'parser' } } },
+        player2: { elo_after: bAfter.elo, why: { formula: 'elo-v2', opponent_before: aBefore.elo } },
+      },
     })
   })
 
-  it('rating a match twice is a no-op (admin calculate-elo on an already rated match)', async () => {
+  // B11: calculate-elo on a rated match answered success "ELO recalculated successfully" with result null
+  it('rating a match twice is a no-op: admin calculate-elo on an already rated match is a 409 and changes nothing', async () => {
     const a = await createPlayer(app, categoryId)
     const b = await createPlayer(app, categoryId)
     const matchId = await activeMatch(app, a, b)
-    await put(app, a, matchId, 'propose_score', { score: '6-1 6-1', winner_id: b.playerId })
-    await put(app, b, matchId, 'approve_score')
+    await put(app, a, matchId, 'propose_score', { score: '1-6 1-6', winner_id: b.playerId })
+    expect((await approve(app, b, matchId)).status).toBe(200)
     const aRated = await playerRow(app, a.playerId)
 
     const admin = await app.signUp(`admin-${Date.now()}@tenis.ec`, 'admin')
     const again = await app.request('POST', `/api/matches/${matchId}/calculate-elo`, { cookie: admin.cookie })
-    expect(again.status).toBe(200)
-    expect(again.body).toMatchObject({ success: true, recalculated: true, result: null })
+    expect(again.status).toBe(409)
     expect(await playerRow(app, a.playerId)).toEqual(aRated)
     expect(await history(matchId)).toHaveLength(2)
   })
@@ -120,7 +122,7 @@ describe('full match flow through the API', () => {
     const b = await createPlayer(app, categoryId)
     const matchId = await activeMatch(app, a, b, false)
     await put(app, a, matchId, 'propose_score', { score: '6-4 6-4', winner_id: a.playerId })
-    expect((await put(app, b, matchId, 'approve_score')).status).toBe(200)
+    expect((await approve(app, b, matchId)).status).toBe(200)
     expect((await matchRow(matchId)).status).toBe('completed')
     expect((await playerRow(app, a.playerId)).total_matches_played).toBe(0)
     expect(await history(matchId)).toHaveLength(0)
@@ -131,7 +133,7 @@ describe('full match flow through the API', () => {
     const b = await createPlayer(app, categoryId)
     const matchId = await activeMatch(app, a, b)
     await put(app, a, matchId, 'propose_score', { score: '7-5 6-7(3) 6-2', winner_id: a.playerId })
-    await put(app, b, matchId, 'approve_score')
+    await approve(app, b, matchId)
 
     const admin = await app.signUp(`admin-recalc-${Date.now()}@tenis.ec`, 'admin')
     const res = await app.request('POST', '/api/admin/matches/recalculate', { cookie: admin.cookie, query: { match_id: matchId } })
@@ -171,7 +173,7 @@ describe('IDOR: matches/[id].put.ts', () => {
 
   it('a non-participant cannot approve a proposed score (403) and nothing is rated', async () => {
     expect((await put(app, a, matchId, 'propose_score', { score: '6-2 6-2', winner_id: a.playerId })).status).toBe(200)
-    const res = await put(app, outsider, matchId, 'approve_score')
+    const res = await approve(app, outsider, matchId)
     expect(res.status).toBe(403)
     expect((await matchRow(matchId)).status).toBe('active')
     expect(await history(matchId)).toHaveLength(0)
@@ -210,7 +212,7 @@ describe('IDOR: matches/[id].put.ts update_status', () => {
     const b = await createPlayer(app, categoryId)
     const matchId = await activeMatch(app, a, b)
     await put(app, a, matchId, 'propose_score', { score: '6-4 6-4', winner_id: a.playerId })
-    await put(app, b, matchId, 'approve_score')
+    await approve(app, b, matchId)
     const res = await put(app, b, matchId, 'update_status', { status: 'cancelled' })
     expect(res.status).toBe(400)
     expect((await matchRow(matchId)).status).toBe('completed')
@@ -246,95 +248,38 @@ describe('IDOR: matches/[id]/messages.post.ts', () => {
 })
 
 describe('rating writes are atomic', () => {
-  it('a failure writing the second player rolls back the first player, the history and the match flags', async () => {
+  // S8: the match was completed in one statement and rated in another, and a rating failure was swallowed, so a
+  // match could stay completed and unrated. Completing and rating now commit together.
+  it('a failure writing the second rating row rolls back the approval, both players and the history', async () => {
     const a = await createPlayer(app, categoryId, 'firme')
     const b = await createPlayer(app, categoryId, 'roto')
-    // B is rated (so its stored MMR is used) and sits at the bottom of numeric(6,3): losing pushes it past -999.999,
-    // so the UPDATE of player 2 fails after player 1 was already written in the same transaction.
-    await app.client.query(`update players set total_matches_played = 5, placement_matches_completed = 3, mmr = -999.999 where id = $1`, [b.playerId])
     const matchId = await activeMatch(app, a, b)
     await put(app, a, matchId, 'propose_score', { score: '6-4 6-4', winner_id: a.playerId })
     const aBefore = await playerRow(app, a.playerId)
     const bBefore = await playerRow(app, b.playerId)
-
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const approved = await put(app, b, matchId, 'approve_score')
-    const logged = errors.mock.calls.map((c) => String(c[0]))
-    errors.mockRestore()
-
-    // The approval itself stands; the rating failure is logged for admin/matches/process-missing-rating-history
-    expect(approved.status).toBe(200)
-    expect(logged).toContain('Error updating ratings after match:')
+    // Fault injection: the insert of B's rating_history row fails after A's player row and history row were written
+    await app.client.exec(`
+      create or replace function fail_for_roto() returns trigger language plpgsql as $$
+      begin raise exception 'injected failure'; end $$;
+      create trigger fail_for_roto before insert on rating_history
+        for each row when (new.player_id = '${b.playerId}') execute function fail_for_roto();
+    `)
+    try {
+      const approved = await approve(app, b, matchId)
+      expect(approved.status).toBe(500)
+    } finally {
+      await app.client.exec(`drop trigger fail_for_roto on rating_history; drop function fail_for_roto();`)
+    }
     expect(await playerRow(app, a.playerId)).toEqual(aBefore)
     expect(await playerRow(app, b.playerId)).toEqual(bBefore)
     expect(await history(matchId)).toHaveLength(0)
-    const match = await matchRow(matchId)
-    expect(match.status).toBe('completed')
-    expect(match.llm_calculation_reasoning).toBeNull()
+    expect((await matchRow(matchId)).status).toBe('active')
 
-    // Once the bad row is fixed, the admin recovery route rates the match
-    await app.client.query(`update players set mmr = 0 where id = $1`, [b.playerId])
-    const admin = await app.signUp(`admin-missing-${Date.now()}@tenis.ec`, 'admin')
-    const recovered = await app.request('POST', '/api/admin/matches/process-missing-rating-history', {
-      cookie: admin.cookie,
-      query: { match_id: matchId },
-    })
-    expect(recovered.status).toBe(200)
-    expect(recovered.body).toMatchObject({ processed: 1, failed: 0 })
+    // Nothing was lost: the same approval goes through once the fault is gone
+    expect((await approve(app, b, matchId)).status).toBe(200)
     expect(await history(matchId)).toHaveLength(2)
     expect((await playerRow(app, a.playerId)).total_matches_played).toBe(aBefore.total_matches_played + 1)
   })
-})
-
-describe('LLM path without a usable model', () => {
-  it('a key that yields an invalid answer falls back to the deterministic calculation and records llm_calculation_failed', async () => {
-    const a = await createPlayer(app, categoryId, 'previa')
-    const b = await createPlayer(app, categoryId, 'segunda')
-    // One earlier match so the prompt carries recent history
-    const first = await activeMatch(app, a, b)
-    await put(app, a, first, 'propose_score', { score: '6-3 6-3', winner_id: b.playerId })
-    await put(app, b, first, 'approve_score')
-
-    const matchId = await activeMatch(app, a, b)
-    await put(app, a, matchId, 'propose_score', { score: '6-4 6-2', winner_id: a.playerId })
-    const aBefore = await playerRow(app, a.playerId)
-    const bBefore = await playerRow(app, b.playerId)
-
-    // No live call ever: OpenRouter is answered in-process with an out-of-bounds ELO change
-    const prompts: string[] = []
-    const realFetch = globalThis.fetch
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      if (!url.startsWith('https://openrouter.ai/')) return realFetch(input, init)
-      prompts.push(String(init?.body))
-      const content = JSON.stringify({ player1_elo_change: 500, player2_elo_change: -500, match_rating: 1, match_weight: 1, reasoning: 'x' })
-      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 })
-    })
-    const g = globalThis as { useRuntimeConfig?: () => unknown }
-    const realConfig = g.useRuntimeConfig
-    g.useRuntimeConfig = () => ({ public: {}, openRouterApiKey: 'test-key-never-sent-anywhere' })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      expect((await put(app, b, matchId, 'approve_score')).status).toBe(200)
-    } finally {
-      g.useRuntimeConfig = realConfig
-      fetchSpy.mockRestore()
-      warn.mockRestore()
-      error.mockRestore()
-    }
-
-    expect(prompts).toHaveLength(3) // one call per attempt, each rejected by validation
-    expect(prompts[0]).toContain('6-3 6-3') // the previous match's score reached the prompt as text
-    const match = await matchRow(matchId)
-    expect(match.llm_elo_calculated).toBe(false)
-    expect(match.llm_calculation_failed).toBe(true)
-    expect(match.llm_calculation_reasoning).toMatch(/failed after 3 attempts: ELO change out of bounds: 500/)
-
-    const expected = getDefaultEloCalculation(aBefore.elo, bBefore.elo, a.playerId, a.playerId)
-    expect((await playerRow(app, a.playerId)).elo).toBe(aBefore.elo + expected.player1EloChange)
-    expect((await playerRow(app, b.playerId)).elo).toBe(bBefore.elo + expected.player2EloChange)
-  }, 30_000)
 })
 
 describe('regressions', () => {
@@ -345,7 +290,7 @@ describe('regressions', () => {
     const b = await createPlayer(app, categoryId, 'resultado')
     const matchId = await activeMatch(app, a, b)
     await put(app, a, matchId, 'propose_score', { score: '6-3 6-4', winner_id: a.playerId })
-    expect((await put(app, b, matchId, 'approve_score')).status).toBe(200)
+    expect((await approve(app, b, matchId)).status).toBe(200)
     const staff = await createPlayer(app, categoryId, 'staff')
     await app.setRole(staff.userId, 'admin')
     const before = await matchRow(matchId)

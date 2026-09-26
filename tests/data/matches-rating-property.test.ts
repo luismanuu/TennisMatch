@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { startTestApp, type TestApp } from '../security/harness'
-import { createCategory, createPlayer, FUTURE, put, type Account } from './matches-helpers'
+import { approve, createCategory, createPlayer, FUTURE, put, type Account } from './matches-helpers'
 
 let app: TestApp
 const categories: string[] = []
@@ -100,6 +100,7 @@ async function snapshot(ids: string[]) {
     await app.client.query<{ player_id: string; n: number }>(
       `select p.id as player_id, count(m.id)::int as n from players p
        left join matches m on (m.player1_id = p.id or m.player2_id = p.id) and m.status = 'completed' and m.is_competitive
+         and m.score <> 'W/O'
        where p.id = any($1) group by p.id`,
       [ids],
     )
@@ -143,7 +144,7 @@ describe('rating writes keep the ledger consistent (property over random match s
           const approver = m.proposerIsPlayer1 ? p2 : p1
           const score = scoreText(m)
           expect((await put(app, proposer, matchId, 'propose_score', { score, winner_id: winner.playerId })).status).toBe(200)
-          const approved = await put(app, approver, matchId, 'approve_score')
+          const approved = await approve(app, approver, matchId)
           expect(approved.status).toBe(200)
           if (m.competitive) competitiveWithPair.set(pairKey, priorCompetitive + 1)
 
@@ -161,7 +162,8 @@ describe('rating writes keep the ledger consistent (property over random match s
               [matchId],
             )
           ).rows
-          if (!m.competitive) {
+          // Friendlies and walkovers are completed but never rated
+          if (!m.competitive || m.walkover) {
             expect(rows).toEqual([])
             continue
           }
@@ -171,7 +173,7 @@ describe('rating writes keep the ledger consistent (property over random match s
           expect(w.was_winner).toBe(true)
           expect(l.was_winner).toBe(false)
           expect(w.elo_change).toBeGreaterThanOrEqual(0)
-          expect(l.elo_change).toBeLessThanOrEqual(0)
+          expect(l.elo_change + w.elo_change).toBe(0)
         }
         return true
       }),

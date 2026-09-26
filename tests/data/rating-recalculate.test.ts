@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { startTestApp, type TestApp } from '../security/harness'
 import { reverseMatchRatings } from '../../server/utils/rating-system'
-import { activeMatch, createCategory, createPlayer, put, type Account } from './matches-helpers'
+import { approve, activeMatch, createCategory, createPlayer, put, type Account } from './matches-helpers'
 
 // Admin recalculation (reverse a match's ratings, then rate it again) with no LLM key: the deterministic path.
 // Oracle: recalculating a match that is both players' latest rating changes nothing, and a player's ratings after
@@ -68,7 +68,7 @@ async function liveHistory(matchId: string) {
 async function play(p1: Account, p2: Account, winner: Account, score: string): Promise<string> {
   const matchId = await activeMatch(app, p1, p2)
   expect((await put(app, p1, matchId, 'propose_score', { score, winner_id: winner.playerId })).status).toBe(200)
-  expect((await put(app, p2, matchId, 'approve_score')).status).toBe(200)
+  expect((await approve(app, p2, matchId)).status).toBe(200)
   return matchId
 }
 
@@ -117,8 +117,8 @@ describe('recalculate: named regressions', { timeout: 30_000 }, () => {
   })
 
   // The reversal left win_streak / loss_streak / matches_this_month as they were and the re-rate added one more,
-  // so the streak grew to 4 and the +6 bonus of the third win became 0.
-  it('recalculating a win that extended a streak of 2 keeps streak 3, the +6 bonus and the ELO', async () => {
+  // so the streak grew to 4. (The +6 streak bonus it also broke no longer exists: audit B2, it created points.)
+  it('recalculating a win that extended a streak of 2 keeps streak 3, no streak bonus, and the ELO', async () => {
     const eva = await createPlayer(app, midCategory, 'eva')
     const rivals = [
       await createPlayer(app, midCategory, 'rival'),
@@ -131,7 +131,7 @@ describe('recalculate: named regressions', { timeout: 30_000 }, () => {
     const before = await state(eva.playerId)
     const bonusBefore = (await liveHistory(m)).find((h) => h.player_id === eva.playerId)!
     expect(before.win_streak).toBe(3)
-    expect(bonusBefore.win_streak_bonus).toBe(6)
+    expect(bonusBefore.win_streak_bonus).toBe(0)
 
     await recalculate(m)
 
@@ -140,7 +140,7 @@ describe('recalculate: named regressions', { timeout: 30_000 }, () => {
     expect(after.win_streak).toBe(3)
     expect(after.loss_streak).toBe(0)
     expect(after.matches_this_month).toBe(before.matches_this_month)
-    expect(bonusAfter.win_streak_bonus).toBe(6)
+    expect(bonusAfter.win_streak_bonus).toBe(0)
     expect(after.elo).toBe(before.elo)
     expect(after).toEqual(before)
   })
@@ -177,9 +177,10 @@ describe('recalculate: named regressions', { timeout: 30_000 }, () => {
     expect(gabiBefore.total_matches_played).toBe(1)
   })
 
-  // elo_after is clamped at ELO_MIN (1) but elo_change is not, so subtracting the delta from a clamped rating
-  // lands on the wrong ELO: 1 - (-20) = 21 instead of the 5 the player had.
-  it('reversing the latest entry of a rating clamped at ELO_MIN restores elo_before (5), not elo_after - elo_change', async () => {
+  // elo_after was clamped at ELO_MIN (1) but elo_change was not, so subtracting the delta from a clamped rating
+  // landed on the wrong ELO: 1 - (-20) = 21 instead of the 5 the player had. The formula now caps the change at
+  // what the loser has above the floor, so the ledger adds up, and the reversal still restores 5.
+  it('reversing the latest entry of a rating at ELO_MIN restores elo_before (5), and elo_before + elo_change = elo_after', async () => {
     const ines = await createPlayer(app, midCategory, 'ines')
     const juan = await createPlayer(app, midCategory, 'juan')
     for (const p of [ines, juan]) {
@@ -191,7 +192,7 @@ describe('recalculate: named regressions', { timeout: 30_000 }, () => {
     const m = await play(ines, juan, juan, '3-6 3-6')
     const [entry] = (await liveHistory(m)).filter((h) => h.player_id === ines.playerId)
     expect(entry.elo_after).toBe(1)
-    expect(entry.elo_before + entry.elo_change).toBeLessThan(1)
+    expect(entry.elo_before + entry.elo_change).toBe(1)
 
     await reverseMatchRatings(m)
 
@@ -214,7 +215,10 @@ describe('recalculate: named regressions', { timeout: 30_000 }, () => {
 
 // ---- property: recalculating the latest match is a no-op on every player, for random match sequences ----
 
+// Written from the winner's side; mirrored when player 2 wins, since a score lists player 1's games first
 const scores = ['6-3 6-4', '7-5 6-7(5) 6-2', '6-0 6-1', '4-6 6-3 7-6(8)', 'WO'] as const
+const fromPlayer1 = (score: string, player1Wins: boolean) =>
+  player1Wins ? score : score.replace(/(\d+)-(\d+)/g, (_, w, l) => `${l}-${w}`)
 
 const plan = fc.integer({ min: 2, max: 4 }).chain((n) =>
   fc.record({
@@ -245,7 +249,8 @@ describe('recalculate: property over random match sequences', () => {
           perPair.set(key, (perPair.get(key) ?? 0) + 1)
           const p1 = accounts[m.pair[0]]
           const p2 = accounts[m.pair[1]]
-          last = await play(p1, p2, m.player1Wins ? p1 : p2, m.score)
+          const matchId = await play(p1, p2, m.player1Wins ? p1 : p2, fromPlayer1(m.score, m.player1Wins))
+          if (m.score !== 'WO') last = matchId // a walkover is never rated, so there is nothing to recalculate
         }
         if (!last) return true
 

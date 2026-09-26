@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startTestApp, type TestApp } from '../security/harness'
-import { activeMatch, createCategory, createPlayer, put, type Account } from './matches-helpers'
+import { approve, activeMatch, createCategory, createPlayer, put, type Account } from './matches-helpers'
 
 // Public player routes: what they return, and what they must not.
 
@@ -20,7 +20,7 @@ afterAll(async () => {
 async function play(p1: Account, p2: Account, winner: Account, score: string): Promise<string> {
   const matchId = await activeMatch(app, p1, p2)
   expect((await put(app, p1, matchId, 'propose_score', { score, winner_id: winner.playerId })).status).toBe(200)
-  expect((await put(app, p2, matchId, 'approve_score')).status).toBe(200)
+  expect((await approve(app, p2, matchId)).status).toBe(200)
   return matchId
 }
 

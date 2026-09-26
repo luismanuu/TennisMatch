@@ -64,3 +64,17 @@ export async function activeMatch(app: TestApp, a: Account, b: Account, isCompet
   expect((await put(app, a, matchId, 'update_status', { status: 'active' })).status).toBe(200)
   return matchId
 }
+
+// Approve the proposal as it is now, sending what the approver's page would have shown (score, winner, proposal time)
+export async function approve(app: TestApp, who: Account, matchId: string) {
+  const { rows } = await app.client.query<{ score: string | null; winner_id: string | null; score_proposed_at: Date | null }>(
+    `select score, winner_id, score_proposed_at from matches where id = $1`,
+    [matchId],
+  )
+  const m = rows[0]
+  return put(app, who, matchId, 'approve_score', {
+    score: m?.score,
+    winner_id: m?.winner_id,
+    score_proposed_at: m?.score_proposed_at ? new Date(m.score_proposed_at).toISOString() : undefined,
+  })
+}
