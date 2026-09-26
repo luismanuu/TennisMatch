@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import { PerspectiveCamera, Vector3 } from 'three'
 import {
-  CHAPTERS, FADE, FLOOD, SHOTS, TENNIS_COURT as C, cameraAt, chaptersAt, countUp, courtTier, easeInOut, lightAt, projectPoint,
+  CHAPTERS, CLAY, DRAW, DRAW_TOTAL, FADE, FLOOD_FULL, MOTES, NET, NET_SWAY, SHOTS, TENNIS_COURT as C, cameraAt, chapterLocal, chaptersAt, clayAt,
+  countUp, courtTier, easeInOut, lightAt, lineDraw, motePosition, motesAt, netSettle, projectPoint, sweepAt,
   type CourtTier, type DeviceSignals, type Vec3
 } from '../../utils/courtShot'
 import { SEED, int, mulberry32, pick } from './prng'
@@ -96,29 +97,105 @@ describe('easeInOut (property)', () => {
   })
 })
 
-describe('lightAt: dusk to floodlights (property)', () => {
-  it('scrolling on never dims the court and never brings daylight back', () => {
+describe('lightAt: the floodlights power on one by one (property)', () => {
+  it('scrolling on never dims a tower, never brings daylight back, never lowers exposure', () => {
     const rand = mulberry32(SEED + 75)
     for (let i = 0; i < RUNS; i++) {
       const a = rand(), b = rand()
       const [lo, hi] = a < b ? [a, b] : [b, a]
       const x = lightAt(lo), y = lightAt(hi)
-      expect(y.flood).toBeGreaterThanOrEqual(x.flood - 1e-12)
+      x.lamps.forEach((l, k) => expect(y.lamps[k]!).toBeGreaterThanOrEqual(l - 1e-12))
       expect(y.dusk).toBeLessThanOrEqual(x.dusk + 1e-12)
       expect(y.exposure).toBeGreaterThanOrEqual(x.exposure - 1e-12)
     }
   })
 
-  it('in range for any input; dark at rest, fully lit from FLOOD.full on', () => {
+  it('towers come on in order: a tower is never brighter than the one before it', () => {
     const rand = mulberry32(SEED + 76)
     for (let i = 0; i < RUNS; i++) {
       const l = lightAt(num(rand))
-      expect(finite([l.flood, l.dusk, l.exposure])).toBe(true)
-      for (const v of [l.flood, l.dusk]) expect(v >= 0 && v <= 1).toBe(true)
+      expect(finite([...l.lamps, l.flood, l.dusk, l.exposure])).toBe(true)
+      for (let k = 1; k < 4; k++) expect(l.lamps[k]!).toBeLessThanOrEqual(l.lamps[k - 1]! + 1e-12)
+      for (const v of [...l.lamps, l.flood, l.dusk]) expect(v >= 0 && v <= 1).toBe(true)
     }
-    expect(lightAt(0)).toEqual({ flood: 0, dusk: 1, exposure: 0.82 })
-    expect(lightAt(FLOOD.full).flood).toBe(1)
+    expect(lightAt(0).flood).toBe(0)
+    expect(lightAt(FLOOD_FULL).flood).toBe(1)
     expect(lightAt(1).dusk).toBe(0)
+  })
+
+  it('the sweep is only there while the towers power on, and stays on the court', () => {
+    const rand = mulberry32(SEED + 84)
+    for (let i = 0; i < RUNS; i++) {
+      const p = num(rand)
+      const s = sweepAt(p)
+      expect(s.at >= 0 && s.at <= 1 && s.strength >= 0 && s.strength <= 1).toBe(true)
+      const l = lightAt(p)
+      if (l.flood === 0 || l.flood === 1) expect(s.strength).toBe(0)
+    }
+  })
+})
+
+describe('clay, net and motes: one moment per chapter (property)', () => {
+  it('the resurfacing is monotonic and happens inside the confirmation chapter', () => {
+    const rand = mulberry32(SEED + 85)
+    for (let i = 0; i < RUNS; i++) {
+      const a = rand(), b = rand()
+      const [lo, hi] = a < b ? [a, b] : [b, a]
+      expect(clayAt(hi)).toBeGreaterThanOrEqual(clayAt(lo) - 1e-12)
+      const c = clayAt(num(rand))
+      expect(c >= 0 && c <= 1).toBe(true)
+    }
+    expect(clayAt(CLAY.start)).toBe(0)
+    expect(clayAt(CLAY.end)).toBe(1)
+    expect(CLAY.start).toBeGreaterThan(CHAPTERS[1]!.to)
+    expect(CLAY.end).toBeLessThanOrEqual(CHAPTERS[2]!.to)
+  })
+
+  it('the net sways less than NET_SWAY, starts and ends at rest, and is continuous', () => {
+    const rand = mulberry32(SEED + 86)
+    for (let i = 0; i < RUNS; i++) {
+      const p = num(rand)
+      const v = netSettle(p)
+      expect(Number.isFinite(v)).toBe(true)
+      expect(Math.abs(v)).toBeLessThanOrEqual(NET_SWAY)
+      const q = rand(), e = 1e-5
+      expect(Math.abs(netSettle(q + e) - netSettle(q))).toBeLessThan(NET_SWAY * 40 * e / (NET.end - NET.start) + 1e-12)
+    }
+    expect(netSettle(NET.start)).toBe(0)
+    expect(netSettle(NET.end)).toBe(0)
+  })
+
+  it('motes stay inside their tower beam and above the court, for any scroll', () => {
+    const rand = mulberry32(SEED + 87)
+    const tower = { x: 12, z: 18, h: 24 }
+    for (let i = 0; i < RUNS; i++) {
+      const [x, y, z] = motePosition(int(rand, 0, 5000), num(rand), tower)
+      expect(finite([x, y, z])).toBe(true)
+      expect(y).toBeGreaterThan(0)
+      expect(y).toBeLessThan(tower.h)
+      const t = y / tower.h
+      expect(Math.hypot(x - tower.x * t, z - tower.z * t)).toBeLessThanOrEqual(5.5 * (1 - t) + 0.4 + 1e-9)
+    }
+    expect(motesAt(MOTES.start)).toBe(0)
+    expect(motesAt(1)).toBe(1)
+  })
+})
+
+describe('lineDraw: the chalk lines draw themselves once (property)', () => {
+  it('each line is 0 before its turn, grows monotonically, is 1 after DRAW_TOTAL, and never ahead of the line before it', () => {
+    const rand = mulberry32(SEED + 88)
+    for (let i = 0; i < RUNS; i++) {
+      const t1 = num(rand, -200, DRAW_TOTAL + 200), t2 = num(rand, -200, DRAW_TOTAL + 200)
+      const [lo, hi] = [t1, t2].map(x => (Number.isFinite(x) ? x : 0)).sort((x, y) => x - y) as [number, number]
+      for (let k = 0; k < 11; k++) {
+        const v = lineDraw(k, t1)
+        expect(v >= 0 && v <= 1).toBe(true)
+        expect(lineDraw(k, hi)).toBeGreaterThanOrEqual(lineDraw(k, lo) - 1e-12)
+        if (k > 0) expect(lineDraw(k, t1)).toBeLessThanOrEqual(lineDraw(k - 1, t1) + 1e-12)
+      }
+    }
+    for (let k = 0; k < 11; k++) { expect(lineDraw(k, 0)).toBe(0); expect(lineDraw(k, DRAW_TOTAL)).toBe(1) }
+    expect(DRAW.delay).toBeGreaterThanOrEqual(0)
   })
 })
 
@@ -153,6 +230,23 @@ describe('chaptersAt: large type revealing alongside the camera (property)', () 
 
   it('holds and fades never overlap in the shipped timeline', () => {
     for (let k = 1; k < CHAPTERS.length; k++) expect(CHAPTERS[k - 1]!.to + FADE).toBeLessThanOrEqual(CHAPTERS[k]!.from - FADE + 1e-12)
+  })
+})
+
+describe('chapterLocal (property)', () => {
+  it('0..1, monotonic, 0 before a chapter arrives and 1 once it starts to leave', () => {
+    const rand = mulberry32(SEED + 89)
+    for (let i = 0; i < RUNS; i++) {
+      const k = int(rand, 0, CHAPTERS.length - 1)
+      const a = rand(), b = rand()
+      const [lo, hi] = a < b ? [a, b] : [b, a]
+      const v = chapterLocal(num(rand), k)
+      expect(v >= 0 && v <= 1).toBe(true)
+      expect(chapterLocal(hi, k)).toBeGreaterThanOrEqual(chapterLocal(lo, k))
+    }
+    expect(chapterLocal(CHAPTERS[1]!.to, 1)).toBe(1)
+    expect(chapterLocal(CHAPTERS[1]!.from - FADE, 1)).toBe(0)
+    expect(chapterLocal(0.5, 99)).toBe(0)
   })
 })
 

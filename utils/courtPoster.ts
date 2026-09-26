@@ -3,7 +3,7 @@
  * court (DESIGN.md "The court · Poster"). It is what every device paints first, from
  * the server HTML, and the whole hero on devices that keep the static court.
  */
-import { TENNIS_COURT as C, cameraAt, courtLines, lightAt, netHeight, projectPoint, type Vec3 } from './courtShot'
+import { TENNIS_COURT as C, cameraAt, clayAt, courtLines, lightAt, netHeight, projectPoint, type Vec3 } from './courtShot'
 
 export interface Poster {
   w: number
@@ -15,16 +15,16 @@ export interface Poster {
   apronFill: string
   court: string
   courtFill: string
-  lines: string[]
+  /** Chalk lines as centre segments [x1, y1, x2, y2, width px], drawn in order. */
+  lines: Array<[number, number, number, number, number]>
   lineFill: string
   net: string
   band: string
   posts: Array<[number, number, number, number]>
   poles: Array<[number, number, number, number]>
-  lamps: Array<[number, number, number]>
-  lampFill: string
+  lamps: Array<[number, number, number, string, number]>
   flood: number
-  pools: Array<[number, number, number, number]>
+  pools: Array<[number, number, number, number, number]>
 }
 
 const APRON_W = C.doubles + 2 * C.runSide
@@ -40,17 +40,18 @@ export function mix(a: string, b: string, t: number): string {
   return '#' + x.map((v, i) => Math.round(v + (y[i]! - v) * k).toString(16).padStart(2, '0')).join('')
 }
 
-/** The palette of the court under a given light (shared with the 3D scene). */
-export function courtColours(flood: number, dusk: number) {
+/** The palette of the court under a given light and surface (shared with the 3D scene). */
+export function courtColours(flood: number, dusk: number, clay = 0) {
   return {
-    ground: mix('#0a1511', '#07100c', flood),
-    court: mix('#1f4c3d', '#1f5c47', flood),
-    apron: mix('#15342a', '#134233', flood),
-    line: mix('#b7c1bb', '#eef0ea', flood),
-    lamp: mix('#2c332f', '#fff4de', flood),
-    skyTop: '#050c09',
-    skyMid: mix('#0b1c16', '#081611', flood),
-    skyLow: mix('#081611', '#3a3122', dusk)
+    ground: mix('#0d1a15', '#07100c', flood),
+    court: mix(mix('#2a5e4d', '#1f5c47', flood), mix('#8f4a33', '#b95b3c', flood), clay),
+    apron: mix(mix('#1c4637', '#134233', flood), mix('#72392a', '#96482f', flood), clay),
+    line: mix('#c9d1cc', '#f2f3ef', flood),
+    lampOff: '#2c332f',
+    lampOn: '#fff4de',
+    skyTop: '#060e0b',
+    skyMid: mix('#10241c', '#081611', flood),
+    skyLow: mix('#081611', '#4a3b27', dusk)
   }
 }
 
@@ -58,8 +59,8 @@ export function courtColours(flood: number, dusk: number) {
 export function drawPoster(w: number, h: number, progress: number): Poster {
   const aspect = w / h
   const cam = cameraAt(progress, aspect)
-  const { flood, dusk } = lightAt(progress)
-  const col = courtColours(flood, dusk)
+  const { flood, dusk, lamps: lampOn } = lightAt(progress)
+  const col = courtColours(flood, dusk, clayAt(progress))
   const px = (v: Vec3): [number, number] | null => {
     const [x, y, d] = projectPoint(v, cam, aspect)
     if (!(d > 0.5)) return null
@@ -74,11 +75,13 @@ export function drawPoster(w: number, h: number, progress: number): Poster {
   const far = px([0, 0, -500]) ?? px([500, 0, 0]) ?? px([-500, 0, 0])
   const horizon = far ? Math.max(0, far[1]) : 0
 
-  const lines = courtLines().map(([x1, z1, x2, z2, lw]) =>
-    Math.abs(x2 - x1) > Math.abs(z2 - z1)
-      ? quad(Math.min(x1, x2) - lw / 2, z1 - lw / 2, Math.max(x1, x2) + lw / 2, z1 + lw / 2)
-      : quad(x1 - lw / 2, Math.min(z1, z2) - lw / 2, x1 + lw / 2, Math.max(z1, z2) + lw / 2)
-  ).filter(Boolean)
+  const lines = courtLines().flatMap(([x1, z1, x2, z2, lw]) => {
+    const a = px([x1, 0, z1]), b = px([x2, 0, z2])
+    if (!a || !b) return []
+    const [, , d] = projectPoint([(x1 + x2) / 2, 0, (z1 + z2) / 2], cam, aspect)
+    const f = (h / 2) / Math.tan((cam.fov * Math.PI) / 360)
+    return [[a[0], a[1], b[0], b[1], r1(Math.max(1, (lw * f) / Math.max(1, d)))] as [number, number, number, number, number]]
+  })
 
   const netTop: Vec3[] = Array.from({ length: 13 }, (_, i) => {
     const x = -C.postX + (i / 12) * 2 * C.postX
@@ -95,19 +98,20 @@ export function drawPoster(w: number, h: number, progress: number): Poster {
     const a = px([x, 0, z]), b = px([x, TOWER.h, z])
     return a && b ? [[a[0], a[1], b[0], b[1]] as [number, number, number, number]] : []
   })
-  const lamps = towers.flatMap(([x, z]) => {
+  const lamps = towers.flatMap(([x, z], k) => {
     const p = px([x, TOWER.h, z])
     if (!p) return []
     const [, , d] = projectPoint([x, TOWER.h, z], cam, aspect)
-    return [[p[0], p[1], r1(Math.max(1.5, (1.3 * h) / d))] as [number, number, number]]
+    const on = lampOn[k] ?? 0
+    return [[p[0], p[1], r1(Math.max(1.5, (1.3 * h) / d)), mix(col.lampOff, col.lampOn, on), on] as [number, number, number, string, number]]
   })
   // Pools of floodlight on the court, one per tower, drawn as ellipses under the lines
-  const pools = ([[-0.5, -0.55], [0.5, -0.55], [-0.5, 0.55], [0.5, 0.55]] as const).flatMap(([fx, fz]) => {
+  const pools = ([[-0.5, -0.55], [0.5, -0.55], [-0.5, 0.55], [0.5, 0.55]] as const).flatMap(([fx, fz], k) => {
     const c = px([fx * C.doubles, 0, fz * C.half * 1.4])
     const e = px([fx * C.doubles + 6, 0, fz * C.half * 1.4])
     const n = px([fx * C.doubles, 0, fz * C.half * 1.4 + 7])
     if (!c || !e || !n) return []
-    return [[c[0], c[1], r1(Math.hypot(e[0] - c[0], e[1] - c[1]) + 1), r1(Math.hypot(n[0] - c[0], n[1] - c[1]) + 1)] as [number, number, number, number]]
+    return [[c[0], c[1], r1(Math.hypot(e[0] - c[0], e[1] - c[1]) + 1), r1(Math.hypot(n[0] - c[0], n[1] - c[1]) + 1), lampOn[k] ?? 0] as [number, number, number, number, number]]
   })
 
   return {
@@ -116,6 +120,6 @@ export function drawPoster(w: number, h: number, progress: number): Poster {
     ground: col.ground,
     apron: quad(-APRON_W / 2, -APRON_L / 2, APRON_W / 2, APRON_L / 2), apronFill: col.apron,
     court: quad(-C.doubles / 2, -C.half, C.doubles / 2, C.half), courtFill: col.court,
-    lines, lineFill: col.line, net, band, posts, poles, lamps, lampFill: col.lamp, flood, pools
+    lines, lineFill: col.line, net, band, posts, poles, lamps, flood, pools
   }
 }

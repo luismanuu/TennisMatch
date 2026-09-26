@@ -65,11 +65,11 @@ interface Key { p: number; yaw: number; elev: number; dist: number; ty: number; 
  */
 export const SHOTS: readonly Key[] = [
   { p: 0, yaw: -0.5, elev: 0.22, dist: 44, ty: 0, tz: 0.8, sx: 0.32 },
-  { p: 0.12, yaw: -0.5, elev: 0.22, dist: 44, ty: 0, tz: 0.8, sx: 0.32 },
-  { p: 0.38, yaw: -1.35, elev: 0.3, dist: 37, ty: 0.3, tz: 0, sx: 0.16 },
-  { p: 0.66, yaw: -1.57, elev: 1.18, dist: 38, ty: 0, tz: 0, sx: 0.2 },
-  { p: 0.78, yaw: -0.78, elev: 0.92, dist: 46, ty: 0, tz: -0.3, sx: 0.22 },
-  { p: 0.9, yaw: -0.08, elev: 0.62, dist: 44, ty: 0, tz: -0.6, sx: 0.26 },
+  { p: 0.1, yaw: -0.5, elev: 0.22, dist: 44, ty: 0, tz: 0.8, sx: 0.32 },
+  { p: 0.34, yaw: -1.35, elev: 0.3, dist: 37, ty: 0.3, tz: 0, sx: 0.16 },
+  { p: 0.6, yaw: -1.57, elev: 1.18, dist: 38, ty: 0, tz: 0, sx: 0.2 },
+  { p: 0.72, yaw: -0.78, elev: 0.92, dist: 46, ty: 0, tz: -0.3, sx: 0.22 },
+  { p: 0.84, yaw: -0.08, elev: 0.62, dist: 44, ty: 0, tz: -0.6, sx: 0.26 },
   { p: 1, yaw: -0.08, elev: 0.62, dist: 44, ty: 0, tz: -0.6, sx: 0.26 }
 ]
 
@@ -99,7 +99,7 @@ export function cameraAt(progress: number, aspect: number): CameraPose {
   ]
   // Wide frames push the court right of the copy; phones lift it above the copy
   const wide = Math.min(1, Math.max(0, (a - 1.1) / 0.5))
-  const shift: [number, number] = [lerp(k0.sx, k1.sx, t) * wide, 0.22 * Math.min(1, narrow / 0.6)]
+  const shift: [number, number] = [lerp(k0.sx, k1.sx, t) * wide, 0.3 * Math.min(1, narrow / 0.6)]
   return { position, target, fov, shift }
 }
 
@@ -127,7 +127,9 @@ export function projectPoint(point: Vec3, cam: CameraPose, aspect: number): [num
 // ── Light ──────────────────────────────────────────────────────────────────
 
 export interface Light {
-  /** 0 dusk only … 1 floodlights fully on. */
+  /** Each floodlight tower, 0 off … 1 on, powering up one after another. */
+  lamps: [number, number, number, number]
+  /** Mean of the four towers: how lit the court is overall. */
   flood: number
   /** How much of the last daylight is left in the sky, 1 … 0. */
   dusk: number
@@ -135,27 +137,94 @@ export interface Light {
   exposure: number
 }
 
-/** Floodlights come up between these scroll positions, the way a stadium powers on. */
-export const FLOOD = { start: 0.2, full: 0.55 } as const
+/** The floodlights power on one tower at a time during the SR chapter's approach. */
+export const FLOOD = { start: 0.13, step: 0.05, ramp: 0.07 } as const
+export const FLOOD_FULL = FLOOD.start + 3 * FLOOD.step + FLOOD.ramp
 
 /** Scroll progress → light. Monotonic: scrolling on never dims the court. */
 export function lightAt(progress: number): Light {
   const p = clamp01(progress)
-  const flood = easeInOut((p - FLOOD.start) / (FLOOD.full - FLOOD.start))
-  const dusk = 1 - easeInOut(p / 0.8)
-  return { flood, dusk, exposure: 0.82 + 0.3 * flood }
+  const lamps = [0, 1, 2, 3].map(k => easeInOut((p - (FLOOD.start + k * FLOOD.step)) / FLOOD.ramp)) as Light['lamps']
+  const flood = (lamps[0] + lamps[1] + lamps[2] + lamps[3]) / 4
+  const dusk = 1 - easeInOut(p / 0.7)
+  return { lamps, flood, dusk, exposure: 1 + 0.15 * flood }
+}
+
+/**
+ * A band of light sweeping across the court as the towers come up: its position along
+ * the court (0 far baseline … 1 near baseline) and its strength (0 outside the window).
+ */
+export function sweepAt(progress: number): { at: number; strength: number } {
+  const p = clamp01(progress)
+  const t = (p - FLOOD.start) / (FLOOD_FULL - FLOOD.start)
+  if (!(t > 0 && t < 1)) return { at: t <= 0 ? 0 : 1, strength: 0 }
+  return { at: easeInOut(t), strength: Math.sin(Math.PI * t) }
+}
+
+/** The court resurfaced from hard court to clay while the confirmation chapter arrives. */
+export const CLAY = { start: 0.42, end: 0.56 } as const
+export function clayAt(progress: number): number {
+  return easeInOut((clamp01(progress) - CLAY.start) / (CLAY.end - CLAY.start))
+}
+
+/**
+ * The net settling after the resurfacing: extra sag in metres at the centre, a damped
+ * sway that starts and ends at rest and never exceeds `NET_SWAY`.
+ */
+export const NET_SWAY = 0.05
+export const NET = { start: 0.46, end: 0.64 } as const
+export function netSettle(progress: number): number {
+  const u = clamp01((clamp01(progress) - NET.start) / (NET.end - NET.start))
+  if (u <= 0 || u >= 1) return 0
+  return NET_SWAY * Math.sin(5 * Math.PI * u) * Math.exp(-4 * u) * (1 - u)
+}
+
+/** Dust in the light beams: how visible it is (it rises with the scroll through the last chapter). */
+export const MOTES = { start: 0.66, full: 0.78 } as const
+export function motesAt(progress: number): number {
+  return easeInOut((clamp01(progress) - MOTES.start) / (MOTES.full - MOTES.start))
+}
+
+/**
+ * One mote's position in the beam under tower corner (sx, sz): it rises through the cone
+ * as the visitor scrolls, wrapping at the top, and never leaves the cone.
+ */
+export function motePosition(seed: number, progress: number, tower: { x: number; z: number; h: number }): Vec3 {
+  const r = (n: number) => { const x = Math.sin(seed * 12.9898 + n * 78.233) * 43758.5453; return x - Math.floor(x) }
+  const lift = (r(1) + clamp01(progress) * 1.6) % 1
+  const y = 0.4 + lift * (tower.h - 1.5)
+  // The cone narrows toward the lamp: radius shrinks with height
+  const radius = 5.5 * (1 - y / tower.h) + 0.4
+  const ang = r(2) * Math.PI * 2
+  const d = Math.sqrt(r(3)) * radius
+  const t = y / tower.h
+  const cx = tower.x * t, cz = tower.z * t
+  return [cx + Math.cos(ang) * d, y, cz + Math.sin(ang) * d]
+}
+
+// ── Chalk lines drawn at first paint ───────────────────────────────────────
+
+/** The lines draw themselves once, as the page first appears: shared by the SVG (CSS) and WebGL. */
+export const DRAW = { delay: 150, dur: 650, stagger: 60 } as const
+export const DRAW_TOTAL = DRAW.delay + DRAW.dur + DRAW.stagger * 10
+
+/** How much of line k (of n) is drawn `elapsed` ms after first paint, eased out. */
+export function lineDraw(k: number, elapsed: number): number {
+  const t = (fin(elapsed) - DRAW.delay - k * DRAW.stagger) / DRAW.dur
+  const x = clamp01(t)
+  return 1 - Math.pow(1 - x, 3)
 }
 
 // ── Copy chapters ──────────────────────────────────────────────────────────
 
 /** Each chapter holds fully between `from` and `to`; it crosses with its neighbours over `FADE`. */
 export const CHAPTERS: ReadonlyArray<{ from: number; to: number }> = [
-  { from: 0, to: 0.13 },
-  { from: 0.27, to: 0.4 },
-  { from: 0.54, to: 0.67 },
-  { from: 0.81, to: 1 }
+  { from: 0, to: 0.1 },
+  { from: 0.22, to: 0.38 },
+  { from: 0.5, to: 0.66 },
+  { from: 0.78, to: 1 }
 ]
-export const FADE = 0.07
+export const FADE = 0.05
 
 /**
  * How visible each chapter of the hero copy is at a scroll progress, 0..1. The first
@@ -173,6 +242,14 @@ export function chaptersAt(progress: number, chapters = CHAPTERS, fade = FADE): 
     const out = last ? 1 : clamp01(((c.to + f) - p) / f)
     return easeInOut(Math.min(inn, out))
   })
+}
+
+/** Progress through chapter i, 0 as it starts to arrive … 1 as it starts to leave. */
+export function chapterLocal(progress: number, i: number, chapters = CHAPTERS, fade = FADE): number {
+  const c = chapters[i]
+  if (!c) return 0
+  const a = c.from - (i === 0 ? 0 : fade)
+  return clamp01((clamp01(progress) - a) / Math.max(1e-6, c.to - a))
 }
 
 // ── Numbers ────────────────────────────────────────────────────────────────

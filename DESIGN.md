@@ -21,6 +21,8 @@ colors:
   court-apron: "#134233"
   court-ground: "#0a1511"
   court-line: "#eef0ea"
+  court-clay: "#b95b3c"
+  court-clay-apron: "#96482f"
   floodlight: "#fff4de"
   day: "#f4f5f0"
   day-raise: "#ffffff"
@@ -155,18 +157,25 @@ Solid header with a Chalk hairline: brand in Archivo 700 with the amber mark, li
 
 ## The court (landing hero)
 
-`components/court/Hero.vue`, `utils/courtShot.ts` (pure camera, projection, light, chapters, count-up, device tiers; property-tested in `tests/design/courtShot.test.ts`), `utils/courtPoster.ts` (the court as SVG through the same camera and light), `lib/court/courtScene.ts` (three.js, its own lazy chunk).
+`components/court/Hero.vue`, `utils/courtShot.ts` (pure camera, projection, light, chapters, the four moments, count-up, device tiers; property-tested in `tests/design/courtShot.test.ts`), `utils/courtPoster.ts` (the court as SVG through the same camera and light), `lib/court/courtScene.ts` (three.js, its own lazy chunk).
 
-- **The court is the object.** A regulation court with chalk lines, a sagging net, metal posts and four slender floodlight towers on a dark ground. Nothing else: no stands, no crowd, no players, no ball.
-- **Camera choreography.** Four held shots and slow moves between them, driven only by scroll: a low three-quarter at dusk (the court to the right of the headline), a profile along the net, the court from above like a plan, and a high end-on view. Moves use a quintic in-out ease (flat at both ends, no jolts). A lens shift places the court clear of the copy: to the right on wide frames, above it on phones. The whole court stays in frame at every scroll position and aspect (a property test holds this).
-- **Light.** The page opens at dusk: a last warm band at the horizon, the court holding a little of the light. Between 20% and 55% of the hero's scroll the floodlights power on: the lamps brighten, pools of warm light fall on the court, the lines go from grey to chalk white, exposure rises. Scrolling on never dims the court.
-- **Type alongside.** Four chapters, one at a time, bottom-left in large type: the headline with the two actions; "Tu nivel, en un número."; "Cuenta cuando los dos confirman."; "Rivales de tu nivel, en tu ciudad.". Each holds while the camera holds and crosses to the next with a 28px rise; two chapters are never visible together. Hidden chapters leave the focus and accessibility order.
-- **First paint is the poster.** The server HTML carries the court as SVG shapes projected through the same camera and light (a landscape and a portrait version, chosen by CSS), so the first frame and the 3D court match. After `load` and an idle callback, `courtTier()` picks `full` (antialiased, DPR ≤ 2), `lite` (DPR ≤ 1.25) or `static`. No WebGL, a software renderer, reduced motion, Data Saver, 2G, under 4 GB of memory or under 4 cores keep the poster, which still follows the camera and the light as you scroll. `?court=full|lite|static` overrides for QA.
-- **On demand.** The scene renders one frame per scroll or size change, and none while off screen.
-- **Reduced motion.** No pin: the lit court as a still, then the four chapters in reading order.
+- **The court is the object.** A regulation court with chalk lines, a sagging net, metal posts and four slender floodlight towers on a dark ground. No stands, no crowd, no players, no ball.
+- **Pacing: confident, not floaty.** The hero is 300vh (270vh on phones), the scroll smoothing half-life is 55ms, chapters cross in 5% of the hero's scroll with a 20px rise. The camera holds four shots (low three-quarter, profile along the net, plan from above, high end-on) and moves between them with a quintic in-out ease. A lens shift keeps the court clear of the copy: right of it on wide frames, above it on phones. The whole court stays in frame at every scroll position and aspect.
+- **One moment per chapter**, choreographed with the camera, never constant noise:
+  1. **Chalk.** On first paint the eleven lines draw themselves, one after another (150ms delay, 650ms each, 60ms apart, ease-out). The poster does it in CSS (`stroke-dashoffset`, no JS), the 3D court continues from the same clock (`lineDraw`, time since first paint), and a poster swapped in after mount picks up where the first left off.
+  2. **Floodlights.** As the SR chapter arrives, the four towers power on one by one (far left, far right, near left, near right; `lightAt().lamps`), each lamp face, halo and pool of light coming up in turn, while a soft band of light sweeps across the court (`sweepAt`). In the copy, the seven levels light up in order.
+  3. **Clay.** As the confirmation chapter arrives, the court is resurfaced from hard court to clay (`clayAt`, colour crossfade under the lights), and the net sways and settles (`netSettle`, at most 5cm, starting and ending at rest).
+  4. **Dust in the beams.** In the last chapter a few hundred motes rise through the four light cones as the visitor scrolls (`motePosition`, scroll-driven, not timed; 320 on the full tier, 120 on lite; not drawn on the poster).
+- **Light.** The page opens at dusk and is lit enough to read the court (exposure 1.0, the paint holding some of the last light); the towers take it to full floodlight (exposure 1.15). Scrolling on never dims a tower.
+- **First paint is the poster** (server HTML, a landscape and a portrait version chosen by CSS), drawn through the same camera and light: it shows the towers powering on and the clay too. After `load` and an idle callback, `courtTier()` picks `full` (DPR ≤ 1.75 desktop, ≤ 1.5 phones, MSAA off on phones), `lite` (DPR 1) or `static` (the poster keeps following the scroll). No WebGL, a software renderer, reduced motion, Data Saver, 2G, under 4 GB or under 4 cores keep the poster. `?court=full|lite|static` overrides for QA.
+- **Cost.** A frame is drawn only when the scroll position or size changes, or while the one-time line draw runs; identical frames are skipped. No shadows, low-segment geometry, one draw per line, four small additive pools instead of a full-court overlay, chalk widened on narrow frames so it never aliases into dashes.
+- **Reduced motion.** No pin, the lines already drawn: the lit court as a still with the headline and actions over it, then the other chapters in reading order.
+
+### Landing voice
+The landing talks like a person, not a spec sheet. Neutral tuteo, short sentences, what the player gets in their words. No acronyms without their meaning: "SR" does not appear on the landing (it is "tu nivel"; tier ranges are "puntos"). "Partido competitivo confirmado" is "cuando tú y tu rival confirman el resultado de un partido que cuenta para el ranking". No stacked noun phrases, no marketing filler, and every claim is one the product keeps (the monthly decay is "si juegas menos de dos partidos al mes, baja un poco" because that is the rule).
 
 ### Below the hero
-Tiers as a typographic scale ("Siete niveles. Un solo número."), three steps with large muted numerals (order is information here), the features as a two-column read-down list, and a centered close ("Tu nombre, en el ranking.") with the lamp button. Sections rise 28px into view once, the first time they enter (`composables/useReveal.ts`, one IntersectionObserver). The hidden starting state exists only after the script arms, so without JS or with reduced motion every section is simply there, and a section never fades out again.
+Tiers as a typographic scale ("Siete niveles para saber dónde estás.", ranges in "puntos"), three steps with large muted numerals (order is information here), the features as a two-column read-down list ("Así funciona."), and a centered close ("Tu nombre, en el ranking.") with the lamp button. Sections rise 28px into view once, the first time they enter (`composables/useReveal.ts`, one IntersectionObserver). The hidden starting state exists only after the script arms, so without JS or with reduced motion every section is simply there, and a section never fades out again.
 
 ## Inicio
 
@@ -195,6 +204,8 @@ A greeting in Display L with the city and the date beneath. Then the player's le
 - **Don't** put a WebGL canvas anywhere but the landing hero, or in the critical path.
 - **Don't** fly the camera through the stadium or let the visitor spin it: it holds product shots.
 - **Don't** add a crowd or stands around the court.
+- **Don't** run more than one moment at a time on the court, or loop any of them.
+- **Don't** use jargon on the landing (SR, tier, matchmaking, decay, brackets) without saying it the way a player would.
 - **Don't** download textures or models; draw them in code.
 - **Don't** light more than one amber lamp per view.
 
@@ -202,4 +213,5 @@ A greeting in Display L with the city and the date beneath. Then the player's le
 
 - Phase 1 "Tablero" (f972ded): an enamel club scoreboard with flip plates. The CEO liked it and asked for videogame-level visuals.
 - Phase 1b "Broadcast" (d38586e): a TV-broadcast layer with a score bug, a rally with Hawk-Eye trails and a crowd. The CEO: the court is good, but the product has no live points, so the scoreboard language misrepresents it; he wants Apple-level UI/UX luxury.
-- Phase 1c "Night Court" (this file): the court kept as the object; scoreboard, plates, rally and crowd removed; the UI rebuilt on type, space, light and motion.
+- Phase 1c "Night Court": the court kept as the object; scoreboard, plates, rally and crowd removed; the UI rebuilt on type, space, light and motion.
+- Phase 1c r2 (this file): the CEO found the court slow and wanted more happening at each change. Tighter pacing, lower render cost, one moment per chapter (chalk, floodlights, clay, dust), a brighter dusk, a solid floor under the copy on phones, and the landing rewritten in a player's words.

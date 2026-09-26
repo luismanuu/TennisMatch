@@ -15,6 +15,7 @@
           class="ch__poster"
           :class="p.cls"
           :viewBox="`0 0 ${p.poster.w} ${p.poster.h}`"
+          :style="p.elapsed ? { '--elapsed': `${p.elapsed}ms` } : undefined"
           preserveAspectRatio="xMidYMid slice"
           aria-hidden="true"
           focusable="false"
@@ -39,16 +40,23 @@
           <line v-for="(l, i) in p.poster.poles" :key="`t${i}`" :x1="l[0]" :y1="l[1]" :x2="l[2]" :y2="l[3]" stroke="#1e2b26" stroke-width="2" />
           <polygon :points="p.poster.apron" :fill="p.poster.apronFill" />
           <polygon :points="p.poster.court" :fill="p.poster.courtFill" />
-          <g :opacity="p.poster.flood">
-            <ellipse v-for="(e, i) in p.poster.pools" :key="`o${i}`" :cx="e[0]" :cy="e[1]" :rx="e[2]" :ry="e[3]" :fill="`url(#pool-${p.cls})`" />
-          </g>
-          <polygon v-for="(l, i) in p.poster.lines" :key="`c${i}`" :points="l" :fill="p.poster.lineFill" />
+          <ellipse v-for="(e, i) in p.poster.pools" :key="`o${i}`" :cx="e[0]" :cy="e[1]" :rx="e[2]" :ry="e[3]" :fill="`url(#pool-${p.cls})`" :opacity="e[4]" />
+          <!-- Chalk lines draw themselves once, in CSS, from the first paint -->
+          <line
+            v-for="(l, i) in p.poster.lines"
+            :key="`c${i}`"
+            class="ch__chalk"
+            :style="{ '--i': i }"
+            :x1="l[0]" :y1="l[1]" :x2="l[2]" :y2="l[3]"
+            :stroke="p.poster.lineFill" :stroke-width="l[4]"
+            pathLength="1"
+          />
           <polygon :points="p.poster.net" fill="#0b1a14" opacity="0.75" />
           <polyline :points="p.poster.band" fill="none" :stroke="p.poster.lineFill" stroke-width="2" />
           <line v-for="(l, i) in p.poster.posts" :key="`p${i}`" :x1="l[0]" :y1="l[1]" :x2="l[2]" :y2="l[3]" stroke="#1e2b26" stroke-width="3" />
           <g v-for="(l, i) in p.poster.lamps" :key="`l${i}`">
-            <circle :cx="l[0]" :cy="l[1]" :r="l[2] * 5" :fill="`url(#halo-${p.cls})`" :opacity="p.poster.flood" />
-            <rect :x="l[0] - l[2]" :y="l[1] - l[2] / 2" :width="l[2] * 2" :height="l[2]" :fill="p.poster.lampFill" />
+            <circle :cx="l[0]" :cy="l[1]" :r="l[2] * 5" :fill="`url(#halo-${p.cls})`" :opacity="l[4]" />
+            <rect :x="l[0] - l[2]" :y="l[1] - l[2] / 2" :width="l[2] * 2" :height="l[2]" :fill="l[3]" />
           </g>
         </svg>
         <canvas v-if="tier === 'full' || tier === 'lite'" ref="canvas" class="ch__canvas" aria-hidden="true" />
@@ -63,6 +71,10 @@
         <div v-for="(c, i) in CHAPTER_COPY" :key="c.title" class="ch__chapter" :style="chapterStyle(i + 1)" :aria-hidden="reduced ? undefined : 'true'">
           <h2 class="t-display-l">{{ c.title }}</h2>
           <p class="t-lede">{{ c.body }}</p>
+          <!-- Chapter 1's moment in the copy: the seven levels, filled as the floodlights come up -->
+          <ol v-if="i === 0" class="tier-track" :style="{ '--fill': tierFill }">
+            <li v-for="(t, k) in TIERS" :key="t.tier" :class="{ 'is-on': k / (TIERS.length - 1) <= Number(tierFill) + 1e-6 }">{{ t.name }}</li>
+          </ol>
         </div>
       </div>
     </div>
@@ -81,21 +93,24 @@
  * everything else keeps the poster, which follows the same camera and light.
  * Reduced motion: no pin, the lit court as a still, the copy in reading order.
  */
-import { chaptersAt, CHAPTERS, courtTier, type CourtTier } from '~/utils/courtShot'
+import { chapterLocal, chaptersAt, CHAPTERS, courtTier, DRAW_TOTAL, type CourtTier } from '~/utils/courtShot'
+import { TIERS } from '~/utils/tiers'
 import { drawPoster } from '~/utils/courtPoster'
 import type { CourtScene } from '~/lib/court/courtScene'
 
-// Product truth only: what the product records and computes
+// Product truth only, in a player's words: what the product records and computes
 const CHAPTER_COPY = [
-  { title: 'Tu nivel, en un número.', body: 'Cada partido competitivo confirmado mueve tu SR. Siete niveles, de Bronce a Gran Maestro.' },
-  { title: 'Cuenta cuando los dos confirman.', body: 'Uno propone el resultado y el otro lo confirma o lo corrige. Así el ranking refleja lo que pasó en la cancha.' },
-  { title: 'Rivales de tu nivel, en tu ciudad.', body: 'Te sugerimos oponentes por nivel, ciudad y actividad reciente. Y torneos cuando quieras más.' }
+  { title: 'Tu nivel, en un número.', body: 'Cuando tú y tu rival confirman el resultado de un partido que cuenta para el ranking, tu nivel sube o baja. Hay siete niveles, de Bronce a Gran Maestro.' },
+  { title: 'Solo cuenta si los dos están de acuerdo.', body: 'Uno anota el resultado y el otro lo confirma o lo corrige. Lo que ves en el ranking es lo que pasó en la cancha.' },
+  { title: 'Rivales de tu nivel, en tu ciudad.', body: 'Te mostramos jugadores de tu nivel que juegan cerca y seguido. Y cuando quieras más, hay torneos.' }
 ]
 
 const stage = ref<HTMLElement | null>(null)
 const frame = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
-const { progress, reduced } = useScrub(stage, { mode: 'pinned', halfLife: 110, initial: 0, reducedValue: 1 })
+const { progress, reduced } = useScrub(stage, { mode: 'pinned', halfLife: 55, initial: 0, reducedValue: 1 })
+// The tier track fills with chapter 1's own progress, while the towers power on
+const tierFill = computed(() => (reduced.value ? 1 : Math.min(1, chapterLocal(progress.value, 1) * 1.25)).toFixed(3))
 
 const visibility = computed(() => (reduced.value ? CHAPTERS.map(() => 1) : chaptersAt(progress.value)))
 const chapterStyle = (i: number) => {
@@ -106,7 +121,7 @@ const chapterStyle = (i: number) => {
   const dir = progress.value < (c.from + c.to) / 2 ? 1 : -1
   return {
     opacity: v.toFixed(3),
-    transform: `translate3d(0, ${((1 - v) * 28 * dir).toFixed(1)}px, 0)`,
+    transform: `translate3d(0, ${((1 - v) * 20 * dir).toFixed(1)}px, 0)`,
     visibility: v <= 0.001 ? ('hidden' as const) : undefined,
     pointerEvents: v < 0.6 ? ('none' as const) : undefined
   }
@@ -118,17 +133,24 @@ const live = ref(false)
 const size = ref<{ w: number; h: number } | null>(null)
 let frozen: ReturnType<typeof drawPoster> | null = null
 
+// The measured poster replaces the server ones after mount: it carries how long ago the
+// page first painted, so its chalk lines pick up the draw where the first poster left it
+const fitElapsed = ref(0)
 const posters = computed(() => {
-  if (live.value && frozen) return [{ cls: 'is-fit', poster: frozen }]
+  if (live.value && frozen) return [{ cls: 'is-fit', poster: frozen, elapsed: DRAW_TOTAL }]
   const p = progress.value
   if (!size.value) {
     return [
-      { cls: 'is-wide', poster: drawPoster(1280, 736, p) },
-      { cls: 'is-tall', poster: drawPoster(390, 780, p) }
+      { cls: 'is-wide', poster: drawPoster(1280, 736, p), elapsed: 0 },
+      { cls: 'is-tall', poster: drawPoster(390, 780, p), elapsed: 0 }
     ]
   }
-  return [{ cls: 'is-fit', poster: drawPoster(size.value.w, size.value.h, p) }]
+  return [{ cls: 'is-fit', poster: drawPoster(size.value.w, size.value.h, p), elapsed: fitElapsed.value }]
 })
+const sinceFirstPaint = () => {
+  const fcp = performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? 0
+  return Math.max(0, performance.now() - fcp)
+}
 
 let scene: CourtScene | null = null
 let raf = 0
@@ -140,7 +162,10 @@ const requestRender = () => {
   if (!scene || raf || !visible) return
   raf = requestAnimationFrame(() => {
     raf = 0
-    scene?.render(progress.value)
+    const t = reduced.value ? DRAW_TOTAL : sinceFirstPaint()
+    scene?.render(progress.value, t)
+    // The one-time line draw needs frames until it finishes; after that, only scroll does
+    if (t < DRAW_TOTAL) requestRender()
   })
 }
 watch(progress, requestRender)
@@ -198,7 +223,7 @@ async function upgrade() {
     canvas.value.addEventListener('webglcontextlost', (ev) => { ev.preventDefault(); teardown(); tier.value = 'static' }, { once: true })
     scene = createCourtScene(canvas.value, chosen)
     measure()
-    scene.render(progress.value)
+    scene.render(progress.value, reduced.value ? DRAW_TOTAL : sinceFirstPaint())
     frozen = size.value ? drawPoster(size.value.w, size.value.h, progress.value) : null
     live.value = true
   } catch (err) {
@@ -209,6 +234,7 @@ async function upgrade() {
 }
 
 onMounted(() => {
+  fitElapsed.value = reduced.value ? DRAW_TOTAL : Math.round(sinceFirstPaint())
   measure()
   if (frame.value) {
     resizeObs = new ResizeObserver(measure)
@@ -238,7 +264,7 @@ onBeforeUnmount(() => {
 /* Full-bleed: the court is wider than the 1280px shell. The hero also tucks up under the
    shell's top padding so its first frame starts right under the header. */
 .ch {
-  position: relative; height: 460vh;
+  position: relative; height: 300vh;
   width: 100vw; margin-inline: calc(50% - 50vw);
   margin-top: calc(-1 * (var(--shell-top) - var(--t-nav-h) - env(safe-area-inset-top, 0px)));
   --pin-h: calc(100svh - var(--t-nav-h) - env(safe-area-inset-top, 0px));
@@ -249,6 +275,20 @@ onBeforeUnmount(() => {
 .ch__poster.is-tall { display: none; }
 @media (max-width: 767px) { .ch__poster.is-wide { display: none; } .ch__poster.is-tall { display: block; } }
 .ch__canvas { opacity: 0; }
+/* Chalk lines: drawn once from the first paint (DRAW in utils/courtShot.ts: 150ms delay, 650ms each, 60ms apart) */
+.ch__chalk { stroke-linecap: butt; }
+@media (prefers-reduced-motion: no-preference) {
+  .ch__chalk {
+    stroke-dasharray: 1; stroke-dashoffset: 1;
+    animation: ch-draw 650ms cubic-bezier(0.33, 1, 0.68, 1) forwards;
+    animation-delay: calc(150ms + var(--i) * 60ms - var(--elapsed, 0ms));
+  }
+}
+@keyframes ch-draw { to { stroke-dashoffset: 0; } }
+/* Chapter 1: the seven levels, lit in order as the chapter plays */
+.tier-track { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; font-weight: 550; }
+.tier-track li { color: rgba(242, 243, 239, 0.4); transition: color 240ms var(--t-ease); }
+.tier-track li.is-on { color: var(--t-ink); }
 .is-live .ch__canvas { opacity: 1; }
 /* A low wash so large type reads over the court, and the court melts into the page below */
 .ch__scrim {
@@ -283,11 +323,12 @@ onBeforeUnmount(() => {
 .ch.is-static .ch__chapter:not(.ch__chapter--intro) { position: static; max-width: 1280px; margin: 0 auto; padding: 56px var(--gutter) 0; }
 
 @media (max-width: 767px) {
-  .ch { height: 400vh; }
+  .ch { height: 270vh; }
   .ch__chapter { bottom: 32px; gap: 16px; }
   .ch__chapter--intro { gap: 18px; }
+  /* Phones: the copy sits on a solid floor, so large type never crosses the court */
   .ch__scrim {
-    background: linear-gradient(180deg, rgba(11, 24, 19, 0) 30%, rgba(11, 24, 19, 0.7) 62%, #0b1813 100%);
+    background: linear-gradient(180deg, rgba(11, 24, 19, 0) 26%, rgba(11, 24, 19, 0.86) 44%, #0b1813 54%, #0b1813 100%);
   }
   .ch.is-static { --still-h: calc(100svh - var(--t-nav-h)); }
   .ch.is-static .ch__chapter--intro { transform: translateY(calc(-100% - 32px)); }

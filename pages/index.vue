@@ -192,7 +192,7 @@
       <CourtHero>
         <template #intro>
           <h1 id="landing-title" class="t-display-xl landing-title">Juega. Confirma. Sube.</h1>
-          <p class="t-lede">Registra tus partidos, sigue tu nivel SR y encuentra rivales de tu nivel en tu ciudad. Rankings y torneos para jugadores amateur de Ecuador.</p>
+          <p class="t-lede">Anota tus partidos, mira cómo sube tu nivel y encuentra rivales de tu nivel en tu ciudad. Hecho para el tenis amateur de Ecuador.</p>
           <div class="landing-actions">
             <NuxtLink to="/sign-up" class="t-btn t-btn--lamp">
               Crear cuenta gratis
@@ -205,13 +205,13 @@
 
       <section class="tiers t-reveal" aria-labelledby="tiers-title">
         <div class="tiers__copy">
-          <h2 id="tiers-title" class="t-display-l">Siete niveles. Un solo número.</h2>
-          <p class="t-lede">Cada partido competitivo confirmado mueve tu SR. Tres partidos de colocación te dan tu nivel inicial.</p>
+          <h2 id="tiers-title" class="t-display-l">Siete niveles para saber dónde estás.</h2>
+          <p class="t-lede">Tus tres primeros partidos te ubican en un nivel. Desde ahí, cada partido que cuenta para el ranking te acerca al siguiente.</p>
         </div>
-        <ol class="tier-scale" aria-label="Niveles por puntos SR">
+        <ol class="tier-scale" aria-label="Niveles y sus puntos">
           <li v-for="tier in tiersTopDown" :key="tier.tier" class="tier-scale__rung">
             <span class="tier-scale__name">{{ tierName(tier.tier) }}</span>
-            <span class="tier-scale__range num">{{ tier.minElo.toLocaleString('es-EC') }}{{ tier.maxElo === Infinity ? ' o más' : ` – ${tier.maxElo.toLocaleString('es-EC')}` }} <abbr title="Skill Rating">SR</abbr></span>
+            <span class="tier-scale__range num">{{ tier.minElo.toLocaleString('es-EC') }}{{ tier.maxElo === Infinity ? ' o más' : ` – ${tier.maxElo.toLocaleString('es-EC')}` }} puntos</span>
           </li>
         </ol>
       </section>
@@ -229,7 +229,7 @@
 
       <!-- What the product does, read down, not a grid of feature cards -->
       <section class="rules t-reveal" aria-labelledby="features-title">
-        <h2 id="features-title" class="t-display-l rules__title">Todo lo que necesitas para competir.</h2>
+        <h2 id="features-title" class="t-display-l rules__title">Así funciona.</h2>
         <dl class="rules__table">
           <div v-for="group in featureGroups" :key="group.title" class="rules__row">
             <dt class="rules__name">{{ group.title }}</dt>
@@ -243,7 +243,7 @@
 
       <section class="close t-reveal" aria-labelledby="close-title">
         <h2 id="close-title" class="t-display-xl">Tu nombre, en el ranking.</h2>
-        <p class="t-lede">Es gratis. Crea tu cuenta y registra tu primer partido hoy.</p>
+        <p class="t-lede">Es gratis. Crea tu cuenta y anota tu primer partido hoy.</p>
         <NuxtLink to="/sign-up" class="t-btn t-btn--lamp close__cta">
           Crear cuenta gratis
           <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
@@ -535,19 +535,19 @@ const homeStats = computed(() => [
 ])
 
 const steps = [
-  { title: 'Crea tu cuenta', detail: 'Con tu email, en menos de un minuto.' },
-  { title: 'Completa tu perfil', detail: 'Ciudad, categoría y nivel de juego.' },
-  { title: 'Juega tus partidos de colocación', detail: 'Obtén tu ranking inicial y empieza a subir.' }
+  { title: 'Crea tu cuenta', detail: 'Solo necesitas tu correo. Toma menos de un minuto.' },
+  { title: 'Cuéntanos dónde juegas', detail: 'Tu ciudad y tu categoría, para mostrarte rivales cerca.' },
+  { title: 'Juega tus tres primeros partidos', detail: 'Con ellos te damos tu nivel inicial. Desde ahí, a subir.' }
 ]
 
-// Guest landing feature groups (copy kept from the previous landing, regrouped as lists)
+// What the product does, in a player's words (landing copy pass, 2026-09-25)
 const featureGroups = [
-  { title: 'Sistema SR (Skill Rating)', icon: 'heroicons:chart-bar', description: 'Rating dinámico con 7 tiers, de Bronce a Gran Maestro.', points: ['Partidos de colocación iniciales', 'Decay mensual para mantener actividad', 'Historial completo de cambios'] },
-  { title: 'Matchmaking', icon: 'heroicons:magnifying-glass', description: 'Oponentes por nivel, ubicación y actividad reciente.', points: ['Búsqueda por tier (2 arriba, 1 abajo)', 'Filtrado por ciudad y segmento', 'Límite de 4 partidos al mes por oponente'] },
-  { title: 'Torneos organizados', icon: 'heroicons:trophy', description: 'Competencias con brackets automáticos y seguimiento.', points: ['Brackets automáticos', 'Múltiples fases y grupos', 'Programación de partidos'] },
-  { title: 'Partidos competitivos y amistosos', icon: 'heroicons:check-badge', description: 'Solo los competitivos mueven tu SR.', points: ['Los competitivos afectan el ranking', 'Los amistosos quedan registrados sin impacto', 'Historial de ambos tipos'] },
-  { title: 'Rankings', icon: 'heroicons:bars-3-bottom-left', description: 'Global, por ciudad, segmento y tier.', points: ['Ranking global', 'Ranking por ciudad y segmento', 'Ranking por tier'] },
-  { title: 'Perfiles y estadísticas', icon: 'heroicons:user-circle', description: 'Perfiles públicos con tu progreso.', points: ['Historial de partidos competitivos', 'Gráfico de progreso SR', 'Porcentaje de victorias y rachas'] }
+  { title: 'Tu nivel', description: 'Un número que sube cuando ganas y baja cuando pierdes, con siete niveles de Bronce a Gran Maestro.', points: ['Tres partidos para ubicarte', 'Si juegas menos de dos partidos al mes, baja un poco', 'Puedes ver cómo cambió en cada partido'] },
+  { title: 'Buscar rival', description: 'Te sugerimos jugadores de tu nivel, de tu ciudad y que juegan seguido.', points: ['Rivales hasta dos niveles arriba y uno abajo', 'Filtra por ciudad', 'Hasta 4 partidos al mes con la misma persona'] },
+  { title: 'Torneos', description: 'Los organizadores arman los cuadros y los horarios. Tú solo juegas.', points: ['Cuadros que se arman solos', 'Fases y grupos', 'Horario de cada partido'] },
+  { title: 'Para el ranking o amistoso', description: 'Tú eliges. Solo los partidos para el ranking mueven tu nivel.', points: ['Los amistosos también quedan anotados', 'Ves el historial de los dos'] },
+  { title: 'Ranking', description: 'Mira dónde estás en todo el país, en tu ciudad o entre los de tu nivel.', points: ['Nacional', 'Por ciudad', 'Por nivel'] },
+  { title: 'Tu perfil', description: 'Tu historial y tu progreso, a la vista de otros jugadores.', points: ['Todos tus partidos', 'Cómo ha cambiado tu nivel', 'Cuántos ganas y tus rachas'] }
 ]
 </script>
 

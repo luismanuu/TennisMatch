@@ -1,28 +1,37 @@
 /**
- * The landing's 3D court (DESIGN.md "The court"): the court as the object, lit like
- * a product shot. Loaded only by a dynamic import after the page has painted, on
- * devices courtTier() clears, so three.js lives in its own chunk.
+ * The landing's 3D court (DESIGN.md "The court"): the court as the object, lit like a
+ * product shot, with one choreographed moment per chapter (lines drawn in chalk, towers
+ * powering on with a sweep, the resurfacing to clay while the net settles, dust in the
+ * beams). Loaded only by a dynamic import after the page has painted, on devices
+ * courtTier() clears, so three.js lives in its own chunk.
  *
- * Everything is procedural. The only textures are drawn at runtime on small canvases:
- * the acrylic grain (256×512), the floodlight pools (256×512), the net weave (32×32)
- * and a soft disc (64×64). It renders on demand: one frame per scroll or size change.
+ * Everything is procedural. Textures are drawn at runtime on small canvases: acrylic grain
+ * (256×512), one soft pool disc (128×128), the net weave (32×32). Cost is kept low: one
+ * draw per line, a capped pixel ratio (phones 1.5, desktop 1.75, lite 1), no shadows, and a
+ * frame only when the scroll position, size or the one-time line intro changes.
  */
 import {
-  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, CanvasTexture, Color, CylinderGeometry,
-  DirectionalLight, DoubleSide, Fog, Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial,
-  PerspectiveCamera, PlaneGeometry, RepeatWrapping, Scene, ShaderMaterial, SphereGeometry, SRGBColorSpace, WebGLRenderer
+  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, Color,
+  CylinderGeometry, DirectionalLight, DoubleSide, Fog, HemisphereLight, Mesh, MeshBasicMaterial, MeshLambertMaterial,
+  MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, Points, PointsMaterial, RepeatWrapping, Scene, ShaderMaterial,
+  SphereGeometry, SRGBColorSpace, WebGLRenderer
 } from 'three'
-import { TENNIS_COURT as C, cameraAt, courtLines, lightAt, netHeight } from '~/utils/courtShot'
-import { TOWER, courtColours } from '~/utils/courtPoster'
+import {
+  TENNIS_COURT as C, cameraAt, clayAt, courtLines, lightAt, lineDraw, motePosition, motesAt, netHeight, netSettle, sweepAt
+} from '~/utils/courtShot'
+import { TOWER, courtColours, mix } from '~/utils/courtPoster'
 
 export interface CourtScene {
   setSize(width: number, height: number): void
-  render(progress: number): void
+  /** Draw the court at a scroll progress; `sinceFirstPaint` (ms) drives the one-time line intro. */
+  render(progress: number, sinceFirstPaint: number): void
   dispose(): void
 }
 
 const APRON_W = C.doubles + 2 * C.runSide
 const APRON_L = 2 * (C.half + C.runBack)
+const TOWERS = [[-TOWER.x, -TOWER.z], [TOWER.x, -TOWER.z], [-TOWER.x, TOWER.z], [TOWER.x, TOWER.z]] as const
+const AIMS = [[-0.5, -0.55], [0.5, -0.55], [-0.5, 0.55], [0.5, 0.55]] as const
 
 function rand(seed: number) {
   let a = seed >>> 0
@@ -45,12 +54,12 @@ const canvasTexture = (w: number, h: number, draw: (g: CanvasRenderingContext2D)
   return t
 }
 
-/** Court paint and apron in white-balanced grey, multiplied by the material colour, with acrylic grain. */
+/** Court paint and apron in white-balanced grey, tinted by the material colour, with acrylic grain. */
 function surfaceTexture(): CanvasTexture {
   const W = 256, H = 512
   return canvasTexture(W, H, g => {
     const sx = W / APRON_W, sz = H / APRON_L
-    g.fillStyle = '#9a9a9a'
+    g.fillStyle = '#a6a6a6'
     g.fillRect(0, 0, W, H)
     g.fillStyle = '#ffffff'
     g.fillRect(C.runSide * sx, C.runBack * sz, C.doubles * sx, 2 * C.half * sz)
@@ -62,31 +71,14 @@ function surfaceTexture(): CanvasTexture {
   })
 }
 
-/** Floodlight pools: four warm ellipses where the towers aim, soft at the edges. */
-function poolTexture(): CanvasTexture {
-  const W = 256, H = 512
-  return canvasTexture(W, H, g => {
-    g.fillStyle = '#000'
-    g.fillRect(0, 0, W, H)
-    g.globalCompositeOperation = 'lighter'
-    for (const [fx, fz] of [[0.3, 0.26], [0.7, 0.26], [0.3, 0.74], [0.7, 0.74]] as const) {
-      const grd = g.createRadialGradient(fx * W, fz * H, 0, fx * W, fz * H, W * 0.62)
-      grd.addColorStop(0, 'rgba(255,232,196,0.55)')
-      grd.addColorStop(0.55, 'rgba(255,232,196,0.18)')
-      grd.addColorStop(1, 'rgba(255,232,196,0)')
-      g.fillStyle = grd
-      g.fillRect(0, 0, W, H)
-    }
-  })
-}
-
-const discTexture = () => canvasTexture(64, 64, g => {
-  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32)
+const discTexture = (size = 128, inner = 0.4) => canvasTexture(size, size, g => {
+  const c = size / 2
+  const grd = g.createRadialGradient(c, c, 0, c, c, c)
   grd.addColorStop(0, 'rgba(255,255,255,1)')
-  grd.addColorStop(0.4, 'rgba(255,255,255,0.35)')
+  grd.addColorStop(inner, 'rgba(255,255,255,0.35)')
   grd.addColorStop(1, 'rgba(255,255,255,0)')
   g.fillStyle = grd
-  g.fillRect(0, 0, 64, 64)
+  g.fillRect(0, 0, size, size)
 })
 
 const netTexture = () => {
@@ -104,8 +96,9 @@ const netTexture = () => {
 
 export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite'): CourtScene {
   const full = tier === 'full'
-  const renderer = new WebGLRenderer({ canvas, antialias: full, alpha: false, powerPreference: full ? 'high-performance' : 'default', stencil: false })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, full ? 2 : 1.25))
+  const phone = Math.min(window.innerWidth, window.innerHeight) < 768
+  const renderer = new WebGLRenderer({ canvas, antialias: full && !phone, alpha: false, powerPreference: full ? 'high-performance' : 'low-power', stencil: false })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, full ? (phone ? 1.5 : 1.75) : 1))
   renderer.outputColorSpace = SRGBColorSpace
   renderer.toneMapping = ACESFilmicToneMapping
 
@@ -118,10 +111,10 @@ export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite
   const disposables: Array<{ dispose(): void }> = []
   const keep = <T extends { dispose(): void }>(x: T): T => (disposables.push(x), x)
 
-  // Sky: deep night overhead, the last warm band of dusk at the horizon fading as the lights come up
+  // Sky: deep night overhead, the last warm band of dusk at the horizon
   const skyUniforms = { top: { value: new Color() }, mid: { value: new Color() }, low: { value: new Color() } }
   scene.add(new Mesh(
-    keep(new SphereGeometry(500, 32, 16)),
+    keep(new SphereGeometry(500, 24, 12)),
     keep(new ShaderMaterial({
       side: BackSide, depthWrite: false, fog: false, uniforms: skyUniforms,
       vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
@@ -131,10 +124,10 @@ export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite
     }))
   ))
 
-  const hemi = new HemisphereLight(0xbcd3c7, 0x0a1a14, 0.6)
+  const hemi = new HemisphereLight(0xbcd3c7, 0x0a1a14, 1)
   const key = new DirectionalLight(0xfff1dc, 0)
   key.position.set(-20, 30, -14)
-  const dusk = new DirectionalLight(0xffb27a, 0.5)
+  const dusk = new DirectionalLight(0xffb27a, 1)
   dusk.position.set(0, 4, -60)
   scene.add(hemi, key, dusk)
 
@@ -150,73 +143,153 @@ export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite
   surface.rotation.x = -Math.PI / 2
   scene.add(surface)
 
-  // Floodlight pools, added on top of the court as the lights come up
-  const poolMat = keep(new MeshBasicMaterial({ map: keep(poolTexture()), transparent: true, blending: AdditiveBlending, depthWrite: false, opacity: 0, toneMapped: true }))
-  const pools = new Mesh(keep(new PlaneGeometry(APRON_W, APRON_L)), poolMat)
-  pools.rotation.x = -Math.PI / 2
-  pools.position.y = 0.002
-  scene.add(pools)
+  // One pool of light per tower, each brightening as its tower powers on
+  const disc = keep(discTexture())
+  const poolGeo = keep(new PlaneGeometry(15, 19))
+  const poolMats = AIMS.map(() => keep(new MeshBasicMaterial({ map: disc, color: 0xffe3bd, transparent: true, blending: AdditiveBlending, depthWrite: false, opacity: 0 })))
+  AIMS.forEach(([fx, fz], k) => {
+    const m = new Mesh(poolGeo, poolMats[k])
+    m.rotation.x = -Math.PI / 2
+    m.position.set(fx * C.doubles, 0.002 + k * 0.0005, fz * C.half * 1.4)
+    scene.add(m)
+  })
 
+  // The sweep: a soft band of light crossing the court as the towers come up
+  const sweepMat = keep(new ShaderMaterial({
+    transparent: true, depthWrite: false, blending: AdditiveBlending,
+    uniforms: { at: { value: 0 }, strength: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `uniform float at; uniform float strength; varying vec2 vUv;
+      void main(){ float d = ((1.0 - vUv.y) - at) / 0.06; float a = exp(-d * d) * strength * 0.35;
+      gl_FragColor = vec4(vec3(1.0, 0.93, 0.8) * a, a); }`
+  }))
+  const sweep = new Mesh(keep(new PlaneGeometry(APRON_W, APRON_L)), sweepMat)
+  sweep.rotation.x = -Math.PI / 2
+  sweep.position.y = 0.004
+  scene.add(sweep)
+
+  // Chalk lines: one mesh per line, scaled along its length for the one-time draw
   const chalk = keep(new MeshBasicMaterial({ color: 0xeef0ea }))
-  const lines = new Group()
-  for (const [x1, z1, x2, z2, w] of courtLines()) {
-    const len = Math.hypot(x2 - x1, z2 - z1)
+  const unitBox = keep(new BoxGeometry(1, 0.004, 1))
+  const lineMeshes = courtLines().map(([x1, z1, x2, z2, w]) => {
+    const len = Math.hypot(x2 - x1, z2 - z1) + w
     const alongX = Math.abs(x2 - x1) > Math.abs(z2 - z1)
-    const m = new Mesh(keep(new BoxGeometry(alongX ? len + w : w, 0.004, alongX ? w : len + w)), chalk)
-    m.position.set((x1 + x2) / 2, 0.004, (z1 + z2) / 2)
-    lines.add(m)
+    const m = new Mesh(unitBox, chalk)
+    m.position.y = 0.006
+    scene.add(m)
+    return { m, x1, z1, x2, z2, w, len, alongX }
+  })
+  // Narrow frames see the court from far away: widen the chalk so it never breaks into dashes
+  let lineScale = 1
+  const placeLines = (sinceFirstPaint: number) => {
+    lineMeshes.forEach((l, k) => {
+      const d = lineDraw(k, sinceFirstPaint)
+      l.m.visible = d > 0.001
+      const L = l.len * d
+      // Draw from the first end toward the second
+      const sx = l.alongX ? Math.sign(l.x2 - l.x1) || 1 : 0
+      const sz = l.alongX ? 0 : Math.sign(l.z2 - l.z1) || 1
+      const x0 = l.x1 - sx * l.w / 2, z0 = l.z1 - sz * l.w / 2
+      const w = l.w * lineScale
+      l.m.scale.set(l.alongX ? L : w, 1, l.alongX ? w : L)
+      l.m.position.x = l.alongX ? x0 + sx * L / 2 : l.x1
+      l.m.position.z = l.alongX ? l.z1 : z0 + sz * L / 2
+    })
   }
-  scene.add(lines)
 
-  // Net: sagging mesh, white band, posts
-  const netGeo = keep(new PlaneGeometry(2 * C.postX, 1, 24, 1))
-  const pos = netGeo.attributes.position as BufferAttribute
-  for (let i = 0; i < pos.count; i++) pos.setY(i, pos.getY(i) > 0 ? netHeight(pos.getX(i)) : 0.02)
-  pos.needsUpdate = true
-  scene.add(new Mesh(netGeo, keep(new MeshBasicMaterial({ color: 0x0b1a14, alphaMap: keep(netTexture()), transparent: true, opacity: 0.9, side: DoubleSide, depthWrite: false }))))
-  const bandGeo = keep(new PlaneGeometry(2 * C.postX, 1, 24, 1))
+  // Net: sagging mesh and white band; the sag sways and settles after the resurfacing
+  const netGeo = keep(new PlaneGeometry(2 * C.postX, 1, 16, 1))
+  const bandGeo = keep(new PlaneGeometry(2 * C.postX, 1, 16, 1))
+  const npos = netGeo.attributes.position as BufferAttribute
   const bpos = bandGeo.attributes.position as BufferAttribute
-  for (let i = 0; i < bpos.count; i++) bpos.setY(i, netHeight(bpos.getX(i)) - (bpos.getY(i) > 0 ? 0 : 0.065))
-  bpos.needsUpdate = true
+  const top0 = Array.from({ length: npos.count }, (_, i) => npos.getY(i) > 0)
+  const btop0 = Array.from({ length: bpos.count }, (_, i) => bpos.getY(i) > 0)
+  let lastSway = Number.NaN
+  const shapeNet = (sway: number) => {
+    if (sway === lastSway) return
+    lastSway = sway
+    for (let i = 0; i < npos.count; i++) {
+      const x = npos.getX(i)
+      const bow = 1 - Math.pow(x / C.postX, 2)
+      npos.setY(i, top0[i] ? netHeight(x) - sway * bow : 0.02)
+    }
+    for (let i = 0; i < bpos.count; i++) {
+      const x = bpos.getX(i)
+      const bow = 1 - Math.pow(x / C.postX, 2)
+      bpos.setY(i, netHeight(x) - sway * bow - (btop0[i] ? 0 : 0.065))
+    }
+    npos.needsUpdate = true
+    bpos.needsUpdate = true
+  }
+  shapeNet(0)
+  scene.add(new Mesh(netGeo, keep(new MeshBasicMaterial({ color: 0x0b1a14, alphaMap: keep(netTexture()), transparent: true, opacity: 0.9, side: DoubleSide, depthWrite: false }))))
   scene.add(new Mesh(bandGeo, chalk))
   const metal = keep(new MeshStandardMaterial({ color: 0x1e2b26, metalness: 0.75, roughness: 0.32 }))
-  const postGeo = keep(new CylinderGeometry(0.045, 0.045, C.netPost + 0.02, 16))
+  const postGeo = keep(new CylinderGeometry(0.045, 0.045, C.netPost + 0.02, 10))
   for (const s of [-1, 1]) {
     const post = new Mesh(postGeo, metal)
     post.position.set(s * C.postX, (C.netPost + 0.02) / 2, 0)
     scene.add(post)
   }
 
-  // Four slender floodlight towers: the source of the light, nothing else around the court
-  const poleGeo = keep(new CylinderGeometry(0.12, 0.2, TOWER.h, 12))
+  // Four slender towers, each with its own lamp face and halo
+  const poleGeo = keep(new CylinderGeometry(0.12, 0.2, TOWER.h, 8))
   const headGeo = keep(new BoxGeometry(2.4, 1.1, 0.25))
-  const lampMat = keep(new MeshBasicMaterial({ color: 0x2c332f, toneMapped: false }))
-  const haloMat = keep(new MeshBasicMaterial({ map: keep(discTexture()), color: 0xffe8c4, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, fog: false }))
   const haloGeo = keep(new PlaneGeometry(7, 7))
-  for (const [x, z] of [[-TOWER.x, -TOWER.z], [TOWER.x, -TOWER.z], [-TOWER.x, TOWER.z], [TOWER.x, TOWER.z]] as const) {
+  const haloTex = keep(discTexture(64, 0.4))
+  const lampMats = TOWERS.map(() => keep(new MeshBasicMaterial({ color: 0x2c332f, toneMapped: false })))
+  const haloMats = TOWERS.map(() => keep(new MeshBasicMaterial({ map: haloTex, color: 0xffe8c4, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, fog: false })))
+  TOWERS.forEach(([x, z], k) => {
     const pole = new Mesh(poleGeo, metal)
     pole.position.set(x, TOWER.h / 2, z)
-    const head = new Mesh(headGeo, lampMat)
+    const head = new Mesh(headGeo, lampMats[k])
     head.position.set(x, TOWER.h + 0.4, z)
     head.lookAt(0, 0, 0)
-    const halo = new Mesh(haloGeo, haloMat)
+    const halo = new Mesh(haloGeo, haloMats[k])
     halo.position.set(x * 0.99, TOWER.h + 0.4, z * 0.99)
     halo.lookAt(0, TOWER.h, 0)
     scene.add(pole, head, halo)
+  })
+
+  // Dust in the beams: a few hundred points, lifted by the scroll through the last chapter
+  const MOTE_COUNT = full ? 320 : 120
+  const moteGeo = keep(new BufferGeometry())
+  const motePos = new Float32Array(MOTE_COUNT * 3)
+  moteGeo.setAttribute('position', new BufferAttribute(motePos, 3))
+  const moteMat = keep(new PointsMaterial({ map: keep(discTexture(32, 0.3)), color: 0xfff1dc, size: 0.32, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, blending: AdditiveBlending }))
+  const motes = new Points(moteGeo, moteMat)
+  motes.frustumCulled = false
+  scene.add(motes)
+  const placeMotes = (progress: number) => {
+    for (let i = 0; i < MOTE_COUNT; i++) {
+      const [x, z] = TOWERS[i % 4]!
+      const p = motePosition(i + 1, progress, { x, z, h: TOWER.h })
+      motePos[i * 3] = p[0]; motePos[i * 3 + 1] = p[1]; motePos[i * 3 + 2] = p[2]
+    }
+    ;(moteGeo.attributes.position as BufferAttribute).needsUpdate = true
   }
 
-  const tmp = new Color()
+  let lastKey = ''
   return {
     setSize(width, height) {
       const w = Math.max(1, Math.round(width))
       const h = Math.max(1, Math.round(height))
       aspect = w / h
+      lineScale = Math.max(1, Math.min(3, 1.5 / aspect))
       renderer.setSize(w, h, false)
+      lastKey = ''
     },
-    render(progress) {
+    render(progress, sinceFirstPaint) {
+      const introDone = lineDraw(lineMeshes.length - 1, sinceFirstPaint) >= 1
+      // Skip identical frames: same scroll position, same size, intro finished
+      const k = `${progress.toFixed(5)}|${aspect.toFixed(4)}|${introDone ? 1 : Math.round(sinceFirstPaint / 8)}`
+      if (k === lastKey) return
+      lastKey = k
+
       const cam = cameraAt(progress, aspect)
       const light = lightAt(progress)
-      const col = courtColours(light.flood, light.dusk)
+      const clay = clayAt(progress)
+      const col = courtColours(light.flood, light.dusk, clay)
       camera.fov = cam.fov
       camera.aspect = aspect
       camera.position.set(...cam.position)
@@ -233,16 +306,27 @@ export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite
       fog.color.set(col.skyMid)
       renderer.setClearColor(col.skyMid, 1)
       renderer.toneMappingExposure = light.exposure
-      hemi.intensity = 0.8 + 0.35 * light.flood
+      hemi.intensity = 1.05 + 0.25 * light.flood
       key.intensity = 1.9 * light.flood
-      dusk.intensity = 1.1 * light.dusk
+      dusk.intensity = 1.2 * light.dusk
       surfaceMat.color.set(col.court)
-      // At dusk the paint holds a little of the last light, so the court reads as a surface, not a drawing
-      surfaceMat.emissive.set(col.court).multiplyScalar(0.28 * light.dusk)
-      poolMat.opacity = 0.85 * light.flood
+      // At dusk the paint holds a little of the last light, so the court reads as a surface
+      surfaceMat.emissive.set(col.court).multiplyScalar(0.34 * light.dusk + 0.06)
+      light.lamps.forEach((on, i) => {
+        poolMats[i]!.opacity = 0.62 * on
+        lampMats[i]!.color.set(mix(col.lampOff, col.lampOn, on))
+        haloMats[i]!.opacity = 0.34 * on
+      })
+      const sw = sweepAt(progress)
+      sweep.visible = sw.strength > 0.001
+      sweepMat.uniforms.at.value = sw.at
+      sweepMat.uniforms.strength.value = sw.strength
       chalk.color.set(col.line)
-      lampMat.color.copy(tmp.set(col.lamp))
-      haloMat.opacity = 0.32 * light.flood
+      placeLines(sinceFirstPaint)
+      shapeNet(netSettle(progress))
+      const mv = motesAt(progress)
+      motes.visible = mv > 0.001
+      if (motes.visible) { moteMat.opacity = 0.7 * mv; placeMotes(progress) }
       renderer.render(scene, camera)
     },
     dispose() {
