@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { createPlayer, type Account } from '../data/matches-helpers'
 import { resetJevBreakerForTests } from '../../server/utils/jev'
-import { MODERATION_QUESTIONS, NAME_REJECTED_MESSAGE, NAME_TOO_LONG_MESSAGE } from '../../server/utils/moderation'
+import { CHAT_TOO_FAST_MESSAGE, MODERATION_QUESTIONS, NAME_REJECTED_MESSAGE, NAME_TOO_LONG_MESSAGE } from '../../server/utils/moderation'
 import { gatewayFailure, SEED, type GatewayBehaviour } from './helpers'
 import { setupJevTestApp } from './http-harness'
 
@@ -152,15 +152,26 @@ describe('chat moderation', () => {
     expect(await t.countRows('match_messages', 'id = $1', [held.id])).toBe(1)
   })
 
-  it('past 20 messages a minute, the extra messages skip moderation and publish as today, with no Jev call', async () => {
+  // Named regression (review): publishing past the limit unmoderated let a 21st message skip the check.
+  it('with moderation on, the 21st message within a minute is refused with 429 and not published, with no Jev call', async () => {
     await t.app.client.query(`delete from rate_limit_buckets where key like 'jev-chat:%'`)
     const gw = t.useGateway(moderationBody({}))
-    for (let i = 0; i < 20; i++) await send(`mensaje ${i}`)
+    for (let i = 0; i < 20; i++) expect((await send(`mensaje ${i}`)).status).toBe(200)
     expect(gw.calls).toHaveLength(20)
-    const extra = await send('mensaje 21')
+    const before = await t.countRows('match_messages', 'match_id = $1', [matchId])
+    const extra = await send('mensaje 21 ofensivo')
+    expect(extra.status).toBe(429)
+    expect(JSON.stringify(extra.body)).toContain(CHAT_TOO_FAST_MESSAGE)
     expect(gw.calls).toHaveLength(20)
-    expect((extra.body as { moderation_status: string }).moderation_status).toBe('visible')
+    expect(await t.countRows('match_messages', 'match_id = $1', [matchId])).toBe(before)
     await t.app.client.query(`delete from rate_limit_buckets where key like 'jev-chat:%'`)
+  })
+
+  it('with moderation off there is no chat limit, as today', async () => {
+    await t.app.client.query(`delete from rate_limit_buckets where key like 'jev-chat:%'`)
+    process.env.JEV_MODERATION_ENABLED = 'false'
+    t.useGateway(moderationBody({}))
+    for (let i = 0; i < 25; i++) expect((await send(`sin moderación ${i}`)).status).toBe(200)
   })
 
   const ALLOWED_KEYS = new Set(['id', 'match_id', 'player_id', 'message', 'created_at', 'moderation_status', 'player'])

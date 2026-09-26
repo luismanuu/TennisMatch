@@ -142,3 +142,4 @@ export const PLAYER_MESSAGE_COLUMNS = {
 } as const
 
 export const CHAT_MODERATION_LIMIT = { windowSeconds: 60, max: 20 }
+export const CHAT_TOO_FAST_MESSAGE = 'Estás enviando mensajes muy rápido. Espera un momento.'
