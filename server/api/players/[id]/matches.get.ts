@@ -69,6 +69,22 @@ export default defineEventHandler(async (event) => {
     const [{ n: totalMatches }] = await db.select({ n: count() }).from(matches).where(where)
 
     const rawMatches = await db.query.matches.findMany({
+      // Public route: only what the profile's history renders. location, the proposal fields and the LLM
+      // reasoning belong to the two players and stay out.
+      columns: {
+        id: true,
+        player1_id: true,
+        player2_id: true,
+        pending_player2_id: true,
+        winner_id: true,
+        tournament_id: true,
+        status: true,
+        is_competitive: true,
+        score: true,
+        played_at: true,
+        scheduled_at: true,
+        created_at: true,
+      },
       with: {
         player1: { columns: playerColumns, with: { category: { columns: categoryColumns } } },
         player2: { columns: playerColumns, with: { category: { columns: categoryColumns } } },
