@@ -35,6 +35,11 @@ export default defineNuxtConfig({
   },
 
 
+  // Nitro 2 emits one Vercel function for every route, so this cap covers the monthly-decay cron and the
+  // slowest request path alike (score approval can wait on the LLM for ~96 s). 300 s is the project's
+  // current fluid-compute default on the Pro plan, made explicit.
+  nitro: { vercel: { functions: { maxDuration: 300 } } },
+
   runtimeConfig: {
     public: {},
     openRouterApiKey: process.env.OPENROUTER_API_KEY

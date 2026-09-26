@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, exists, inArray, isNotNull, ne, not, or, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lt, ne, not, or, sql, type SQL } from 'drizzle-orm'
 import { useDb, type DbOrTx } from '../db'
 import { categories, matches, players, rating_history } from '../db/schema'
 import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayStatus } from '~/types'
@@ -520,46 +520,39 @@ export function applyDecay(currentElo: number, decayAmount: number): number {
 }
 
 /**
- * Get days remaining in current month
+ * Days left in the current UTC month
  */
 export function getDaysRemainingInMonth(): number {
   const now = new Date()
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return lastDay.getDate() - now.getDate()
+  const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+  return lastDay.getUTCDate() - now.getUTCDate()
+}
+
+// First instant of a UTC month, `offset` months from the current one.
+export function utcMonthStart(offset = 0): Date {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1))
 }
 
 /**
- * Calculate required matches for current month based on when player registered
- * If player registered mid-month, adjust requirement proportionally
+ * Matches required in the UTC month starting at `monthStart` (default: the current month). A player who registered
+ * after day 1 of that month owes a share proportional to the days left from registration, at least 1.
+ * The decay job passes the month it is closing, so it applies the requirement the player saw during that month.
  */
-export function calculateRequiredMatchesForMonth(playerCreatedAt: string | null | Date): number {
+export function calculateRequiredMatchesForMonth(playerCreatedAt: string | null | Date, monthStart: Date = utcMonthStart()): number {
   if (!playerCreatedAt) {
     return MATCHES_REQUIRED_PER_MONTH
   }
-  
-  const createdDate = typeof playerCreatedAt === 'string' ? new Date(playerCreatedAt) : playerCreatedAt
-  const now = new Date()
-  
-  // If player was created in a different month/year, use full requirement
-  if (createdDate.getMonth() !== now.getMonth() || createdDate.getFullYear() !== now.getFullYear()) {
+
+  const created = typeof playerCreatedAt === 'string' ? new Date(playerCreatedAt) : playerCreatedAt
+  const inMonth = created.getUTCFullYear() === monthStart.getUTCFullYear() && created.getUTCMonth() === monthStart.getUTCMonth()
+  if (!inMonth || created.getUTCDate() === 1) {
     return MATCHES_REQUIRED_PER_MONTH
   }
-  
-  // If created on day 1, use full requirement
-  if (createdDate.getDate() === 1) {
-    return MATCHES_REQUIRED_PER_MONTH
-  }
-  
-  // Calculate proportional requirement based on days remaining in month from registration date
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const daysInMonth = lastDayOfMonth.getDate()
-  const dayOfMonthCreated = createdDate.getDate()
-  const daysRemainingFromCreation = daysInMonth - dayOfMonthCreated + 1
-  
-  // Calculate proportional requirement (minimum 1 match)
-  const proportionalRequirement = Math.max(1, Math.round((MATCHES_REQUIRED_PER_MONTH * daysRemainingFromCreation) / daysInMonth))
-  
-  return proportionalRequirement
+
+  const daysInMonth = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0)).getUTCDate()
+  const daysRemainingFromCreation = daysInMonth - created.getUTCDate() + 1
+  return Math.max(1, Math.round((MATCHES_REQUIRED_PER_MONTH * daysRemainingFromCreation) / daysInMonth))
 }
 
 /**
@@ -589,25 +582,6 @@ export function getMonthlyDecayStatus(
     estimated_decay: estimatedDecay,
     last_decay_check: lastDecayCheck ?? undefined,
   }
-}
-
-/**
- * Check if decay should be applied (new month since last check)
- */
-export function shouldApplyDecay(lastDecayCheck: Date | null): boolean {
-  if (!lastDecayCheck) {
-    return false // First time, don't decay
-  }
-  
-  const now = new Date()
-  const lastCheckMonth = lastDecayCheck.getMonth()
-  const lastCheckYear = lastDecayCheck.getFullYear()
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear()
-  
-  // Different year or month means we should check for decay
-  return currentYear > lastCheckYear || 
-    (currentYear === lastCheckYear && currentMonth > lastCheckMonth)
 }
 
 // ============================================
@@ -1683,81 +1657,122 @@ export async function clearLlmCalculation(matchId: string, tx?: DbOrTx): Promise
     .where(eq(matches.id, matchId))
 }
 
+export type MonthlyDecayOutcome = 'decayed' | 'reset' | 'baseline' | 'skipped'
+
+// First day of the current UTC month as YYYY-MM-DD, the same format and zone as last_decay_check.
+const currentMonthStart = () => utcMonthStart().toISOString().split('T')[0]
+
 /**
- * Check and apply monthly decay for a player
+ * Apply the monthly decay to one player, at most once per calendar month (UTC).
+ *
+ * One transaction locks the player row and re-reads it, so a concurrent run (or a rating update) waits and then
+ * finds last_decay_check already in this month. Unrated players, players still in placement and deleted
+ * players are never touched. A player never checked before gets this month recorded as the baseline, with no
+ * decay: decay starts from the next month. matches_this_month was never reset for such a player, so the
+ * baseline recounts it from this month's rating history.
  */
-export async function checkAndApplyMonthlyDecay(
-  playerId: string,
-  tx?: DbOrTx
-): Promise<{ decayApplied: number; uncertaintyIncrease: number } | null> {
-  const db = tx ?? useDb()
-  const [player] = await db
-    .select({
-      id: players.id,
-      elo: players.elo,
-      mmr_uncertainty: players.mmr_uncertainty,
-      matches_this_month: players.matches_this_month,
-      last_decay_check: players.last_decay_check,
-      total_matches_played: players.total_matches_played,
-      placement_matches_completed: players.placement_matches_completed,
-      created_at: players.created_at,
-    })
-    .from(players)
-    .where(eq(players.id, playerId))
+export async function applyMonthlyDecay(
+  playerId: string
+): Promise<{ outcome: MonthlyDecayOutcome; decayApplied: number; uncertaintyIncrease: number }> {
+  const none = (outcome: MonthlyDecayOutcome) => ({ outcome, decayApplied: 0, uncertaintyIncrease: 0 })
 
-  if (!player) {
-    console.error('Failed to fetch player for decay check:', playerId)
-    return null
-  }
+  return useDb().transaction(async (tx) => {
+    const [player] = await tx
+      .select({
+        elo: players.elo,
+        mmr_uncertainty: players.mmr_uncertainty,
+        matches_this_month: players.matches_this_month,
+        last_decay_check: players.last_decay_check,
+        total_matches_played: players.total_matches_played,
+        placement_matches_completed: players.placement_matches_completed,
+        created_at: players.created_at,
+      })
+      .from(players)
+      .where(and(eq(players.id, playerId), eq(players.status, 'active'), isNull(players.deleted_at)))
+      .for('update')
 
-  // Don't apply decay to unrated players
-  if (player.total_matches_played === 0) {
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
-  }
+    if (!player || (player.total_matches_played ?? 0) === 0 || (player.placement_matches_completed ?? 0) < 3) {
+      return none('skipped')
+    }
 
-  // Don't apply decay to players still in placement matches
-  if ((player.placement_matches_completed ?? 0) < 3) {
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
-  }
+    const today = new Date().toISOString().split('T')[0]
+    const monthStart = currentMonthStart()
 
-  const lastDecayCheck = player.last_decay_check ? new Date(player.last_decay_check) : null
+    if (!player.last_decay_check) {
+      const [{ n }] = await tx
+        .select({ n: count() })
+        .from(rating_history)
+        .innerJoin(matches, eq(matches.id, rating_history.match_id))
+        .where(
+          and(
+            eq(rating_history.player_id, playerId),
+            sql`${rating_history.rating_reversed} is not true`,
+            gte(sql`coalesce(${matches.played_at}, ${rating_history.created_at})`, new Date(`${monthStart}T00:00:00Z`))
+          )
+        )
+      await tx.update(players).set({ last_decay_check: today, matches_this_month: n }).where(eq(players.id, playerId))
+      return none('baseline')
+    }
 
-  if (!shouldApplyDecay(lastDecayCheck)) {
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
-  }
+    if (player.last_decay_check >= monthStart) {
+      return none('skipped')
+    }
 
-  // Calculate required matches (proportional if registered mid-month)
-  const matchesRequired = calculateRequiredMatchesForMonth(player.created_at)
-  const matchesThisMonth = player.matches_this_month ?? 0
+    // Closing the previous month: its requirement, not this month's.
+    const matchesRequired = calculateRequiredMatchesForMonth(player.created_at, utcMonthStart(-1))
+    const matchesThisMonth = player.matches_this_month ?? 0
+    const decayAmount = calculateDecayAmount(matchesThisMonth, matchesRequired)
+    const uncertaintyIncrease = (matchesRequired - Math.min(matchesThisMonth, matchesRequired)) * 0.1
 
-  const decayAmount = calculateDecayAmount(matchesThisMonth, matchesRequired)
-  const uncertaintyIncrease = (matchesRequired - Math.min(matchesThisMonth, matchesRequired)) * 0.1
-  const today = new Date().toISOString().split('T')[0]
+    if (decayAmount === 0 && uncertaintyIncrease === 0) {
+      await tx.update(players).set({ last_decay_check: today, matches_this_month: 0 }).where(eq(players.id, playerId))
+      return none('reset')
+    }
 
-  if (decayAmount === 0 && uncertaintyIncrease === 0) {
-    // No decay needed, just update the check date and reset the month
-    await db
+    await tx
       .update(players)
-      .set({ last_decay_check: today, matches_this_month: 0 })
+      .set({
+        elo: applyDecay(player.elo, decayAmount),
+        mmr_uncertainty: Math.min(UNCERTAINTY_MAX, Number(player.mmr_uncertainty) + uncertaintyIncrease),
+        last_decay_check: today,
+        matches_this_month: 0,
+      })
       .where(eq(players.id, playerId))
 
-    return { decayApplied: 0, uncertaintyIncrease: 0 }
+    return { outcome: 'decayed' as const, decayApplied: decayAmount, uncertaintyIncrease }
+  })
+}
+
+/**
+ * The scheduled monthly decay: every rated, active player not yet checked this month, one transaction each.
+ * Safe to run any number of times; a run cut short is finished by the next one.
+ */
+export async function applyMonthlyDecayToAllPlayers(): Promise<Record<MonthlyDecayOutcome | 'failed', number>> {
+  const monthStart = currentMonthStart()
+  const due = await useDb()
+    .select({ id: players.id })
+    .from(players)
+    .where(
+      and(
+        eq(players.status, 'active'),
+        isNull(players.deleted_at),
+        gt(players.total_matches_played, 0),
+        gte(players.placement_matches_completed, 3),
+        or(isNull(players.last_decay_check), lt(players.last_decay_check, monthStart))
+      )
+    )
+    .orderBy(asc(players.id))
+
+  const counts: Record<MonthlyDecayOutcome | 'failed', number> = { decayed: 0, reset: 0, baseline: 0, skipped: 0, failed: 0 }
+  for (const { id } of due) {
+    try {
+      counts[(await applyMonthlyDecay(id)).outcome]++
+    } catch (error) {
+      counts.failed++
+      console.error('Monthly decay failed for player', id, error)
+    }
   }
-
-  const newElo = applyDecay(player.elo, decayAmount)
-  const newUncertainty = Math.min(UNCERTAINTY_MAX, Number(player.mmr_uncertainty) + uncertaintyIncrease)
-
-  await db
-    .update(players)
-    .set({
-      elo: newElo,
-      mmr_uncertainty: newUncertainty,
-      last_decay_check: today,
-      matches_this_month: 0,
-    })
-    .where(eq(players.id, playerId))
-
-  return { decayApplied: decayAmount, uncertaintyIncrease }
+  return counts
 }
 
 /**

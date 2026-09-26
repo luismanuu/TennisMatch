@@ -4,9 +4,10 @@
 //   user, admin, organizer, admin_or_organizer -> 401 without a session
 //   admin                                      -> 403 for a signed-in non-admin
 //   optional                                   -> public, but personalised when a session exists
+//   cron                                       -> 401 without `Authorization: Bearer <CRON_SECRET>`, whatever the session
 // server/api/auth/[...all].ts is Better Auth's own handler and is not listed.
 
-export type Access = 'public' | 'optional' | 'user' | 'admin' | 'organizer' | 'admin_or_organizer'
+export type Access = 'public' | 'optional' | 'user' | 'admin' | 'organizer' | 'admin_or_organizer' | 'cron'
 
 export const ROUTE_ACCESS: Record<string, Access> = {
   'server/api/admin/categories/[id].delete.ts': 'admin',
@@ -69,6 +70,7 @@ export const ROUTE_ACCESS: Record<string, Access> = {
   'server/api/admin/tournaments/index.get.ts': 'admin',
   'server/api/admin/tournaments/index.post.ts': 'admin',
   'server/api/categories.get.ts': 'public',
+  'server/api/cron/monthly-decay.get.ts': 'cron',
   'server/api/cities.get.ts': 'public',
   'server/api/invitations/accept.post.ts': 'user',
   'server/api/leaderboard/index.get.ts': 'optional',

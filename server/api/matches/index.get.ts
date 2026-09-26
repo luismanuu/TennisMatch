@@ -14,7 +14,7 @@ const matchListRelations = {
   player1: listedPlayer,
   player2: listedPlayer,
   pending_player2: {
-    columns: { id: true, name: true, email: true, status: true, invited_by_player_id: true },
+    columns: { id: true, name: true, status: true, invited_by_player_id: true },
     with: { category: categoryColumns },
   },
   winner: { columns: { id: true, name: true, status: true } },

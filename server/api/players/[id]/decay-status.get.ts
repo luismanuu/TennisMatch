@@ -1,14 +1,14 @@
 import { eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { players } from '~/server/db/schema'
-import { checkAndApplyMonthlyDecay, getMonthlyDecayStatus } from '~/server/utils/rating-system'
+import { getMonthlyDecayStatus } from '~/server/utils/rating-system'
 
+// Read-only: decay itself runs from the scheduled job (server/api/cron/monthly-decay.get.ts).
+// decay_applied and uncertainty_increase stay in the response, always 0, for the existing client.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default defineEventHandler(async (event) => {
   const playerId = getRouterParam(event, 'id')
-  const query = getQuery(event)
-  const applyDecay = query.apply_decay === 'true'
 
   if (!playerId) {
     throw createError({ statusCode: 400, statusMessage: 'Player ID is required' })
@@ -35,17 +35,6 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, statusMessage: 'Player not found' })
     }
 
-    let decayApplied = 0
-    let uncertaintyIncrease = 0
-
-    if (applyDecay) {
-      const decayResult = await checkAndApplyMonthlyDecay(playerId)
-      if (decayResult) {
-        decayApplied = decayResult.decayApplied
-        uncertaintyIncrease = decayResult.uncertaintyIncrease
-      }
-    }
-
     const status = getMonthlyDecayStatus(
       player.matches_this_month ?? 0,
       player.last_decay_check,
@@ -56,8 +45,8 @@ export default defineEventHandler(async (event) => {
     return {
       success: true,
       status,
-      decay_applied: decayApplied,
-      uncertainty_increase: uncertaintyIncrease,
+      decay_applied: 0,
+      uncertainty_increase: 0,
       is_unrated: player.total_matches_played === 0,
       is_in_placement: (player.placement_matches_completed ?? 0) < 3,
     }

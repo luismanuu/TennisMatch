@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { tournaments } from '~/server/db/schema'
+import { publicPlayer } from '~/server/utils/public-player'
 import { requirePlayer } from '~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
@@ -13,8 +14,8 @@ export default defineEventHandler(async (event) => {
       orderBy: [desc(tournaments.created_at)],
       with: {
         category: true,
-        registrations: { with: { player: true } },
-        groups: { with: { players: { with: { player: true } } } },
+        registrations: { with: { player: publicPlayer } },
+        groups: { with: { players: { with: { player: publicPlayer } } } },
       },
     })
   } catch (error: any) {

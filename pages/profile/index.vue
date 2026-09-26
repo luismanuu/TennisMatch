@@ -183,7 +183,7 @@ definePageMeta({
 
 const { isLoaded, isSignedIn, user, userId } = useAuthState()
 const { player, loading, error, fetchPlayer } = usePlayer()
-const { status: decayStatus, fetchDecayStatus, checkDecayOnLogin } = useMonthlyDecay()
+const { status: decayStatus, fetchDecayStatus } = useMonthlyDecay()
 
 const showUserProfileModal = ref(false)
 

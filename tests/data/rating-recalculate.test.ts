@@ -78,7 +78,10 @@ async function recalculate(matchId: string) {
   expect(res.body).toMatchObject({ success: true })
 }
 
-describe('recalculate: named regressions', () => {
+// Each case signs up real accounts (password hashing) and plays matches over HTTP: fixed CPU-bound work timed by
+// the wall clock. Measured for the first case: 1.65-1.80 s alone (5 runs), 2.06-2.10 s in the full suite (3 runs),
+// 4.09 s with all 4 cores saturated (1 run). The 5 s default timed out once on a loaded host.
+describe('recalculate: named regressions', { timeout: 30_000 }, () => {
   // reverseMatchRatings clamped MMR at 0 (so every player below 2250 ELO came back with MMR 0) and ELO at 1000.
   it('recalculating the latest match of rated players below 2250 ELO: ELO and MMR equal a fresh rating of the same sequence', async () => {
     const ana = await createPlayer(app, lowCategory, 'ana')

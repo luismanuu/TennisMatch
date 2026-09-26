@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, ilike, inArray, isNull, lte, type SQL } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { tournaments } from '~/server/db/schema'
+import { publicPlayer } from '~/server/utils/public-player'
 
 const TOURNAMENT_STATUSES = ['upcoming', 'active', 'completed'] as const
 
@@ -53,9 +54,9 @@ export default defineEventHandler(async (event) => {
         orderBy: [asc(tournaments.start_date)],
         with: {
           category: true,
-          created_by_player: true,
-          organizer: true,
-          registrations: { with: { player: true } },
+          created_by_player: publicPlayer,
+          organizer: publicPlayer,
+          registrations: { with: { player: publicPlayer } },
         },
       })
     } catch (error) {

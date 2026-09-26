@@ -1,6 +1,7 @@
 import { asc, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { tournament_groups, tournament_matches } from '~/server/db/schema'
+import { publicPlayer } from '~/server/utils/public-player'
 
 const playerName = { columns: { id: true, name: true } } as const
 
@@ -24,8 +25,8 @@ export default defineEventHandler(async (event) => {
         where: eq(tournament_groups.tournament_id, tournamentId),
         orderBy: [asc(tournament_groups.group_number)],
         with: {
-          players: { with: { player: true } },
-          standings: { with: { player: true } },
+          players: { with: { player: publicPlayer } },
+          standings: { with: { player: publicPlayer } },
         },
       })
 

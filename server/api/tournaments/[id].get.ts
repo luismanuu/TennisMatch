@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { tournaments } from '~/server/db/schema'
+import { PUBLIC_PLAYER_COLUMNS, publicPlayer } from '~/server/utils/public-player'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -17,10 +18,10 @@ export default defineEventHandler(async (event) => {
       where: eq(tournaments.id, tournamentId),
       with: {
         category: true,
-        created_by_player: true,
-        organizer: true,
-        registrations: { with: { player: { with: { category: true } } } },
-        groups: { with: { players: { with: { player: true } } } },
+        created_by_player: publicPlayer,
+        organizer: publicPlayer,
+        registrations: { with: { player: { columns: PUBLIC_PLAYER_COLUMNS, with: { category: true } } } },
+        groups: { with: { players: { with: { player: publicPlayer } } } },
         rounds: true,
       },
     })

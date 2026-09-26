@@ -3,8 +3,6 @@ import type { MonthlyDecayStatus } from '~/types'
 interface DecayStatusResponse {
   success: boolean
   status: MonthlyDecayStatus
-  decay_applied: number
-  uncertainty_increase: number
   is_unrated: boolean
 }
 
@@ -13,20 +11,17 @@ export function useMonthlyDecay() {
   const loading = ref(false)
   const error = ref<Error | null>(null)
   const isUnrated = ref(false)
-  const lastDecayApplied = ref(0)
 
-  const fetchDecayStatus = async (playerId: string, applyDecay: boolean = false) => {
+  // Read-only: the server applies decay from its scheduled job, never from this request.
+  const fetchDecayStatus = async (playerId: string) => {
     try {
       loading.value = true
       error.value = null
       
-      const response = await $fetch<DecayStatusResponse>(`/api/players/${playerId}/decay-status`, {
-        query: { apply_decay: applyDecay ? 'true' : 'false' }
-      })
+      const response = await $fetch<DecayStatusResponse>(`/api/players/${playerId}/decay-status`)
       
       status.value = response.status
       isUnrated.value = response.is_unrated
-      lastDecayApplied.value = response.decay_applied
       
       return response
     } catch (err: any) {
@@ -36,11 +31,6 @@ export function useMonthlyDecay() {
     } finally {
       loading.value = false
     }
-  }
-
-  const checkDecayOnLogin = async (playerId: string) => {
-    // Check and apply decay if needed (called on login)
-    return fetchDecayStatus(playerId, true)
   }
 
   const getDecayWarningLevel = computed(() => {
@@ -65,10 +55,8 @@ export function useMonthlyDecay() {
     loading,
     error,
     isUnrated,
-    lastDecayApplied,
     getDecayWarningLevel,
     shouldShowWarning,
     fetchDecayStatus,
-    checkDecayOnLogin,
   }
 }

@@ -2,6 +2,7 @@ import { and, count, eq, isNull } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { tournament_registrations, tournaments } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
+import { publicPlayer } from '~/server/utils/public-player'
 import { checkSelfRegistrationAllowed } from '~/server/utils/tournament-status'
 
 export default defineEventHandler(async (event) => {
@@ -128,7 +129,7 @@ export default defineEventHandler(async (event) => {
     const registrationId = await insertRegistration('confirmed', 'Failed to register')
     const registration = await db.query.tournament_registrations.findFirst({
       where: eq(tournament_registrations.id, registrationId),
-      with: { player: true },
+      with: { player: publicPlayer },
     })
 
     return {
