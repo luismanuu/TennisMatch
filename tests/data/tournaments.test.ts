@@ -395,6 +395,51 @@ describe('admin withdraw with walkovers', () => {
 })
 
 describe('admin withdraw with a replacement', () => {
+  // Round 3 (review of #54): the replacement took over completed, rated matches too, so their rating rows stayed with
+  // the withdrawn player while the match named the replacement.
+  it('a completed, rated match keeps its players and ratings; only open matches move to the replacement', async () => {
+    const tournamentId = await adminTournament()
+    const registered = await seedPlayers(app, 4)
+    for (const playerId of registered) {
+      const res = await app.request('POST', `/api/admin/tournaments/${tournamentId}/register`, { cookie: admin.cookie, body: { player_id: playerId } })
+      expect(res.status, JSON.stringify(res.body)).toBe(200)
+    }
+    expect((await app.request('POST', `/api/admin/tournaments/${tournamentId}/generate-brackets`, { cookie: admin.cookie })).status).toBe(200)
+    const [withdrawn] = registered
+    const [replacement] = await seedPlayers(app, 1)
+    const own = await rows<{ id: string; player1_id: string; player2_id: string }>(
+      app,
+      `select id, player1_id, player2_id from matches where tournament_id = $1 and (player1_id = $2 or player2_id = $2) order by id`,
+      [tournamentId, withdrawn],
+    )
+    expect(own.length).toBeGreaterThanOrEqual(2)
+    const played = own[0]
+    const score = played.player1_id === withdrawn ? '6-3 6-3' : '3-6 3-6'
+    const result = await app.request('PUT', `/api/matches/${played.id}`, {
+      cookie: admin.cookie,
+      body: { action: 'organizer_set_result', data: { winner_id: withdrawn, score } },
+    })
+    expect(result.status, JSON.stringify(result.body)).toBe(200)
+    const ledger = await rows<{ player_id: string }>(app, `select player_id from rating_history where match_id = $1 and rating_reversed = false`, [played.id])
+    expect(ledger.map((r) => r.player_id)).toContain(withdrawn)
+
+    const res = await app.request('POST', `/api/admin/tournaments/${tournamentId}/withdraw`, {
+      cookie: admin.cookie,
+      body: { player_id: withdrawn, option: 'replacement', replacement_player_id: replacement },
+    })
+    expect(res.status, JSON.stringify(res.body)).toBe(200)
+
+    const [kept] = await rows<{ player1_id: string; player2_id: string; winner_id: string }>(app, `select player1_id, player2_id, winner_id from matches where id = $1`, [played.id])
+    expect(kept).toEqual({ player1_id: played.player1_id, player2_id: played.player2_id, winner_id: withdrawn })
+    const players = [kept.player1_id, kept.player2_id].sort()
+    expect(ledger.map((r) => r.player_id).sort()).toEqual(players)
+    for (const m of own.slice(1)) {
+      const [moved] = await rows<{ player1_id: string; player2_id: string }>(app, `select player1_id, player2_id from matches where id = $1`, [m.id])
+      expect([moved.player1_id, moved.player2_id]).toContain(replacement)
+      expect([moved.player1_id, moved.player2_id]).not.toContain(withdrawn)
+    }
+  })
+
   // The replacement took the withdrawn player's matches, group seat and registration, but tournament_standings
   // kept the withdrawn player's row: the group table showed someone who no longer plays, and not the replacement.
   it('moves the withdrawn player\'s standings row to the replacement, in the same group', async () => {

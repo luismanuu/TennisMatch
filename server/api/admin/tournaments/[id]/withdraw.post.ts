@@ -92,14 +92,17 @@ export default defineEventHandler(async (event) => {
         }
 
         // Replace player in all tournament matches
+        // Only open matches move to the replacement: a completed match keeps its players, so its rating rows still
+        // belong to the players named on it
+        const OPEN = ['scheduled', 'active'] as const
         await tx
           .update(matches)
           .set({ player1_id: replacement_player_id })
-          .where(and(eq(matches.tournament_id, tournamentId), eq(matches.player1_id, player_id)))
+          .where(and(eq(matches.tournament_id, tournamentId), eq(matches.player1_id, player_id), inArray(matches.status, OPEN)))
         await tx
           .update(matches)
           .set({ player2_id: replacement_player_id })
-          .where(and(eq(matches.tournament_id, tournamentId), eq(matches.player2_id, player_id)))
+          .where(and(eq(matches.tournament_id, tournamentId), eq(matches.player2_id, player_id), inArray(matches.status, OPEN)))
 
         // Replace in group assignments
         await tx
