@@ -149,6 +149,69 @@
             </p>
           </div>
 
+          <form
+            v-if="showQuestionnaire"
+            class="panel level-quiz mb-6"
+            aria-labelledby="level-quiz-title"
+            @submit.prevent="requestSuggestion"
+          >
+            <h2 id="level-quiz-title" class="text-size-2 font-semibold text-foreground mb-2">¿Te ayudamos a elegir?</h2>
+            <p class="text-size-4 text-foreground-muted mb-6">
+              Responde cuatro preguntas y te sugerimos una categoría. Tú decides cuál usar.
+            </p>
+            <fieldset v-for="question in LEVEL_QUESTIONS" :key="question.id" class="level-quiz__group">
+              <legend class="text-size-4 font-semibold text-foreground mb-3">{{ question.label }}</legend>
+              <div class="level-quiz__options">
+                <label v-for="option in question.options" :key="option.id" class="level-quiz__option">
+                  <input v-model="levelAnswers[question.id]" type="radio" :name="question.id" :value="option.id" />
+                  <span>{{ option.label }}</span>
+                </label>
+              </div>
+            </fieldset>
+            <label for="self_description" class="block text-size-4 font-semibold text-foreground mb-2">
+              ¿Algo más sobre tu juego? <span class="font-regular text-foreground-muted">(opcional)</span>
+            </label>
+            <textarea
+              id="self_description"
+              v-model="levelAnswers.self_description"
+              class="form-textarea mb-6"
+              :maxlength="SELF_DESCRIPTION_MAX"
+              rows="3"
+              placeholder="Por ejemplo: jugué en el colegio y ahora juego dos veces por semana"
+            />
+            <div class="flex flex-wrap gap-4">
+              <button type="submit" class="btn-primary text-size-3 flex-1" :disabled="!questionnaireComplete || suggestionLoading">
+                {{ suggestionLoading ? 'Buscando tu categoría…' : 'Ver sugerencia' }}
+              </button>
+              <button type="button" class="btn-secondary text-size-3" @click="questionnaireDismissed = true">
+                Prefiero elegir yo
+              </button>
+            </div>
+          </form>
+
+          <p v-if="suggestionMissed" class="text-size-4 text-foreground-muted mb-6" role="status">
+            No pudimos sugerirte una categoría esta vez. Elige abajo la que mejor te describa.
+          </p>
+
+          <div v-if="suggestion" class="panel level-suggestion mb-6" role="status">
+            <p class="eyebrow mb-1">Nuestra sugerencia</p>
+            <p class="text-size-2 font-semibold text-foreground mb-1">{{ suggestion.name }}</p>
+            <p v-if="suggestion.runner_up" class="text-size-4 text-foreground-muted mb-4">
+              También podrías encajar en {{ suggestion.runner_up.name }}.
+            </p>
+            <p class="text-size-4 text-foreground-muted mb-4">
+              Es solo una sugerencia: confírmala o elige otra categoría abajo.
+            </p>
+            <button
+              type="button"
+              class="btn-secondary text-size-4"
+              :aria-pressed="formData.category_id === suggestion.category_id"
+              @click="selectCategory(suggestion.category_id)"
+            >
+              {{ formData.category_id === suggestion.category_id ? 'Categoría seleccionada' : 'Usar esta categoría' }}
+            </button>
+          </div>
+
           <div v-if="categoriesLoading" class="panel text-center">
             <Icon name="heroicons:arrow-path" class="w-8 h-8 text-accent animate-spin" aria-hidden="true" />
             <p class="text-size-4 font-regular text-foreground-muted mt-4">Cargando categorías...</p>
@@ -176,6 +239,7 @@
                 <div class="flex-1">
                   <h3 class="text-size-2 font-semibold text-foreground mb-2">
                     {{ category.name }}
+                    <span v-if="suggestion?.category_id === category.id" class="badge badge-accent ml-2 align-middle">Sugerida</span>
                   </h3>
                   <p v-if="category.description" class="text-size-4 font-regular text-foreground-muted">
                     {{ category.description }}
@@ -191,6 +255,12 @@
                 </div>
               </div>
             </button>
+
+            <div v-if="nameRejected" class="panel">
+              <label for="player_name" class="block text-size-4 font-semibold text-foreground mb-2">Tu nombre en el ranking</label>
+              <input id="player_name" v-model="formData.name" type="text" class="form-input" maxlength="80" aria-describedby="player_name_error" />
+              <p id="player_name_error" class="text-size-4 text-danger mt-2" role="alert">{{ nameRejected }}</p>
+            </div>
 
             <div class="flex gap-4 pt-4">
               <button
@@ -234,6 +304,8 @@
 </template>
 
 <script setup lang="ts">
+import { LEVEL_QUESTIONS, SELF_DESCRIPTION_MAX, type LevelSuggestion } from '~/utils/level-questionnaire'
+
 definePageMeta({
   middleware: 'auth'
 })
@@ -256,6 +328,46 @@ const selectCategory = (categoryId: string) => {
   formData.value.category_id = categoryId
 }
 
+// Jev level suggestion (feature-flagged). Advisory only: it never picks the category for the player.
+const levelEnabled = ref(false)
+const questionnaireDismissed = ref(false)
+const suggestionLoading = ref(false)
+const suggestion = ref<LevelSuggestion | null>(null)
+const suggestionMissed = ref(false)
+const levelAnswers = ref<Record<string, string>>({ self_description: '' })
+const nameRejected = ref('')
+
+const questionnaireComplete = computed(() => LEVEL_QUESTIONS.every((q) => Boolean(levelAnswers.value[q.id])))
+const showQuestionnaire = computed(
+  () => levelEnabled.value && !questionnaireDismissed.value && !suggestion.value && categories.value.length > 0,
+)
+
+const requestSuggestion = async () => {
+  if (!questionnaireComplete.value) return
+  suggestionLoading.value = true
+  try {
+    const res = await $fetch<{ suggestion: LevelSuggestion | null }>('/api/players/level-suggestion', {
+      method: 'POST',
+      body: levelAnswers.value,
+    })
+    suggestion.value = res.suggestion
+  } catch {
+    suggestion.value = null
+  } finally {
+    suggestionLoading.value = false
+    questionnaireDismissed.value = true
+    suggestionMissed.value = !suggestion.value
+  }
+}
+
+const loadLevelEnabled = async () => {
+  try {
+    levelEnabled.value = (await $fetch<{ enabled: boolean }>('/api/players/level-suggestion')).enabled
+  } catch {
+    levelEnabled.value = false
+  }
+}
+
 const handleComplete = async () => {
   if (!userId.value || !formData.value.category_id || !formData.value.city_id) return
 
@@ -268,7 +380,11 @@ const handleComplete = async () => {
     })
     
     currentStep.value = 5
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 422) {
+      nameRejected.value = error.data?.statusMessage || error.statusMessage || 'Elige otro nombre.'
+      return
+    }
     console.error('Error creating profile:', error)
     // Error handling is done by the composable
   }
@@ -283,7 +399,8 @@ onMounted(async () => {
     formData.value.name = user.value.name || ''
     await Promise.all([
       fetchCategories(),
-      fetchCities()
+      fetchCities(),
+      loadLevelEnabled()
     ])
   }
 })
@@ -293,7 +410,8 @@ watch([isLoaded, () => user.value], async () => {
     formData.value.name = user.value.name || ''
     await Promise.all([
       fetchCategories(),
-      fetchCities()
+      fetchCities(),
+      loadLevelEnabled()
     ])
   }
 }, { immediate: false })
@@ -302,6 +420,13 @@ watch([isLoaded, () => user.value], async () => {
 
 <style scoped>
 .onboarding { min-height: 100dvh; }
+.level-quiz__group { border: 0; padding: 0; margin: 0 0 24px; }
+.level-quiz__options { display: flex; flex-wrap: wrap; gap: 8px; }
+.level-quiz__option { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 10px 16px; border-radius: 999px; background: var(--lens); border: 1px solid var(--edge); color: var(--foreground); font-size: var(--font-size-4); cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease; }
+.level-quiz__option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.level-quiz__option:has(input:checked) { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); }
+.level-quiz__option:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .level-quiz__option { transition: none; } }
 .onboarding__mark { display: grid; place-items: center; width: 80px; height: 80px; margin: 0 auto 24px; border-radius: 50%; background: var(--accent-subtle); color: var(--accent); }
 .onboarding :deep(h1) { font-size: var(--font-size-1); line-height: 1.12; letter-spacing: -0.035em; text-wrap: balance; }
 </style>
