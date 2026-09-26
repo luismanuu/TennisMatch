@@ -168,6 +168,11 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Prom
   return results
 }
 
+// A non-finite change would turn the whole sum into NaN in the facts sent to Jev; it is skipped instead.
+export function sumRatingPoints(rows: Array<{ elo_change: number | null | undefined }>): number {
+  return rows.reduce((sum, r) => (Number.isFinite(r.elo_change) ? sum + (r.elo_change as number) : sum), 0)
+}
+
 const DAY_MS = 86_400_000
 
 export async function scanForRatingFarming(options: JevOpts & { now?: Date } = {}): Promise<FarmingReviewRow[]> {
@@ -255,9 +260,9 @@ export async function scanForRatingFarming(options: JevOpts & { now?: Date } = {
             : null,
       }
     })
-    const ratingPointsToA = history
-      .filter((h) => h.player_id === a && !h.reversed && ms.some((m) => m.id === h.match_id))
-      .reduce((sum, h) => sum + h.elo_change, 0)
+    const ratingPointsToA = sumRatingPoints(
+      history.filter((h) => h.player_id === a && !h.reversed && ms.some((m) => m.id === h.match_id)),
+    )
     const ageDays = (id: string) => {
       const created = personById.get(id)?.created_at
       return created ? Math.max(0, Math.floor((now.getTime() - created.getTime()) / DAY_MS)) : 0

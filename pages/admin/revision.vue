@@ -173,8 +173,11 @@ const scan = async () => {
     scanEnabled.value = res.enabled
     pairs.value = res.pairs
     scanDone.value = true
-  } catch {
-    scanError.value = 'El análisis falló. Inténtalo de nuevo más tarde.'
+  } catch (error: any) {
+    scanError.value =
+      error?.statusCode === 429
+        ? 'Demasiados análisis seguidos. Espera un minuto e inténtalo de nuevo.'
+        : 'El análisis falló. Inténtalo de nuevo más tarde.'
   } finally {
     scanLoading.value = false
   }

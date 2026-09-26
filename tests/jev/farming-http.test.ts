@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { createPlayer, type Account } from '../data/matches-helpers'
 import { resetJevBreakerForTests } from '../../server/utils/jev'
-import { FARMING_FLAG_SCORE, FARMING_QUESTIONS, computePairFacts, judgePair, type PairMatch } from '../../server/utils/farming'
+import { FARMING_FLAG_SCORE, FARMING_QUESTIONS, computePairFacts, judgePair, sumRatingPoints, type PairMatch } from '../../server/utils/farming'
 import { answersFor, fakeGateway, FLAGS_ON, gatewayFailure, probability, SEED, type GatewayBehaviour } from './helpers'
 import { setupJevTestApp } from './http-harness'
 
@@ -63,6 +63,7 @@ describe('rating-farming review', () => {
         ),
         async (behaviour) => {
           resetJevBreakerForTests()
+          await t.app.client.query(`delete from rate_limit_buckets where key = 'jev-farming-scan'`)
           const gw = t.useGateway(behaviour)
           const res = await t.app.request('POST', '/api/admin/jev/farming-scan', { cookie: admin.cookie })
           t.releaseGateway()
@@ -77,6 +78,31 @@ describe('rating-farming review', () => {
         },
       ),
       { seed: SEED, numRuns: 15 },
+    )
+  })
+
+  it('the scan is limited to 3 a minute across all admins; the 4th gets 429 and never calls the gateway', async () => {
+    await t.app.client.query(`delete from rate_limit_buckets where key = 'jev-farming-scan'`)
+    const gw = t.useGateway({ kind: 'status', status: 503 })
+    for (let i = 0; i < 3; i++) {
+      expect((await t.app.request('POST', '/api/admin/jev/farming-scan', { cookie: admin.cookie })).status).toBe(200)
+    }
+    const calls = gw.calls.length
+    const fourth = await t.app.request('POST', '/api/admin/jev/farming-scan', { cookie: admin.cookie })
+    expect(fourth.status).toBe(429)
+    expect(gw.calls).toHaveLength(calls)
+    await t.app.client.query(`delete from rate_limit_buckets where key = 'jev-farming-scan'`)
+  })
+
+  it('rating points moved is always a finite number, whatever the history rows hold (property)', () => {
+    const change = fc.oneof(fc.integer({ min: -500, max: 500 }), fc.constantFrom(Number.NaN, Infinity, -Infinity, null as unknown as number, undefined as unknown as number))
+    fc.assert(
+      fc.property(fc.array(change, { maxLength: 20 }), (changes) => {
+        const total = sumRatingPoints(changes.map((elo_change) => ({ elo_change })))
+        expect(Number.isFinite(total)).toBe(true)
+        expect(total).toBe(changes.filter((c) => Number.isFinite(c)).reduce((a, b) => a + b, 0))
+      }),
+      { seed: SEED, numRuns: 300 },
     )
   })
 
