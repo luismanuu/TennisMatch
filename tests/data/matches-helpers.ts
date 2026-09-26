@@ -78,3 +78,17 @@ export async function approve(app: TestApp, who: Account, matchId: string) {
     score_proposed_at: m?.score_proposed_at ? new Date(m.score_proposed_at).toISOString() : undefined,
   })
 }
+
+let walkoverAdmin: Account | null = null
+
+// A walkover is recorded by an organizer or admin, never proposed by a player: the player's attempt is a 400, then an
+// admin records it. Returns the admin's response.
+export async function recordWalkover(app: TestApp, proposer: Account, matchId: string, winnerId: string) {
+  expect((await put(app, proposer, matchId, 'propose_score', { score: 'W/O', winner_id: winnerId })).status).toBe(400)
+  if (!walkoverAdmin) {
+    const { rows } = await app.client.query<{ category_id: string }>(`select category_id from players where id = $1`, [proposer.playerId])
+    walkoverAdmin = await createPlayer(app, rows[0].category_id, 'arbitro')
+    await app.setRole(walkoverAdmin.userId, 'admin')
+  }
+  return put(app, walkoverAdmin, matchId, 'organizer_set_result', { winner_id: winnerId, is_wo: true })
+}

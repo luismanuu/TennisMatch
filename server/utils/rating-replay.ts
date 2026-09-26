@@ -27,6 +27,8 @@ export interface ReplayPlan {
   result: ReplayResult
   current: Map<string, { name: string; elo: number; total: number }>
   unparsedScores: Array<{ matchId: string; score: string | null }>
+  /** Live ratings of matches the replay does not rewrite (no longer completed or competitive): applying refuses */
+  orphanRatings: Array<{ matchId: string; playerId: string }>
 }
 
 export async function planReplay(db: DbOrTx): Promise<ReplayPlan> {
@@ -96,6 +98,9 @@ export async function planReplay(db: DbOrTx): Promise<ReplayPlan> {
     }
   }
 
+  const replayed = new Set(replayMatches.map((m) => m.id))
+  const orphanRatings = live.filter((r) => !replayed.has(r.match_id)).map((r) => ({ matchId: r.match_id, playerId: r.player_id }))
+
   const ids = [...seeds.keys()]
   const rows = ids.length
     ? await db
@@ -105,22 +110,39 @@ export async function planReplay(db: DbOrTx): Promise<ReplayPlan> {
     : []
   const current = new Map(rows.map((p) => [p.id, { name: p.name, elo: p.elo, total: p.total ?? 0 }]))
 
-  return { input: { seeds, matches: replayMatches }, result: replayRatings(seeds, replayMatches), current, unparsedScores }
+  return { input: { seeds, matches: replayMatches }, result: replayRatings(seeds, replayMatches), current, unparsedScores, orphanRatings }
+}
+
+/** scripts/recompute-ratings.ts: writing needs both --apply and --i-understand; anything else is a dry run. */
+export function replayApplyMode(argv: readonly string[]): 'dry-run' | 'apply' | 'refuse' {
+  if (!argv.includes('--apply')) return 'dry-run'
+  return argv.includes('--i-understand') ? 'apply' : 'refuse'
 }
 
 /**
  * Write a replay: every live rating is reversed and replaced by the replayed one, and each replayed player's SR,
- * match count, placement count and streaks are set from the replay. One transaction; UTR match data is carried over
- * from the rating it replaces. Returns how many rating rows were written.
+ * match count, placement count, streaks and matches_this_month are set from the replay. One transaction; UTR match
+ * data is carried over from the rating it replaces. Returns how many rating rows were written.
+ *
+ * Refuses (throws, nothing written) when a live rating belongs to a match the replay does not rewrite, e.g. a rated
+ * match later turned into a friendly: reversing it without replaying it would change that player's SR silently.
  */
 export async function applyReplay(db: DbOrTx): Promise<number> {
   return db.transaction(async (t) => {
-    // No approval may add or reverse a rating between the plan and the write
+    // Lock order matches an approval (players in id order, then rating_history), so the two cannot deadlock. Every
+    // player row is locked because the plan is not known yet; then no approval can add or reverse a rating
+    // between the plan and the write.
+    await t.select({ id: players.id }).from(players).orderBy(asc(players.id)).for('update')
     await t.execute(sql`lock table rating_history in exclusive mode`)
     const plan = await planReplay(t)
+    if (plan.orphanRatings.length > 0) {
+      throw new Error(
+        `${plan.orphanRatings.length} live rating rows belong to matches outside the replay (no longer completed or ` +
+          `competitive); reverse them first: ${[...new Set(plan.orphanRatings.map((r) => r.matchId))].join(', ')}`
+      )
+    }
     const ids = [...plan.input.seeds.keys()].sort()
     if (ids.length === 0) return 0
-    await t.select({ id: players.id }).from(players).where(inArray(players.id, ids)).orderBy(asc(players.id)).for('update')
 
     const previous = await t
       .select()
@@ -132,6 +154,9 @@ export async function applyReplay(db: DbOrTx): Promise<number> {
     // Rows get increasing created_at in replay order: "latest rating" (reversal, streaks) is read by created_at
     const start = Date.now() - 2 * plan.result.rows.length
     const played = new Map<string, number>()
+    const thisMonth = new Map<string, number>()
+    const now = new Date()
+    const matchAt = new Map(plan.input.matches.map((m) => [m.id, new Date(m.at)]))
     const streak = new Map<string, { win: number; loss: number }>()
     let written = 0
     for (const row of plan.result.rows) {
@@ -171,6 +196,10 @@ export async function applyReplay(db: DbOrTx): Promise<number> {
           created_at: new Date(start + written),
         })
         played.set(playerId, (played.get(playerId) ?? 0) + 1)
+        const at = matchAt.get(row.matchId)!
+        if (at.getUTCFullYear() === now.getUTCFullYear() && at.getUTCMonth() === now.getUTCMonth()) {
+          thisMonth.set(playerId, (thisMonth.get(playerId) ?? 0) + 1)
+        }
         const s = streak.get(playerId) ?? { win: 0, loss: 0 }
         streak.set(playerId, won ? { win: s.win + 1, loss: 0 } : { win: 0, loss: s.loss + 1 })
         written++
@@ -190,6 +219,7 @@ export async function applyReplay(db: DbOrTx): Promise<number> {
           placement_matches_completed: Math.min(3, count),
           win_streak: s.win,
           loss_streak: s.loss,
+          matches_this_month: thisMonth.get(id) ?? 0,
         })
         .where(eq(players.id, id))
     }

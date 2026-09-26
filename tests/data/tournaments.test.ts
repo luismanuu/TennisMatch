@@ -348,6 +348,52 @@ describe('delete', () => {
   })
 })
 
+// Round 2 (review of #54): the walkover option overwrote matches already completed and rated, leaving their live
+// rating_history behind a result that no longer matched it.
+describe('admin withdraw with walkovers', () => {
+  it('leaves completed (rated) matches alone and turns only open matches into unrated walkovers', async () => {
+    const tournamentId = await adminTournament()
+    const registered = await seedPlayers(app, 4)
+    for (const playerId of registered) {
+      const res = await app.request('POST', `/api/admin/tournaments/${tournamentId}/register`, { cookie: admin.cookie, body: { player_id: playerId } })
+      expect(res.status, JSON.stringify(res.body)).toBe(200)
+    }
+    expect((await app.request('POST', `/api/admin/tournaments/${tournamentId}/generate-brackets`, { cookie: admin.cookie })).status).toBe(200)
+    const [withdrawn] = registered
+    const own = await rows<{ id: string; player1_id: string; player2_id: string }>(
+      app,
+      `select id, player1_id, player2_id from matches where tournament_id = $1 and (player1_id = $2 or player2_id = $2) order by id`,
+      [tournamentId, withdrawn],
+    )
+    expect(own.length).toBeGreaterThanOrEqual(2)
+    const played = own[0]
+    const score = played.player1_id === withdrawn ? '6-3 6-3' : '3-6 3-6'
+    const result = await app.request('PUT', `/api/matches/${played.id}`, {
+      cookie: admin.cookie,
+      body: { action: 'organizer_set_result', data: { winner_id: withdrawn, score } },
+    })
+    expect(result.status, JSON.stringify(result.body)).toBe(200)
+    const ledgerBefore = await rows(app, `select player_id, elo_change, rating_reversed from rating_history where match_id = $1 order by player_id`, [played.id])
+    expect(ledgerBefore).toHaveLength(2)
+
+    const res = await app.request('POST', `/api/admin/tournaments/${tournamentId}/withdraw`, {
+      cookie: admin.cookie,
+      body: { player_id: withdrawn, option: 'walkover' },
+    })
+    expect(res.status, JSON.stringify(res.body)).toBe(200)
+
+    const [kept] = await rows<{ status: string; score: string; winner_id: string }>(app, `select status, score, winner_id from matches where id = $1`, [played.id])
+    expect(kept).toEqual({ status: 'completed', score, winner_id: withdrawn })
+    expect(await rows(app, `select player_id, elo_change, rating_reversed from rating_history where match_id = $1 order by player_id`, [played.id])).toEqual(ledgerBefore)
+    for (const m of own.slice(1)) {
+      const [after] = await rows<{ status: string; score: string; winner_id: string }>(app, `select status, score, winner_id from matches where id = $1`, [m.id])
+      expect(after).toMatchObject({ status: 'completed', score: 'W/O' })
+      expect(after.winner_id).not.toBe(withdrawn)
+      expect(await rows(app, `select 1 from rating_history where match_id = $1`, [m.id])).toEqual([])
+    }
+  })
+})
+
 describe('admin withdraw with a replacement', () => {
   // The replacement took the withdrawn player's matches, group seat and registration, but tournament_standings
   // kept the withdrawn player's row: the group table showed someone who no longer plays, and not the replacement.

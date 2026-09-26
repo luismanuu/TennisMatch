@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { startTestApp, type TestApp } from '../security/harness'
 import { reverseMatchRatings } from '../../server/utils/rating-system'
-import { approve, activeMatch, createCategory, createPlayer, put, type Account } from './matches-helpers'
+import { approve, recordWalkover, activeMatch, createCategory, createPlayer, put, type Account } from './matches-helpers'
 
 // Admin recalculation (reverse a match's ratings, then rate it again) with no LLM key: the deterministic path.
 // Oracle: recalculating a match that is both players' latest rating changes nothing, and a player's ratings after
@@ -249,8 +249,13 @@ describe('recalculate: property over random match sequences', () => {
           perPair.set(key, (perPair.get(key) ?? 0) + 1)
           const p1 = accounts[m.pair[0]]
           const p2 = accounts[m.pair[1]]
-          const matchId = await play(p1, p2, m.player1Wins ? p1 : p2, fromPlayer1(m.score, m.player1Wins))
-          if (m.score !== 'WO') last = matchId // a walkover is never rated, so there is nothing to recalculate
+          if (m.score === 'WO') {
+            // a walkover is recorded by an admin and never rated, so there is nothing to recalculate
+            const matchId = await activeMatch(app, p1, p2)
+            expect((await recordWalkover(app, p1, matchId, (m.player1Wins ? p1 : p2).playerId)).status).toBe(200)
+            continue
+          }
+          last = await play(p1, p2, m.player1Wins ? p1 : p2, fromPlayer1(m.score, m.player1Wins))
         }
         if (!last) return true
 

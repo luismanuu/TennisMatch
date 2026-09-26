@@ -4,7 +4,8 @@
  *
  * Orientation: player 1's games are always written first ("6-4 3-6 7-5" means player 1 took the first and third sets).
  * Format: best of 3 sets; the third set may be a match tiebreak to 10 ("6-4 3-6 10-8"). A 7-6 set may carry the
- * loser's tiebreak points ("7-6(5)"). "ret." after the sets marks a retirement, "abd." an abandoned match, and "W/O"
+ * loser's tiebreak points ("7-6(5)"). Or a single pro set, to 8 (8-0..8-6, 9-7, 9-8 with a tiebreak at 8-8) or to 10
+ * (10-0..10-8, 11-9, 11-10 with a tiebreak at 10-10), e.g. "9-8(5)". "ret." after the sets marks a retirement, "abd." an abandoned match, and "W/O"
  * alone a walkover. The stored text is always renderScore(parseScore(input)), so every stored score parses back to
  * the same value.
  */
@@ -19,6 +20,8 @@ export type SetScore = {
   tiebreak?: number
   /** A third-set match tiebreak (points, first to 10 by 2) instead of a set of games */
   matchTiebreak?: true
+  /** The whole match as one pro set to 8 or to 10 games */
+  proSet?: 8 | 10
 }
 
 export type ParsedScore = { sets: SetScore[]; completion: Completion }
@@ -38,9 +41,12 @@ const fail = (error: string): ScoreParse => ({ ok: false, error })
 export function setWinner(set: SetScore): Side | null {
   const hi = Math.max(set.p1, set.p2)
   const lo = Math.min(set.p1, set.p2)
+  const to = set.proSet
   const finished = set.matchTiebreak
     ? hi >= 10 && hi - lo >= 2 && (hi === 10 || hi - lo === 2)
-    : (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6))
+    : to
+      ? (hi === to && lo <= to - 2) || (hi === to + 1 && (lo === to - 1 || lo === to))
+      : (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6))
   if (!finished) return null
   return set.p1 > set.p2 ? 'p1' : 'p2'
 }
@@ -54,12 +60,21 @@ function setsWon(sets: SetScore[]): { p1: number; p2: number } {
   return won
 }
 
+// Who the sets say won: a pro set decides the match alone, otherwise two sets do
+function decidedBy(sets: SetScore[]): Side | null {
+  if (sets.length === 1 && sets[0].proSet) return setWinner(sets[0])
+  const won = setsWon(sets)
+  return won.p1 === 2 ? 'p1' : won.p2 === 2 ? 'p2' : null
+}
+
 /** The side the sets say won the match; null for a retirement, walkover or abandoned match. */
 export function scoreWinner(score: ParsedScore): Side | null {
   if (score.completion !== 'completed') return null
-  const won = setsWon(score.sets)
-  return won.p1 === 2 ? 'p1' : won.p2 === 2 ? 'p2' : null
+  return decidedBy(score.sets)
 }
+
+const PRO_SET_ERROR =
+  'Un pro set a 8 termina 8-6 o menos, 9-7 o 9-8 con tiebreak; a 10, 10-8 o menos, 11-9 u 11-10 con tiebreak.'
 
 // A set in progress when the match stopped: games only, neither side has won it yet.
 function isPartialSet(set: SetScore): boolean {
@@ -67,7 +82,7 @@ function isPartialSet(set: SetScore): boolean {
   return Math.max(set.p1, set.p2) <= 6 && setWinner(set) === null
 }
 
-function parseToken(token: string, index: number): SetScore | string {
+function parseToken(token: string, index: number, single = false): SetScore | string {
   const m = TOKEN.exec(token)
   if (!m) return `No entiendo "${token}". Escribe cada set como 6-4.`
   const p1 = Number(m[1])
@@ -79,8 +94,15 @@ function parseToken(token: string, index: number): SetScore | string {
     set.matchTiebreak = true
     return set
   }
+  // One set of 8 games or more, as the whole match, is a pro set: to 8 up to 9 games, to 10 from 10
+  if (single && Math.max(p1, p2) >= 8) set.proSet = Math.max(p1, p2) <= 9 ? 8 : 10
   if (m[3] !== undefined) {
-    if (Math.max(p1, p2) !== 7 || Math.min(p1, p2) !== 6) return `Solo un set 7-6 lleva tiebreak entre paréntesis ("${token}").`
+    const tiebreakAt = set.proSet ?? 6
+    if (Math.max(p1, p2) !== tiebreakAt + 1 || Math.min(p1, p2) !== tiebreakAt) {
+      return set.proSet
+        ? `Solo un pro set ${tiebreakAt + 1}-${tiebreakAt} lleva tiebreak entre paréntesis ("${token}").`
+        : `Solo un set 7-6 lleva tiebreak entre paréntesis ("${token}").`
+    }
     const a = Number(m[3])
     const tiebreak = m[4] === undefined ? a : Math.min(a, Number(m[4]))
     if (m[4] !== undefined) {
@@ -119,7 +141,7 @@ export function parseScore(input: string | null | undefined): ScoreParse {
 
   const sets: SetScore[] = []
   for (const [i, token] of tokens.entries()) {
-    const set = parseToken(token, i)
+    const set = parseToken(token, i, tokens.length === 1 && completion === 'completed')
     if (typeof set === 'string') return fail(set)
     sets.push(set)
   }
@@ -133,6 +155,7 @@ function validate({ sets, completion }: ParsedScore): string | null {
   for (const [i, set] of sets.entries()) {
     if (set.matchTiebreak && i !== 2) return 'El super tiebreak solo puede ser el tercer set.'
     const partialAllowed = completion !== 'completed' && i === last
+    if (set.proSet && setWinner(set) === null) return PRO_SET_ERROR
     if (setWinner(set) === null && !(partialAllowed && isPartialSet(set))) {
       return `El set ${set.p1}-${set.p2} no es un resultado válido de set.`
     }
@@ -146,8 +169,7 @@ function validate({ sets, completion }: ParsedScore): string | null {
     return 'El super tiebreak solo se juega con los sets 1-1.'
   }
 
-  const won = setsWon(sets)
-  const decided = won.p1 === 2 || won.p2 === 2
+  const decided = decidedBy(sets) !== null
   if (completion === 'completed' && !decided) return 'El marcador no tiene ganador: faltan sets. Si alguien se retiró, añade "ret.".'
   if (completion !== 'completed' && decided) return 'El partido ya estaba decidido: quita "ret." o "abd.".'
   return null

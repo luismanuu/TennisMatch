@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import {
   matches,
@@ -125,21 +125,23 @@ export default defineEventHandler(async (event) => {
           withdrawn_at: new Date()
         })
       } else {
-        // Walkover: mark all matches as completed with opponent winning
+        // Walkover: the withdrawn player's open matches (scheduled or active) go to the opponent, unrated. A match
+        // already completed keeps its result and its rating; a cancelled one stays cancelled.
         const tournamentMatches = await tx.query.tournament_matches.findMany({
           columns: { match_id: true },
           where: eq(tournament_matches.tournament_id, tournamentId),
-          with: { match: { columns: { id: true, player1_id: true, player2_id: true } } },
+          with: { match: { columns: { id: true, player1_id: true, player2_id: true, status: true } } },
         })
 
         for (const tm of tournamentMatches) {
           const match = tm.match
-          if (match && (match.player1_id === player_id || match.player2_id === player_id)) {
+          const open = match?.status === 'scheduled' || match?.status === 'active'
+          if (match && open && (match.player1_id === player_id || match.player2_id === player_id)) {
             const winnerId = match.player1_id === player_id ? match.player2_id : match.player1_id
             await tx
               .update(matches)
               .set({ winner_id: winnerId, status: 'completed', score: 'W/O' })
-              .where(eq(matches.id, match.id))
+              .where(and(eq(matches.id, match.id), inArray(matches.status, ['scheduled', 'active'])))
           }
         }
 

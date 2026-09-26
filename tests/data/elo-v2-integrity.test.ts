@@ -284,3 +284,52 @@ describe('regressions from review', () => {
     expect(await history(matchId)).toHaveLength(0)
   })
 })
+
+// Round 2 (review of #54): a player-proposed walkover completed the match unrated, so two players could agree to
+// dodge the rating (or an opponent could tap "Aprobar" without reading). Walkovers only come from organizer/admin.
+describe('round 2: players cannot propose an unrated result', () => {
+  it.each([['W/O'], ['wo'], ['Walkover'], ['6-4 3-3 abd.']])('propose_score %j is a 400 and stores nothing', async (score) => {
+    const [a, b] = await pairOf('esquiva')
+    const matchId = await activeMatch(app, a, b)
+    const res = await put(app, a, matchId, 'propose_score', { score, winner_id: a.playerId })
+    expect(res.status).toBe(400)
+    expect(await matchRow(matchId)).toMatchObject({ status: 'active', score: null, winner_id: null })
+  })
+
+  it('a retirement is still a player result (and it is rated)', async () => {
+    const [a, b] = await pairOf('retira')
+    const matchId = await activeMatch(app, a, b)
+    expect((await put(app, a, matchId, 'propose_score', { score: '6-4 2-1 ret.', winner_id: a.playerId })).status).toBe(200)
+    expect((await approve(app, b, matchId)).status).toBe(200)
+    expect(await history(matchId)).toHaveLength(2)
+  })
+
+  it('calculate-elo rates a completed match that has no rating yet', async () => {
+    const [a, b] = await pairOf('sinrating')
+    const { rows } = await app.client.query<{ id: string }>(
+      `insert into matches (player1_id, player2_id, winner_id, status, score, is_competitive, played_at)
+       values ($1, $2, $1, 'completed', '6-3 6-4', true, now()) returning id`,
+      [a.playerId, b.playerId],
+    )
+    const admin = await app.signUp(`admin-calc-${Date.now()}@tenis.ec`, 'admin')
+    const res = await app.request('POST', `/api/matches/${rows[0].id}/calculate-elo`, { cookie: admin.cookie })
+    expect(res.status).toBe(200)
+    const expected = rateMatch({ rating: 1500, ratedMatches: 0 }, { rating: 1500, ratedMatches: 0 }, { completion: 'completed', sets: 'straight', source: 'parser' })
+    expect(res.body).toMatchObject({ success: true, result: { player1: { eloChange: expected.winner.delta }, player2: { eloChange: expected.loser.delta } } })
+    expect(await history(rows[0].id)).toHaveLength(2)
+  })
+})
+
+describe('pro set through the API (CEO 14:29Z)', () => {
+  it('"9-8 (7-4)" is stored as "9-8(4)" and rated as a pro set; "8-7" and a mismatched winner are refused', async () => {
+    const [a, b] = await pairOf('proset')
+    const matchId = await activeMatch(app, a, b)
+    expect((await put(app, a, matchId, 'propose_score', { score: '8-7', winner_id: a.playerId })).status).toBe(400)
+    expect((await put(app, a, matchId, 'propose_score', { score: '9-8(4)', winner_id: b.playerId })).status).toBe(400)
+    expect((await put(app, a, matchId, 'propose_score', { score: '9-8 (7-4)', winner_id: a.playerId })).status).toBe(200)
+    expect((await matchRow(matchId)).score).toBe('9-8(4)')
+    expect((await approve(app, b, matchId)).status).toBe(200)
+    const view = await app.request('GET', `/api/matches/${matchId}/rating-history`, { cookie: a.cookie })
+    expect(view.body).toMatchObject({ rating_history: { player1: { why: { margin: 0.9, classification: { sets: 'pro' } } } } })
+  })
+})

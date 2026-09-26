@@ -2,8 +2,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { startTestApp, type TestApp } from '../security/harness'
-import { applyReplay, planReplay } from '../../server/utils/rating-replay'
-import { activeMatch, approve, createCategory, createPlayer, put, type Account } from './matches-helpers'
+import { applyReplay, planReplay, replayApplyMode } from '../../server/utils/rating-replay'
+import { activeMatch, approve, recordWalkover, createCategory, createPlayer, put, type Account } from './matches-helpers'
 
 // The recompute tool (scripts/recompute-ratings.ts). Differential oracle: replaying the confirmed matches in order
 // reproduces what the live approvals wrote, and applying a replay is idempotent.
@@ -59,6 +59,10 @@ describe('replay', () => {
           const matchId = await activeMatch(app, p1, p2)
           const winner = m.p1Wins ? p1 : p2
           const score = m.p1Wins || m.score.includes('ret.') ? m.score : flipped(m.score)
+          if (score === 'W/O') {
+            expect((await recordWalkover(app, p1, matchId, winner.playerId)).status).toBe(200)
+            continue
+          }
           expect((await put(app, p1, matchId, 'propose_score', { score, winner_id: winner.playerId })).status).toBe(200)
           expect((await approve(app, p2, matchId)).status).toBe(200)
         }
@@ -103,6 +107,10 @@ describe('replay', () => {
     for (const [i, j, p1Wins, score] of plays) {
       const matchId = await activeMatch(app, accounts[i], accounts[j])
       const text = p1Wins || score.includes('ret.') ? score : flipped(score)
+      if (text === 'W/O') {
+        expect((await recordWalkover(app, accounts[i], matchId, (p1Wins ? accounts[i] : accounts[j]).playerId)).status).toBe(200)
+        continue
+      }
       await put(app, accounts[i], matchId, 'propose_score', { score: text, winner_id: (p1Wins ? accounts[i] : accounts[j]).playerId })
       expect((await approve(app, accounts[j], matchId)).status).toBe(200)
     }
@@ -133,5 +141,51 @@ describe('replay', () => {
     await applyReplay(app.db)
     const [pa, pb] = [(await players([a.playerId]))[0], (await players([b.playerId]))[0]]
     expect(pa.elo + pb.elo).toBe(3000)
+  })
+})
+
+// Round 2 (review of #54)
+describe('replay: round 2', () => {
+  const play = async (p1: Account, p2: Account, winner: Account, score: string) => {
+    const matchId = await activeMatch(app, p1, p2)
+    expect((await put(app, p1, matchId, 'propose_score', { score, winner_id: winner.playerId })).status).toBe(200)
+    expect((await approve(app, p2, matchId)).status).toBe(200)
+    return matchId
+  }
+  const liveRows = async () => (await app.client.query(`select id from rating_history where rating_reversed = false order by id`)).rows
+
+  it('refuses to apply, changing nothing, when a live rating belongs to a match the replay would not rewrite', async () => {
+    const [a, b] = [await createPlayer(app, categories[1], 'amistoso'), await createPlayer(app, categories[1], 'amistoso')]
+    const matchId = await play(a, b, a, '6-3 6-4')
+    // The match was turned into a friendly after it was rated: its live rows are outside the replay
+    await app.client.query(`update matches set is_competitive = false where id = $1`, [matchId])
+    const plan = await planReplay(app.db)
+    expect(plan.orphanRatings.map((r) => r.matchId)).toContain(matchId)
+    const before = { rows: await liveRows(), players: await players([a.playerId, b.playerId]) }
+    await expect(applyReplay(app.db)).rejects.toThrow(/outside the replay/)
+    expect(await liveRows()).toEqual(before.rows)
+    expect(await players([a.playerId, b.playerId])).toEqual(before.players)
+    await app.client.query(`update matches set is_competitive = true where id = $1`, [matchId])
+  })
+
+  it('recomputes matches_this_month from the replayed matches played in the current UTC month', async () => {
+    const [a, b, c] = [await createPlayer(app, categories[1], 'mes'), await createPlayer(app, categories[1], 'mes'), await createPlayer(app, categories[1], 'mes')]
+    const old = await play(a, b, a, '6-3 6-4')
+    await play(a, c, c, '3-6 4-6')
+    await play(b, c, b, '6-2 6-2')
+    const lastMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 15))
+    await app.client.query(`update matches set played_at = $2 where id = $1`, [old, lastMonth])
+    await app.client.query(`update players set matches_this_month = 99 where id = any($1)`, [[a.playerId, b.playerId, c.playerId]])
+    await applyReplay(app.db)
+    const { rows } = await app.client.query<{ id: string; matches_this_month: number }>(`select id, matches_this_month from players where id = any($1)`, [[a.playerId, b.playerId, c.playerId]])
+    const month = (id: string) => rows.find((r) => r.id === id)!.matches_this_month
+    expect([month(a.playerId), month(b.playerId), month(c.playerId)]).toEqual([1, 1, 2])
+  })
+
+  it('--apply needs --i-understand as well; anything else is a dry run', () => {
+    expect(replayApplyMode([])).toBe('dry-run')
+    expect(replayApplyMode(['--i-understand'])).toBe('dry-run')
+    expect(replayApplyMode(['--apply'])).toBe('refuse')
+    expect(replayApplyMode(['--apply', '--i-understand'])).toBe('apply')
   })
 })

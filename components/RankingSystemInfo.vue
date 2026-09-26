@@ -181,7 +181,7 @@
             </div>
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
-              <p>El Top 100 muestra a los mejores jugadores de la región</p>
+              <p>El Top 100 muestra a los mejores jugadores de Ecuador</p>
             </div>
           </div>
         </div>
@@ -273,7 +273,7 @@ const ranks = [
     name: 'TOP 100',
     icon: '/images/ranks/top100.png',
     eloRange: 'Mejores 100',
-    note: 'Top 100 de tu región'
+    note: 'Top 100 de Ecuador'
   }
 ]
 </script>

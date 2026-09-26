@@ -7,6 +7,7 @@ import {
   MAX_MARGIN_FACTOR,
   RATING_FLOOR,
   classifyStoredScore,
+  parseExplanation,
   isRatable,
   ratePair,
   rateMatch,
@@ -29,7 +30,7 @@ const player = fc.record({ rating, ratedMatches: experience })
 const classification: fc.Arbitrary<MatchClassification> = fc.oneof(
   fc.record({
     completion: fc.constant('completed' as const),
-    sets: fc.constantFrom('straight' as const, 'deciding' as const, 'unknown' as const),
+    sets: fc.constantFrom('straight' as const, 'deciding' as const, 'pro' as const, 'unknown' as const),
     source: fc.constantFrom('manual' as const, 'parser' as const, 'jev' as const),
   }),
   fc.record({ completion: fc.constant('retired' as const), sets: fc.constant('incomplete' as const), source: fc.constant('parser' as const) }),
@@ -213,5 +214,28 @@ describe('named regressions from the audit', () => {
     const c = classifyStoredScore('ganamos por abandono')
     expect(c).toEqual({ completion: 'completed', sets: 'unknown', source: 'parser' })
     expect(rateMatch({ rating: 1500, ratedMatches: 10 }, { rating: 1500, ratedMatches: 10 }, c).winner.delta).toBe(16)
+  })
+})
+
+describe('parseExplanation', () => {
+  it('returns null for legacy LLM reasoning text, a wrong formula version, and broken JSON', () => {
+    expect(parseExplanation('Player 1 won a close match against a stronger opponent, so +17 SR.')).toBeNull()
+    expect(parseExplanation(JSON.stringify({ formula: 'elo-v1', k: 32, margin: 1, expected: 0.5, opponent_before: 1500, classification: { completion: 'completed', sets: 'straight', source: 'parser' } }))).toBeNull()
+    expect(parseExplanation('{"formula": "elo-v2", ')).toBeNull()
+    expect(parseExplanation(null)).toBeNull()
+  })
+
+  it('reads back what a rating stored', () => {
+    const value = { formula: 'elo-v2', k: 46, margin: 1.1, expected: 0.5, opponent_before: 1500, classification: { completion: 'completed', sets: 'straight', source: 'parser' } }
+    expect(parseExplanation(JSON.stringify(value))).toEqual(value)
+  })
+})
+
+describe('pro set (CEO 14:29Z)', () => {
+  it('a single pro set is classified "pro" and rated at 0.9, like a deciding set', () => {
+    const c = classifyStoredScore('9-8(5)')
+    expect(c).toEqual({ completion: 'completed', sets: 'pro', source: 'parser' })
+    const o = rateMatch({ rating: 1500, ratedMatches: 10 }, { rating: 1500, ratedMatches: 10 }, c)
+    expect([o.margin, o.winner.delta]).toEqual([0.9, 14])
   })
 })

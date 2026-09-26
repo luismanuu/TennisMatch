@@ -836,7 +836,7 @@
                         aria-describedby="score-help"
                       />
                       <p id="score-help" class="text-size-5 text-foreground-muted mt-2">
-                        Primero los juegos de {{ match.player1?.name || 'quien creó el partido' }}. Tiebreak: 7-6(5). Super tiebreak como tercer set: 10-8. Si alguien se retiró, añade «ret.»; si no se presentó, escribe W/O.
+                        Primero los juegos de {{ match.player1?.name || 'quien creó el partido' }}. Tiebreak: 7-6(5). Super tiebreak como tercer set: 10-8. Un pro set: 8-5 o 9-8(4). Si alguien se retiró, añade «ret.». Si tu rival no se presentó, pide al organizador o a un administrador que lo registre.
                       </p>
                       <p v-if="scorePreview" class="text-size-5 mt-1" :class="scorePreview.ok ? 'text-foreground-muted' : 'text-danger'" aria-live="polite">
                         {{ scorePreview.text }}
@@ -1175,7 +1175,7 @@
                         placeholder="Ej: 6-4 3-6 7-5"
                       />
                       <p class="text-size-5 text-foreground-muted mt-2">
-                        Primero los juegos de {{ match.player1?.name || 'el jugador 1' }} (ej: "6-4 6-3" o "6-2 4-6 10-8"). Si alguien se retiró, añade «ret.».
+                        Primero los juegos de {{ match.player1?.name || 'el jugador 1' }} (ej: "6-4 6-3", "6-2 4-6 10-8" o un pro set "9-7"). Si alguien se retiró, añade «ret.».
                       </p>
                     </div>
 
@@ -1637,6 +1637,7 @@ const scorePreview = computed<{ ok: boolean; text: string } | null>(() => {
 const MARGIN_TEXT: Record<string, string> = {
   straight: 'Partido en dos sets: el cambio se multiplica por 1,1.',
   deciding: 'Partido a tres sets: el cambio se multiplica por 0,9.',
+  pro: 'Partido a un pro set: el cambio se multiplica por 0,9.',
   incomplete: 'Partido con retiro: el cambio se multiplica por 0,9.',
   unknown: 'Marcador anterior al formato actual: el cambio no se ajusta por sets.',
 }

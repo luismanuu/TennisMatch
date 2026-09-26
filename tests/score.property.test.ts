@@ -45,7 +45,22 @@ const retired = fc
     return { sets, completion: 'retired' }
   })
   .filter((s) => s.sets.length > 0 && s.sets.filter((x) => setWinner(x) === 'p1').length < 2 && s.sets.filter((x) => setWinner(x) === 'p2').length < 2)
-const anyValid = fc.oneof(completed, completed, retired, fc.constant<ParsedScore>({ sets: [], completion: 'walkover' }))
+// A whole match as one pro set, to 8 or to 10, from player 1's side
+const proSet = fc
+  .record({
+    to: fc.constantFrom(8 as const, 10 as const),
+    kind: fc.constantFrom('clear', 'byTwo', 'tiebreak'),
+    lo: fc.nat(),
+    tb: fc.option(fc.integer({ min: 0, max: 30 }), { nil: undefined }),
+    p1Wins: fc.boolean(),
+  })
+  .map(({ to, kind, lo, tb, p1Wins }): ParsedScore => {
+    const [w, l] = kind === 'clear' ? [to, lo % (to - 1)] : kind === 'byTwo' ? [to + 1, to - 1] : [to + 1, to]
+    const set: SetScore = { p1: p1Wins ? w : l, p2: p1Wins ? l : w, proSet: to }
+    if (kind === 'tiebreak' && tb !== undefined) set.tiebreak = tb
+    return { sets: [set], completion: 'completed' }
+  })
+const anyValid = fc.oneof(completed, completed, proSet, retired, fc.constant<ParsedScore>({ sets: [], completion: 'walkover' }))
 
 describe('parseScore / renderScore: properties', () => {
   it('round-trip: parse(render(x)) == x for every valid score', () => {
@@ -73,9 +88,9 @@ describe('parseScore / renderScore: properties', () => {
     )
   })
 
-  it('a completed score agrees with exactly one winner: the side that took two sets', () => {
+  it('a completed score agrees with exactly one winner: the side that took two sets, or the pro set', () => {
     fc.assert(
-      fc.property(completed, (score) => {
+      fc.property(fc.oneof(completed, proSet), (score) => {
         const winner = scoreWinner(score)!
         expect(checkWinner(score, winner)).toBeNull()
         expect(checkWinner(score, winner === 'p1' ? 'p2' : 'p1')).not.toBeNull()
@@ -122,6 +137,12 @@ describe('named regressions: scores the old free-text field accepted', () => {
     ['6-4 6-4 ret.'], // decided, yet marked retired
     ['10-8 6-4 6-4'], // a match tiebreak as the first set
     ['6-4 6-3(5)'], // a tiebreak on a 6-3 set
+    ['8-7'], // pro set: 8-7 is not final (play on to 9-7, or a tiebreak at 8-8)
+    ['9-9'],
+    ['10-9'],
+    ['12-10'],
+    ['8-6(5)'], // a tiebreak on an 8-6 pro set
+    ['9-7 6-4'], // a pro-set score as one of several sets
     [''],
   ])('rejects %j', (text) => {
     expect(parseScore(text).ok).toBe(false)
@@ -144,10 +165,29 @@ describe('named regressions: scores the old free-text field accepted', () => {
     ['6\u20134 6\u20133', '6-4 6-3'], // en dash
     ['6-4 2-1 rtd', '6-4 2-1 ret.'],
     ['Walkover', 'W/O'], // what the tournament withdraw route stored
+    ['8-6', '8-6'], // pro sets (CEO 14:29Z)
+    ['9-7', '9-7'],
+    ['9-8 (7-5)', '9-8(5)'],
+    ['10-8', '10-8'],
+    ['11-9', '11-9'],
+    ['11-10(3)', '11-10(3)'],
   ])('accepts %j as %j', (text, canonical) => {
     const parsed = parseScore(text)
     expect(parsed.ok).toBe(true)
     if (parsed.ok) expect(renderScore(parsed.score)).toBe(canonical)
+  })
+
+  it('a pro set agrees only with the side that won it: "8-6" won by player 2 is refused', () => {
+    const parsed = parseScore('8-6')
+    expect(parsed.ok && parsed.score.sets[0].proSet).toBe(8)
+    if (parsed.ok) {
+      expect(checkWinner(parsed.score, 'p1')).toBeNull()
+      expect(checkWinner(parsed.score, 'p2')).toMatch(/no coincide con el ganador/)
+    }
+  })
+
+  it('an invalid pro set explains the pro-set format', () => {
+    expect(parseScore('8-7')).toEqual({ ok: false, error: expect.stringMatching(/pro set a 8/) })
   })
 
   it('an abandoned match is never a result', () => {

@@ -24,6 +24,8 @@ import { parseScore, type Completion, type ParsedScore } from '../../utils/score
  * Margin (bounded, applies to both players, so the match stays zero-sum):
  * - straight sets 1.10, a deciding third set 0.90, a retirement 0.90 (less evidence than a finished match), a
  *   completed score that could not be parsed (older free-text results) 1.00.
+ * - a single pro set 0.90, like a deciding set: it is one short set (12-17 games against 18 or more in two sets), so
+ *   it shows less of a gap than winning two sets, and one break decides it the way a third set does.
  * - walkover and abandoned: not rated at all (factor 0). A walkover says nothing about playing level and would
  *   reward a no-show; an abandoned match has no winner.
  *
@@ -39,7 +41,7 @@ export const K_PLACEMENT = 60
 export const K_ESTABLISHED = 32
 export const RATING_FLOOR = 1
 
-export type SetsShape = 'straight' | 'deciding' | 'incomplete' | 'none' | 'unknown'
+export type SetsShape = 'straight' | 'deciding' | 'pro' | 'incomplete' | 'none' | 'unknown'
 export type ClassificationSource = 'manual' | 'parser' | 'jev'
 
 export interface MatchClassification {
@@ -49,7 +51,7 @@ export interface MatchClassification {
 }
 
 export const MARGIN_FACTORS: Record<Completion, Partial<Record<SetsShape, number>> & { default: number }> = {
-  completed: { straight: 1.1, deciding: 0.9, unknown: 1, default: 1 },
+  completed: { straight: 1.1, deciding: 0.9, pro: 0.9, unknown: 1, default: 1 },
   retired: { default: 0.9 },
   walkover: { default: 0 },
   abandoned: { default: 0 },
@@ -69,7 +71,8 @@ export function classifyScore(score: ParsedScore, source: ClassificationSource):
   if (score.completion !== 'completed') {
     return { completion: score.completion, sets: score.sets.length === 0 ? 'none' : 'incomplete', source }
   }
-  return { completion: 'completed', sets: score.sets.length === 2 ? 'straight' : 'deciding', source }
+  const sets: SetsShape = score.sets.length === 1 ? 'pro' : score.sets.length === 2 ? 'straight' : 'deciding'
+  return { completion: 'completed', sets, source }
 }
 
 /**

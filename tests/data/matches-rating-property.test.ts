@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { startTestApp, type TestApp } from '../security/harness'
-import { approve, createCategory, createPlayer, FUTURE, put, type Account } from './matches-helpers'
+import { approve, recordWalkover, createCategory, createPlayer, FUTURE, put, type Account } from './matches-helpers'
 
 let app: TestApp
 const categories: string[] = []
@@ -143,9 +143,12 @@ describe('rating writes keep the ledger consistent (property over random match s
           const proposer = m.proposerIsPlayer1 ? p1 : p2
           const approver = m.proposerIsPlayer1 ? p2 : p1
           const score = scoreText(m)
-          expect((await put(app, proposer, matchId, 'propose_score', { score, winner_id: winner.playerId })).status).toBe(200)
-          const approved = await approve(app, approver, matchId)
-          expect(approved.status).toBe(200)
+          if (m.walkover) {
+            expect((await recordWalkover(app, proposer, matchId, winner.playerId)).status).toBe(200)
+          } else {
+            expect((await put(app, proposer, matchId, 'propose_score', { score, winner_id: winner.playerId })).status).toBe(200)
+            expect((await approve(app, approver, matchId)).status).toBe(200)
+          }
           if (m.competitive) competitiveWithPair.set(pairKey, priorCompetitive + 1)
 
           const { players, latest, completed } = await snapshot(ids)

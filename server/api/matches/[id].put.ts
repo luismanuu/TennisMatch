@@ -139,10 +139,18 @@ export default defineEventHandler(async (event) => {
 
     // The side of the match a winner id is on, for the score check (the score lists player 1's games first)
     const sideOf = (winnerId: string): 'p1' | 'p2' => (winnerId === match.player1_id ? 'p1' : 'p2')
-    const parsedResult = (text: string | undefined, winnerId: string) => {
+    // `byPlayer`: a result the two players settle between themselves must be rated, so it cannot be a walkover
+    // (only an organizer or admin records one); otherwise two players could agree to dodge the rating.
+    const parsedResult = (text: string | undefined, winnerId: string, byPlayer: boolean) => {
       const parsed = parseScore(text)
       if (!parsed.ok) {
         throw createError({ statusCode: 400, statusMessage: parsed.error })
+      }
+      if (byPlayer && parsed.score.completion === 'walkover') {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Un walkover lo registra el organizador o un administrador. Si el partido se jugó, escribe el marcador.'
+        })
       }
       const winnerError = checkWinner(parsed.score, sideOf(winnerId))
       if (winnerError) {
@@ -257,7 +265,7 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        updateData.score = parsedResult(scoreData.score, scoreData.winner_id).score
+        updateData.score = parsedResult(scoreData.score, scoreData.winner_id, true).score
         updateData.winner_id = scoreData.winner_id
         updateData.score_proposed_by = currentPlayer.id
         updateData.score_proposed_at = new Date()
@@ -1121,7 +1129,7 @@ export default defineEventHandler(async (event) => {
           updateData.score = 'W/O'
           classification = { completion: 'walkover', sets: 'none', source: 'manual' }
         } else if (resultData.score) {
-          const result = parsedResult(resultData.score, resultData.winner_id)
+          const result = parsedResult(resultData.score, resultData.winner_id, false)
           updateData.score = result.score
           classification = result.classification
         } else {
