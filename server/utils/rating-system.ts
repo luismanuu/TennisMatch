@@ -520,46 +520,39 @@ export function applyDecay(currentElo: number, decayAmount: number): number {
 }
 
 /**
- * Get days remaining in current month
+ * Days left in the current UTC month
  */
 export function getDaysRemainingInMonth(): number {
   const now = new Date()
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return lastDay.getDate() - now.getDate()
+  const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+  return lastDay.getUTCDate() - now.getUTCDate()
+}
+
+// First instant of a UTC month, `offset` months from the current one.
+export function utcMonthStart(offset = 0): Date {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1))
 }
 
 /**
- * Calculate required matches for current month based on when player registered
- * If player registered mid-month, adjust requirement proportionally
+ * Matches required in the UTC month starting at `monthStart` (default: the current month). A player who registered
+ * after day 1 of that month owes a share proportional to the days left from registration, at least 1.
+ * The decay job passes the month it is closing, so it applies the requirement the player saw during that month.
  */
-export function calculateRequiredMatchesForMonth(playerCreatedAt: string | null | Date): number {
+export function calculateRequiredMatchesForMonth(playerCreatedAt: string | null | Date, monthStart: Date = utcMonthStart()): number {
   if (!playerCreatedAt) {
     return MATCHES_REQUIRED_PER_MONTH
   }
-  
-  const createdDate = typeof playerCreatedAt === 'string' ? new Date(playerCreatedAt) : playerCreatedAt
-  const now = new Date()
-  
-  // If player was created in a different month/year, use full requirement
-  if (createdDate.getMonth() !== now.getMonth() || createdDate.getFullYear() !== now.getFullYear()) {
+
+  const created = typeof playerCreatedAt === 'string' ? new Date(playerCreatedAt) : playerCreatedAt
+  const inMonth = created.getUTCFullYear() === monthStart.getUTCFullYear() && created.getUTCMonth() === monthStart.getUTCMonth()
+  if (!inMonth || created.getUTCDate() === 1) {
     return MATCHES_REQUIRED_PER_MONTH
   }
-  
-  // If created on day 1, use full requirement
-  if (createdDate.getDate() === 1) {
-    return MATCHES_REQUIRED_PER_MONTH
-  }
-  
-  // Calculate proportional requirement based on days remaining in month from registration date
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const daysInMonth = lastDayOfMonth.getDate()
-  const dayOfMonthCreated = createdDate.getDate()
-  const daysRemainingFromCreation = daysInMonth - dayOfMonthCreated + 1
-  
-  // Calculate proportional requirement (minimum 1 match)
-  const proportionalRequirement = Math.max(1, Math.round((MATCHES_REQUIRED_PER_MONTH * daysRemainingFromCreation) / daysInMonth))
-  
-  return proportionalRequirement
+
+  const daysInMonth = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0)).getUTCDate()
+  const daysRemainingFromCreation = daysInMonth - created.getUTCDate() + 1
+  return Math.max(1, Math.round((MATCHES_REQUIRED_PER_MONTH * daysRemainingFromCreation) / daysInMonth))
 }
 
 /**
@@ -1667,10 +1660,7 @@ export async function clearLlmCalculation(matchId: string, tx?: DbOrTx): Promise
 export type MonthlyDecayOutcome = 'decayed' | 'reset' | 'baseline' | 'skipped'
 
 // First day of the current UTC month as YYYY-MM-DD, the same format and zone as last_decay_check.
-function currentMonthStart(): string {
-  const now = new Date()
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0]
-}
+const currentMonthStart = () => utcMonthStart().toISOString().split('T')[0]
 
 /**
  * Apply the monthly decay to one player, at most once per calendar month (UTC).
@@ -1728,7 +1718,8 @@ export async function applyMonthlyDecay(
       return none('skipped')
     }
 
-    const matchesRequired = calculateRequiredMatchesForMonth(player.created_at)
+    // Closing the previous month: its requirement, not this month's.
+    const matchesRequired = calculateRequiredMatchesForMonth(player.created_at, utcMonthStart(-1))
     const matchesThisMonth = player.matches_this_month ?? 0
     const decayAmount = calculateDecayAmount(matchesThisMonth, matchesRequired)
     const uncertaintyIncrease = (matchesRequired - Math.min(matchesThisMonth, matchesRequired)) * 0.1
