@@ -39,18 +39,17 @@ const sizeClass = computed(() => ({
 
 // Direction contract (impeccable new-work §5): first thing in <body> on every Tablero route,
 // so the shipped page carries the brief it is audited against.
-const CONTRACT = `THESIS: Tenis Ecuador is a club scoreboard, not a dashboard of cards. Refuses the dark app with glass cards, pills and a photo hero.
-OWN-WORLD: enamel-green board, white enamel plates hung on two hooks, one amber lamp for what needs you; Big Shoulders painted caps, Archivo text, tabular numerals; chalk hairlines; 3-4px corners.
-BROADCAST: the board goes on television. A real-time court behind the landing's score bug, lower thirds and straps as Tablero pieces, enamel player cards with a brushed bezel; luxury broadcast, never arcade.
-STORY: a visitor watches a match play out under their own scroll, sees it confirmed and the winner climb a rung, then signs up; a player reads their SR on plates and acts on the lit plate.
-FIRST VIEWPORT: the court under floodlights through the broadcast camera, the score bug at 0-0 top-left, the title card lower-left with the headline at display scale and amber "Crear cuenta gratis" (phones: headline first, court below).
-FORM: hand-operated club scoreboard, grounded candidate 3 of 7; seed 2af1d28f.
+const CONTRACT = `THESIS: Tenis Ecuador is a night court, presented the way Apple presents a product: one object, large type, space, light. Refuses boxes on boxes, scoreboards for a product with no live scores, and arcade effects.
+OWN-WORLD: deep court-green night, off-white Archivo set large and tight, one amber lamp for the action that needs you (or you); depth from light and shadow, not borders; soft radii 10/16/24 and pill buttons.
+STORY: a visitor watches the court come out of dusk under floodlights as they scroll, reading what the product does in four lines, then signs up; a player reads their SR as one large number and acts on the one amber button.
+FIRST VIEWPORT: the 3D court at dusk, full-bleed, "Juega. Confirma. Sube." large over its lower left with the amber "Crear cuenta gratis" (phones: same, stacked).
+FORM: product film of a court; seed 2af1d28f, refined 2026-09-25 after CEO feedback.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md`
 
 if (props.world === 'tablero') {
   useHead({
     script: [{ key: 'direction-contract', type: 'text/plain', id: 'direction-contract', tagPosition: 'bodyOpen', innerHTML: CONTRACT }],
-    link: [{ key: 'tablero-display-font', rel: 'preload', as: 'font', type: 'font/woff2', href: '/fonts/big-shoulders-latin.woff2', crossorigin: '' }]
+    link: [{ key: 'tablero-font', rel: 'preload', as: 'font', type: 'font/woff2', href: '/fonts/archivo-latin.woff2', crossorigin: '' }]
   })
 }
 </script>
@@ -59,5 +58,5 @@ if (props.world === 'tablero') {
 main:focus { outline: none; }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 60; padding: 12px 16px; border-radius: 12px; background: var(--surface); color: var(--foreground); }
 .skip-link:focus { top: 16px; }
-.tablero .skip-link { border-radius: 4px; background: var(--t-plate); color: var(--t-plate-ink); }
+.tablero .skip-link { border-radius: 999px; background: var(--t-ink); color: var(--t-board); }
 </style>

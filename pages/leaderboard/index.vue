@@ -1,46 +1,38 @@
 <template>
   <PageLayout world="tablero">
-    <!-- Ranking (DESIGN.md "Ranking"): the club's ladder board -->
-    <header ref="rankBoard" class="rank-head">
+    <!-- Ranking (DESIGN.md "Ranking"): large type, the viewer's place, then the ladder -->
+    <header class="rank-head">
       <div class="rank-head__title">
         <h1 class="t-display-xl">Ranking</h1>
-        <p v-if="total" class="rank-head__count">
-          <TableroPlates :value="total" :label="`${total.toLocaleString('es-EC')} jugadores clasificados`" />
-          <span class="t-paint" aria-hidden="true">jugadores clasificados</span>
+        <p class="rank-head__count">
+          <template v-if="total"><span class="num">{{ total.toLocaleString('es-EC') }}</span> jugadores clasificados en Ecuador</template>
+          <template v-else>Clasificación de Ecuador</template>
         </p>
-        <p v-else class="t-muted">Clasificación de Ecuador</p>
       </div>
-      <div class="rank-head__side">
-        <BroadcastPlayerCard
-          v-if="ownRow"
-          class="rank-head__own"
-          compact
-          :name="ownRow.name"
-          :rank="ownRow.rank"
-          :rating="ownRow.elo"
-          :tier="ownTier"
-          :heading="`Tu posición: puesto ${ownRow.rank}`"
-          :stats="ownStats"
-        />
-        <button type="button" class="t-btn t-btn--line" @click.stop="showRankingInfo = true">
-          Cómo funciona
-          <Icon name="heroicons:information-circle" class="w-5 h-5" aria-hidden="true" />
-        </button>
+      <div v-if="ownRow" ref="rankBoard" class="rank-own t-arrive">
+        <p class="rank-own__label">Tu posición</p>
+        <p class="rank-own__figures">
+          <span class="rank-own__rank num" aria-hidden="true">{{ ownRow.rank }}</span>
+          <span class="rank-own__meta" aria-hidden="true">
+            <span class="num">{{ ownRow.elo.toLocaleString('es-EC') }} SR</span>
+            <span v-if="ownTier" class="t-muted">{{ ownTier }}</span>
+          </span>
+          <span class="sr-only">Puesto {{ ownRow.rank }}, {{ ownRow.elo }} puntos SR<template v-if="ownTier">, {{ ownTier }}</template></span>
+        </p>
       </div>
     </header>
 
     <TableroScoreStrip v-if="ownRow" :target="rankBoard">
-      <span class="strip-label">Tú</span>
-      <TableroPlate :value="ownRow.rank" tone="lamp" word />
-      <span class="strip-sr num">{{ ownRow.elo.toLocaleString('es-EC') }}</span>
-      <span class="t-paint">SR</span>
+      <strong class="strip-label">Tú</strong>
+      <span class="strip-rank num">Puesto {{ ownRow.rank }}</span>
+      <span class="strip-sr num t-muted">{{ ownRow.elo.toLocaleString('es-EC') }} SR</span>
     </TableroScoreStrip>
 
     <RankingSystemInfo v-model="showRankingInfo" />
 
     <div v-if="initialLoading" class="rank-loading" aria-busy="true">
-      <span v-for="n in 5" :key="n" class="t-slot rank-loading__bar" aria-hidden="true" />
-      <p class="t-muted">Cargando clasificación…</p>
+      <span class="sr-only">Cargando clasificación…</span>
+      <span v-for="n in 6" :key="n" class="t-skel rank-loading__bar" :style="{ opacity: 1 - n * 0.12 }" aria-hidden="true" />
     </div>
 
     <template v-else>
@@ -65,10 +57,16 @@
             </select>
           </div>
         </div>
-        <button v-if="hasActiveFilters" type="button" class="t-link" @click="clearAllFilters">
-          <Icon name="heroicons:x-mark" class="w-4 h-4" aria-hidden="true" />
-          Limpiar filtros
-        </button>
+        <div class="filters__tools">
+          <button v-if="hasActiveFilters" type="button" class="t-link" @click="clearAllFilters">
+            <Icon name="heroicons:x-mark" class="w-4 h-4" aria-hidden="true" />
+            Limpiar filtros
+          </button>
+          <button type="button" class="t-link filters__info" @click.stop="showRankingInfo = true">
+            Cómo funciona el ranking
+            <Icon name="heroicons:information-circle" class="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
       </section>
 
       <div class="rank-section-head">
@@ -90,7 +88,7 @@
 
       <div class="ranking-grid">
         <section v-if="topPlayers.length >= 3" class="rank-top" aria-labelledby="rank-top-title">
-          <h3 id="rank-top-title" class="t-paint rank-top__title">Primeros tres puestos</h3>
+          <h3 id="rank-top-title" class="rank-top__title">Primeros tres puestos</h3>
           <div class="rank-list">
             <LeaderboardPlayerCard v-for="(p, i) in topPlayers.slice(0, 3)" :key="`top-${p.id}`" :player="p" :billing="(i + 1) as 1 | 2 | 3" :order="i" />
           </div>
@@ -98,8 +96,8 @@
 
         <section class="rank-list ranking-list" :aria-label="showAroundMe ? 'Cerca de tu posición' : 'Clasificación'">
           <div v-if="loading && rankings.length === 0" class="rank-loading" aria-busy="true">
-            <span v-for="n in 4" :key="n" class="t-slot rank-loading__bar" aria-hidden="true" />
-            <p class="t-muted">Cargando rankings…</p>
+            <span class="sr-only">Cargando rankings…</span>
+            <span v-for="n in 4" :key="n" class="t-skel rank-loading__bar" aria-hidden="true" />
           </div>
           <div v-else-if="rankings.length > 0" ref="scrollContainer" class="ranking-scroll" @scroll="onScroll">
             <div v-if="hasMoreAbove && isLoadingMore" class="ranking-more" aria-live="polite">
@@ -179,10 +177,7 @@ const ownTier = computed(() => {
   if (!r || !r.total_matches_played) return null
   return TIERS.find(t => r.elo >= t.minElo && r.elo <= t.maxElo)?.name ?? null
 })
-const ownStats = computed(() => [
-  { label: 'Partidos jugados', value: ownRow.value?.total_matches_played ?? null },
-  { label: 'Victorias seguidas', value: ownRow.value?.win_streak ?? null }
-])
+
 
 // Computed
 const hasActiveFilters = computed(() => {
@@ -689,52 +684,53 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.rank-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 24px 40px; padding-bottom: 28px; margin-bottom: 32px; border-bottom: 1px solid var(--t-chalk-strong); }
+.rank-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 40px 64px; margin-bottom: clamp(56px, 7vw, 96px); }
 .rank-head__title { display: grid; gap: 16px; }
-/* The count as a broadcast strap under the title: plates on a painted bar */
-.rank-head__count { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-self: start; font-size: 2rem; padding: 8px 16px 8px 8px; border-radius: 4px; background: var(--t-board-raise); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); }
-@media (prefers-reduced-motion: no-preference) {
-  .rank-head__count { transition: clip-path 620ms var(--t-ease); clip-path: inset(0 0 0 0 round 4px); }
-  @starting-style { .rank-head__count { clip-path: inset(0 100% 0 0 round 4px); } }
-}
-.rank-head__side { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; }
-.rank-head__own { width: min(420px, 100%); }
-.strip-label { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
-.strip-sr { font-size: 17px; font-weight: 650; }
+.rank-head__count { font-size: 19px; color: var(--t-ink-muted); }
+.rank-head__count .num { color: var(--t-ink); font-weight: 600; }
 
-.filters { display: grid; gap: 8px; margin-bottom: 36px; }
+/* The viewer's place: the one amber figure on the page */
+.rank-own { display: grid; gap: 6px; }
+.rank-own__label { font-size: 15px; color: var(--t-ink-muted); }
+.rank-own__figures { display: flex; align-items: flex-end; gap: 20px; margin: 0; }
+.rank-own__rank { font-size: clamp(4rem, 3rem + 3.6vw, 6.5rem); font-weight: 700; line-height: 0.85; letter-spacing: -0.055em; color: var(--t-lamp); }
+.rank-own__meta { display: grid; gap: 2px; padding-bottom: 6px; font-size: 19px; font-weight: 600; }
+.rank-own__meta .t-muted { font-weight: 500; }
+.strip-label { font-weight: 650; }
+.strip-rank { font-weight: 600; color: var(--t-lamp); }
+
+.filters { display: grid; gap: 8px; margin-bottom: clamp(48px, 6vw, 80px); }
 .filters__grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-.filters .t-link { justify-self: start; }
+.filters__tools { display: flex; flex-wrap: wrap; gap: 4px 28px; }
+.filters__info { margin-left: auto; }
 
-.rank-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; margin-bottom: 20px; }
+.rank-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 24px; }
 .rank-section-head > div:first-child { display: grid; gap: 8px; }
-.rank-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.rank-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
 
-.ranking-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 40px; align-items: start; }
+.ranking-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 64px; align-items: start; }
 .ranking-grid > .ranking-list:only-child { grid-column: 1 / -1; }
-.rank-top__title { margin-bottom: 8px; font-size: 0.78rem; }
-.rank-list { border-bottom: 1px solid var(--t-chalk); }
+.rank-top__title { margin-bottom: 12px; font-size: 15px; font-weight: 550; letter-spacing: 0; color: var(--t-ink-muted); }
+.rank-list { display: grid; gap: 2px; }
 /* Scroll container kept: the page loads more rows above/below and centers the viewer's row inside it */
 .ranking-scroll {
-  position: relative; max-height: min(70vh, 640px); overflow-y: auto; overscroll-behavior: contain;
-  /* A window onto the ladder: rows fade at the window's edges instead of being guillotined */
-  -webkit-mask-image: linear-gradient(180deg, transparent 0, var(--t-ink) 44px, var(--t-ink) calc(100% - 44px), transparent 100%);
-  mask-image: linear-gradient(180deg, transparent 0, var(--t-ink) 44px, var(--t-ink) calc(100% - 44px), transparent 100%);
-  padding: 12px 0;
+  position: relative; display: grid; gap: 2px; max-height: min(70vh, 680px); overflow-y: auto; overscroll-behavior: contain;
+  /* A window onto the ladder: rows fade at its edges instead of being cut */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  padding: 16px 16px; margin: 0 -16px;
 }
 .ranking-more { display: flex; justify-content: center; padding: 10px; color: var(--t-ink-muted); }
 .rank-loading { display: grid; gap: 10px; padding: 12px 0; }
-.rank-loading__bar { display: block; height: 52px; width: 100%; padding: 0; }
+.rank-loading__bar { display: block; height: 64px; width: 100%; border-radius: var(--t-r-md); }
 .rank-empty { display: grid; justify-items: start; gap: 12px; padding: 32px 0; }
 
 @media (min-width: 768px) and (max-width: 1099px) { .ranking-grid { grid-template-columns: 1fr; } }
 @media (max-width: 767px) {
-  .rank-head { padding-bottom: 20px; margin-bottom: 24px; }
-  .rank-head__count { font-size: 1.6rem; }
-  .rank-head__side { width: 100%; justify-content: space-between; }
-  .rank-head__own { width: 100%; }
+  .rank-head { gap: 32px; }
   .filters__grid { grid-template-columns: 1fr; }
-  .ranking-grid { grid-template-columns: 1fr; gap: 32px; }
-  .ranking-scroll { max-height: 60vh; }
+  .filters__info { margin-left: 0; }
+  .ranking-grid { grid-template-columns: 1fr; gap: 40px; }
+  .ranking-scroll { max-height: 64vh; }
 }
 </style>

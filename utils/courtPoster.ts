@@ -1,40 +1,65 @@
 /**
- * The court drawn as flat SVG shapes through the broadcast camera (DESIGN.md
- * "Broadcast · Poster"). It is the hero every device sees first, in the server
- * HTML, and the whole hero on devices that keep the static court. Because it uses
- * the same cameraAt/projectPoint as the WebGL scene, the 3D court fades in over
- * a drawing with the same framing.
+ * The court drawn as flat SVG shapes through the same camera and light as the 3D
+ * court (DESIGN.md "The court · Poster"). It is what every device paints first, from
+ * the server HTML, and the whole hero on devices that keep the static court.
  */
-import { TENNIS_COURT as C, cameraAt, courtLines, netHeight, projectPoint, rallyAt, trailPoints, type Vec3 } from './broadcast'
+import { TENNIS_COURT as C, cameraAt, courtLines, lightAt, netHeight, projectPoint, type Vec3 } from './courtShot'
 
 export interface Poster {
   w: number
   h: number
   horizon: number
-  stands: string[]
+  sky: [string, string, string]
+  ground: string
   apron: string
+  apronFill: string
   court: string
+  courtFill: string
   lines: string[]
+  lineFill: string
   net: string
   band: string
   posts: Array<[number, number, number, number]>
+  poles: Array<[number, number, number, number]>
   lamps: Array<[number, number, number]>
-  trail: string
-  ball: [number, number, number] | null
-  shadow: [number, number, number] | null
+  lampFill: string
+  flood: number
+  pools: Array<[number, number, number, number]>
 }
 
 const APRON_W = C.doubles + 2 * C.runSide
 const APRON_L = 2 * (C.half + C.runBack)
-const ROWS = 9, RISE = 0.48, DEPTH = 0.85
+export const TOWER = { x: APRON_W / 2 + 13, z: APRON_L / 2 + 10, h: 24 } as const
 
 const r1 = (x: number) => Math.round(x * 10) / 10
+const hex = (c: string) => [1, 3, 5].map(i => Number.parseInt(c.slice(i, i + 2), 16))
+/** Mix two #rrggbb colours: t = 0 gives a, 1 gives b. */
+export function mix(a: string, b: string, t: number): string {
+  const x = hex(a), y = hex(b)
+  const k = Math.min(1, Math.max(0, Number.isFinite(t) ? t : 0))
+  return '#' + x.map((v, i) => Math.round(v + (y[i]! - v) * k).toString(16).padStart(2, '0')).join('')
+}
 
-/** Draw the court at `progress` into a w × h frame. `withBall` adds the rally (static tier). */
-export function drawPoster(w: number, h: number, progress: number, withBall: boolean): Poster {
+/** The palette of the court under a given light (shared with the 3D scene). */
+export function courtColours(flood: number, dusk: number) {
+  return {
+    ground: mix('#0a1511', '#07100c', flood),
+    court: mix('#1f4c3d', '#1f5c47', flood),
+    apron: mix('#15342a', '#134233', flood),
+    line: mix('#b7c1bb', '#eef0ea', flood),
+    lamp: mix('#2c332f', '#fff4de', flood),
+    skyTop: '#050c09',
+    skyMid: mix('#0b1c16', '#081611', flood),
+    skyLow: mix('#081611', '#3a3122', dusk)
+  }
+}
+
+/** Draw the court at `progress` into a w × h frame. */
+export function drawPoster(w: number, h: number, progress: number): Poster {
   const aspect = w / h
-  const rally = rallyAt(progress)
-  const cam = cameraAt(progress, aspect, null, rally.ball[0])
+  const cam = cameraAt(progress, aspect)
+  const { flood, dusk } = lightAt(progress)
+  const col = courtColours(flood, dusk)
   const px = (v: Vec3): [number, number] | null => {
     const [x, y, d] = projectPoint(v, cam, aspect)
     if (!(d > 0.5)) return null
@@ -44,19 +69,10 @@ export function drawPoster(w: number, h: number, progress: number, withBall: boo
     const out = pts.map(px)
     return out.every(Boolean) ? out.map(p => p!.join(',')).join(' ') : ''
   }
-  const quad = (x1: number, z1: number, x2: number, z2: number, y = 0) => poly([[x1, y, z1], [x2, y, z1], [x2, y, z2], [x1, y, z2]])
+  const quad = (x1: number, z1: number, x2: number, z2: number) => poly([[x1, 0, z1], [x2, 0, z1], [x2, 0, z2], [x1, 0, z2]])
 
-  const far = px([0, 0, -400])
-  const horizon = far ? far[1] : 0
-
-  // Stands: far end and both sides (the near stand sits behind the camera)
-  const aw = APRON_W / 2, al = APRON_L / 2
-  const s0 = 2.2, s1 = 2.2 + ROWS * DEPTH, top = ROWS * RISE
-  const stands = [
-    poly([[-aw - 9, 0, -al - s0], [aw + 9, 0, -al - s0], [aw + 9, top, -al - s1], [-aw - 9, top, -al - s1]]),
-    poly([[-aw - s0, 0, al], [-aw - s0, 0, -al - s0], [-aw - s1, top, -al - s1], [-aw - s1, top, al]]),
-    poly([[aw + s0, 0, al], [aw + s0, 0, -al - s0], [aw + s1, top, -al - s1], [aw + s1, top, al]])
-  ].filter(Boolean)
+  const far = px([0, 0, -500]) ?? px([500, 0, 0]) ?? px([-500, 0, 0])
+  const horizon = far ? Math.max(0, far[1]) : 0
 
   const lines = courtLines().map(([x1, z1, x2, z2, lw]) =>
     Math.abs(x2 - x1) > Math.abs(z2 - z1)
@@ -74,31 +90,32 @@ export function drawPoster(w: number, h: number, progress: number, withBall: boo
     const a = px([s * C.postX, 0, 0]), b = px([s * C.postX, C.netPost, 0])
     return a && b ? [[a[0], a[1], b[0], b[1]] as [number, number, number, number]] : []
   })
-  const tx = aw + 11, tz = al + 11
-  const lamps = ([[-tx, -tz], [tx, -tz], [-tx, tz], [tx, tz]] as const).flatMap(([x, z]) => {
-    const p = px([x, 26.5, z])
+  const towers = [[-TOWER.x, -TOWER.z], [TOWER.x, -TOWER.z], [-TOWER.x, TOWER.z], [TOWER.x, TOWER.z]] as const
+  const poles = towers.flatMap(([x, z]) => {
+    const a = px([x, 0, z]), b = px([x, TOWER.h, z])
+    return a && b ? [[a[0], a[1], b[0], b[1]] as [number, number, number, number]] : []
+  })
+  const lamps = towers.flatMap(([x, z]) => {
+    const p = px([x, TOWER.h, z])
     if (!p) return []
-    const [, , d] = projectPoint([x, 26.5, z], cam, aspect)
-    return [[p[0], p[1], r1(Math.max(2, (1.7 * h) / d))] as [number, number, number]]
+    const [, , d] = projectPoint([x, TOWER.h, z], cam, aspect)
+    return [[p[0], p[1], r1(Math.max(1.5, (1.3 * h) / d))] as [number, number, number]]
+  })
+  // Pools of floodlight on the court, one per tower, drawn as ellipses under the lines
+  const pools = ([[-0.5, -0.55], [0.5, -0.55], [-0.5, 0.55], [0.5, 0.55]] as const).flatMap(([fx, fz]) => {
+    const c = px([fx * C.doubles, 0, fz * C.half * 1.4])
+    const e = px([fx * C.doubles + 6, 0, fz * C.half * 1.4])
+    const n = px([fx * C.doubles, 0, fz * C.half * 1.4 + 7])
+    if (!c || !e || !n) return []
+    return [[c[0], c[1], r1(Math.hypot(e[0] - c[0], e[1] - c[1]) + 1), r1(Math.hypot(n[0] - c[0], n[1] - c[1]) + 1)] as [number, number, number, number]]
   })
 
-  let trail = ''
-  let ball: Poster['ball'] = null
-  let shadow: Poster['shadow'] = null
-  if (withBall) {
-    const pts = trailPoints(rally, 14).map(px).filter(Boolean) as Array<[number, number]>
-    trail = pts.map(p => p.join(',')).join(' ')
-    const b = px(rally.ball), s = px([rally.ball[0], 0, rally.ball[2]])
-    const [, , d] = projectPoint(rally.ball, cam, aspect)
-    const rad = r1(Math.max(2.5, (0.16 * h) / Math.max(1, d)))
-    if (b) ball = [b[0], b[1], rad]
-    if (s) shadow = [s[0], s[1], rad]
-  }
-
   return {
-    w, h, horizon, stands,
-    apron: quad(-aw, -al, aw, al),
-    court: quad(-C.doubles / 2, -C.half, C.doubles / 2, C.half),
-    lines, net, band, posts, lamps, trail, ball, shadow
+    w, h, horizon,
+    sky: [col.skyTop, col.skyMid, col.skyLow],
+    ground: col.ground,
+    apron: quad(-APRON_W / 2, -APRON_L / 2, APRON_W / 2, APRON_L / 2), apronFill: col.apron,
+    court: quad(-C.doubles / 2, -C.half, C.doubles / 2, C.half), courtFill: col.court,
+    lines, lineFill: col.line, net, band, posts, poles, lamps, lampFill: col.lamp, flood, pools
   }
 }

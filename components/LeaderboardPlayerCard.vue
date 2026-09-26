@@ -7,9 +7,8 @@
     :style="{ '--i': Math.min(order, 12) }"
     :aria-current="player.is_current_user ? 'true' : undefined"
   >
-    <span class="lb-rank">
-      <span class="sr-only">Puesto {{ player.rank }}</span>
-      <TableroPlate :value="player.rank" :tone="player.is_current_user ? 'lamp' : 'plate'" word />
+    <span class="lb-rank num">
+      <span class="sr-only">Puesto </span>{{ player.rank }}
     </span>
     <span class="lb-copy">
       <strong class="lb-name">{{ player.name }}<template v-if="player.is_current_user"> (tú)</template></strong>
@@ -45,8 +44,8 @@
 
 <script setup lang="ts">
 /**
- * Ranking row (DESIGN.md "Ranking"): a name painted on the ladder board with its rank on
- * a hung plate. The viewer's own rank hangs on the amber lamp plate. The first three
+ * Ranking row (DESIGN.md "Ranking"): rank, name and SR on the night court, no rules between
+ * rows; a surface rises under the pointer. The viewer's own rank is in the amber lamp. The first three
  * rows are billed by size (`billing`), never by podium cards. Names wrap; SR stays
  * right-aligned in tabular numerals.
  */
@@ -74,53 +73,47 @@ const streak = computed(() => {
 
 <style scoped>
 .lb-row {
-  display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) auto; align-items: start; gap: 16px;
-  padding: 16px 8px; border-top: 1px solid var(--t-chalk); color: inherit; text-decoration: none;
+  display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; align-items: start; gap: 16px;
+  padding: 16px; border-radius: var(--t-r-md); color: inherit; text-decoration: none;
 }
-.lb-rank { display: grid; justify-items: start; font-size: 1.45rem; padding-top: 1px; }
+.lb-rank { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; color: var(--t-ink-muted); padding-top: 1px; }
 .lb-copy { min-width: 0; overflow-wrap: anywhere; display: grid; gap: 3px; }
-.lb-name { font-weight: 650; font-size: 16px; line-height: 1.3; }
-.lb-meta { font-size: 13.5px; color: var(--t-ink-muted); }
-.lb-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.lb-name { font-weight: 600; font-size: 17px; line-height: 1.3; }
+.lb-meta { font-size: 14px; color: var(--t-ink-muted); }
+.lb-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .lb-end { display: grid; justify-items: end; gap: 2px; text-align: right; }
-.lb-sr { font-size: 18px; font-weight: 650; line-height: 1.2; }
-.lb-tier { font-size: 12.5px; color: var(--t-ink-muted); white-space: nowrap; }
-.lb-change { display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; font-size: 12.5px; font-weight: 650; }
+.lb-sr { font-size: 19px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
+.lb-tier { font-size: 13px; color: var(--t-ink-muted); white-space: nowrap; }
+.lb-change { display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; font-size: 13px; font-weight: 600; }
 .lb-change.is-up { color: var(--t-ink); }
 .lb-change.is-down { color: var(--t-clay); }
 
-/* The viewer's own row: the lamp plate carries it; the row itself only gets a painted frame */
-.lb-row.is-own { background: var(--t-board-raise); box-shadow: inset 0 0 0 1px var(--t-chalk-strong); border-top-color: transparent; }
+/* The viewer's own row: a raised surface, the rank in the lamp */
+.lb-row.is-own { background: var(--t-board-raise); box-shadow: var(--t-inner), var(--t-e1); }
+.lb-row.is-own .lb-rank { color: var(--t-lamp); }
 
-/* Billing: the top of the board is painted larger, rank 1 largest */
-.is-billing-1 .lb-name, .is-billing-2 .lb-name, .is-billing-3 .lb-name { font-family: var(--t-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1; }
-.is-billing-1 .lb-name { font-size: 2rem; }
-.is-billing-2 .lb-name { font-size: 1.65rem; }
-.is-billing-3 .lb-name { font-size: 1.4rem; }
-.is-billing-1 .lb-rank { font-size: 2rem; }
+/* The top of the ladder is billed by size, rank 1 largest */
+.is-billing-1 .lb-name { font-size: 24px; font-weight: 700; letter-spacing: -0.03em; }
+.is-billing-2 .lb-name { font-size: 21px; font-weight: 650; letter-spacing: -0.025em; }
+.is-billing-3 .lb-name { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; }
+.is-billing-1 .lb-rank { font-size: 24px; color: var(--t-ink); }
 
-/* Hover: the rank plate lifts on its hooks; press: the row is pressed into the board */
-.lb-rank :deep(.t-plate) { transform-origin: 50% 0; }
 @media (prefers-reduced-motion: no-preference) {
-  .lb-rank :deep(.t-plate) { transition: transform 240ms var(--t-ease), box-shadow 240ms var(--t-ease); }
+  .lb-row { transition: background-color var(--t-base) var(--t-ease), box-shadow var(--t-base) var(--t-ease), transform var(--t-quick) var(--t-ease), opacity var(--t-slow) var(--t-ease) calc(var(--i, 0) * 40ms), translate var(--t-slow) var(--t-ease) calc(var(--i, 0) * 40ms); }
+  /* Rows rise into place, staggered, the moment the data puts them on the ladder */
+  @starting-style { .lb-row { opacity: 0; translate: 0 10px; } }
 }
 @media (hover: hover) {
-  .lb-row:hover { background: var(--lens); }
-  .lb-row.is-own:hover { background: var(--t-board-raise); }
-  .lb-row:hover .lb-rank :deep(.t-plate) { transform: perspective(300px) rotateX(14deg); }
+  .lb-row:hover { background: var(--t-board-raise); box-shadow: var(--t-inner), var(--t-e1); }
+  .lb-row.is-own:hover { box-shadow: var(--t-inner), var(--t-e2); }
 }
-.lb-row:active { background: var(--t-board-deep); }
-/* Stat reveal: rows wipe in, staggered, the moment the data puts them on the board */
-@media (prefers-reduced-motion: no-preference) {
-  .lb-row { transition: clip-path 520ms var(--t-ease) calc(var(--i, 0) * 45ms), background-color 160ms linear; clip-path: inset(0 0 0 0); }
-  @starting-style { .lb-row { clip-path: inset(0 100% 0 0); } }
-}
+.lb-row:active { transform: scale(0.99); background: var(--t-board-high); }
 @media (max-width: 767px) {
-  .lb-row { grid-template-columns: 2.9rem minmax(0, 1fr) auto; gap: 12px; padding: 14px 4px; }
-  .lb-rank { font-size: 1.25rem; }
-  .lb-name { font-size: 15px; }
-  .is-billing-1 .lb-name { font-size: 1.6rem; }
-  .is-billing-2 .lb-name { font-size: 1.4rem; }
-  .is-billing-3 .lb-name { font-size: 1.25rem; }
+  .lb-row { grid-template-columns: 2.4rem minmax(0, 1fr) auto; gap: 12px; padding: 14px 12px; }
+  .lb-rank { font-size: 17px; }
+  .lb-name { font-size: 16px; }
+  .is-billing-1 .lb-name { font-size: 21px; }
+  .is-billing-2 .lb-name { font-size: 19px; }
+  .is-billing-3 .lb-name { font-size: 17px; }
 }
 </style>
