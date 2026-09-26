@@ -418,7 +418,7 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        if (match.status === 'active') {
+        if (match.status === 'active' && !isAdmin) {
           throw createError({
             statusCode: 400,
             statusMessage: 'Cannot cancel an active match. Use reschedule instead.'

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, ne } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm'
 import type { DbOrTx } from '../db'
 import { matches, players, rating_history } from '../db/schema'
 import {
@@ -115,6 +115,8 @@ export async function planReplay(db: DbOrTx): Promise<ReplayPlan> {
  */
 export async function applyReplay(db: DbOrTx): Promise<number> {
   return db.transaction(async (t) => {
+    // No approval may add or reverse a rating between the plan and the write
+    await t.execute(sql`lock table rating_history in exclusive mode`)
     const plan = await planReplay(t)
     const ids = [...plan.input.seeds.keys()].sort()
     if (ids.length === 0) return 0
@@ -128,7 +130,7 @@ export async function applyReplay(db: DbOrTx): Promise<number> {
     await t.update(rating_history).set({ rating_reversed: true, reversed_at: new Date() }).where(eq(rating_history.rating_reversed, false))
 
     // Rows get increasing created_at in replay order: "latest rating" (reversal, streaks) is read by created_at
-    const start = Date.now()
+    const start = Date.now() - 2 * plan.result.rows.length
     const played = new Map<string, number>()
     const streak = new Map<string, { win: number; loss: number }>()
     let written = 0

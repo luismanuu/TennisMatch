@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { startTestApp, type TestApp } from '../security/harness'
 import { rateMatch } from '../../server/utils/elo'
+import { calculateGroupStandings } from '../../server/utils/tournament-brackets'
 import { activeMatch, approve, createCategory, createPlayer, playerRow, put, type Account } from './matches-helpers'
 
 // Match integrity around the rating (audit S1-S6, B2-B4, B6, B9): parsed scores, versioned approval, the status
@@ -261,5 +262,25 @@ describe('the rating reads only SR and experience (B2, B3, B4, B6, B9)', () => {
     )
     expect(rows.find((r) => r.player_id === a.playerId)).toMatchObject({ elo_before: 2000, elo_change: expected.winner.delta })
     expect(rows.find((r) => r.player_id === b.playerId)).toMatchObject({ elo_before: 1500, elo_change: expected.loser.delta })
+  })
+})
+
+// Review findings on the canonical score text and the status whitelist
+describe('regressions from review', () => {
+  it('group standings read "7-6(5) 6-4" as 13-10 in games, not 69 lost games', () => {
+    const standings = calculateGroupStandings('g', [{ player1_id: 'a', player2_id: 'b', winner_id: 'a', score: '7-6(5) 6-4' }])
+    expect(standings.get('a')).toMatchObject({ games_won: 13, games_lost: 10, game_difference: 3 })
+    expect(standings.get('b')).toMatchObject({ games_won: 10, games_lost: 13, game_difference: -3 })
+  })
+
+  it('an admin can cancel an abandoned active match; a player still cannot', async () => {
+    const [a, b] = await pairOf('lluvia')
+    const matchId = await activeMatch(app, a, b)
+    expect((await put(app, a, matchId, 'cancel')).status).toBe(400)
+    const staff = await createPlayer(app, categoryId, 'staff')
+    await app.setRole(staff.userId, 'admin')
+    expect((await put(app, staff, matchId, 'cancel')).status).toBe(200)
+    expect(await matchRow(matchId)).toMatchObject({ status: 'cancelled', winner_id: null })
+    expect(await history(matchId)).toHaveLength(0)
   })
 })

@@ -127,6 +127,24 @@ describe('named regressions: rank (audit R1-R5)', () => {
     }
   })
 
+  it('R6: the previous_rank snapshot uses the same definition; a player with no rated match gets none', async () => {
+    const admin = await app.signUp(`admin-r6-${Date.now()}@tenis.ec`, 'admin')
+    const ids = [
+      await seedPlayer(app, { elo: 2600, total_matches_played: 0, previous_rank: 1 }),
+      await seedPlayer(app, { elo: 2000, total_matches_played: 3 }),
+      await seedPlayer(app, { elo: 2000, total_matches_played: 3 }),
+    ]
+    try {
+      expect((await app.request('POST', '/api/admin/rankings/update-previous-ranks', { cookie: admin.cookie })).status).toBe(200)
+      const { rows } = await app.client.query<{ id: string; previous_rank: number | null }>(`select id, previous_rank from players where id = any($1)`, [ids])
+      expect(ids.map((id) => rows.find((r) => r.id === id)?.previous_rank)).toEqual([null, 1, 1])
+      const board = (await app.request('GET', '/api/leaderboard', { query: { tier: 'Gold' } })).body as { rankings: Array<Row & { rank_change?: number }> }
+      expect(board.rankings.filter((r) => ids.includes(r.id)).map((r) => r.rank_change)).toEqual([0, 0])
+    } finally {
+      await deletePlayers(app, ids)
+    }
+  })
+
   it('R5: /api/rankings?tier=Gold filters before paging: a Gold player below 3 Diamond players is on page 1', async () => {
     const ids = [
       await seedPlayer(app, { elo: 3300, total_matches_played: 3 }),

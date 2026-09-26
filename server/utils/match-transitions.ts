@@ -5,13 +5,15 @@ export type MatchStatus = 'scheduled' | 'active' | 'completed' | 'cancelled'
  * itself is conditional on the status that was checked (matches/[id].put.ts), so two requests cannot both move it.
  *
  * - A match starts (scheduled → active) through update_status, which cannot do anything else.
- * - It is cancelled only before it starts, by `cancel` or by the opponent rejecting the proposal.
+ * - It is cancelled before it starts, by `cancel` or by the opponent rejecting the proposal; an admin can also
+ *   cancel an active match (abandoned, no result).
  * - It is completed only by an approved score or an organizer/admin result, which also rates it.
  * - completed and cancelled are final.
  */
 export const STATUS_CHANGES: Readonly<Record<string, { from: readonly MatchStatus[]; to: MatchStatus }>> = {
   update_status: { from: ['scheduled'], to: 'active' },
-  cancel: { from: ['scheduled'], to: 'cancelled' },
+  // Players only before it starts (enforced in the handler); an admin also closes an active match that was abandoned
+  cancel: { from: ['scheduled', 'active'], to: 'cancelled' },
   reject_match: { from: ['scheduled'], to: 'cancelled' },
   approve_score: { from: ['active'], to: 'completed' },
   organizer_set_result: { from: ['scheduled', 'active'], to: 'completed' },

@@ -210,7 +210,8 @@ export function calculateGroupStandings(
     const player2Standing = standings.get(match.player2_id)!
     
     // Check if it's a walkover (WO)
-    const isWalkover = match.score.trim().toUpperCase() === 'WO'
+    // Walkover in any stored spelling (WO, W/O, Walkover)
+    const isWalkover = /^(w\s*\/?\s*o|walkover)$/i.test(match.score.trim())
     
     let player1Sets = 0
     let player2Sets = 0
@@ -220,7 +221,8 @@ export function calculateGroupStandings(
     if (!isWalkover) {
       // Parse score with robust error handling for various formats
       // Handles: "6-4, 6-3", "6-4,6-3", "6-4, 6-3, 6-2", "8-6" (pro set), "6-4 6-3" (space instead of comma)
-      let scoreToParse = match.score.trim()
+      // Tiebreak points "7-6(5)" are not games
+      let scoreToParse = match.score.trim().replace(/\s*\([^)]*\)/g, '')
       
       // Normalize: replace multiple spaces with single space, then replace space-comma or comma-space patterns
       scoreToParse = scoreToParse.replace(/\s+/g, ' ') // Multiple spaces -> single space

@@ -140,6 +140,10 @@ describe('named regressions: scores the old free-text field accepted', () => {
     ['6-4 2-1 RET', '6-4 2-1 ret.'],
     ['w/o', 'W/O'],
     ['6-4 5-5 abd', '6-4 5-5 abd.'],
+    ['6/4 6/3', '6-4 6-3'], // slash spelling (review finding)
+    ['6\u20134 6\u20133', '6-4 6-3'], // en dash
+    ['6-4 2-1 rtd', '6-4 2-1 ret.'],
+    ['Walkover', 'W/O'], // what the tournament withdraw route stored
   ])('accepts %j as %j', (text, canonical) => {
     const parsed = parseScore(text)
     expect(parsed.ok).toBe(true)

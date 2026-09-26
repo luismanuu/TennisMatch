@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
     const player = UUID.test(playerId)
       ? await db.query.players.findFirst({
-          columns: { id: true, elo: true, city_id: true, total_matches_played: true },
+          columns: { id: true, elo: true, city_id: true, total_matches_played: true, status: true, deleted_at: true },
           where: eq(players.id, playerId),
         })
       : undefined
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Rank as defined in server/utils/ranking.ts; a player with no rated match has none
-    if (!player.total_matches_played) {
+    if (!player.total_matches_played || player.status !== 'active' || player.deleted_at) {
       return { success: true, is_unrated: true, position: null }
     }
 

@@ -25,9 +25,9 @@ export type ParsedScore = { sets: SetScore[]; completion: Completion }
 
 export type ScoreParse = { ok: true; score: ParsedScore } | { ok: false; error: string }
 
-const WALKOVER = /^(w\s*\/\s*o|w\.?\s*o\.?)$/
+const WALKOVER = /^(w\s*\/\s*o|w\.?\s*o\.?|walkover)$/
 const MARKERS: Array<[RegExp, Completion]> = [
-  [/\s*(ret\.?|retiro|retirado|retirada)$/, 'retired'],
+  [/\s*(ret\.?|rtd\.?|retired|retiro|retirado|retirada)$/, 'retired'],
   [/\s*(abd\.?|abandonado|suspendido)$/, 'abandoned'],
 ]
 const TOKEN = /^\[?(\d{1,2})-(\d{1,2})\]?(?:\((\d{1,2})(?:-(\d{1,2}))?\))?$/
@@ -106,7 +106,9 @@ export function parseScore(input: string | null | undefined): ScoreParse {
     }
   }
 
+  // "6/4" and "6–4" (slash, en dash) are common spellings of 6-4
   const tokens = text
+    .replace(/(\d)\s*[\/\u2013\u2014]\s*(\d)/g, '$1-$2')
     .replace(/\s*-\s*/g, '-')
     .replace(/\s*\(\s*/g, '(')
     .replace(/\s*\)/g, ')')

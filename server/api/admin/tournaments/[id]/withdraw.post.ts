@@ -138,7 +138,7 @@ export default defineEventHandler(async (event) => {
             const winnerId = match.player1_id === player_id ? match.player2_id : match.player1_id
             await tx
               .update(matches)
-              .set({ winner_id: winnerId, status: 'completed', score: 'Walkover' })
+              .set({ winner_id: winnerId, status: 'completed', score: 'W/O' })
               .where(eq(matches.id, match.id))
           }
         }

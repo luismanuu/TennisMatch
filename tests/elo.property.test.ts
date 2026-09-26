@@ -202,7 +202,7 @@ describe('named regressions from the audit', () => {
   })
 
   it('B10: walkover spellings are recognised and never rated ("W/O", "wo", "w.o.")', () => {
-    for (const text of ['W/O', 'wo', 'w.o.', 'WO']) {
+    for (const text of ['W/O', 'wo', 'w.o.', 'WO', 'Walkover']) {
       const c = classifyStoredScore(text)
       expect(c.completion).toBe('walkover')
       expect(isRatable(c)).toBe(false)
