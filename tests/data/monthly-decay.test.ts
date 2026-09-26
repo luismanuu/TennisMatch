@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import fc from 'fast-check'
 import { startTestApp, type TestApp } from '../security/harness'
-import { applyMonthlyDecay, ELO_DECAY_FLOOR } from '../../server/utils/rating-system'
+import { applyMonthlyDecay, ELO_DECAY_FLOOR, getMonthlyDecayStatus } from '../../server/utils/rating-system'
 
 // Monthly decay writes ratings. It must only happen from the scheduled job, which proves itself with
 // CRON_SECRET, at most once per player per calendar month. The public decay-status GET only reads.
@@ -342,4 +342,70 @@ describe('applyMonthlyDecay on its own, as an overlapping run reaches it', () =>
     expect((await applyMonthlyDecay(id)).outcome).toBe('baseline')
     expect((await snapshot([id])).get(id)).toMatchObject({ matches_this_month: 1, last_decay_check: today, elo: 1700 })
   })
+})
+
+// What the decay-status panel tells a player during a month must be what the cron applies when it closes that
+// month on the 1st. Only Date is faked; the database keeps its own clock.
+describe('the cron closes the month the player was told about', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // A second useFakeTimers call does not move an already faked clock; setSystemTime does.
+  const at = (iso: string) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(iso))
+  }
+
+  async function joinedAndPlayed(createdAt: string, lastCheck: string, played: number): Promise<string> {
+    const id = await insertPlayer({
+      elo: 1800,
+      uncertainty: 1,
+      matchesThisMonth: played,
+      lastCheck,
+      total: 3 + played,
+      placement: 3,
+      deleted: false,
+      oldAccount: true,
+    })
+    await app.client.query(`update players set created_at = $2 where id = $1`, [id, createdAt])
+    return id
+  }
+
+  // Review of PR #50 (2026-09-26): joined Feb 15, the panel said 1 match was needed, the player played 1, and
+  // the March 1 run evaluated February with March's clock (created in another month, so 2 required) and decayed.
+  it('regression: joined 2026-02-15, played 1 of the 1 required, is not decayed on 2026-03-01', async () => {
+    at('2026-02-27T15:00:00Z')
+    const promised = getMonthlyDecayStatus(1, '2026-02-16', 3, new Date('2026-02-15T14:00:00Z'))
+    expect(promised).toMatchObject({ matches_required: 1, will_decay: false, estimated_decay: 0 })
+
+    const id = await joinedAndPlayed('2026-02-15T14:00:00Z', '2026-02-16', 1)
+    at('2026-03-01T05:10:00Z')
+    const result = await applyMonthlyDecay(id)
+    expect(result).toMatchObject({ outcome: 'reset', decayApplied: 0 })
+    expect((await snapshot([id])).get(id)).toMatchObject({ elo: 1800, matches_this_month: 0, last_decay_check: '2026-03-01' })
+  })
+
+  it('property: the decay applied on the 1st equals the estimate shown on the last day of the closed month', async () => {
+    const month = fc.constantFrom('2026-02', '2026-04', '2026-07', '2026-12', '2028-02')
+    await fc.assert(
+      fc.asyncProperty(month, fc.integer({ min: 1, max: 28 }), fc.nat({ max: 3 }), async (ym, joinDay, played) => {
+        const [y, m] = ym.split('-').map(Number)
+        const created = new Date(Date.UTC(y, m - 1, joinDay, 12))
+        const lastDay = new Date(Date.UTC(y, m, 0, 20))
+        const firstOfNext = new Date(Date.UTC(y, m, 1, 5, 10))
+        const lastCheck = created.toISOString().split('T')[0]
+
+        at(lastDay.toISOString())
+        const promised = getMonthlyDecayStatus(played, lastCheck, 3, created)
+        const id = await joinedAndPlayed(created.toISOString(), lastCheck, played)
+        at(firstOfNext.toISOString())
+        const result = await applyMonthlyDecay(id)
+        vi.useRealTimers()
+        expect(result.decayApplied, JSON.stringify({ ym, joinDay, played, promised })).toBe(promised.estimated_decay)
+        return true
+      }),
+      { seed: 20260926, numRuns: 60 },
+    )
+  }, 120_000)
 })
