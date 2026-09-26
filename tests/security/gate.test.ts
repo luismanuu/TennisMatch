@@ -98,6 +98,20 @@ describe('signed-in non-admin on admin routes', () => {
   )
 })
 
+describe('cron routes', () => {
+  const cronRoutes = routes.filter((r) => accessOf(r) === 'cron')
+
+  it('every cron route is scheduled in vercel.json, and every scheduled path is a cron route', () => {
+    const scheduled = (JSON.parse(readFileSync(join(ROOT, 'vercel.json'), 'utf8')).crons as Array<{ path: string }>).map((c) => c.path)
+    expect(scheduled.sort()).toEqual(cronRoutes.map((r) => r.pattern).sort())
+  })
+
+  it.each(cronRoutes.map((r) => [label(r), r] as const))('%s → 401 for an admin session and forged identity, no secret configured', async (_, r) => {
+    const res = await app.request(methodOf(r), r.pattern, { cookie: admin.cookie, ...forged(admin.userId) })
+    expect(res.status).toBe(401)
+  })
+})
+
 describe('organizer routes', () => {
   it.each(routes.filter((r) => accessOf(r) === 'organizer').map((r) => [label(r), r] as const))(
     '%s → 403 for a player',
