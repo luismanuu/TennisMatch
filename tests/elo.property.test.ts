@@ -5,6 +5,7 @@ import {
   K_ESTABLISHED,
   K_PLACEMENT,
   MAX_MARGIN_FACTOR,
+  PLACEMENT_MATCHES,
   RATING_FLOOR,
   classifyStoredScore,
   parseExplanation,
@@ -83,8 +84,15 @@ describe('rateMatch: properties', () => {
     fc.assert(
       fc.property(pair, classification, ([w, l], c) => {
         const o = rateMatch(w, l, c)
-        expect([K_ESTABLISHED, K_PLACEMENT, (K_ESTABLISHED + K_PLACEMENT) / 2]).toContain(o.k)
+        expect([K_ESTABLISHED, K_PLACEMENT, Math.round((K_ESTABLISHED + K_PLACEMENT) / 2)]).toContain(o.k)
         expect(Math.abs(o.winner.delta)).toBeLessThanOrEqual(Math.round(o.k * MAX_MARGIN_FACTOR))
+        // The two documented ceilings: never above the placement swing, and two established players never above the
+        // established swing (with K = 48: 66 and 53)
+        expect(Math.abs(o.winner.delta)).toBeLessThanOrEqual(Math.round(K_PLACEMENT * MAX_MARGIN_FACTOR))
+        if (w.ratedMatches >= PLACEMENT_MATCHES && l.ratedMatches >= PLACEMENT_MATCHES) {
+          expect(o.k).toBe(K_ESTABLISHED)
+          expect(Math.abs(o.winner.delta)).toBeLessThanOrEqual(Math.round(K_ESTABLISHED * MAX_MARGIN_FACTOR))
+        }
         expect(o.winner.delta).toBeGreaterThanOrEqual(0)
         expect(o.loser.after).toBeGreaterThanOrEqual(RATING_FLOOR)
         if (!isRatable(c)) expect(o.winner.delta).toBe(0)
@@ -158,7 +166,7 @@ describe('replayRatings: properties', () => {
         for (const row of replayRatings(seeds, matches).rows) {
           for (const [id, side] of [[row.winner, row.outcome.winner], [row.loser, row.outcome.loser]] as const) {
             const n = seen.get(id) ?? 0
-            expect(side.isPlacement).toBe(n < 3)
+            expect(side.isPlacement).toBe(n < PLACEMENT_MATCHES)
             seen.set(id, n + 1)
           }
         }
@@ -172,11 +180,12 @@ describe('replayRatings: properties', () => {
 describe('named regressions from the audit', () => {
   const straight: MatchClassification = { completion: 'completed', sets: 'straight', source: 'parser' }
 
+  // K = 54 = (60 + 48) / 2 since the CEO's K = 48 (2026-09-26); it was 46 and +25 / -25 at K = 32
   it('B1: a newcomer (0 matches) at 1500 beating an established 1500 no longer creates points (was +30 / -12)', () => {
     const o = rateMatch({ rating: 1500, ratedMatches: 0 }, { rating: 1500, ratedMatches: 10 }, straight)
-    expect(o.k).toBe(46)
-    expect(o.winner.delta).toBe(25)
-    expect(o.loser.delta).toBe(-25)
+    expect(o.k).toBe(54)
+    expect(o.winner.delta).toBe(30)
+    expect(o.loser.delta).toBe(-30)
   })
 
   it('B5: placement vs established at 1500 is zero-sum (was +25 / -20)', () => {
@@ -184,9 +193,20 @@ describe('named regressions from the audit', () => {
     expect(o.winner.delta).toBe(-o.loser.delta)
   })
 
-  it('B6: one formula: established 1500 v 1500 in straight sets is +18 / -18 on every path (was 20, 16 or the LLM)', () => {
+  // +18 / -18 at K = 32; +26 / -26 = round(48 * 1.1 * 0.5) since K = 48
+  it('B6: one formula: established 1500 v 1500 in straight sets is +26 / -26 on every path (was 20, 16 or the LLM)', () => {
     const o = rateMatch({ rating: 1500, ratedMatches: 10 }, { rating: 1500, ratedMatches: 10 }, straight)
-    expect([o.k, o.margin, o.winner.delta, o.loser.delta]).toEqual([32, 1.1, 18, -18])
+    expect([o.k, o.margin, o.winner.delta, o.loser.delta]).toEqual([48, 1.1, 26, -26])
+  })
+
+  it('K = 48 (CEO 2026-09-26): the largest swing between established players is 53, a 4500 losing to a 1 in straight sets', () => {
+    const o = rateMatch({ rating: 1, ratedMatches: 10 }, { rating: 4500, ratedMatches: 10 }, straight)
+    expect([o.k, o.winner.delta, o.loser.delta]).toEqual([48, 53, -53])
+  })
+
+  it('placement keeps K = 60: the largest swing between two placement players is still 66', () => {
+    const o = rateMatch({ rating: 1, ratedMatches: 0 }, { rating: 4500, ratedMatches: 2 }, straight)
+    expect([o.k, o.winner.delta, o.loser.delta]).toEqual([60, 66, -66])
   })
 
   it('B7: the winner never loses SR, even as a 4500 favourite against a 1-rated opponent', () => {
@@ -213,7 +233,8 @@ describe('named regressions from the audit', () => {
   it('legacy free text that the parser cannot read still rates, at factor 1', () => {
     const c = classifyStoredScore('ganamos por abandono')
     expect(c).toEqual({ completion: 'completed', sets: 'unknown', source: 'parser' })
-    expect(rateMatch({ rating: 1500, ratedMatches: 10 }, { rating: 1500, ratedMatches: 10 }, c).winner.delta).toBe(16)
+    // An even match at factor 1 is worth K / 2: 24 since K = 48 (16 at K = 32)
+    expect(rateMatch({ rating: 1500, ratedMatches: 10 }, { rating: 1500, ratedMatches: 10 }, c).winner.delta).toBe(24)
   })
 })
 
@@ -236,6 +257,7 @@ describe('pro set (CEO 14:29Z)', () => {
     const c = classifyStoredScore('9-8(5)')
     expect(c).toEqual({ completion: 'completed', sets: 'pro', source: 'parser' })
     const o = rateMatch({ rating: 1500, ratedMatches: 10 }, { rating: 1500, ratedMatches: 10 }, c)
-    expect([o.margin, o.winner.delta]).toEqual([0.9, 14])
+    // round(48 * 0.9 * 0.5) = 22 since K = 48 (14 at K = 32)
+    expect([o.margin, o.winner.delta]).toEqual([0.9, 22])
   })
 })
