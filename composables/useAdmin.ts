@@ -487,82 +487,6 @@ export const useAdmin = () => {
     }
   }
 
-  // Fallback matches state
-  const fallbackMatches = ref<any[]>([])
-  const fallbackMatchesPage = ref(1)
-  const fallbackMatchesPageSize = ref(15)
-  const fallbackMatchesTotal = ref(0)
-
-  // Fetch fallback matches (admin only)
-  const fetchFallbackMatches = async (page?: number, pageSize?: number) => {
-    if (!userId.value) {
-      throw new Error('User not authenticated')
-    }
-    
-    if (page !== undefined) fallbackMatchesPage.value = page
-    if (pageSize !== undefined) fallbackMatchesPageSize.value = pageSize
-    
-    loading.value = true
-    error.value = null
-    
-    try {
-      const offset = (fallbackMatchesPage.value - 1) * fallbackMatchesPageSize.value
-      const data = await $fetch<{ data: any[], total: number, page: number, page_size: number }>(
-        `/api/admin/matches/fallback?limit=${fallbackMatchesPageSize.value}&offset=${offset}`
-      )
-      fallbackMatches.value = data.data
-      fallbackMatchesTotal.value = data.total || 0
-      return data.data
-    } catch (err: any) {
-      error.value = err
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  // Reprocess a single match (admin only)
-  const reprocessMatch = async (matchId: string) => {
-    if (!userId.value) {
-      throw new Error('User not authenticated')
-    }
-    
-    loading.value = true
-    error.value = null
-    
-    try {
-      const data = await $fetch<{
-        success: boolean
-        message: string
-        match_id: string
-        processed?: number
-        errors?: number
-        skipped?: number
-        results?: Array<{
-          match_id: string
-          status: 'success' | 'error' | 'skipped'
-          message: string
-          error?: string
-        }>
-      }>(
-        `/api/admin/matches/reprocess-fallback?match_id=${matchId}`,
-        {
-          method: 'POST'
-        }
-      )
-      
-      // Refresh fallback matches list after reprocessing
-      await fetchFallbackMatches()
-      
-      return data
-    } catch (err: any) {
-      error.value = err
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-  
   // Organizer management functions
   const organizers = ref<any[]>([])
   const pendingOrganizerInvitations = ref<any[]>([])
@@ -675,9 +599,6 @@ export const useAdmin = () => {
     matchesPage: readonly(matchesPage),
     matchesPageSize: readonly(matchesPageSize),
     matchesTotal: readonly(matchesTotal),
-    fallbackMatchesPage: readonly(fallbackMatchesPage),
-    fallbackMatchesPageSize: readonly(fallbackMatchesPageSize),
-    fallbackMatchesTotal: readonly(fallbackMatchesTotal),
     organizersPage: readonly(organizersPage),
     organizersPageSize: readonly(organizersPageSize),
     organizersTotal: readonly(organizersTotal),
@@ -700,9 +621,6 @@ export const useAdmin = () => {
     fetchAllMatches,
     stats: readonly(stats),
     fetchStats,
-    fallbackMatches: readonly(fallbackMatches),
-    fetchFallbackMatches,
-    reprocessMatch,
     organizers: readonly(organizers),
     pendingOrganizerInvitations: readonly(pendingOrganizerInvitations),
     fetchOrganizers,

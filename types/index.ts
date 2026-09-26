@@ -377,8 +377,11 @@ export interface ProposeScorePayload {
   winner_id: string
 }
 
+/** The proposal the approver saw: approving fails with 409 if the match's proposal is no longer this one */
 export interface ApproveScorePayload {
-  // No additional fields needed, just approval
+  score: string
+  winner_id: string
+  score_proposed_at: string
 }
 
 export interface UpdateMatchStatusPayload {
@@ -565,24 +568,13 @@ export interface HeadToHeadStats {
 
 // Rating calculation result
 export interface RatingCalculationResult {
-  player1: {
-    eloChange: number
-    newElo: number
-    mmrChange: number
-    newMmr: number
-    newUncertainty: number
-    winStreakBonus: number
-  }
-  player2: {
-    eloChange: number
-    newElo: number
-    mmrChange: number
-    newMmr: number
-    newUncertainty: number
-    winStreakBonus: number
-  }
-  llmUsed?: boolean
-  llmFailed?: boolean
+  player1: { eloChange: number; newElo: number }
+  player2: { eloChange: number; newElo: number }
+  /** K used for this match (server/utils/elo.ts) */
+  k: number
+  /** Margin factor from the result classification */
+  margin: number
+  classification: { completion: 'completed' | 'retired' | 'walkover' | 'abandoned'; sets: string; source: 'manual' | 'parser' | 'jev' }
 }
 
 // City segment management payloads
@@ -625,7 +617,6 @@ export interface MatchRatingData {
   format: MatchFormat
 }
 
-// LlmEloCalculationRequest is exported from server/utils/llm-prompts.ts
 // Import it from there instead of from types
 
 export interface LlmEloCalculationResponse {

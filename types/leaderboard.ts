@@ -105,7 +105,10 @@ export interface LeaderboardPlayer {
   id: string
   name: string
   elo: number
+  /** Global rank (server/utils/ranking.ts): the same number on every page, whatever the filters */
   rank: number
+  /** 1-based place of this row in the filtered list, for pagination */
+  position?: number
   previous_rank?: number // For showing movement
   rank_change?: number   // Positive = moved up, Negative = moved down
   rating_tier: RatingTier

@@ -13,16 +13,15 @@ function summary(result: RatingCalculationResult) {
   return {
     player1_elo_change: result.player1.eloChange,
     player2_elo_change: result.player2.eloChange,
-    llm_used: result.llmUsed || false
+    k: result.k,
+    margin: result.margin,
   }
 }
 
 /**
- * Admin endpoint to force recalculate a match
- * This will reverse existing rating_history entries and recalculate (with LLM if API key is set)
- * Works for any match, regardless of whether it used LLM or fallback.
- * The reversal and the recalculation apply together or not at all (recalculateMatchRatings), and the LLM is asked
- * with no transaction open.
+ * Admin endpoint to force recalculate a match: reverse its live rating_history and rate it again with the SR
+ * formula from the players' current ratings. The reversal and the recalculation apply together or not at all
+ * (recalculateMatchRatings). To recompute every rating in order, use scripts/recompute-ratings.ts.
  */
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)

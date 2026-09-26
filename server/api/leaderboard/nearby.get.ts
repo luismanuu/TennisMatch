@@ -1,19 +1,15 @@
-import { and, asc, desc, eq, isNull } from 'drizzle-orm'
+import { and, count, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { players } from '~/server/db/schema'
-import { getRatingTier, getNextTierProgress } from '~/server/utils/rating-system'
-import type { LeaderboardPlayer, NearbyPlayersResponse, BadgeType } from '~/types/leaderboard'
+import { orderedBefore, rankedPlayers, rankedRows } from '~/server/utils/ranking'
+import type { NearbyPlayersResponse } from '~/types/leaderboard'
 
-// Helper to calculate badges for a player (disabled for now)
-function getPlayerBadges(rank: number, winStreak: number, totalMatches: number): BadgeType[] {
-  return [] // Badges disabled
-}
-
+// The ranked players just above and below one player, with their global rank (server/utils/ranking.ts)
 export default defineEventHandler(async (event): Promise<NearbyPlayersResponse> => {
   try {
     const query = getQuery(event)
     const playerId = query.player_id as string
-    const range = Math.min(query.range ? parseInt(query.range as string) : 5, 10)
+    const range = Math.max(1, Math.min(query.range ? parseInt(query.range as string) || 5 : 5, 10))
 
     if (!playerId) {
       throw createError({
@@ -23,106 +19,30 @@ export default defineEventHandler(async (event): Promise<NearbyPlayersResponse> 
     }
 
     const db = useDb()
-
-    // First, get all players ordered by ELO (including placement players)
-    const allPlayers = await db.query.players.findMany({
-      where: and(eq(players.status, 'active'), isNull(players.deleted_at)),
-      orderBy: [desc(players.elo), asc(players.id)],
-      columns: {
-        id: true,
-        name: true,
-        elo: true,
-        total_matches_played: true,
-        placement_matches_completed: true,
-        win_streak: true,
-        loss_streak: true,
-        previous_rank: true,
-      },
-      with: {
-        city: { columns: { id: true, name: true } },
-        category: { columns: { id: true, name: true } },
-      },
-    })
-
-    if (allPlayers.length === 0) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'No players found',
-      })
-    }
-
-    // Find the current player's index (position)
-    const currentPlayerIndex = allPlayers.findIndex((p) => p.id === playerId)
-
-    if (currentPlayerIndex === -1) {
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const [target] = UUID.test(playerId)
+      ? await db.select({ id: players.id, elo: players.elo }).from(players).where(and(rankedPlayers, eq(players.id, playerId)))
+      : []
+    if (!target) {
       throw createError({
         statusCode: 404,
         statusMessage: 'Player not found in rankings',
       })
     }
 
-    // Map all players to LeaderboardPlayer format
-    const rankedPlayers: LeaderboardPlayer[] = allPlayers.map((player, index) => {
-      const tierInfo = getRatingTier(player.elo)
-      const rank = index + 1
-      const badges = getPlayerBadges(rank, player.win_streak ?? 0, player.total_matches_played ?? 0)
-
-      // Check if player is close to next tier (within 100 ELO)
-      // This works for both rated players and players in placement
-      let isNearPromotion = false
-      let nextTierName: string | null = null
-      const tierProgress = getNextTierProgress(player.elo)
-      if (!tierProgress.isMaxTier && tierProgress.eloNeeded <= 100) {
-        isNearPromotion = true
-        nextTierName = tierProgress.nextTier?.tier || null
-      }
-
-      // Calculate rank change
-      const previousRank = player.previous_rank
-      let rankChange: number | undefined = undefined
-      if (previousRank !== null && previousRank !== undefined) {
-        // rank_change = previous_rank - current_rank
-        // Positive = moved up, Negative = moved down
-        rankChange = previousRank - rank
-      }
-
-      return {
-        id: player.id,
-        name: player.name,
-        elo: player.elo,
-        rank,
-        previous_rank: previousRank ?? undefined,
-        rank_change: rankChange,
-        rating_tier: tierInfo.tier, // Use ELO-based tier for all players
-        total_matches_played: player.total_matches_played ?? 0,
-        win_streak: player.win_streak ?? 0,
-        loss_streak: player.loss_streak ?? 0,
-        placement_matches_completed: player.placement_matches_completed ?? 0,
-        city: player.city as any,
-        category: player.category as any,
-        badges,
-        is_current_user: player.id === playerId,
-        near_promotion: isNearPromotion,
-        next_tier: nextTierName,
-      } as LeaderboardPlayer & { near_promotion?: boolean; next_tier?: string | null }
-    })
-
-    // Get the current player
-    const currentPlayer = rankedPlayers[currentPlayerIndex]
-
-    // Get players above (higher rank = lower index = higher ELO)
-    const startAbove = Math.max(0, currentPlayerIndex - range)
-    const playersAbove = rankedPlayers.slice(startAbove, currentPlayerIndex)
-
-    // Get players below (lower rank = higher index = lower ELO)
-    const endBelow = Math.min(rankedPlayers.length, currentPlayerIndex + range + 1)
-    const playersBelow = rankedPlayers.slice(currentPlayerIndex + 1, endBelow)
+    const [{ n: index }] = await db.select({ n: count() }).from(players).where(and(rankedPlayers, orderedBefore(target.elo, target.id)))
+    const start = Math.max(0, index - range)
+    const rows = await rankedRows(db, { limit: index - start + 1 + range, offset: start, viewerId: playerId })
+    const at = rows.findIndex((p) => p.id === playerId)
+    if (at < 0) {
+      throw createError({ statusCode: 409, statusMessage: 'The ranking changed while it was read; try again' })
+    }
 
     return {
       success: true,
-      current_player: currentPlayer,
-      players_above: playersAbove,
-      players_below: playersBelow,
+      current_player: rows[at],
+      players_above: rows.slice(0, at),
+      players_below: rows.slice(at + 1),
     }
   } catch (error: any) {
     console.error('Nearby players error:', error)

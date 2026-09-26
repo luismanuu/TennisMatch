@@ -99,18 +99,6 @@
                 <span>Partidos</span>
               </button>
               <button
-                @click="activeTab = 'fallback-matches'"
-                :class="[
-                  'admin-tab',
-                  activeTab === 'fallback-matches'
-                    ? 'is-active'
-                    : ''
-                ]"
-              >
-                <Icon name="heroicons:exclamation-triangle" class="w-4 h-4 flex-shrink-0" />
-                <span>Fallback Matches</span>
-              </button>
-              <button
                 @click="activeTab = 'missing-rating-history'"
                 :class="[
                   'admin-tab',
@@ -1362,174 +1350,6 @@
           </div>
         </div>
 
-        <!-- Fallback Matches Tab -->
-        <div v-show="activeTab === 'fallback-matches' && !loading">
-          <div v-if="fallbackMatches.length > 0" class="space-y-6">
-            <div class="panel overflow-hidden">
-              <div class="overflow-x-auto">
-                <table class="w-full min-w-[1400px]">
-                  <thead>
-                    <tr class="border-b border-border-subtle bg-surface/50">
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-32">Date</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-40">Player 1</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-40">Player 2</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground hidden md:table-cell w-24">Score</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-32">Status</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground min-w-[400px]">Fallback Reason</th>
-                      <th class="text-left p-3 sm:p-4 text-size-4 font-semibold text-foreground w-32">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <template v-for="match in fallbackMatches" :key="match.id">
-                      <tr 
-                        class="border-b border-border-subtle hover:bg-surface/50 transition-colors"
-                      >
-                        <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground-muted">
-                          {{ formatDate(match.played_at || match.created_at) }}
-                        </td>
-                        <td class="p-3 sm:p-4">
-                          <div class="flex items-center gap-2">
-                            <span class="text-size-4 font-regular text-foreground">{{ match.player1?.name || 'N/A' }}</span>
-                            <span 
-                              v-if="match.player1?.status === 'deleted'"
-                              class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
-                            >
-                              Eliminado
-                            </span>
-                          </div>
-                        </td>
-                        <td class="p-3 sm:p-4">
-                          <div class="flex items-center gap-2">
-                            <span class="text-size-4 font-regular text-foreground">
-                              {{ match.player2?.name || match.pending_player2?.name || 'N/A' }}
-                            </span>
-                            <span 
-                              v-if="match.player2?.status === 'deleted'"
-                              class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-600 border border-red-500/30"
-                            >
-                              Eliminado
-                            </span>
-                          </div>
-                        </td>
-                        <td class="p-3 sm:p-4 text-size-4 font-regular text-foreground hidden md:table-cell">
-                          {{ match.score || 'N/A' }}
-                        </td>
-                        <td class="p-3 sm:p-4">
-                          <div class="flex flex-col gap-1">
-                            <span 
-                              :class="[
-                                'px-3 py-1 rounded-lg text-size-4 font-semibold',
-                                match.status === 'completed' ? 'bg-green-500/20 text-green-600' :
-                                match.status === 'active' ? 'bg-yellow-500/20 text-yellow-600' :
-                                match.status === 'cancelled' ? 'bg-red-500/20 text-red-600' :
-                                'bg-blue-500/20 text-blue-600'
-                              ]"
-                            >
-                              {{ match.status }}
-                            </span>
-                            <span 
-                              v-if="match.is_reprocessed"
-                              class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-600 border border-blue-500/30"
-                            >
-                              Reprocessed
-                            </span>
-                          </div>
-                        </td>
-                        <td class="p-3 sm:p-4">
-                          <button
-                            @click="toggleExpandedMatch(match.id)"
-                            class="flex items-start gap-2 text-size-4 font-regular text-foreground-muted hover:text-foreground transition-colors w-full text-left"
-                          >
-                            <Icon 
-                              :name="expandedMatches.has(match.id) ? 'heroicons:chevron-up' : 'heroicons:chevron-down'" 
-                              class="w-4 h-4 flex-shrink-0 mt-0.5"
-                            />
-                            <span class="flex-1 min-w-0" :class="expandedMatches.has(match.id) ? '' : 'line-clamp-2'">
-                              {{ match.fallback_reason || 'No reason provided' }}
-                            </span>
-                          </button>
-                        </td>
-                        <td class="p-3 sm:p-4">
-                          <button
-                            @click="showReprocessConfirm(match)"
-                            :disabled="reprocessingMatchId === match.id || match.is_reprocessed"
-                            :class="[
-                              'px-4 py-2 rounded-lg text-size-4 font-semibold transition-all',
-                              match.is_reprocessed 
-                                ? 'bg-gray-500/20 text-gray-600 cursor-not-allowed'
-                                : reprocessingMatchId === match.id
-                                ? 'bg-accent-subtle/50 text-foreground cursor-wait'
-                                : 'bg-accent text-white hover:bg-accent/90'
-                            ]"
-                          >
-                            <span v-if="reprocessingMatchId === match.id">Processing...</span>
-                            <span v-else-if="match.is_reprocessed">Reprocessed</span>
-                            <span v-else>Reprocess</span>
-                          </button>
-                        </td>
-                      </tr>
-                      <tr v-if="expandedMatches.has(match.id)" class="bg-surface/30">
-                        <td colspan="7" class="p-6">
-                          <div class="space-y-4 max-w-none">
-                            <div>
-                              <h4 class="text-size-3 font-semibold text-foreground mb-3">Fallback Reason Details:</h4>
-                              <div class="bg-surface-elevated p-4 rounded-lg border border-border-subtle">
-                                <p class="text-size-4 font-regular text-foreground-muted whitespace-pre-wrap break-words">{{ match.fallback_reason || 'No reason provided' }}</p>
-                              </div>
-                            </div>
-                            <div class="pt-3 border-t border-border-subtle">
-                              <p class="text-size-5 font-semibold text-foreground-muted mb-2">Match Details:</p>
-                              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div class="text-size-4 font-regular text-foreground-muted">
-                                  <span class="font-semibold">Match ID:</span> {{ match.id }}
-                                </div>
-                                <div class="text-size-4 font-regular text-foreground-muted">
-                                  <span class="font-semibold">Played at:</span> {{ formatDate(match.played_at || match.created_at) }}
-                                </div>
-                                <div class="text-size-4 font-regular text-foreground-muted">
-                                  <span class="font-semibold">Score:</span> {{ match.score || 'N/A' }}
-                                </div>
-                                <div class="text-size-4 font-regular text-foreground-muted">
-                                  <span class="font-semibold">LLM Calculated:</span> {{ match.llm_elo_calculated ? 'Yes' : 'No' }}
-                                </div>
-                                <div class="text-size-4 font-regular text-foreground-muted">
-                                  <span class="font-semibold">LLM Failed:</span> {{ match.llm_calculation_failed ? 'Yes' : 'No' }}
-                                </div>
-                                <div v-if="match.llm_calculation_timestamp" class="text-size-4 font-regular text-foreground-muted">
-                                  <span class="font-semibold">Calculation Timestamp:</span> {{ formatDate(match.llm_calculation_timestamp) }}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </template>
-                  </tbody>
-                </table>
-              </div>
-              
-              <PaginationControls
-                :current-page="fallbackMatchesPage"
-                :total="fallbackMatchesTotal"
-                :page-size="fallbackMatchesPageSize"
-                :loading="loading"
-                @page-change="handleFallbackMatchesPageChange"
-              />
-            </div>
-          </div>
-
-          <!-- Empty State -->
-          <div v-else class="panel text-center max-w-md mx-auto">
-            <div class="w-24 h-24 rounded-2xl bg-surface-elevated border border-accent/30 flex items-center justify-center mx-auto mb-6">
-              <Icon name="heroicons:exclamation-triangle" class="w-12 h-12 text-accent" />
-            </div>
-            <h3 class="panel-title">No Fallback Matches</h3>
-            <p class="text-size-4 font-regular text-foreground-muted leading-relaxed">
-              No matches found that used fallback calculation. All matches are using LLM calculation successfully.
-            </p>
-          </div>
-        </div>
-
         <!-- Missing Rating History Tab -->
         <div v-show="activeTab === 'missing-rating-history' && !loading">
           <div class="panel mb-6">
@@ -1657,61 +1477,6 @@
           </NuxtLink>
         </div>
 
-    <!-- Reprocess Confirmation Dialog -->
-    <div 
-      v-if="showReprocessDialog && matchToReprocess"
-      class="te-modal"
-      @click.self="showReprocessDialog = false"
-    >
-      <div class="te-modal__panel">
-        <h3 class="panel-title">Confirm Reprocess Match</h3>
-        
-        <div class="space-y-3 mb-6">
-          <div>
-            <p class="text-size-5 font-semibold text-foreground-muted mb-1">Match ID:</p>
-            <p class="text-size-4 font-regular text-foreground">{{ matchToReprocess.id }}</p>
-          </div>
-          
-          <div>
-            <p class="text-size-5 font-semibold text-foreground-muted mb-1">Players:</p>
-            <p class="text-size-4 font-regular text-foreground">
-              {{ matchToReprocess.player1?.name || 'N/A' }} vs {{ matchToReprocess.player2?.name || matchToReprocess.pending_player2?.name || 'N/A' }}
-            </p>
-          </div>
-          
-          <div>
-            <p class="text-size-5 font-semibold text-foreground-muted mb-1">Score:</p>
-            <p class="text-size-4 font-regular text-foreground">{{ matchToReprocess.score || 'N/A' }}</p>
-          </div>
-          
-          <div>
-            <p class="text-size-5 font-semibold text-foreground-muted mb-1">Fallback Reason:</p>
-            <p class="text-size-4 font-regular text-foreground whitespace-pre-wrap">{{ matchToReprocess.fallback_reason || 'No reason provided' }}</p>
-          </div>
-        </div>
-
-        <p class="text-size-4 font-regular text-foreground-muted mb-6">
-          This will reverse the current SR calculations and recalculate using LLM (if available). Are you sure you want to continue?
-        </p>
-
-        <div class="flex gap-3">
-          <button
-            @click="showReprocessDialog = false"
-            class="btn-secondary flex-1"
-          >
-            Cancel
-          </button>
-          <button
-            @click="handleReprocessConfirm"
-            :disabled="reprocessingMatchId !== null"
-            class="btn-primary flex-1"
-          >
-            <span v-if="reprocessingMatchId">Processing...</span>
-            <span v-else>Reprocess</span>
-          </button>
-        </div>
-      </div>
-    </div>
   </PageLayout>
 </template>
 
@@ -1741,12 +1506,6 @@ const {
   matchesPage,
   matchesPageSize,
   matchesTotal,
-  fallbackMatches,
-  fallbackMatchesPage,
-  fallbackMatchesPageSize,
-  fallbackMatchesTotal,
-  fetchFallbackMatches,
-  reprocessMatch,
   fetchPendingPlayers, 
   resendInvitation,
   invitePlayer,
@@ -1768,7 +1527,7 @@ const {
 
 
 // Tab management
-const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'fallback-matches' | 'missing-rating-history' | 'tournaments' | 'organizers' | 'city-segments' | 'rankings'>('overview')
+const activeTab = ref<'overview' | 'pending' | 'players' | 'categories' | 'matches' | 'missing-rating-history' | 'tournaments' | 'organizers' | 'city-segments' | 'rankings'>('overview')
 
 const successMessage = ref<string | null>(null)
 const resendingIds = ref<Set<string>>(new Set())
@@ -1778,12 +1537,6 @@ const deletingPendingIds = ref<Set<string>>(new Set())
 const inviting = ref(false)
 const inviteError = ref<string | null>(null)
 const showDeletedPlayers = ref(false)
-
-// Fallback matches state
-const expandedMatches = ref<Set<string>>(new Set())
-const reprocessingMatchId = ref<string | null>(null)
-const showReprocessDialog = ref(false)
-const matchToReprocess = ref<any>(null)
 
 // Pending players search (client-side filtering on current page)
 const pendingSearch = ref('')
@@ -2378,9 +2131,6 @@ const loadStats = async () => {
   }
 }
 
-// Track if fallback matches are being loaded to prevent duplicate calls
-const isLoadingFallbackMatches = ref(false)
-
 // Missing rating history processing
 const missingRatingHistoryPlayerId = ref('')
 const processingMissingRatingHistory = ref(false)
@@ -2397,70 +2147,6 @@ const missingRatingHistoryResults = ref<{
     elo_changes?: { player1: number; player2: number }
   }>
 } | null>(null)
-
-const loadFallbackMatches = async () => {
-  // Prevent duplicate calls
-  if (isLoadingFallbackMatches.value || loading.value) {
-    return
-  }
-  
-  try {
-    isLoadingFallbackMatches.value = true
-    successMessage.value = null
-    await fetchFallbackMatches()
-  } catch (err) {
-    console.error('Error loading fallback matches:', err)
-    const toastErr = useToastNotifications()
-    toastErr.error('Failed to load fallback matches')
-  } finally {
-    isLoadingFallbackMatches.value = false
-  }
-}
-
-const toggleExpandedMatch = (matchId: string) => {
-  if (expandedMatches.value.has(matchId)) {
-    expandedMatches.value.delete(matchId)
-  } else {
-    expandedMatches.value.add(matchId)
-  }
-}
-
-const showReprocessConfirm = (match: any) => {
-  matchToReprocess.value = match
-  showReprocessDialog.value = true
-}
-
-const handleReprocessConfirm = async () => {
-  if (!matchToReprocess.value) return
-  
-  const matchId = matchToReprocess.value.id
-  reprocessingMatchId.value = matchId
-  
-  try {
-    const result = await reprocessMatch(matchId)
-    const toast = useToastNotifications()
-    
-    if (result.success) {
-      toast.success(result.message || 'Match reprocessed successfully')
-      // Refresh the list
-      await fetchFallbackMatches()
-    } else {
-      toast.error(result.message || 'Failed to reprocess match')
-    }
-  } catch (err: any) {
-    console.error('Error reprocessing match:', err)
-    const toastErr = useToastNotifications()
-    toastErr.error(err.data?.message || err.message || 'Failed to reprocess match')
-  } finally {
-    reprocessingMatchId.value = null
-    showReprocessDialog.value = false
-    matchToReprocess.value = null
-  }
-}
-
-const handleFallbackMatchesPageChange = (page: number) => {
-  fetchFallbackMatches(page)
-}
 
 // Process missing rating history
 const processMissingRatingHistory = async () => {
@@ -2533,8 +2219,6 @@ watch(activeTab, (newTab, oldTab) => {
     loadCategories()
   } else if (newTab === 'matches') {
     loadMatches()
-  } else if (newTab === 'fallback-matches') {
-    loadFallbackMatches()
   } else if (newTab === 'tournaments') {
     // Navigate to tournaments page
     navigateTo('/admin/tournaments')

@@ -409,12 +409,13 @@ const parsePlayerScores = (score: string, playerNumber: number): Array<{ mainSco
   if (!score) return []
   
   // Handle walkover
-  if (score.trim().toUpperCase() === 'WO') {
+  if (/^(w\s*\/?\s*o|walkover)$/i.test(score.trim())) {
     return []
   }
   
   // Normalize score string (aligned with calculateGroupStandings logic)
-  let scoreToParse = score.trim()
+  // Tiebreak points "7-6(5)" are not games
+  let scoreToParse = score.trim().replace(/\s*\([^)]*\)/g, '')
   
   // Replace multiple spaces with single space
   scoreToParse = scoreToParse.replace(/\s+/g, ' ')

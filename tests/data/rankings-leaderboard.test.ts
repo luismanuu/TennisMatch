@@ -38,7 +38,9 @@ async function fetchAllPages(app: TestApp, pageSize: number) {
 }
 
 describe('GET /api/leaderboard: population, ranking and pagination (property)', () => {
-  it('ranks exactly the active/not-deleted population by elo desc with a stable tie-break, gapless ranks 1..n, pages partition it, and soft-deleted players never appear', async () => {
+  // One rank definition (server/utils/ranking.ts): ranked = active, not deleted, at least one rated match; rank = 1 +
+  // ranked players with a strictly higher SR. The list is ordered by SR then id, and `position` is the row's place.
+  it('lists exactly the ranked population by elo desc with a stable tie-break, shared ranks on ties, pages partition it, and never shows an unranked or deleted player', async () => {
     await fc.assert(
       fc.asyncProperty(fc.array(specArb, { minLength: 3, maxLength: 12 }), async (specs: Spec[]) => {
         const ids: string[] = []
@@ -53,29 +55,27 @@ describe('GET /api/leaderboard: population, ranking and pagination (property)', 
             ids.push(id)
           }
 
-          // Expected population: active, not deleted. No min-matches rule on this route.
-          const expected = specs
-            .map((s, i) => ({ id: ids[i], elo: s.elo, deleted: s.deleted }))
-            .filter((p) => !p.deleted)
-            .sort((a, b) => (b.elo !== a.elo ? b.elo - a.elo : a.id.localeCompare(b.id)))
+          const ranked = specs
+            .map((s, i) => ({ id: ids[i], elo: s.elo, deleted: s.deleted, matches: s.total_matches_played }))
+            .filter((p) => !p.deleted && p.matches >= 1)
+          const expected = [...ranked].sort((a, b) => (b.elo !== a.elo ? b.elo - a.elo : a.id.localeCompare(b.id)))
+          const rankOf = (elo: number) => 1 + ranked.filter((p) => p.elo > elo).length
 
           const pages = await fetchAllPages(app, 3)
           for (const p of pages) if (p.status !== 200) return false
 
-          const all = pages.flatMap((p) => (p.body as { rankings: Array<{ id: string; elo: number; rank: number }> }).rankings)
+          const all = pages.flatMap((p) => (p.body as { rankings: Array<{ id: string; elo: number; rank: number; position: number }> }).rankings)
 
-          // No dupes, no omissions, no soft-deleted player, exact same population.
-          const deletedIds = new Set(ids.filter((_, i) => specs[i].deleted))
-          if (all.some((r) => deletedIds.has(r.id))) return false
+          const hidden = new Set(ids.filter((_, i) => specs[i].deleted || specs[i].total_matches_played === 0))
+          if (all.some((r) => hidden.has(r.id))) return false
           if (all.length !== expected.length) return false
 
-          // Order + stable tie-break, and gapless ranks 1..n across pages.
           for (let i = 0; i < expected.length; i++) {
             if (all[i].id !== expected[i].id) return false
-            if (all[i].rank !== i + 1) return false
+            if (all[i].rank !== rankOf(expected[i].elo)) return false
+            if (all[i].position !== i + 1) return false
           }
 
-          // The final page's `total` reflects the qualifying population exactly.
           const lastBody = pages[pages.length - 1].body as { total: number }
           if (lastBody.total !== expected.length) return false
 

@@ -84,7 +84,7 @@
                 <p>Gana SR (Skill Rating) al vencer</p>
                 <p>Pierde SR al ser derrotado</p>
                 <p>SR ganado/perdido depende del rival</p>
-                <p>Partidos justos = más SR</p>
+                <p>Ganar en dos sets suma un poco más</p>
               </div>
             </div>
           </div>
@@ -169,11 +169,19 @@
             </div>
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
-              <p>Ganar contra oponentes de mayor SR otorga más puntos</p>
+              <p>Ganar contra oponentes de mayor SR otorga más puntos. Lo que gana uno es exactamente lo que pierde el otro</p>
             </div>
             <div class="flex items-start gap-2">
               <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
-              <p>El Top 100 muestra a los mejores jugadores de la región</p>
+              <p>Un walkover (W/O) no cambia el SR: el partido no se jugó</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+              <p>Apareces en el ranking desde tu primer partido que cuenta. Con el mismo SR, compartes puesto</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <Icon name="heroicons:check-circle" class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+              <p>El Top 100 muestra a los mejores jugadores de Ecuador</p>
             </div>
           </div>
         </div>
@@ -265,7 +273,7 @@ const ranks = [
     name: 'TOP 100',
     icon: '/images/ranks/top100.png',
     eloRange: 'Mejores 100',
-    note: 'Top 100 de tu región'
+    note: 'Top 100 de Ecuador'
   }
 ]
 </script>

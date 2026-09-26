@@ -1,10 +1,13 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, sql, type SQL } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { matches, players, tournament_matches } from '~/server/db/schema'
 import { requireUser } from '~/server/utils/session'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { updateBracketAfterMatch, recalculateGroupStandings } from '~/server/utils/tournament-brackets'
 import { updateRatingsAfterMatch } from '~/server/utils/rating-system'
+import { classifyScore, classifyStoredScore, type MatchClassification } from '~/server/utils/elo'
+import { statusChangeError, type MatchStatus } from '~/server/utils/match-transitions'
+import { checkWinner, parseScore, renderScore } from '~/utils/score'
 import { createMatchNotification, dismissExistingNotifications } from '~/server/utils/notifications'
 import { datetimeLocalToISO, isDateInFuture } from '~/server/utils/timezone'
 import type { ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
@@ -129,6 +132,32 @@ export default defineEventHandler(async (event) => {
     }
     
     const updateData: Partial<typeof matches.$inferInsert> = {}
+    // Extra conditions on the match row for the write (the status checked here is always one of them)
+    const writeGuards: SQL[] = []
+    // How the result being completed was classified (score parser or an explicit form choice), for the rating
+    let classification: MatchClassification | undefined
+
+    // The side of the match a winner id is on, for the score check (the score lists player 1's games first)
+    const sideOf = (winnerId: string): 'p1' | 'p2' => (winnerId === match.player1_id ? 'p1' : 'p2')
+    // `byPlayer`: a result the two players settle between themselves must be rated, so it cannot be a walkover
+    // (only an organizer or admin records one); otherwise two players could agree to dodge the rating.
+    const parsedResult = (text: string | undefined, winnerId: string, byPlayer: boolean) => {
+      const parsed = parseScore(text)
+      if (!parsed.ok) {
+        throw createError({ statusCode: 400, statusMessage: parsed.error })
+      }
+      if (byPlayer && parsed.score.completion === 'walkover') {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Un walkover lo registra el organizador o un administrador. Si el partido se jugó, escribe el marcador.'
+        })
+      }
+      const winnerError = checkWinner(parsed.score, sideOf(winnerId))
+      if (winnerError) {
+        throw createError({ statusCode: 400, statusMessage: winnerError })
+      }
+      return { score: renderScore(parsed.score), classification: classifyScore(parsed.score, 'parser') }
+    }
     
     // Track notifications to create after match update
     const pendingNotifications: Array<{
@@ -165,6 +194,13 @@ export default defineEventHandler(async (event) => {
           throw createError({
             statusCode: 400,
             statusMessage: 'Cannot change the status of a completed match'
+          })
+        }
+        // update_status only starts a match; cancelling goes through `cancel`, which has its own rules
+        if (statusData.status !== 'active') {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Con esta acción solo puedes iniciar el partido. Para cancelarlo, usa Cancelar.'
           })
         }
 
@@ -229,7 +265,7 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        updateData.score = scoreData.score
+        updateData.score = parsedResult(scoreData.score, scoreData.winner_id, true).score
         updateData.winner_id = scoreData.winner_id
         updateData.score_proposed_by = currentPlayer.id
         updateData.score_proposed_at = new Date()
@@ -237,13 +273,14 @@ export default defineEventHandler(async (event) => {
         // Notify opponent about score proposal (after update completes)
         const opponentId = match.player1_id === currentPlayer.id ? match.player2_id : match.player1_id
         if (opponentId) {
-          // Will create notification after match update
+          // A new proposal replaces the opponent's notification, so it never shows an earlier score
+          dismissNotifications.push({ playerId: opponentId, types: ['score_proposal'] })
           pendingNotifications.push({
             playerId: opponentId,
             type: 'score_proposal',
             metadata: {
               proposed_by: currentPlayer.id,
-              score: scoreData.score,
+              score: updateData.score,
               winner_id: scoreData.winner_id
             }
           })
@@ -274,6 +311,32 @@ export default defineEventHandler(async (event) => {
           })
         }
         
+        // The approver names the proposal they saw; a proposal changed since then is not approved
+        const seen = data as ApproveScorePayload | undefined
+        const seenAt = seen?.score_proposed_at ? new Date(seen.score_proposed_at) : null
+        if (!seen?.score || !seen.winner_id || !seenAt || Number.isNaN(seenAt.getTime())) {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Vuelve a cargar el partido: falta el marcador que estás aprobando.'
+          })
+        }
+        if (
+          seen.score !== match.score ||
+          seen.winner_id !== match.winner_id ||
+          seenAt.getTime() !== match.score_proposed_at?.getTime()
+        ) {
+          throw createError({
+            statusCode: 409,
+            statusMessage: 'El marcador cambió desde que lo viste. Revísalo antes de aprobarlo.'
+          })
+        }
+        writeGuards.push(
+          eq(matches.score, seen.score),
+          eq(matches.winner_id, seen.winner_id),
+          sql`date_trunc('milliseconds', ${matches.score_proposed_at}) = ${seenAt.toISOString()}::timestamptz`,
+        )
+        classification = classifyStoredScore(match.score)
+
         updateData.score_approved_by = currentPlayer.id
         updateData.status = 'completed'
         updateData.played_at = new Date()
@@ -346,6 +409,14 @@ export default defineEventHandler(async (event) => {
               statusMessage: 'Only the match proposer can cancel before acceptance'
             })
           }
+
+          // A tournament match belongs to the bracket: a player cannot drop out of it by cancelling
+          if (match.tournament_id) {
+            throw createError({
+              statusCode: 403,
+              statusMessage: 'Un partido de torneo solo lo puede cancelar un administrador.'
+            })
+          }
         }
         
         if (match.status === 'completed') {
@@ -355,7 +426,7 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        if (match.status === 'active') {
+        if (match.status === 'active' && !isAdmin) {
           throw createError({
             statusCode: 400,
             statusMessage: 'Cannot cancel an active match. Use reschedule instead.'
@@ -1053,11 +1124,14 @@ export default defineEventHandler(async (event) => {
           })
         }
         
-        // Set score (WO if is_wo is true, otherwise use provided score or default)
+        // A walkover ticked in the form is an explicit classification; a typed score goes through the parser
         if (resultData.is_wo) {
-          updateData.score = 'WO'
+          updateData.score = 'W/O'
+          classification = { completion: 'walkover', sets: 'none', source: 'manual' }
         } else if (resultData.score) {
-          updateData.score = resultData.score
+          const result = parsedResult(resultData.score, resultData.winner_id, false)
+          updateData.score = result.score
+          classification = result.classification
         } else {
           // If no score provided and not WO, require score
           throw createError({
@@ -1095,28 +1169,44 @@ export default defineEventHandler(async (event) => {
         })
     }
     
-    // Update the match
-    const [updatedRow] = await db
-      .update(matches)
-      .set(updateData)
-      .where(eq(matches.id, matchId))
-      .returning({ id: matches.id })
-    
+    // One whitelist of status changes (server/utils/match-transitions.ts)
+    if (updateData.status !== undefined && updateData.status !== match.status) {
+      const transitionError = statusChangeError(action, match.status as MatchStatus, updateData.status as MatchStatus)
+      if (transitionError) {
+        throw createError({ statusCode: 400, statusMessage: transitionError })
+      }
+    }
+
+    // The write only applies to the match as it was checked above: same status, and for an approval the same
+    // proposal. A result that completes the match is rated in the same transaction, so a match is never completed
+    // without its rating, and a second approval finds it completed and changes nothing.
+    const completes = updateData.status === 'completed' && match.status !== 'completed'
+    const updatedRow = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(matches)
+        .set(updateData)
+        .where(and(eq(matches.id, matchId), eq(matches.status, match.status), ...writeGuards))
+        .returning({ id: matches.id })
+      if (row && completes) {
+        await updateRatingsAfterMatch(matchId, tx, classification)
+      }
+      return row
+    })
+
     if (!updatedRow) {
       throw createError({
-        statusCode: 404,
-        statusMessage: 'Match not found after update'
+        statusCode: 409,
+        statusMessage: 'El partido cambió mientras lo actualizabas. Vuelve a cargarlo.'
       })
     }
-    
-    // Process pending notifications (create new ones)
-    for (const notification of pendingNotifications) {
-      await createMatchNotification(notification.playerId, matchId, notification.type, notification.metadata)
-    }
-    
-    // Process dismiss notifications (auto-dismiss when action is taken)
+
+    // Dismiss first: a new proposal replaces the notification it supersedes
     for (const dismiss of dismissNotifications) {
       await dismissExistingNotifications(dismiss.playerId, matchId, dismiss.types)
+    }
+
+    for (const notification of pendingNotifications) {
+      await createMatchNotification(notification.playerId, matchId, notification.type, notification.metadata)
     }
     
     const updatedMatch = await db.query.matches.findFirst({
@@ -1156,21 +1246,6 @@ export default defineEventHandler(async (event) => {
       } catch (bracketError) {
         // Log error but don't fail the request
         console.error('Error updating bracket after match:', bracketError)
-      }
-    }
-    
-    // Update player ratings after match completion (for ALL matches - tournament and regular).
-    // Awaited so the work finishes before a serverless function is frozen; it runs in its own transaction,
-    // so a failure leaves both players' ratings untouched. The match stays completed either way, and
-    // admin/matches/process-missing-rating-history picks up matches whose rating failed.
-    if (updatedMatch.status === 'completed' && updatedMatch.winner_id && updatedMatch.player1_id && updatedMatch.player2_id) {
-      try {
-        const ratingResult = await updateRatingsAfterMatch(matchId)
-        if (!ratingResult) {
-          console.warn(`[PUT /api/matches/${matchId}] Rating update returned null - check logs for errors`)
-        }
-      } catch (ratingError) {
-        console.error('Error updating ratings after match:', ratingError)
       }
     }
     

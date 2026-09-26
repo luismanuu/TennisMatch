@@ -1,4 +1,4 @@
-import type { Match, CreateMatchPayload, ProposeScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
+import type { Match, CreateMatchPayload, ProposeScorePayload, ApproveScorePayload, UpdateMatchStatusPayload, ProposeReschedulePayload } from '~/types'
 
 export const useMatches = () => {
   const matches = ref<Match[]>([])
@@ -171,7 +171,8 @@ export const useMatches = () => {
     }
   }
   
-  const approveScore = async (accountId: string, matchId: string) => {
+  // `seen` is the proposal on screen; the server refuses (409) if the proposal changed since
+  const approveScore = async (accountId: string, matchId: string, seen: ApproveScorePayload) => {
     loading.value = true
     error.value = null
     
@@ -179,7 +180,8 @@ export const useMatches = () => {
       const data = await $fetch<Match>(`/api/matches/${matchId}`, {
         method: 'PUT',
         body: {
-          action: 'approve_score'
+          action: 'approve_score',
+          data: seen
         }
       })
       // Update match in cache
