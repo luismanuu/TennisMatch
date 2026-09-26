@@ -4,7 +4,9 @@
 // (empty gateway balance), a 429, a network error or an unexpected response shape all come back as
 // { ok: false }, and the caller then behaves exactly as the app did before Jev existed.
 // One attempt per call, no retries. A 402 or 429 pauses every feature for BREAKER_MS, because the
-// gateway balance is shared across the team and hammering it cannot help.
+// gateway balance is shared across the team and hammering it cannot help. The pause is best-effort: it
+// lives in module memory, so it covers one warm serverless instance, and a cold or parallel instance
+// makes its own first call before it pauses too.
 //
 // Jev never does arithmetic here: callers count in code and pass the results in as facts.
 
@@ -57,6 +59,7 @@ export function isJevFeatureEnabled(feature: JevFeature, env: Env = process.env)
   return env[FLAG_BY_FEATURE[feature]] === 'true'
 }
 
+// Per warm instance only (see the header); not shared across instances.
 let breakerOpenUntil = 0
 
 export function resetJevBreakerForTests() {
@@ -106,10 +109,15 @@ export function parseJevResponse<QS extends Record<string, JevQuestion>>(
     if (parsed === undefined) return undefined
     answers[key] = parsed
   }
+  return { answers: answers as JevAnswers<QS>, ...readJevUsage(b) }
+}
+
+export function readJevUsage(body: unknown): { inputTokens: number; costUsd: number } {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, any>
   const inputTokens = Number.isFinite(b.usage?.inputTokens) ? Number(b.usage.inputTokens) : 0
   const reportedCost = Number(b.providerMetadata?.gateway?.cost)
   const costUsd = Number.isFinite(reportedCost) ? reportedCost : inputTokens * USD_PER_INPUT_TOKEN
-  return { answers: answers as JevAnswers<QS>, inputTokens, costUsd }
+  return { inputTokens, costUsd }
 }
 
 function logUsage(entry: Record<string, unknown>) {
@@ -132,9 +140,15 @@ export async function evaluateJev<QS extends Record<string, JevQuestion>>(
   const env = options.env ?? process.env
   const now = options.now ?? Date.now
   const started = now()
-  const fail = (reason: JevFailure): JevOutcome<QS> => {
+  const fail = (reason: JevFailure, usage = { inputTokens: 0, costUsd: 0 }): JevOutcome<QS> => {
     const latencyMs = now() - started
-    logUsage({ feature: options.feature, outcome: reason, latency_ms: latencyMs, input_tokens: 0, cost_usd: 0 })
+    logUsage({
+      feature: options.feature,
+      outcome: reason,
+      latency_ms: latencyMs,
+      input_tokens: usage.inputTokens,
+      cost_usd: usage.costUsd,
+    })
     return { ok: false, reason, latencyMs }
   }
 
@@ -157,8 +171,9 @@ export async function evaluateJev<QS extends Record<string, JevQuestion>>(
       return fail(res.status === 402 ? 'http_402' : 'http_429')
     }
     if (!res.ok) return fail('http_error')
-    const parsed = parseJevResponse(options.questions, await res.json())
-    if (!parsed) return fail('bad_shape')
+    const body = await res.json()
+    const parsed = parseJevResponse(options.questions, body)
+    if (!parsed) return fail('bad_shape', readJevUsage(body))
     const latencyMs = now() - started
     logUsage({
       feature: options.feature,

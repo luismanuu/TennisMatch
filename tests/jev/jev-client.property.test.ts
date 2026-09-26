@@ -122,6 +122,19 @@ describe('evaluateJev success path', () => {
     expect(JSON.stringify(logged)).not.toContain('test-gateway-key')
   })
 
+  // Review finding: a malformed answer still costs money when the gateway billed it; the log must show it.
+  it('named regression: a bad_shape response with billed usage logs its real tokens and cost', async () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const gw = fakeGateway({
+      kind: 'body',
+      body: { answers: { flag: { type: 'boolean', probability: 7 } }, usage: { inputTokens: 412 }, providerMetadata: { gateway: { cost: '0.0000173' } } },
+    })
+    const outcome = await evaluateJev({ feature: 'moderation', state: {}, questions: QUESTIONS, env: FLAGS_ON, fetchImpl: gw.fetchImpl })
+    expect(outcome).toMatchObject({ ok: false, reason: 'bad_shape' })
+    const logged = JSON.parse(String(log.mock.calls.at(-1)![0]))
+    expect(logged).toMatchObject({ outcome: 'bad_shape', input_tokens: 412, cost_usd: 0.0000173 })
+  })
+
   // The shape observed on a live call on 2026-09-26: `confidence` and extra metadata ride along.
   it('parses the live response shape, extra fields included', () => {
     const live = {

@@ -256,6 +256,12 @@
               </div>
             </button>
 
+            <div v-if="nameRejected" class="panel">
+              <label for="player_name" class="block text-size-4 font-semibold text-foreground mb-2">Tu nombre en el ranking</label>
+              <input id="player_name" v-model="formData.name" type="text" class="form-input" maxlength="80" aria-describedby="player_name_error" />
+              <p id="player_name_error" class="text-size-4 text-danger mt-2" role="alert">{{ nameRejected }}</p>
+            </div>
+
             <div class="flex gap-4 pt-4">
               <button
                 @click="handleComplete"
@@ -329,6 +335,7 @@ const suggestionLoading = ref(false)
 const suggestion = ref<LevelSuggestion | null>(null)
 const suggestionMissed = ref(false)
 const levelAnswers = ref<Record<string, string>>({ self_description: '' })
+const nameRejected = ref('')
 
 const questionnaireComplete = computed(() => LEVEL_QUESTIONS.every((q) => Boolean(levelAnswers.value[q.id])))
 const showQuestionnaire = computed(
@@ -373,7 +380,11 @@ const handleComplete = async () => {
     })
     
     currentStep.value = 5
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 422) {
+      nameRejected.value = error.data?.statusMessage || error.statusMessage || 'Elige otro nombre.'
+      return
+    }
     console.error('Error creating profile:', error)
     // Error handling is done by the composable
   }
