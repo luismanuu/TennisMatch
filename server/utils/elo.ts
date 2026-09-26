@@ -16,8 +16,13 @@ import { parseScore, type Completion, type ParsedScore } from '../../utils/score
  * K by experience (rated matches played before this one):
  * - Placement, the first 3 matches: K = 60. Seeds come from a self-chosen category, 250 SR apart, so the first
  *   matches must be able to move a player a good part of a category. 60 is what unrated players already had.
- * - After placement: K = 32, the usual value for club-level Elo on this scale. An even match is worth about 16; the
- *   largest possible single swing (two placement players, straight sets, huge upset) is round(60 * 1.1) = 66.
+ * - After placement: K = 48 (CEO decision 2026-09-26, was 32). An even match is worth about 24 (26 in straight sets,
+ *   22 in a deciding or pro set). Reason: climb speed. Categories are 250 SR apart (a tier is two of them, 500 SR). A
+ *   player who beats equals 75% of the time gains 0.25 * K per match on average, so crossing 250 SR takes about
+ *   250 / 12 = 21 matches at K = 48, around 5 months at 4 matches a month, against about 250 / 8 = 31 at K = 32 (8 months).
+ *   The cost is noise: an established player's rating wobbles 1.5x as much around their level.
+ * - Largest possible single swing: round(K * 1.1) for the match's K, a huge upset in straight sets. Between two
+ *   established players that is round(48 * 1.1) = 53; with two placement players round(60 * 1.1) = 66.
  * The placement count stays 3: players.placement_matches_completed has a CHECK between 0 and 3, the landing and the
  * ranking explainer say three, and decay exempts players in placement.
  *
@@ -38,7 +43,7 @@ export const ELO_FORMULA_VERSION = 'elo-v2'
 export const ELO_SCALE = 400
 export const PLACEMENT_MATCHES = 3
 export const K_PLACEMENT = 60
-export const K_ESTABLISHED = 32
+export const K_ESTABLISHED = 48
 export const RATING_FLOOR = 1
 
 export type SetsShape = 'straight' | 'deciding' | 'pro' | 'incomplete' | 'none' | 'unknown'

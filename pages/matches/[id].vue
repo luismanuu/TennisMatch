@@ -1217,6 +1217,7 @@ import { checkWinner, parseScore, renderScore } from '~/utils/score'
 import type { Match, MatchMessage } from '~/types'
 import { useRankIconAsset } from '~/composables/useRankIcon'
 import { getRatingTier } from '~/server/utils/rating-system'
+import { K_ESTABLISHED } from '~/server/utils/elo'
 import { getCurrentEcuadorDatetimeLocal } from '~/composables/useTimezone'
 import { useWhatsApp } from '~/composables/useWhatsApp'
 
@@ -1653,7 +1654,7 @@ const srWhy = computed(() => {
     opponent: why.opponent_before,
     expectedPct: Math.round(why.expected * 100),
     k: why.k,
-    placement: why.k > 32,
+    placement: why.k > K_ESTABLISHED,
     marginText: MARGIN_TEXT[why.classification.sets] ?? '',
     formula: `${why.k} × ${decimal(why.margin)} × (${own.elo_change > 0 || (own.elo_change === 0 && why.expected >= 0.5) ? 1 : 0} − ${decimal(why.expected)}) ≈ ${own.elo_change > 0 ? '+' : ''}${own.elo_change}`,
   }
