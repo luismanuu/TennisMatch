@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { tournaments } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
+import { publicPlayer } from '~/server/utils/public-player'
 import { createTournamentFromPayload } from '~/server/utils/tournament-status'
 import type { CreateTournamentPayload } from '~/types'
 
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
     const tournamentId = await createTournamentFromPayload(body, organizer.id, organizer.id)
     const tournament = await useDb().query.tournaments.findFirst({
       where: eq(tournaments.id, tournamentId),
-      with: { category: true, organizer: true },
+      with: { category: true, organizer: publicPlayer },
     })
 
     return {

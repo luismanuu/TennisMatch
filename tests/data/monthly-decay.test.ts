@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { startTestApp, type TestApp } from '../security/harness'
-import { ELO_DECAY_FLOOR } from '../../server/utils/rating-system'
+import { applyMonthlyDecay, ELO_DECAY_FLOOR } from '../../server/utils/rating-system'
 
 // Monthly decay writes ratings. It must only happen from the scheduled job, which proves itself with
 // CRON_SECRET, at most once per player per calendar month. The public decay-status GET only reads.
@@ -250,8 +250,8 @@ describe('the decay cron: once per player per month, only for eligible players',
           }
           expect(a.last_decay_check, JSON.stringify(spec)).toBe(today)
           if (spec.lastCheck === null) {
-            // First sighting: record the month, decay nothing, keep the running count.
-            expect(a, JSON.stringify(spec)).toEqual({ ...b, last_decay_check: today })
+            // First sighting: record the month, decay nothing, recount this month's matches (none here).
+            expect(a, JSON.stringify(spec)).toEqual({ ...b, last_decay_check: today, matches_this_month: 0 })
             return
           }
           expect(a.matches_this_month).toBe(0)
@@ -271,4 +271,75 @@ describe('the decay cron: once per player per month, only for eligible players',
       { seed: 20260926, numRuns: 25 },
     )
   }, 120_000)
+})
+
+// The batch query only picks due players, which hides the checks inside applyMonthlyDecay from the cron tests.
+// A second run that overlaps the first (both selected the player before either committed) reaches those checks
+// directly, so they are exercised here without the batch filter in front of them.
+describe('applyMonthlyDecay on its own, as an overlapping run reaches it', () => {
+  it('property: exempt or already-checked players are skipped; a second call is always skipped and writes nothing', async () => {
+    await fc.assert(
+      fc.asyncProperty(playerSpec, async (spec) => {
+        const id = await insertPlayer(spec)
+        const before = (await snapshot([id])).get(id)!
+        const first = await applyMonthlyDecay(id)
+        const exempt = spec.deleted || spec.total === 0 || spec.placement < 3
+        if (exempt || spec.lastCheck === midThisMonth) {
+          expect(first.outcome, JSON.stringify(spec)).toBe('skipped')
+          expect((await snapshot([id])).get(id), JSON.stringify(spec)).toEqual(before)
+        } else {
+          expect(first.outcome, JSON.stringify(spec)).not.toBe('skipped')
+        }
+        const afterFirst = (await snapshot([id])).get(id)!
+        expect((await applyMonthlyDecay(id)).outcome, JSON.stringify(spec)).toBe('skipped')
+        expect((await snapshot([id])).get(id), JSON.stringify(spec)).toEqual(afterFirst)
+        return true
+      }),
+      { seed: 20260926, numRuns: 60 },
+    )
+  }, 120_000)
+
+  // Review finding (2026-09-26): matches_this_month was never reset for a player without last_decay_check, so
+  // it held a lifetime count; keeping it at the baseline let anyone with 2+ lifetime matches skip next month's decay.
+  it('baseline recounts matches_this_month from this month\'s non-reversed rating history', async () => {
+    const id = await insertPlayer({
+      elo: 1700,
+      uncertainty: 1,
+      matchesThisMonth: 7,
+      lastCheck: null,
+      total: 7,
+      placement: 3,
+      deleted: false,
+      oldAccount: true,
+    })
+    const opponent = await insertPlayer({
+      elo: 1700,
+      uncertainty: 1,
+      matchesThisMonth: 0,
+      lastCheck: midThisMonth,
+      total: 7,
+      placement: 3,
+      deleted: false,
+      oldAccount: true,
+    })
+    const history = async (playedAt: string, reversed: boolean) => {
+      const { rows } = await app.client.query<{ id: string }>(
+        `insert into matches (player1_id, player2_id, winner_id, status, score, played_at) values ($1, $2, $1, 'completed', '6-1 6-1', $3) returning id`,
+        [id, opponent, playedAt],
+      )
+      await app.client.query(
+        `insert into rating_history (player_id, match_id, elo_before, elo_after, elo_change, mmr_before, mmr_after, mmr_change,
+           uncertainty_before, uncertainty_after, k_factor, expected_score, actual_score, was_winner, rating_reversed)
+         values ($1, $2, 1700, 1710, 10, 0, 0, 0, 1, 1, 32, 0.5, 1, true, $3)`,
+        [id, rows[0].id, reversed],
+      )
+    }
+    await history(`${midThisMonth}T12:00:00Z`, false)
+    await history(`${midThisMonth}T13:00:00Z`, true)
+    await history(`${midLastMonth}T12:00:00Z`, false)
+    await history(`${midLastMonth}T13:00:00Z`, false)
+
+    expect((await applyMonthlyDecay(id)).outcome).toBe('baseline')
+    expect((await snapshot([id])).get(id)).toMatchObject({ matches_this_month: 1, last_decay_check: today, elo: 1700 })
+  })
 })

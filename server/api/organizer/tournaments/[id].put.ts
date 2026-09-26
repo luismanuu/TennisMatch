@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '~/server/db'
 import { categories, tournament_groups, tournament_matches, tournaments } from '~/server/db/schema'
 import { requirePlayer } from '~/server/utils/session'
+import { publicPlayer } from '~/server/utils/public-player'
 import { verifyOrganizerOwnsTournament } from '~/server/utils/organizer'
 import { tournamentUpdateFromPayload } from '~/server/utils/tournament-status'
 import type { UpdateTournamentPayload } from '~/types'
@@ -78,7 +79,7 @@ export default defineEventHandler(async (event) => {
       await db.update(tournaments).set(updateData).where(eq(tournaments.id, tournamentId))
       tournament = await db.query.tournaments.findFirst({
         where: eq(tournaments.id, tournamentId),
-        with: { category: true, organizer: true },
+        with: { category: true, organizer: publicPlayer },
       })
     } catch (error) {
       throw createError({

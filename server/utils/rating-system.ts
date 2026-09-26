@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lt, ne, not, or, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lt, ne, not, or, sql, type SQL } from 'drizzle-orm'
 import { useDb, type DbOrTx } from '../db'
 import { categories, matches, players, rating_history } from '../db/schema'
 import type { RatingTier, RatingTierInfo, RatingCalculationResult, MonthlyDecayStatus } from '~/types'
@@ -589,25 +589,6 @@ export function getMonthlyDecayStatus(
     estimated_decay: estimatedDecay,
     last_decay_check: lastDecayCheck ?? undefined,
   }
-}
-
-/**
- * Check if decay should be applied (new month since last check)
- */
-export function shouldApplyDecay(lastDecayCheck: Date | null): boolean {
-  if (!lastDecayCheck) {
-    return false // First time, don't decay
-  }
-  
-  const now = new Date()
-  const lastCheckMonth = lastDecayCheck.getMonth()
-  const lastCheckYear = lastDecayCheck.getFullYear()
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear()
-  
-  // Different year or month means we should check for decay
-  return currentYear > lastCheckYear || 
-    (currentYear === lastCheckYear && currentMonth > lastCheckMonth)
 }
 
 // ============================================
@@ -1685,13 +1666,20 @@ export async function clearLlmCalculation(matchId: string, tx?: DbOrTx): Promise
 
 export type MonthlyDecayOutcome = 'decayed' | 'reset' | 'baseline' | 'skipped'
 
+// First day of the current UTC month as YYYY-MM-DD, the same format and zone as last_decay_check.
+function currentMonthStart(): string {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0]
+}
+
 /**
- * Apply the monthly decay to one player, at most once per calendar month.
+ * Apply the monthly decay to one player, at most once per calendar month (UTC).
  *
  * One transaction locks the player row and re-reads it, so a concurrent run (or a rating update) waits and then
  * finds last_decay_check already in this month. Unrated players, players still in placement and deleted
  * players are never touched. A player never checked before gets this month recorded as the baseline, with no
- * decay and the running match count kept: decay starts from the next month.
+ * decay: decay starts from the next month. matches_this_month was never reset for such a player, so the
+ * baseline recounts it from this month's rating history.
  */
 export async function applyMonthlyDecay(
   playerId: string
@@ -1718,13 +1706,25 @@ export async function applyMonthlyDecay(
     }
 
     const today = new Date().toISOString().split('T')[0]
+    const monthStart = currentMonthStart()
 
     if (!player.last_decay_check) {
-      await tx.update(players).set({ last_decay_check: today }).where(eq(players.id, playerId))
+      const [{ n }] = await tx
+        .select({ n: count() })
+        .from(rating_history)
+        .innerJoin(matches, eq(matches.id, rating_history.match_id))
+        .where(
+          and(
+            eq(rating_history.player_id, playerId),
+            sql`${rating_history.rating_reversed} is not true`,
+            gte(sql`coalesce(${matches.played_at}, ${rating_history.created_at})`, new Date(`${monthStart}T00:00:00Z`))
+          )
+        )
+      await tx.update(players).set({ last_decay_check: today, matches_this_month: n }).where(eq(players.id, playerId))
       return none('baseline')
     }
 
-    if (!shouldApplyDecay(new Date(player.last_decay_check))) {
+    if (player.last_decay_check >= monthStart) {
       return none('skipped')
     }
 
@@ -1757,8 +1757,7 @@ export async function applyMonthlyDecay(
  * Safe to run any number of times; a run cut short is finished by the next one.
  */
 export async function applyMonthlyDecayToAllPlayers(): Promise<Record<MonthlyDecayOutcome | 'failed', number>> {
-  const now = new Date()
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0]
+  const monthStart = currentMonthStart()
   const due = await useDb()
     .select({ id: players.id })
     .from(players)

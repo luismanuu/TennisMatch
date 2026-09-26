@@ -18,6 +18,7 @@ type World = {
   tournaments: string[]
   groups: string[]
   pending: string[]
+  tokens: string[]
   matches: string[]
 }
 
@@ -120,7 +121,7 @@ async function insertPlayer(spec: PlayerSpec): Promise<string> {
 }
 
 async function seedWorld(spec: WorldSpec): Promise<World> {
-  const world: World = { players: [], tournaments: [], groups: [], pending: [], matches: [] }
+  const world: World = { players: [], tournaments: [], groups: [], pending: [], tokens: [], matches: [] }
   for (const p of spec.players) world.players.push(await insertPlayer(p))
   // Tournaments need a creator; a world without players borrows a fresh one that registers nowhere.
   const creatorPool = world.players.length ? world.players : [await insertPlayer({ name: 'Creador', phone: true, rated: false })]
@@ -183,11 +184,13 @@ async function seedWorld(spec: WorldSpec): Promise<World> {
 
   for (const i of spec.invites) {
     const tag = `inv${++seq}`
+    const token = `tok-${randomUUID()}`
     const [pending] = await q<{ id: string }>(
       `insert into pending_players (name, email, category_id, invited_by_player_id, invitation_token) values ($1, $2, $3, $4, $5) returning id`,
-      [`Invitado ${tag}`, `${tag}.invitado@correo.ec`, categoryId, world.players[i], `tok-${randomUUID()}`],
+      [`Invitado ${tag}`, `${tag}.invitado@correo.ec`, categoryId, world.players[i], token],
     )
     world.pending.push(pending.id)
+    world.tokens.push(token)
     const [m] = await q<{ id: string }>(
       `insert into matches (player1_id, pending_player2_id, status) values ($1, $2, 'scheduled') returning id`,
       [world.players[i], pending.id],
@@ -207,8 +210,12 @@ async function privateValues(caller: Caller): Promise<string[]> {
     ...(await q<{ v: string }>(`select email as v from pending_players`)),
     ...(await q<{ v: string }>(`select invitation_token as v from pending_players where invitation_token is not null`)),
     ...(await q<{ v: string }>(`select token as v from session`)),
+    ...(await q<{ v: string }>(
+      `select unnest(array[password, access_token, refresh_token, id_token]) as v from account where user_id is distinct from $1`,
+      [caller.userId ?? null],
+    )),
   ]
-  return values.map((r) => r.v)
+  return values.map((r) => r.v).filter((v): v is string => Boolean(v))
 }
 
 function privateKeysIn(value: unknown, path = '$', found: string[] = []): string[] {
@@ -233,12 +240,17 @@ function outsiderRoutes(caller: Caller): Route[] {
   })
 }
 
-const QUERY_VARIANTS: Record<string, Array<Record<string, string>>> = {
-  '/api/tournaments': [{}, { status: 'upcoming' }, { status: 'active' }, { status: 'completed' }],
-  '/api/leaderboard': [{}, { center_around_player: 'true' }],
-  '/api/players/search': [{ q: 'a' }, { q: 'Jugador' }],
-  '/api/rankings': [{ min_matches: '0' }],
-  '/api/matches': [{ skip_24h_filter: 'true' }],
+function queryVariants(pattern: string, world: World): Array<Record<string, string>> {
+  const variants: Record<string, Array<Record<string, string>>> = {
+    '/api/tournaments': [{}, { status: 'upcoming' }, { status: 'active' }, { status: 'completed' }],
+    '/api/leaderboard': [{}, { center_around_player: 'true' }],
+    '/api/leaderboard/nearby': world.players.slice(0, 2).map((player_id) => ({ player_id })),
+    '/api/players/search': [{ q: 'a' }, { q: 'Jugador' }],
+    '/api/rankings': [{ min_matches: '0' }],
+    '/api/matches': [{ skip_24h_filter: 'true' }],
+  }
+  const list = variants[pattern] ?? [{}]
+  return list.length ? list : [{}]
 }
 
 // Every concrete path for a route pattern, drawn from the world's own ids. An unknown parameter fails the
@@ -253,7 +265,7 @@ function concretePaths(pattern: string, world: World): string[] {
     else if (parent === 'group') ids = world.groups
     else if (parent === 'pending-players') ids = world.pending
     else if (parent === 'matches') ids = world.matches
-    else if (parent === 'invitation') ids = [`tok-${randomUUID()}`]
+    else if (parent === 'invitation') ids = world.tokens
     else throw new Error(`no id source for :${name} after /${parent}/ in ${pattern}`)
     const sample = ids.length ? ids.slice(0, 4) : [randomUUID()]
     paths = paths.flatMap((p) => sample.map((id) => p.replace(`:${name}`, id)))
@@ -261,7 +273,16 @@ function concretePaths(pattern: string, world: World): string[] {
   return paths
 }
 
+async function invitationOwnValues(path: string): Promise<string[]> {
+  const token = path.split('/').pop()!
+  const rows = await q<{ email: string }>(`select email from pending_players where invitation_token = $1`, [token])
+  return [token, ...rows.map((r) => r.email)]
+}
+
 type Leak = { caller: string; path: string; status: number; values: string[]; keys: string[] }
+
+// Route patterns that answered 200 at least once, across every world in the file.
+const answered200 = new Set<string>()
 
 async function leaksFor(caller: Caller, world: World): Promise<{ leaks: Leak[]; ok: number }> {
   const forbidden = await privateValues(caller)
@@ -269,14 +290,20 @@ async function leaksFor(caller: Caller, world: World): Promise<{ leaks: Leak[]; 
   let ok = 0
   for (const route of outsiderRoutes(caller)) {
     for (const path of concretePaths(route.pattern, world)) {
-      for (const query of QUERY_VARIANTS[route.pattern] ?? [{}]) {
+      for (const query of queryVariants(route.pattern, world)) {
         const res = await app.request('GET', path, { cookie: caller.cookie, query })
-        if (res.status === 200) ok++
+        if (res.status === 200) {
+          ok++
+          answered200.add(`${caller.name} ${route.pattern}`)
+        }
         const text = typeof res.body === 'string' ? res.body : JSON.stringify(res.body)
-        const values = forbidden.filter((v) => text.includes(v))
+        // Whoever holds an invitation token is the invitee: that one invitation's email and token are theirs.
+        const own = route.pattern === '/api/pending-players/invitation/:token' ? await invitationOwnValues(path) : []
+        const values = forbidden.filter((v) => text.includes(v) && !own.includes(v))
         // Key names are checked on public routes only: a signed-in route may return the caller's own row.
         const access = ROUTE_ACCESS[route.file]
-        const keys = access === 'public' || access === 'optional' ? privateKeysIn(res.body) : []
+        const keys =
+          access === 'public' || access === 'optional' ? privateKeysIn(res.body).filter((k) => !(own.length && k === '$.email')) : []
         if (values.length || keys.length) leaks.push({ caller: caller.name, path: `${path}?${new URLSearchParams(query)}`, status: res.status, values, keys: keys.slice(0, 5) })
       }
     }
@@ -304,6 +331,11 @@ describe('no outsider GET response carries private fields (property over seeded 
     // Non-vacuity: the routes really answered with data, not only 404s and 500s.
     expect(answered).toBeGreaterThan(200)
   }, 600_000)
+
+  it('every public GET route answered 200 to an anonymous caller at least once (the oracle saw real data)', () => {
+    const publicGets = app.routes.filter((r) => r.method === 'GET' && ['public', 'optional'].includes(ROUTE_ACCESS[r.file]))
+    expect(publicGets.map((r) => r.pattern).filter((p) => !answered200.has(`anonymous ${p}`))).toEqual([])
+  })
 
   it('a large field: 40 players, all with phones, all registered in one grouped tournament', async () => {
     const players = Array.from({ length: 40 }, (_, i) => ({ name: `Jugadora ${i} ñ`, phone: true, rated: i % 2 === 0 }))
