@@ -126,7 +126,7 @@ Depth is light, not lines.
 - **Inner light** (`inset 0 1px 0 rgba(255,255,255,.04)`): every raised surface catches a hairline of light on its top edge.
 - **E1** (`0 1px 1px shadow, 0 10px 24px -14px shadow`): a surface under the pointer, the viewer's own row, the lamp button at rest.
 - **E2** (`0 2px 3px shadow, 0 22px 44px -18px shadow-deep`): the lamp button and the own row on hover.
-- The header, the tab bar and the compact rail are translucent (`saturate(160%) blur(20px)`) so content passes under them. That is the only blur in the world; no glass cards.
+- The tab bar and the compact rail are translucent (`saturate(160%) blur(20px)`) so content passes under them. The header stays solid Night: translucent, its brand lost contrast over the lit court. That is the only blur in the world; no glass cards.
 
 ## Shapes
 
@@ -151,7 +151,7 @@ Night Raise wells with a Chalk ring, 12px corners, 48px, 16px text. Focus: the r
 Designed placeholders (`.t-skel`) in the exact shape of what is coming (the SR figure, stat numbers, panel lines, ranking rows), with a slow light passing over them (1.8s, in-out). When data lands it rises 8px into place (`.t-arrive`, `@starting-style`); stat numbers stagger by 70ms, ranking rows by 40ms. Reduced motion: static placeholders, instant content.
 
 ### Navigation
-Translucent header: brand in Archivo 700 with the amber mark, links in 15px/500 muted, the current page on a Night High pill. Tab bar: translucent, the active tab in Ink/600. The notification dot is the lamp.
+Solid header with a Chalk hairline: brand in Archivo 700 with the amber mark, links in 15px/500 muted, the current page on a Night High pill. Tab bar: translucent, the active tab in Ink/600. The notification dot is the lamp.
 
 ## The court (landing hero)
 
@@ -166,7 +166,7 @@ Translucent header: brand in Archivo 700 with the amber mark, links in 15px/500 
 - **Reduced motion.** No pin: the lit court as a still, then the four chapters in reading order.
 
 ### Below the hero
-Tiers as a typographic scale ("Siete niveles. Un solo número."), three steps with large muted numerals (order is information here), the features as a two-column read-down list, and a centered close ("Tu nombre, en el ranking.") with the lamp button. Sections rise 28px into view with a scroll-driven animation (`animation-timeline: view()`, no JS); without support they are simply there.
+Tiers as a typographic scale ("Siete niveles. Un solo número."), three steps with large muted numerals (order is information here), the features as a two-column read-down list, and a centered close ("Tu nombre, en el ranking.") with the lamp button. Sections rise 28px into view once, the first time they enter (`composables/useReveal.ts`, one IntersectionObserver). The hidden starting state exists only after the script arms, so without JS or with reduced motion every section is simply there, and a section never fades out again.
 
 ## Inicio
 

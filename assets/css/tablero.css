@@ -147,13 +147,10 @@ html[data-theme='claro']:has(.tablero), html[data-theme='claro']:has(.tablero) b
   @starting-style { .t-arrive { opacity: 0; translate: 0 8px; } }
 }
 
-/* Scroll reveal for sections below the fold: driven by scroll position, no JS */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .t-reveal { animation: t-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
-  }
-}
-@keyframes t-rise { from { opacity: 0; translate: 0 28px; } to { opacity: 1; translate: 0 0; } }
+/* Sections below the fold rise into place once, the first time they enter (composables/useReveal.ts).
+   The hidden state exists only after the script has armed, so content is never lost without JS. */
+.is-armed .t-reveal:not(.is-in) { opacity: 0; translate: 0 28px; }
+.is-armed .t-reveal { transition: opacity 900ms var(--t-ease), translate 900ms var(--t-ease); }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .t-btn {
@@ -249,11 +246,10 @@ select.t-field option { background: var(--t-board); color: var(--t-ink); }
   padding: env(safe-area-inset-top, 0px) max(var(--gutter), calc((100vw - 1280px) / 2 + var(--gutter))) 0;
   border: 0; border-bottom: 1px solid var(--t-chalk);
   border-radius: 0;
-  background: rgba(11, 24, 19, 0.72);
+  background: var(--t-board);
   box-shadow: none;
-  -webkit-backdrop-filter: saturate(160%) blur(20px); backdrop-filter: saturate(160%) blur(20px);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
 }
-[data-theme='claro'] .tablero .nav-island { background: rgba(244, 245, 240, 0.78); }
 .tablero .nav-island .brand { gap: 10px; font-family: var(--t-text); font-weight: 700; font-size: 18px; letter-spacing: -0.005em; word-spacing: 0.06em; color: var(--t-ink); }
 .tablero .nav-island .brand > svg { color: var(--t-lamp); }
 .tablero .nav-island .brand strong { font-weight: 700; }

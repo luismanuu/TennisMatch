@@ -188,7 +188,7 @@
     </template>
 
     <!-- Guest landing (DESIGN.md "Landing") -->
-    <template v-else>
+    <div v-else ref="landing" class="landing">
       <CourtHero>
         <template #intro>
           <h1 id="landing-title" class="t-display-xl landing-title">Juega. Confirma. Sube.</h1>
@@ -249,7 +249,7 @@
           <Icon name="heroicons:arrow-right" class="w-5 h-5" aria-hidden="true" />
         </NuxtLink>
       </section>
-    </template>
+    </div>
   </PageLayout>
 </template>
 
@@ -257,6 +257,9 @@
 import { byUrgency, formatScore, leadPanelState, pendingCopy } from '~/utils/pendingAction'
 import { tierName } from '~/utils/tiers'
 import { countUp } from '~/utils/courtShot'
+
+const landing = ref<HTMLElement | null>(null)
+useReveal(landing)
 
 definePageMeta({
   middleware: []
