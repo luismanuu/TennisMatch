@@ -239,8 +239,11 @@ export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite
   const haloTex = keep(discTexture(64, 0.4))
   const lampMats = TOWERS.map(() => keep(new MeshBasicMaterial({ color: 0x2c332f, toneMapped: false })))
   const haloMats = TOWERS.map(() => keep(new MeshBasicMaterial({ map: haloTex, color: 0xffe8c4, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, fog: false })))
+  // Each tower fades out when the camera passes close to it, so a pole never slices the frame
+  const towerMats = TOWERS.map(() => keep(new MeshStandardMaterial({ color: 0x1e2b26, metalness: 0.75, roughness: 0.32, transparent: true })))
+  const towerParts: Array<{ x: number; z: number; mats: Array<{ opacity: number; depthWrite: boolean }>; meshes: Mesh[] }> = []
   TOWERS.forEach(([x, z], k) => {
-    const pole = new Mesh(poleGeo, metal)
+    const pole = new Mesh(poleGeo, towerMats[k])
     pole.position.set(x, TOWER.h / 2, z)
     const head = new Mesh(headGeo, lampMats[k])
     head.position.set(x, TOWER.h + 0.4, z)
@@ -249,7 +252,18 @@ export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite
     halo.position.set(x * 0.99, TOWER.h + 0.4, z * 0.99)
     halo.lookAt(0, TOWER.h, 0)
     scene.add(pole, head, halo)
+    towerParts.push({ x, z, mats: [towerMats[k]!], meshes: [pole, head, halo] })
   })
+  // Fade when a tower stands much nearer the camera than the court does (it would be a foreground pole)
+  const fadeTowers = (cx: number, cz: number) => {
+    const toCourt = Math.hypot(cx, cz) || 1
+    for (const t of towerParts) {
+      const o = Math.min(1, Math.max(0, (Math.hypot(cx - t.x, cz - t.z) / toCourt - 0.62) / 0.16))
+      for (const m of t.meshes) m.visible = o > 0.01
+      t.mats[0]!.opacity = o
+      t.mats[0]!.depthWrite = o >= 0.99
+    }
+  }
 
   // Dust in the beams: a few hundred points, lifted by the scroll through the last chapter
   const MOTE_COUNT = full ? 320 : 120
@@ -295,6 +309,7 @@ export function createCourtScene(canvas: HTMLCanvasElement, tier: 'full' | 'lite
       camera.position.set(...cam.position)
       camera.lookAt(...cam.target)
       camera.updateProjectionMatrix()
+      fadeTowers(cam.position[0], cam.position[2])
       // Lens shift (utils/courtShot.ts CameraPose.shift): moves the picture, not the camera
       camera.projectionMatrix.elements[8] = -cam.shift[0]
       camera.projectionMatrix.elements[9] = -cam.shift[1]
